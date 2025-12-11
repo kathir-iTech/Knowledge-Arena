@@ -15,8 +15,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { PlusCircle, Trash2, Send } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { createQuizAndRoom } from '@/lib/mock-data';
 import { useToast } from '@/hooks/use-toast';
+import { useFirestore, setDocumentNonBlocking } from '@/firebase';
+import { doc, collection } from 'firebase/firestore';
+import type { Quiz, Room } from '@/lib/types';
+
 
 const questionSchema = z.object({
   text: z.string().min(5, "Question text must be at least 5 characters."),
@@ -40,6 +43,7 @@ export function QuizCreatorForm() {
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
+  const firestore = useFirestore();
 
   const form = useForm<z.infer<typeof quizSchema>>({
     resolver: zodResolver(quizSchema),
@@ -65,18 +69,32 @@ export function QuizCreatorForm() {
   };
 
   const onSubmit = (values: z.infer<typeof quizSchema>) => {
-    if (!user) {
+    if (!user || !firestore) {
         toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to create a quiz.' });
         return;
     }
     const quizId = uuidv4().slice(0, 6).toUpperCase();
-    const newQuiz = {
-        id: quizId,
+    const quizRef = doc(firestore, 'quizzes', quizId);
+
+    const newQuiz: Omit<Quiz, 'id'> = {
         topic: values.topic,
         createdBy: user.id,
         questions: values.questions.map(q => ({ ...q, id: uuidv4() })),
     };
-    createQuizAndRoom(newQuiz, user);
+    
+    setDocumentNonBlocking(quizRef, newQuiz, {});
+
+    const roomRef = doc(firestore, 'battleRooms', quizId);
+    const newRoom: Room = {
+      quizId: quizId,
+      participants: [user],
+      status: 'waiting',
+      scores: { [user.id]: 0 },
+      currentQuestionIndex: 0,
+      startTime: 0,
+    };
+    setDocumentNonBlocking(roomRef, newRoom, {});
+    
     router.push(`/battle/${quizId}`);
   };
 

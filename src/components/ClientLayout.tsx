@@ -1,17 +1,18 @@
 "use client";
 
 import React from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useUser } from '@/firebase';
 import { usePathname, redirect } from 'next/navigation';
 import AppSidebar from '@/components/AppSidebar';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { Skeleton } from './ui/skeleton';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isUserLoading } = useUser();
+  const isAuthenticated = !!user;
   const pathname = usePathname();
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="flex flex-col items-center gap-4">

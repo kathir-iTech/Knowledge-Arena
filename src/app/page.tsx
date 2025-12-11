@@ -1,14 +1,14 @@
 "use client";
 
-import { useAuth } from '@/hooks/useAuth';
+import { useUser } from '@/firebase';
 import TeacherDashboard from '@/components/dashboard/TeacherDashboard';
 import StudentDashboard from '@/components/dashboard/StudentDashboard';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
-  const { user, isLoading } = useAuth();
+  const { user, isUserLoading } = useUser();
 
-  if (isLoading || !user) {
+  if (isUserLoading || !user) {
     return (
       <div className="p-8">
         <Skeleton className="h-8 w-1/4 mb-6" />
@@ -20,5 +20,7 @@ export default function Home() {
     );
   }
 
-  return user.role === 'Teacher' ? <TeacherDashboard /> : <StudentDashboard />;
+  const userRole = (user.reloadUserInfo as any).customAttributes?.role;
+
+  return userRole === 'Teacher' ? <TeacherDashboard /> : <StudentDashboard />;
 }

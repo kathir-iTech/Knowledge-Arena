@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle, XCircle, Shield, Clock } from 'lucide-react';
-import { updateRoom } from '@/lib/mock-data';
+import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 
 interface BattleRoomProps {
@@ -27,6 +28,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
   const [score, setScore] = useState(0);
   const router = useRouter();
   const { addXp } = useAuth();
+  const firestore = useFirestore();
 
   const currentQuestion = quiz.questions[currentQuestionIndex];
 
@@ -53,23 +55,21 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
     return () => clearInterval(timer);
   }, [timeLeft, showResult]);
 
-  useEffect(() => {
-    if (timeLeft <= 0 && !showResult) {
-      handleAnswer(null);
-    }
-  }, [timeLeft, showResult]);
+  const handleAnswer = useCallback((answerIndex: number | null) => {
+    if (showResult) return;
 
-  const handleAnswer = (answerIndex: number | null) => {
     setSelectedAnswer(answerIndex);
     setShowResult(true);
 
+    let points = 0;
     if (answerIndex === currentQuestion.correctAnswer) {
-      const points = 50 + Math.floor(timeLeft * (50 / currentQuestion.timer));
+      points = 50 + Math.floor(timeLeft * (50 / currentQuestion.timer));
       const newScore = score + points;
       setScore(newScore);
-      
+
+      const roomRef = doc(firestore, 'battleRooms', room.quizId);
       const newScores = { ...room.scores, [user.id]: newScore };
-      updateRoom(room.quizId, { scores: newScores });
+      updateDocumentNonBlocking(roomRef, { scores: newScores });
     }
 
     setTimeout(() => {
@@ -78,11 +78,18 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
         setSelectedAnswer(null);
         setShowResult(false);
       } else {
-        addXp(score);
+        addXp(score + points);
         onFinish();
       }
     }, 3000);
-  };
+  }, [showResult, currentQuestion, timeLeft, score, firestore, room.quizId, room.scores, user.id, currentQuestionIndex, quiz.questions.length, addXp, onFinish]);
+
+  useEffect(() => {
+    if (timeLeft <= 0 && !showResult) {
+      handleAnswer(null);
+    }
+  }, [timeLeft, showResult, handleAnswer]);
+
 
   const getButtonClass = (index: number) => {
     if (!showResult) return 'bg-secondary hover:bg-primary/20';

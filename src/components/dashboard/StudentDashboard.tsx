@@ -8,19 +8,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Swords, BarChart } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { getRoom } from '@/lib/mock-data';
+import { useFirestore } from '@/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 const StudentDashboard = () => {
   const [roomCode, setRoomCode] = useState('');
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
+  const firestore = useFirestore();
 
-  const handleJoinBattle = (e: React.FormEvent) => {
+  const handleJoinBattle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (roomCode.trim()) {
-      const room = getRoom(roomCode.trim());
-      if (room) {
+    if (roomCode.trim() && firestore) {
+      const roomRef = doc(firestore, 'battleRooms', roomCode.trim());
+      const roomSnap = await getDoc(roomRef);
+
+      if (roomSnap.exists()) {
         router.push(`/battle/${roomCode.trim()}`);
       } else {
         toast({

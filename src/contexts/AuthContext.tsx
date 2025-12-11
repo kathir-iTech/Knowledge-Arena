@@ -2,8 +2,19 @@
 
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import type { User } from '@/lib/types';
-import { findUserByEmail, createUser, updateUser } from '@/lib/mock-data';
 import { useToast } from '@/hooks/use-toast';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
+import { useFirebase } from '@/firebase';
 
 interface AuthContextType {
   user: User | null;
@@ -19,34 +30,34 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { auth, firestore, user: firebaseUser, isUserLoading } = useFirebase();
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('cyber-gladiator-user');
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
-    } catch (error) {
-      console.error("Failed to parse user from localStorage", error);
-      localStorage.removeItem('cyber-gladiator-user');
-    } finally {
-      setIsLoading(false);
+    if (isUserLoading) return;
+    if (firebaseUser) {
+      const userRef = doc(firestore, 'users', firebaseUser.uid);
+      getDoc(userRef).then(userDoc => {
+        if (userDoc.exists()) {
+          setUser(userDoc.data() as User);
+        } else {
+          // Handle case where auth user exists but no firestore doc.
+          // This can happen in signup.
+        }
+      });
+    } else {
+      setUser(null);
     }
-  }, []);
+  }, [firebaseUser, isUserLoading, firestore]);
 
-  const handleUserUpdate = useCallback((updatedUser: User) => {
-    setUser(updatedUser);
-    localStorage.setItem('cyber-gladiator-user', JSON.stringify(updatedUser));
-  }, []);
 
   const login = async (credentials: { email: string }) => {
-    const existingUser = findUserByEmail(credentials.email);
-    if (existingUser) {
-      handleUserUpdate(existingUser);
-    } else {
+    // NOTE: This app uses email as a username, not for a real email/password flow
+    // For simplicity, we use a fixed password.
+    try {
+      await signInWithEmailAndPassword(auth, credentials.email, 'password');
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Login Failed",
@@ -57,45 +68,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signup = async (credentials: { name: string; email: string }) => {
-    if (findUserByEmail(credentials.email)) {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, 'password');
+      const role = credentials.email.endsWith('@staffs.com') ? 'Teacher' : 'Student';
+      const newUser: User = {
+        id: userCredential.user.uid,
+        name: credentials.name,
+        email: credentials.email,
+        avatar: '👤',
+        role,
+        xp: 0
+      };
+      await setDoc(doc(firestore, "users", userCredential.user.uid), newUser);
+      setUser(newUser);
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Signup Failed",
-        description: "An account with this email already exists.",
+        description: "An account with this email already exists or another error occurred.",
       });
-      throw new Error("User already exists");
+      throw new Error("User already exists or another error occurred");
     }
-
-    const role = credentials.email.endsWith('@staffs.com') ? 'Teacher' : 'Student';
-    const newUser = createUser({
-      name: credentials.name,
-      email: credentials.email,
-      avatar: '👤',
-      role,
-    });
-    handleUserUpdate(newUser);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await signOut(auth);
     setUser(null);
-    localStorage.removeItem('cyber-gladiator-user');
   };
 
   const updateAvatar = async (avatar: string) => {
     if (user) {
-      const updatedUser = updateUser(user.id, { avatar });
-      if (updatedUser) {
-        handleUserUpdate(updatedUser);
-      }
+      const userRef = doc(firestore, 'users', user.id);
+      await updateDoc(userRef, { avatar });
+      setUser(prevUser => prevUser ? { ...prevUser, avatar } : null);
     }
   };
   
   const addXp = async (amount: number) => {
     if (user) {
-        const updatedUser = updateUser(user.id, { xp: user.xp + amount });
-        if(updatedUser) {
-            handleUserUpdate(updatedUser);
-        }
+        const newXp = user.xp + amount;
+        const userRef = doc(firestore, 'users', user.id);
+        await updateDoc(userRef, { xp: newXp });
+        setUser(prevUser => prevUser ? { ...prevUser, xp: newXp } : null);
     }
   };
 
@@ -104,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         isAuthenticated: !!user,
-        isLoading,
+        isLoading: isUserLoading,
         login,
         signup,
         logout,
