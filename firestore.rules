@@ -5,25 +5,23 @@
  * or through specific ownership fields within the document (for collaborative battle rooms and student results).
  *
  * Data Structure:
- * - /users/{userId}: Private user profiles, only accessible by the owner.
- * - /users/{teacherId}/quizzes/{quizId}: Quizzes created by a teacher, nested to enforce ownership.
- * - /users/{teacherId}/quizzes/{quizId}/questions/{questionId}: Questions for a quiz, inheriting ownership.
- * - /battleRooms/{battleRoomId}: A top-level collection for collaborative quiz sessions.
+ * - /users/{userId}: Private user profiles, only accessible by the owner for writes. Read access for leaderboards.
+ * - /battleRooms/{battleRoomId}: A top-level collection for collaborative quiz sessions. Quiz data is denormalized here.
  * - /battleResults/{battleResultId}: A top-level collection for student results from battles.
  *
  * Key Security Decisions:
- * - User Isolation: Users can only access their own data under /users/{userId}. Listing all users is disabled for privacy but allowed for the leaderboard.
- * - Teacher Ownership: Teachers have exclusive control over the quizzes and questions they create, enforced by nesting them under their user path.
+ * - User Isolation: Users can only write to their own data under /users/{userId}. Listing all users is allowed for the leaderboard.
+ * - Teacher Ownership: Teachers have exclusive control over the battle rooms they create.
  * - Shared Battle Rooms: Battle Rooms are secured using a denormalized 'teacherId' for owner controls and a 'studentIds' array for participant access.
  * - Result Privacy: Battle results can only be created by the student who earned them. Teachers are granted read-only access to the results of their battles for grading purposes.
  *
  * Denormalization for Authorization:
  * To ensure fast and secure rules, this model relies on denormalization.
- * - Battle Rooms MUST contain a 'teacherId' field copied from the original quiz to allow for teacher-only write operations without extra reads.
+ * - Battle Rooms MUST contain a 'teacherId' field to allow for teacher-only write operations without extra reads.
+ * - Battle Rooms MUST contain the full 'quiz' object so students can play without needing access to the teacher's private data.
  * - Battle Results MUST contain both a 'studentId' (for student ownership) and a 'teacherId' (for teacher read access), preventing slow and costly `get()` calls to parent documents.
  *
  * Structural Segregation:
- * Teacher-specific content (quizzes, questions) is segregated into a private user subcollection.
  * Collaborative content (battle rooms) and student-generated data (results) are in separate, top-level collections with their own distinct security models.
  */
 rules_version = '2';
@@ -59,29 +57,7 @@ service cloud.firestore {
       allow read, list: if isSignedIn();
       allow write: if isOwner(userId);
     }
-
-    /**
-     * @description Secures quizzes created by teachers. Only the teacher who owns the quiz can access or manage it.
-     * @path /users/{teacherId}/quizzes/{quizId}
-     * @allow (create) A teacher with UID 'teacher123' can create a quiz at `/users/teacher123/quizzes/quizABC`.
-     * @deny (list) A student or another teacher cannot list quizzes under `/users/teacher123/quizzes`.
-     * @principle Enforces document ownership based on the collection path.
-     */
-    match /users/{teacherId}/quizzes/{quizId} {
-      allow read, write, list: if isOwner(teacherId);
-
-      /**
-       * @description Secures questions within a teacher's quiz, inheriting ownership from the parent quiz.
-       * @path /users/{teacherId}/quizzes/{quizId}/questions/{questionId}
-       * @allow (get) A teacher with UID 'teacher123' can read a question at `/users/teacher123/quizzes/quizABC/questions/q1`.
-       * @deny (delete) A teacher with UID 'teacher456' cannot delete a question at `/users/teacher123/quizzes/quizABC/questions/q1`.
-       * @principle Inherits ownership from the parent document's path.
-       */
-      match /questions/{questionId} {
-        allow read, write, list: if isOwner(teacherId);
-      }
-    }
-
+    
     /**
      * @description Secures collaborative battle rooms. The teacher who created the room is the owner.
      * Students listed in `studentIds` can access the room's state.

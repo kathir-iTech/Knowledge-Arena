@@ -27,7 +27,7 @@ export interface Quiz {
 
 export interface Room {
   id: string;
-  quizId: string;
+  quiz: Quiz;
   teacherId: string; // userId of teacher who created the quiz
   participants: User[];
   studentIds: string[];

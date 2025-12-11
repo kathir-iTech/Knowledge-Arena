@@ -19,7 +19,7 @@ import { PlusCircle, Trash2, Send } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { doc, collection, setDoc, writeBatch } from 'firebase/firestore';
+import { doc, collection, writeBatch } from 'firebase/firestore';
 import type { Quiz, Room, User, Question } from '@/lib/types';
 
 
@@ -80,17 +80,14 @@ export function QuizCreatorForm() {
     
     const batch = writeBatch(firestore);
 
-    // 1. Create the Quiz document
-    const quizPath = `users/${user.id}/quizzes`;
-    const quizRef = doc(collection(firestore, quizPath));
-
-    const newQuiz: Omit<Quiz, 'id'> = {
+    // 1. Define the Quiz object
+    const quizId = uuidv4();
+    const newQuiz: Quiz = {
+        id: quizId,
         topic: values.topic,
         teacherId: user.id,
         questions: values.questions,
     };
-    batch.set(quizRef, newQuiz);
-    const quizId = quizRef.id;
 
     // 2. Create the Battle Room document
     const roomCode = uuidv4().slice(0, 6).toUpperCase();
@@ -106,7 +103,7 @@ export function QuizCreatorForm() {
     }
 
     const newRoom: Omit<Room, 'id'> = {
-      quizId: quizId,
+      quiz: newQuiz, // Embed the full quiz object
       teacherId: user.id,
       participants: [creatorAsParticipant],
       studentIds: [user.id], // Add teacher to studentIds to grant access
