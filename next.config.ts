@@ -2,6 +2,7 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Adding a comment to force a rebuild and clear cache.
   typescript: {
     ignoreBuildErrors: true,
   },
