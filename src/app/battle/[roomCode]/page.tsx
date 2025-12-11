@@ -12,8 +12,6 @@ import QuizResults from '@/components/quiz/QuizResults';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
@@ -131,6 +129,13 @@ export default function BattlePage() {
             <Skeleton className="w-full max-w-lg h-64" />
         </div>
     );
+  }
+
+  // If a teacher tries to access a room that is not theirs, deny access.
+  if (appUser.role === 'Teacher' && appUser.id !== room.teacherId) {
+    toast({ variant: "destructive", title: "Access Denied", description: "You cannot join a battle created by another teacher." });
+    router.push('/teacher/dashboard');
+    return null;
   }
   
   const isTeacherObserver = appUser.id === room.teacherId;
