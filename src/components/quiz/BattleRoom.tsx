@@ -119,7 +119,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
     setShowResult(true);
 
     let currentPoints = 0;
-    if (answerIndex === currentQuestion.correctAnswer) {
+    if (answerIndex === currentQuestion.correctAnswerIndex) {
       // Base 50 points, plus up to 50 bonus points for speed
       currentPoints = 50 + Math.floor(timeLeft * (50 / currentQuestion.timer));
       const newScore = score + currentPoints;
@@ -149,7 +149,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
 
   const getButtonClass = (index: number) => {
     if (!showResult && !isTeacher) return 'bg-secondary hover:bg-primary/20';
-    if (index === currentQuestion.correctAnswer) return 'bg-green-500/80 ring-2 ring-green-400';
+    if (index === currentQuestion.correctAnswerIndex) return 'bg-green-500/80 ring-2 ring-green-400';
     if (index === selectedAnswer && !isTeacher) return 'bg-red-500/80';
     return 'bg-secondary opacity-50';
   };
@@ -196,7 +196,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
         <CardContent className="space-y-6">
           <p className="text-xl md:text-2xl text-center font-medium">{currentQuestion.text}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {currentQuestion.options.map((option, index) => (
+            {currentQuestion.answerOptions.map((option, index) => (
               <Button
                 key={index}
                 onClick={() => handleAnswer(index)}
@@ -213,7 +213,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
             <Card className="mt-6 bg-secondary p-4">
                 <div className="flex items-start gap-4">
                     {!isTeacher && (
-                        selectedAnswer === currentQuestion.correctAnswer ? (
+                        selectedAnswer === currentQuestion.correctAnswerIndex ? (
                             <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
                         ) : (
                             <XCircle className="w-8 h-8 text-red-400 shrink-0" />
@@ -222,7 +222,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
                      {isTeacher && <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />}
                     <div>
                         <h3 className="font-bold text-lg">
-                           {isTeacher ? `Correct Answer: ${currentQuestion.options[currentQuestion.correctAnswer]}` : (selectedAnswer === currentQuestion.correctAnswer ? 'Correct!' : 'Incorrect')}
+                           {isTeacher ? `Correct Answer: ${currentQuestion.answerOptions[currentQuestion.correctAnswerIndex]}` : (selectedAnswer === currentQuestion.correctAnswerIndex ? 'Correct!' : 'Incorrect')}
                         </h3>
                         <p className="text-muted-foreground">{currentQuestion.explanation}</p>
                     </div>
@@ -251,3 +251,5 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
 };
 
 export default BattleRoom;
+
+    

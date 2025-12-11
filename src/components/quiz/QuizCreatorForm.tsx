@@ -26,13 +26,13 @@ import type { Quiz, Room, Question } from '@/lib/types';
 const questionSchema = z.object({
   id: z.string().default(() => uuidv4()),
   text: z.string().min(5, "Question text must be at least 5 characters."),
-  options: z.tuple([
+  answerOptions: z.tuple([
     z.string().min(1, "Option 1 is required."),
     z.string().min(1, "Option 2 is required."),
     z.string().min(1, "Option 3 is required."),
     z.string().min(1, "Option 4 is required."),
   ]),
-  correctAnswer: z.coerce.number().min(0).max(3),
+  correctAnswerIndex: z.coerce.number().min(0).max(3),
   explanation: z.string().min(1, "Explanation is required."),
   timer: z.coerce.number().min(5, "Timer must be at least 5 seconds.").max(120),
 });
@@ -66,8 +66,8 @@ export function QuizCreatorForm() {
     append({
       id: uuidv4(),
       text: '',
-      options: ['', '', '', ''],
-      correctAnswer: 0,
+      answerOptions: ['', '', '', ''],
+      correctAnswerIndex: 0,
       explanation: '',
       timer: 30,
     });
@@ -197,7 +197,7 @@ export function QuizCreatorForm() {
                   
                   <FormField
                     control={form.control}
-                    name={`questions.${index}.correctAnswer`}
+                    name={`questions.${index}.correctAnswerIndex`}
                     render={({ field }) => (
                       <FormItem className="space-y-3">
                         <FormLabel>Options (select the correct one)</FormLabel>
@@ -211,7 +211,7 @@ export function QuizCreatorForm() {
                               <FormField
                                 key={optionIndex}
                                 control={form.control}
-                                name={`questions.${index}.options.${optionIndex}` as const}
+                                name={`questions.${index}.answerOptions.${optionIndex}` as const}
                                 render={({ field: optionField }) => (
                                     <FormItem className="flex items-center space-x-3 space-y-0">
                                       <FormControl>
@@ -290,3 +290,5 @@ export function QuizCreatorForm() {
     </Card>
   );
 }
+
+    

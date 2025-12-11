@@ -11,8 +11,8 @@ export interface User {
 export interface Question {
   id: string;
   text: string;
-  options: string[];
-  correctAnswer: number;
+  answerOptions: string[];
+  correctAnswerIndex: number;
   explanation: string;
   timer: number; // in seconds
 }
