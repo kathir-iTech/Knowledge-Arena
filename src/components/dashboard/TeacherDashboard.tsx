@@ -1,12 +1,11 @@
 
-
 "use client";
 
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, BarChart, Users, History, ChevronDown, Loader2, Trash2, Copy } from 'lucide-react';
+import { PlusCircle, BarChart, Users, History, Loader2, Trash2, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore, useCollectionSafe, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, query, where, getDocs, orderBy, doc } from 'firebase/firestore';
@@ -36,7 +35,6 @@ const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
 
   React.useEffect(() => {
     const fetchResults = async () => {
-      // Defensive check for battleResultIds
       if (!firestore || !room.battleResultIds || room.battleResultIds.length === 0) {
         setIsLoading(false);
         return;
@@ -100,10 +98,7 @@ const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
 };
 
 
-const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
-  const firestore = useFirestore();
-  const [battleRooms, setBattleRooms] = useState<Room[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+const PastBattleRoomItem: React.FC<{ room: Room, onDelete: (roomId: string) => void }> = ({ room, onDelete }) => {
   const { toast } = useToast();
   
   const copyToClipboard = (text: string) => {
@@ -112,93 +107,54 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
     });
   };
 
-  const fetchBattleRooms = async () => {
-    if (!firestore) return;
-    setIsLoading(true);
-    const roomsQuery = query(
-      collection(firestore, 'battleRooms'),
-      where('quiz.id', '==', quiz.id),
-      where('teacherId', '==', quiz.teacherId)
-    );
-    const roomsSnapshot = await getDocs(roomsQuery);
-    const roomsData = roomsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
-    setBattleRooms(roomsData);
-    setIsLoading(false);
-  };
-  
-  const handleDeleteRoom = (roomId: string) => {
-    if (!firestore) return;
-    const roomRef = doc(firestore, 'battleRooms', roomId);
-    deleteDocumentNonBlocking(roomRef);
-    // Optimistically remove from UI
-    setBattleRooms(prev => prev.filter(room => room.id !== roomId));
-  }
-
-
   return (
-    <AccordionItem value={quiz.id}>
-      <AccordionTrigger onClick={fetchBattleRooms}>
-        <div className="flex justify-between items-center w-full pr-4">
-            <span className="font-medium">{quiz.topic}</span>
-            <span className="text-sm text-muted-foreground">{quiz.questions.length} questions</span>
-        </div>
-      </AccordionTrigger>
-      <AccordionContent>
-        {isLoading && <div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>}
-        {!isLoading && battleRooms.length === 0 && <p className="text-sm text-muted-foreground p-4">No battle rooms found for this quiz.</p>}
-        {!isLoading && battleRooms.length > 0 && (
-           <Accordion type="single" collapsible className="w-full space-y-2">
-             {battleRooms.map(room => (
-               <AccordionItem key={room.id} value={room.id} className="bg-secondary/50 rounded-md px-4">
-                  <div className="flex items-center w-full">
-                    <AccordionTrigger className="w-full flex-grow">
-                        <div className="w-full flex justify-between items-center pr-4">
-                          <div className="flex items-center gap-2">
-                            Room Code: <span className="font-mono text-primary">{room.id}</span>
-                          </div>
-                          <div className="text-sm text-muted-foreground">{room.studentIds.length} participant(s)</div>
-                        </div>
-                    </AccordionTrigger>
-                    
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); copyToClipboard(room.id)}}>
-                        <Copy className="h-4 w-4" />
-                    </Button>
-
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                         <Button variant="ghost" size="icon" className="ml-2 shrink-0 h-8 w-8">
-                           <Trash2 className="h-4 w-4 text-destructive" />
-                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the battle room
-                             and all associated results.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => handleDeleteRoom(room.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-
+    <AccordionItem value={room.id} className="bg-secondary/50 rounded-md px-4 border-b-0">
+        <div className="flex items-center w-full">
+            <AccordionTrigger className="w-full flex-grow py-4">
+                <div className="w-full flex justify-between items-center pr-4">
+                  <div className="flex flex-col items-start text-left">
+                    <span className="font-medium">{room.quiz.topic}</span>
+                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        Room Code: <span className="font-mono text-primary">{room.id}</span>
+                      </div>
                   </div>
-                  <AccordionContent>
-                      <BattleRoomResults room={room} />
-                  </AccordionContent>
-               </AccordionItem>
-             ))}
-           </Accordion>
-        )}
-      </AccordionContent>
+                  <div className="text-sm text-muted-foreground">{room.studentIds.length} participant(s)</div>
+                </div>
+            </AccordionTrigger>
+            
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); copyToClipboard(room.id)}}>
+                <Copy className="h-4 w-4" />
+            </Button>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="ml-2 shrink-0 h-8 w-8">
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the battle room
+                      and all associated results.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={() => onDelete(room.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+        </div>
+        <AccordionContent>
+            <BattleRoomResults room={room} />
+        </AccordionContent>
     </AccordionItem>
   );
 };
@@ -208,21 +164,28 @@ const TeacherDashboard = () => {
   const { user } = useAuth();
   const firestore = useFirestore();
 
-  const quizzesQuery = useMemoFirebase(
-    () => (user && firestore ? query(collection(firestore, `battleRooms`), where('teacherId', '==', user.id)) : null),
+  const battleRoomsQuery = useMemoFirebase(
+    () => (user && firestore ? query(collection(firestore, `battleRooms`), where('teacherId', '==', user.id), orderBy('startTime', 'desc')) : null),
     [user, firestore]
   );
   
-  const { data: rooms, isLoading: isLoadingQuizzes } = useCollectionSafe(quizzesQuery);
-  
-  // Sort rooms by startTime on the client side to avoid needing a composite index
-  const sortedRooms = React.useMemo(() => {
-    if (!rooms) return [];
-    return [...rooms].sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
-  }, [rooms]);
+  const { data: rooms, isLoading: isLoadingRooms } = useCollectionSafe(battleRoomsQuery);
+  const [optimisticRooms, setOptimisticRooms] = useState<Room[] | null>(null);
 
-  // This is a hack to get unique quizzes from the rooms
-  const quizzes = sortedRooms ? [...new Map(sortedRooms.map(room => [room.quiz.id, room.quiz])).values()] : [];
+  React.useEffect(() => {
+    if (rooms) {
+      setOptimisticRooms(rooms);
+    }
+  }, [rooms]);
+  
+  const handleDeleteRoom = (roomId: string) => {
+    if (!firestore) return;
+    const roomRef = doc(firestore, 'battleRooms', roomId);
+    deleteDocumentNonBlocking(roomRef);
+    setOptimisticRooms(prev => prev ? prev.filter(room => room.id !== roomId) : null);
+  }
+
+  const displayedRooms = optimisticRooms ?? rooms;
 
 
   return (
@@ -245,12 +208,12 @@ const TeacherDashboard = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Quizzes Created</CardTitle>
+            <CardTitle className="text-sm font-medium">Battles Hosted</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoadingQuizzes ? <Skeleton className="h-8 w-1/4 mt-1" /> : <div className="text-2xl font-bold">{quizzes?.length || 0}</div> }
-            <p className="text-xs text-muted-foreground">Number of quizzes you have created</p>
+            {isLoadingRooms ? <Skeleton className="h-8 w-1/4 mt-1" /> : <div className="text-2xl font-bold">{displayedRooms?.length || 0}</div> }
+            <p className="text-xs text-muted-foreground">Number of battles you have hosted</p>
           </CardContent>
         </Card>
       </div>
@@ -272,25 +235,25 @@ const TeacherDashboard = () => {
       
       <Card>
         <CardHeader>
-            <CardTitle className="font-headline text-2xl flex items-center gap-2"><History /> Past Quizzes</CardTitle>
-            <CardDescription>Review the quizzes you've created and their battle results.</CardDescription>
+            <CardTitle className="font-headline text-2xl flex items-center gap-2"><History /> Past Battles</CardTitle>
+            <CardDescription>Review the battles you've created and their results.</CardDescription>
         </CardHeader>
         <CardContent>
-            {isLoadingQuizzes && (
+            {isLoadingRooms && (
                 <div className="space-y-2">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
                 </div>
             )}
-             {quizzes && quizzes.length > 0 ? (
-               <Accordion type="single" collapsible className="w-full">
-                {quizzes.map(quiz => (
-                  <PastQuizItem key={quiz.id} quiz={quiz} />
+             {displayedRooms && displayedRooms.length > 0 ? (
+               <Accordion type="single" collapsible className="w-full space-y-2">
+                {displayedRooms.map(room => (
+                  <PastBattleRoomItem key={room.id} room={room} onDelete={handleDeleteRoom} />
                 ))}
               </Accordion>
             ) : (
-                !isLoadingQuizzes && <p className="text-muted-foreground text-center py-8">You haven't created any quizzes yet.</p>
+                !isLoadingRooms && <p className="text-muted-foreground text-center py-8">You haven't created any battles yet.</p>
             )}
         </CardContent>
       </Card>
@@ -299,12 +262,3 @@ const TeacherDashboard = () => {
 };
 
 export default TeacherDashboard;
-
-    
-
-      
-
-    
-
-
-
