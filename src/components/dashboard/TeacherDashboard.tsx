@@ -67,7 +67,7 @@ const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
 
   return (
     <div className="p-4 bg-background rounded-md">
-       <h4 className="font-semibold mb-2">Battle Results (Room: {room.id})</h4>
+       <h4 className="font-semibold mb-2">Battle Results</h4>
        <Table>
           <TableHeader>
             <TableRow>
@@ -108,7 +108,7 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
     setIsLoading(true);
     const roomsQuery = query(
       collection(firestore, 'battleRooms'),
-      where('quizId', '==', quiz.id),
+      where('quiz.id', '==', quiz.id),
       where('teacherId', '==', quiz.teacherId)
     );
     const roomsSnapshot = await getDocs(roomsQuery);
@@ -194,10 +194,14 @@ const TeacherDashboard = () => {
   const firestore = useFirestore();
 
   const quizzesQuery = useMemoFirebase(
-    () => (user && firestore ? query(collection(firestore, `users/${user.id}/quizzes`)) : null),
+    () => (user && firestore ? query(collection(firestore, `battleRooms`), where('teacherId', '==', user.id), orderBy('startTime', 'desc')) : null),
     [user, firestore]
   );
-  const { data: quizzes, isLoading: isLoadingQuizzes } = useCollection<Quiz>(quizzesQuery);
+  
+  const { data: rooms, isLoading: isLoadingQuizzes } = useCollection<Room>(quizzesQuery);
+  // This is a hack to get unique quizzes from the rooms
+  const quizzes = rooms ? [...new Map(rooms.map(room => [room.quiz.id, room.quiz])).values()] : [];
+
 
   return (
     <div className="p-4 md:p-8 space-y-8">
