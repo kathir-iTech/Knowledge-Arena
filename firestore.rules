@@ -18,18 +18,11 @@ service cloud.firestore {
     match /battleRooms/{roomId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
-      allow update: if request.auth != null && (
-        // Allow student to add themselves to the room
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly('studentIds') &&
-         request.resource.data.studentIds.size() == resource.data.studentIds.size() + 1
-         ) ||
-        // Allow teacher to start/finish battle or add results
-        (resource.data.teacherId == request.auth.uid &&
-         (request.resource.data.diff(resource.data).affectedKeys().hasOnly('status') ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly('startTime') ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly('currentQuestionIndex') ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly('battleResultIds')))
-      );
+      // Allow a student to add themselves to the room's studentIds array.
+      // This rule is crucial for joining a battle.
+      allow update: if request.auth != null && 
+                      request.resource.data.studentIds == resource.data.studentIds.concat([request.auth.uid]);
+      
       allow delete: if request.auth != null && resource.data.teacherId == request.auth.uid;
     }
     
