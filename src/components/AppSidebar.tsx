@@ -54,10 +54,10 @@ const AppSidebar = () => {
                 <SidebarMenuItem key={item.label}>
                   <Link href={item.href} passHref>
                     <SidebarMenuButton asChild isActive={isActive}>
-                      <>
+                      <div className="flex items-center gap-2">
                         <item.icon />
                         <span>{item.label}</span>
-                      </>
+                      </div>
                     </SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>
