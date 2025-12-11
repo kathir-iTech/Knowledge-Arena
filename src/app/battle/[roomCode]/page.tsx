@@ -33,39 +33,40 @@ export default function BattlePage() {
       const roomDocRef = doc(firestore, 'battleRooms', roomCode);
 
       try {
-        const roomDoc = await getDoc(roomDocRef);
+        // Optimistically try to add the user to the room.
+        // `arrayUnion` is idempotent, so it won't add duplicates.
+        // This is the only write operation needed for a user to join.
+        // The security rules allow users to add themselves to the studentIds array.
+        // We no longer need to read the document first to check for participation.
+        await updateDoc(roomDocRef, {
+          studentIds: arrayUnion(appUser.id)
+        });
 
-        if (!roomDoc.exists()) {
-          toast({ variant: 'destructive', title: 'Error', description: 'This battle room does not exist.' });
-          router.push('/');
-          return;
+      } catch (error: any) {
+        // If the update fails, it might be because the room doesn't exist
+        // or a more restrictive security rule is in place.
+        // Let's check if the room exists for a better error message.
+        try {
+            const roomDoc = await getDoc(roomDocRef);
+            if (!roomDoc.exists()) {
+                toast({ variant: 'destructive', title: 'Error', description: 'This battle room does not exist.' });
+                router.push('/');
+                return;
+            }
+        } catch (getErr) {
+            console.error("Error checking room existence:", getErr);
         }
 
-        const roomData = roomDoc.data() as Room;
-        const isParticipant = roomData.studentIds?.includes(appUser.id);
-        const isTeacher = appUser.id === roomData.teacherId;
-        
-        // If the user is a student and not already in the studentIds array, add them.
-        if (appUser.role === 'Student' && !isParticipant) {
-           // This single update is what the security rules allow.
-           await updateDoc(roomDocRef, {
-             studentIds: arrayUnion(appUser.id)
-           });
-        }
-        
-        // If a teacher re-joins, their access is based on teacherId, but we add them to studentIds for consistency in participation tracking
-        if(isTeacher && !isParticipant) {
-           await updateDoc(roomDocRef, {
-             studentIds: arrayUnion(appUser.id)
-           });
-        }
-        
-      } catch (error) {
         console.error("Error joining room:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not join the battle room.' });
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not join the battle room. You may not have permission.' });
         router.push('/');
+
       } finally {
-        setIsJoining(false); // Finished joining, allow useDoc to proceed
+        // Whether we succeeded or failed, the joining attempt is over.
+        // This allows the useDoc hook below to proceed and fetch the room data.
+        // If joining failed, useDoc will likely fail with a permission error,
+        // which is expected and handled later in the component.
+        setIsJoining(false);
       }
     };
 
@@ -74,12 +75,12 @@ export default function BattlePage() {
   }, [isAuthLoading, firestore, appUser, roomCode, router, toast]);
 
   const roomRef = useMemoFirebase(() => {
-    // Wait until joining is complete before creating the ref
+    // Wait until joining attempt is complete before creating the ref
     if (isJoining || !firestore) return null;
     return doc(firestore, 'battleRooms', roomCode);
   }, [isJoining, firestore, roomCode]);
 
-  const { data: room, isLoading: isRoomLoading } = useDoc<Room>(roomRef);
+  const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<Room>(roomRef);
   
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [isQuizLoading, setIsQuizLoading] = useState(true);
@@ -121,7 +122,7 @@ export default function BattlePage() {
     setAreParticipantsLoading(true);
     const participantPromises = room.studentIds.map(id => getDoc(doc(firestore, 'users', id)));
     Promise.all(participantPromises).then(participantDocs => {
-      const participantData = participantDocs.filter(doc => doc.exists()).map(doc => doc.data() as User);
+      const participantData = participantDocs.filter(doc => doc.exists()).map(doc => ({ id: doc.id, ...doc.data() } as User));
       setParticipants(participantData);
       setAreParticipantsLoading(false);
     }).catch(err => {
@@ -144,6 +145,14 @@ export default function BattlePage() {
     }
   };
   
+  // Handle case where useDoc failed after joining attempt
+  useEffect(() => {
+      if(roomError) {
+        toast({ variant: "destructive", title: "Access Denied", description: "You do not have permission to access this room." });
+        router.push('/');
+      }
+  }, [roomError, router, toast]);
+  
   if (isAuthLoading || isJoining || isRoomLoading || isQuizLoading || areParticipantsLoading || !appUser || !room || !quiz) {
     return (
         <div className="flex flex-col items-center justify-center h-screen p-4">
@@ -153,21 +162,14 @@ export default function BattlePage() {
     );
   }
   
-  const isTeacher = appUser.role === 'Teacher';
-  
-  // After all loading, if the user is not in the studentIds array, they don't have access.
-  if (!room.studentIds.includes(appUser.id)) {
-     toast({ variant: "destructive", title: "Access Denied", description: "You do not have permission to access this room." });
-     router.push('/');
-     return null;
-  }
+  const isTeacherObserver = appUser.id === room.teacherId;
   
   if (room.status === 'waiting') {
-    return <WaitingRoom room={{...room, id: roomCode, participants: participants}} quiz={quiz} user={appUser} onStart={handleStartBattle} isTeacherObserver={isTeacher} />;
+    return <WaitingRoom room={{...room, id: roomCode, participants: participants}} quiz={quiz} user={appUser} onStart={handleStartBattle} isTeacherObserver={isTeacherObserver} />;
   }
 
   if (room.status === 'playing') {
-    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={appUser} onFinish={handleFinishBattle} isTeacherObserver={isTeacher} />;
+    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={appUser} onFinish={handleFinishBattle} isTeacherObserver={isTeacherObserver} />;
   }
 
   if (room.status === 'finished') {

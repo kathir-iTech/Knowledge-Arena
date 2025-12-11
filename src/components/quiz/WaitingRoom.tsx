@@ -19,7 +19,6 @@ interface WaitingRoomProps {
 }
 
 const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, isTeacherObserver }) => {
-  const isTeacher = user.role === 'Teacher' || isTeacherObserver;
   const shareableLink = typeof window !== 'undefined' ? window.location.href : '';
   const { toast } = useToast();
 
@@ -50,7 +49,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, is
                     <AvatarFallback className="text-3xl bg-secondary">{p.avatar}</AvatarFallback>
                   </Avatar>
                   <span className="text-sm font-medium max-w-20 truncate">{p.name}</span>
-                   {p.role === 'Teacher' && <span className="text-xs text-primary">(Host)</span>}
+                   {p.id === room.teacherId && <span className="text-xs text-primary">(Host)</span>}
                 </div>
               ))}
             </div>
@@ -76,18 +75,18 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, is
         </Card>
       </div>
 
-      {isTeacher && (
+      {isTeacherObserver && (
         <div className="w-full max-w-6xl">
             <Button 
               size="lg" 
               className="w-full bg-accent hover:bg-accent/80 text-accent-foreground text-lg py-8" 
               onClick={onStart}
-              disabled={room.participants.filter(p => p.role === 'Student').length === 0}
+              disabled={room.participants.filter(p => p.id !== room.teacherId).length === 0}
             >
               <ShieldCheck className="mr-3 h-6 w-6" />
-               {room.participants.filter(p => p.role === 'Student').length === 0 
+               {room.participants.filter(p => p.id !== room.teacherId).length === 0 
                 ? 'Waiting for students to join...'
-                : `Start Battle for ${room.participants.filter(p => p.role === 'Student').length} Gladiator(s)`}
+                : `Start Battle for ${room.participants.filter(p => p.id !== room.teacherId).length} Gladiator(s)`}
             </Button>
         </div>
       )}
