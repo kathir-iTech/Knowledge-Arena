@@ -5,15 +5,26 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, BarChart, Users, History, ChevronDown, Loader2 } from 'lucide-react';
+import { PlusCircle, BarChart, Users, History, ChevronDown, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, query, where, getDocs, orderBy, doc } from 'firebase/firestore';
 import type { Quiz, Room, BattleResult } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 
 const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
@@ -105,6 +116,15 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
     setBattleRooms(roomsData);
     setIsLoading(false);
   };
+  
+  const handleDeleteRoom = (roomId: string) => {
+    if (!firestore) return;
+    const roomRef = doc(firestore, 'battleRooms', roomId);
+    deleteDocumentNonBlocking(roomRef);
+    // Optimistically remove from UI
+    setBattleRooms(prev => prev.filter(room => room.id !== roomId));
+  }
+
 
   return (
     <AccordionItem value={quiz.id}>
@@ -121,12 +141,41 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
            <Accordion type="single" collapsible className="w-full space-y-2">
              {battleRooms.map(room => (
                <AccordionItem key={room.id} value={room.id} className="bg-secondary/50 rounded-md px-4">
-                  <AccordionTrigger>
-                      <div className="w-full flex justify-between items-center pr-4">
-                        <div>Room Code: <span className="font-mono text-primary">{room.id}</span></div>
-                        <div className="text-sm text-muted-foreground">{room.studentIds.length} participant(s)</div>
-                      </div>
-                  </AccordionTrigger>
+                  <div className="flex items-center w-full">
+                    <AccordionTrigger className="w-full">
+                        <div className="w-full flex justify-between items-center pr-4">
+                          <div>Room Code: <span className="font-mono text-primary">{room.id}</span></div>
+                          <div className="text-sm text-muted-foreground">{room.studentIds.length} participant(s)</div>
+                        </div>
+                    </AccordionTrigger>
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                         <Button variant="ghost" size="icon" className="ml-2 shrink-0">
+                           <Trash2 className="h-4 w-4 text-destructive" />
+                         </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the battle room
+                             and all associated results.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => handleDeleteRoom(room.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+
+                  </div>
                   <AccordionContent>
                       <BattleRoomResults room={room} />
                   </AccordionContent>
