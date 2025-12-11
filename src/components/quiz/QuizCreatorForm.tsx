@@ -17,8 +17,8 @@ import { Separator } from '@/components/ui/separator';
 import { PlusCircle, Trash2, Send } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, setDocumentNonBlocking } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { doc, collection, setDoc } from 'firebase/firestore';
 import type { Quiz, Room, User, Question } from '@/lib/types';
 
 
@@ -86,7 +86,7 @@ export function QuizCreatorForm() {
         teacherId: user.id,
         questions: values.questions,
     };
-    await setDocumentNonBlocking(quizRef, newQuiz);
+    await setDoc(quizRef, newQuiz);
     const quizId = quizRef.id;
 
     // Create the Battle Room document with a 6-char ID
@@ -102,16 +102,16 @@ export function QuizCreatorForm() {
       xp: user.xp,
     }
 
-    const newRoom: Room = {
+    const newRoom: Omit<Room, 'id'> = {
       quizId: quizId,
       participants: [creatorAsParticipant],
       status: 'waiting',
       scores: { [user.id]: 0 },
       currentQuestionIndex: 0,
       startTime: 0,
-      teacherId: user.id, // Add teacherId to the room for rule validation
+      teacherId: user.id,
     };
-    await setDocumentNonBlocking(roomRef, newRoom);
+    await setDoc(roomRef, newRoom);
     
     toast({
         title: "Battle Room Created!",

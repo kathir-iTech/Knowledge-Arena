@@ -55,6 +55,15 @@ service cloud.firestore {
     function isExistingOwner(userId) {
       return resource != null && isOwner(userId);
     }
+    
+    function isParticipant(roomId) {
+      return isSignedIn() && get(/databases/$(database)/documents/battleRooms/$(roomId)).data.participants.hasAny([request.auth.uid]);
+    }
+    
+    function isTeacherOfRoom(roomId) {
+        return isSignedIn() && request.auth.uid == get(/databases/$(database)/documents/battleRooms/$(roomId)).data.teacherId;
+    }
+
 
     /**
      * @description Manages user profile documents. Access is restricted to the user themselves.
@@ -64,11 +73,8 @@ service cloud.firestore {
      * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow read, write: if isOwner(userId);
       allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
     }
 
     /**
@@ -79,11 +85,8 @@ service cloud.firestore {
      * @principle Enforces document ownership based on the collection path.
      */
     match /users/{teacherId}/quizzes/{quizId} {
-      allow get: if isOwner(teacherId);
+      allow read, write: if isOwner(teacherId);
       allow list: if isOwner(teacherId);
-      allow create: if isOwner(teacherId) && request.resource.data.teacherId == teacherId;
-      allow update: if isExistingOwner(teacherId) && request.resource.data.teacherId == resource.data.teacherId;
-      allow delete: if isExistingOwner(teacherId);
 
       /**
        * @description Secures questions within a teacher's quiz, inheriting ownership from the parent quiz.
@@ -93,11 +96,8 @@ service cloud.firestore {
        * @principle Inherits ownership from the parent document's path.
        */
       match /questions/{questionId} {
-        allow get: if isOwner(teacherId);
+        allow read, write: if isOwner(teacherId);
         allow list: if isOwner(teacherId);
-        allow create: if isOwner(teacherId) && request.resource.data.quizId == quizId;
-        allow update: if isExistingOwner(teacherId) && request.resource.data.quizId == resource.data.quizId;
-        allow delete: if isExistingOwner(teacherId);
       }
     }
 
@@ -110,10 +110,10 @@ service cloud.firestore {
      * @principle Enforces shared access via a collaborator list (`studentIds`) and a single owner (`teacherId`).
      */
     match /battleRooms/{battleRoomId} {
-      allow get: if isSignedIn() && (request.auth.uid == resource.data.teacherId || request.auth.uid in resource.data.studentIds);
+      allow get: if isSignedIn() && (request.auth.uid == resource.data.teacherId || request.auth.uid in resource.data.participants.map(p => p.id));
       allow list: if false;
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.teacherId;
-      allow update: if resource != null && isSignedIn() && request.auth.uid == resource.data.teacherId && request.resource.data.teacherId == resource.data.teacherId;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.teacherId || request.auth.uid in resource.data.participants.map(p => p.id);
       allow delete: if resource != null && isSignedIn() && request.auth.uid == resource.data.teacherId;
     }
 
