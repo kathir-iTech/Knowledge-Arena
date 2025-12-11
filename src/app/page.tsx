@@ -1,26 +1,45 @@
 "use client";
 
 import { useUser } from '@/firebase';
-import TeacherDashboard from '@/components/dashboard/TeacherDashboard';
-import StudentDashboard from '@/components/dashboard/StudentDashboard';
+import { redirect } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { BotMessageSquare } from 'lucide-react';
+import { LoginForm } from '@/components/auth/LoginForm';
 
 export default function Home() {
   const { user, isUserLoading } = useUser();
+  const userRole = (user?.reloadUserInfo as any)?.customAttributes?.role;
 
-  if (isUserLoading || !user) {
+  if (isUserLoading) {
     return (
-      <div className="p-8">
-        <Skeleton className="h-8 w-1/4 mb-6" />
-        <div className="space-y-4">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <BotMessageSquare className="w-16 h-16 text-primary mx-auto animate-pulse" />
+          <h1 className="text-2xl font-headline text-primary">CYBER GLADIATORS</h1>
+          <Skeleton className="h-4 w-48" />
         </div>
       </div>
     );
   }
 
-  const userRole = (user.reloadUserInfo as any).customAttributes?.role;
+  if (user) {
+    if (userRole === 'Teacher') {
+      redirect('/teacher/dashboard');
+    } else {
+      redirect('/student/dashboard');
+    }
+  }
 
-  return userRole === 'Teacher' ? <TeacherDashboard /> : <StudentDashboard />;
+  return (
+    <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center space-y-2">
+           <BotMessageSquare className="w-16 h-16 text-primary mx-auto" />
+          <h1 className="text-4xl font-headline text-primary">Cyber Gladiators</h1>
+          <p className="text-muted-foreground">Enter the arena of knowledge. Sign in or create your account.</p>
+        </div>
+        <LoginForm />
+      </div>
+    </main>
+  );
 }

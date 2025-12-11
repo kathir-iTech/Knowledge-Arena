@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Swords, Trophy, LogOut, BotMessageSquare } from 'lucide-react';
+import { Home, Swords, Trophy, LogOut, BotMessageSquare, LayoutDashboard } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -22,12 +22,20 @@ const AppSidebar = () => {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  
+  const isTeacher = user?.role === 'Teacher';
 
-  const navItems = [
-    { href: '/', label: 'Dashboard', icon: Home },
-    { href: '/create-quiz', label: 'Create Quiz', icon: Swords, teacherOnly: true },
-    { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
-  ];
+  const navItems = isTeacher
+    ? [
+        { href: '/teacher/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { href: '/create-quiz', label: 'Create Quiz', icon: Swords },
+        { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+      ]
+    : [
+        { href: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+      ];
+
 
   return (
     <>
@@ -41,9 +49,6 @@ const AppSidebar = () => {
         <SidebarContent>
           <SidebarMenu>
             {navItems.map((item) => {
-              if (item.teacherOnly && user?.role !== 'Teacher') {
-                return null;
-              }
               const isActive = pathname === item.href;
               return (
                 <SidebarMenuItem key={item.label}>
