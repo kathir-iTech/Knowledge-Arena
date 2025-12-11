@@ -1,161 +1,73 @@
-/**
- * Core Philosophy: This ruleset enforces a strict, role-based security model for a quiz application.
- * Teachers have full ownership of the quizzes and questions they create. Students can participate in
- * quiz "battles" but cannot modify the underlying quiz content. The rules are designed to be secure by
- * default, ensuring users can only access data relevant to their role and actions.
- *
- * Data Structure: The data is organized hierarchically to reflect ownership and context.
- * - /users/{userId}: Stores public profile information for all users (teachers and students).
- * - /users/{teacherId}/quizzes/{quizId}: A subcollection storing all quizzes owned by a specific teacher.
- * - /users/{teacherId}/quizzes/{quizId}/questions/{questionId}: Questions are nested under the quiz they belong to.
- * - /battleRooms/{battleRoomId}: A top-level collection for active quiz sessions, readable by all signed-in users.
- * - /battleRooms/{battleRoomId}/battleParticipations/{battleParticipationId}: Records of individual student activity within a battle room.
- *
- * Key Security Decisions:
- * - User Enumeration Disabled: Listing all users from the top-level '/users' collection is forbidden to protect user privacy.
- * - Strict Teacher Ownership: All create, update, and delete operations on quizzes and questions are restricted to the teacher who owns them, determined by the path.
- * - Battle Room Access: Battle Rooms are publicly readable by any signed-in user to allow students to join, but only the founding teacher can manage them.
- * - Student Participation Control: Students can create and update their own participation record (e.g., to submit answers) but are explicitly forbidden from resetting their own malpractice status. Only the teacher can reset a student's malpractice flag.
- *
- * Denormalization for Authorization: To ensure fast and secure rule evaluation, this ruleset assumes that a 'teacherId' field is denormalized (copied) onto each 'battleRooms' document at the time of its creation. This avoids slow and costly multi-document reads during authorization checks for battle participations.
- *
- * Structural Segregation: Teacher-created content (/users/{teacherId}/quizzes) is stored in a separate data tree from live session data (/battleRooms), creating a clear security boundary that simplifies rules and queries.
- */
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --------------------------------------------------------------------------------
-    // Helper Functions
-    // --------------------------------------------------------------------------------
-
-    /**
-     * isSignedIn
-     * Checks if the user is authenticated.
-     */
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /**
-     * isOwner
-     * Checks if the authenticated user's ID matches the provided userId.
-     */
+    function isTeacher() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-
-    /**
-     * isExistingDoc
-     * Checks if a document currently exists. Used for safe updates and deletes.
-     */
-    function isExistingDoc() {
-      return resource != null;
+    
+    function isRoomTeacher(roomId) {
+      return isTeacher() && get(/databases/$(database)/documents/battleRooms/$(roomId)).data.teacherId == request.auth.uid;
     }
 
-    /**
-     * isQuizOwnerOfBattleRoom
-     * Checks if the requesting user is the teacher who owns the quiz associated with this battle room.
-     * CRITICAL: This function assumes the 'teacherId' is denormalized onto the battleRoom document.
-     */
-    function isQuizOwnerOfBattleRoom(battleRoomId) {
-      let battleRoomData = get(/databases/$(database)/documents/battleRooms/$(battleRoomId)).data;
-      return isSignedIn() && battleRoomData.teacherId == request.auth.uid;
-    }
-
-    /**
-     * isParticipantOwner
-     * Checks if the requesting user is the student who owns this participation document.
-     * Uses existing document data, so it is only valid for update/delete operations.
-     */
-    function isParticipantOwner() {
-      return isSignedIn() && request.auth.uid == resource.data.userId;
-    }
-
-    /**
-     * studentCannotResetMalpractice
-     * Ensures a student cannot update their own malpractice status.
-     */
-    function studentCannotResetMalpractice() {
-      return request.resource.data.malpracticeBlocked == resource.data.malpracticeBlocked
-          && request.resource.data.malpracticeCount == resource.data.malpracticeCount;
-    }
-
-    // --------------------------------------------------------------------------------
-    // Collection Rules
-    // --------------------------------------------------------------------------------
-
-    /**
-     * @description Users can create their own profile and manage it. They can view other users' profiles but cannot list all users.
-     * @path /users/{userId}
-     * @allow (create) A new user signs up: `create /users/user_abc` where auth.uid is 'user_abc'.
-     * @deny  (list) A user tries to enumerate all other users in the app.
-     * @principle Restricts access to a user's own data tree and prevents user enumeration.
-     */
+    // USER--
+    // Users can create their own profile.
+    // Users can read and update their own profile.
+    // Signed-in users can read other users' public profiles (for names/avatars).
     match /users/{userId} {
+      allow create: if isOwner(userId);
       allow get: if isSignedIn();
-      allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isOwner(userId) && isExistingDoc() && request.resource.data.id == resource.data.id && request.resource.data.role == resource.data.role;
+      allow update: if isOwner(userId);
       allow delete: if false;
     }
 
-    /**
-     * @description A teacher has full control over their own quizzes. No other user can read or write them.
-     * @path /users/{teacherId}/quizzes/{quizId}
-     * @allow (create) A teacher creates a new quiz: `create /users/teacher_123/quizzes/quiz_xyz` where auth.uid is 'teacher_123'.
-     * @deny  (get) A student tries to read a teacher's quiz directly: `get /users/teacher_123/quizzes/quiz_xyz`.
-     * @principle Enforces strict document ownership based on the user's auth UID in the path.
-     */
-    match /users/{teacherId}/quizzes/{quizId} {
-      allow get, list: if isOwner(teacherId);
-      allow create: if isOwner(teacherId) && request.resource.data.teacherId == teacherId;
-      allow update: if isOwner(teacherId) && isExistingDoc() && request.resource.data.teacherId == resource.data.teacherId;
-      allow delete: if isOwner(teacherId) && isExistingDoc();
+    // QUIZZES
+    // Only teachers can create, read, update, or delete quizzes.
+    // Quizzes are owned by the teacher who created them.
+    match /quizzes/{quizId} {
+      allow read, write: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
+      allow create: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
+      allow update, delete: if isTeacher() && resource.data.teacherId == request.auth.uid;
     }
 
-    /**
-     * @description A teacher has full control over the questions within their own quizzes.
-     * @path /users/{teacherId}/quizzes/{quizId}/questions/{questionId}
-     * @allow (create) The quiz owner adds a question: `create /users/teacher_123/quizzes/quiz_xyz/questions/q_1` where auth.uid is 'teacher_123'.
-     * @deny  (update) Another teacher tries to modify a question: `update /users/teacher_123/...` where auth.uid is 'teacher_456'.
-     * @principle Inherits ownership from the parent path, ensuring only the quiz owner can manage its content.
-     */
-    match /users/{teacherId}/quizzes/{quizId}/questions/{questionId} {
-      allow get, list: if isOwner(teacherId);
-      allow create: if isOwner(teacherId) && request.resource.data.quizId == quizId;
-      allow update: if isOwner(teacherId) && isExistingDoc() && request.resource.data.quizId == resource.data.quizId;
-      allow delete: if isOwner(teacherId) && isExistingDoc();
-    }
-
-    /**
-     * @description Battle rooms are created by teachers. Once created, any signed-in user can read them to join a game, but only the owner can modify or delete the room.
-     * @path /battleRooms/{battleRoomId}
-     * @allow (get) A student reads a battle room document to get quiz details: `get /battleRooms/room_abc`.
-     * @deny  (create) A student tries to create their own battle room.
-     * @principle Implements public read access for signed-in users with owner-only writes. Assumes 'teacherId' is denormalized on the document for ownership checks.
-     */
-    match /battleRooms/{battleRoomId} {
+    // BATTLE ROOMS
+    // Only teachers can create battle rooms.
+    // The hosting teacher can update or delete the room.
+    // Any signed-in user can read a room to join it.
+    match /battleRooms/{roomId} {
       allow get, list: if isSignedIn();
-      // NOTE: Create rule assumes the client adds a 'teacherId' field to the document matching the creator's UID.
-      allow create: if isSignedIn() && request.resource.data.teacherId == request.auth.uid;
-      allow update: if isQuizOwnerOfBattleRoom(battleRoomId) && isExistingDoc();
-      allow delete: if isQuizOwnerOfBattleRoom(battleRoomId) && isExistingDoc();
+      allow create: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
+      allow update, delete: if isRoomTeacher(roomId);
     }
-
-    /**
-     * @description Governs student participation in a battle. Students create their own record and can update their score. The quiz owner (teacher) can read all participations and reset malpractice flags.
-     * @path /battleRooms/{battleRoomId}/battleParticipations/{battleParticipationId}
-     * @allow (create) A student joins a battle: `create /battleRooms/room_abc/battleParticipations/student_xyz_participation` where auth.uid is 'student_xyz'.
-     * @deny  (update) A student attempts to change their `malpracticeBlocked` status from true to false.
-     * @principle Enforces a shared access model. The student owns their record for score updates, while the teacher (quiz owner) has moderator privileges to manage malpractice status.
-     */
-    match /battleRooms/{battleRoomId}/battleParticipations/{battleParticipationId} {
-      allow get: if isParticipantOwner() || isQuizOwnerOfBattleRoom(battleRoomId);
-      allow list: if isQuizOwnerOfBattleRoom(battleRoomId);
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.battleRoomId == battleRoomId;
-      allow update: if isExistingDoc() && ((isParticipantOwner() && studentCannotResetMalpractice()) || isQuizOwnerOfBattleRoom(battleRoomId));
-      allow delete: if false;
+    
+    // BATTLE PARTICIPANTS
+    // A student can create their own participation record to join a battle.
+    // A student can update their own record (e.g., to submit answers).
+    // A student CANNOT update their own `isBlocked` or `malpracticeCount` status.
+    // The hosting teacher can read all participant data and can update a student's record to reset a malpractice block.
+    match /battleRooms/{roomId}/participants/{participantId} {
+      allow get: if isSignedIn() && (isOwner(participantId) || isRoomTeacher(roomId));
+      allow list: if isRoomTeacher(roomId);
+      allow create: if isOwner(participantId);
+      
+      allow update: if isSignedIn() && (
+        // Case 1: Student updating their own answers.
+        // They can change anything EXCEPT their blocked status.
+        (isOwner(participantId) && request.resource.data.isBlocked == resource.data.isBlocked && request.resource.data.malpracticeCount == resource.data.malpracticeCount) ||
+        // Case 2: Teacher resetting a student's malpractice block.
+        (isRoomTeacher(roomId))
+      );
     }
   }
 }
+

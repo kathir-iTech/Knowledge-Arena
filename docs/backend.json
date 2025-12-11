@@ -1,190 +1,161 @@
+
 {
   "entities": {
     "User": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
+      "description": "Represents a user in the application, either a Teacher or a Student.",
       "type": "object",
-      "description": "Represents a user in the Cyber Gladiators application.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the User entity."
+          "description": "Unique identifier for the user, matching the Firebase Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's display name."
         },
         "email": {
           "type": "string",
-          "description": "User's email address.",
+          "description": "The user's email address.",
           "format": "email"
         },
         "role": {
           "type": "string",
-          "description": "User's role in the application (e.g., 'Teacher' or 'Student')."
-        },
-        "xp": {
-          "type": "number",
-          "description": "Total experience points (XP) earned by the user."
+          "description": "The role of the user.",
+          "enum": ["Teacher", "Student"]
         },
         "avatar": {
-          "type": "string",
-          "description": "Emoji representing the user's avatar."
+            "type": "string",
+            "description": "Emoji representing the user's avatar."
         }
       },
-      "required": [
-        "id",
-        "email",
-        "role",
-        "xp",
-        "avatar"
-      ]
+      "required": ["id", "name", "email", "role", "avatar"]
     },
     "Quiz": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Quiz",
+      "description": "Represents a set of questions created by a teacher.",
       "type": "object",
-      "description": "Represents a quiz created by a teacher.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the Quiz entity."
+          "description": "Unique identifier for the quiz."
         },
         "teacherId": {
           "type": "string",
-          "description": "Reference to the User (Teacher) who created the quiz. (Relationship: User 1:N Quiz)"
+          "description": "The UID of the teacher who owns this quiz."
         },
-        "topic": {
+        "title": {
           "type": "string",
-          "description": "Topic of the quiz."
-        }
-      },
-      "required": [
-        "id",
-        "teacherId",
-        "topic"
-      ]
-    },
-    "Question": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Question",
-      "type": "object",
-      "description": "Represents a question within a quiz.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Question entity."
+          "description": "The title of the quiz."
         },
-        "quizId": {
-          "type": "string",
-          "description": "Reference to the Quiz this question belongs to. (Relationship: Quiz 1:N Question)"
-        },
-        "text": {
-          "type": "string",
-          "description": "The text of the question."
-        },
-        "answerOptions": {
+        "questions": {
           "type": "array",
-          "description": "Array of possible answer options for the question.",
+          "description": "An array of question objects.",
           "items": {
-            "type": "string"
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "options": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "correctAnswerIndex": { "type": "number" },
+              "timer": { "type": "number" }
+            },
+            "required": ["id", "text", "options", "correctAnswerIndex", "timer"]
           }
-        },
-        "correctAnswerIndex": {
-          "type": "number",
-          "description": "Index of the correct answer in the answerOptions array."
-        },
-        "explanation": {
-          "type": "string",
-          "description": "Explanation for the correct answer."
-        },
-        "timer": {
-          "type": "number",
-          "description": "Timer duration (in seconds) for the question."
         }
       },
-      "required": [
-        "id",
-        "quizId",
-        "text",
-        "answerOptions",
-        "correctAnswerIndex",
-        "explanation",
-        "timer"
-      ]
+      "required": ["id", "teacherId", "title", "questions"]
     },
     "BattleRoom": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "BattleRoom",
+      "description": "Represents a live quiz session initiated by a teacher.",
       "type": "object",
-      "description": "Represents a battle room for a quiz.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the BattleRoom entity."
+          "description": "Unique identifier for the battle room (the room code)."
         },
-        "quizId": {
+        "teacherId": {
           "type": "string",
-          "description": "Reference to the Quiz being played in this room. (Relationship: Quiz 1:1 BattleRoom)"
+          "description": "The UID of the teacher hosting the battle."
         },
-        "roomCode": {
-          "type": "string",
-          "description": "Unique code for students to join the room."
+        "quiz": {
+          "$ref": "#/backend/entities/Quiz",
+          "description": "A denormalized copy of the quiz object for the battle."
         },
-        "qrCode": {
+        "status": {
           "type": "string",
-          "description": "URL for the QR code that allows students to join the room."
+          "description": "The current status of the battle.",
+          "enum": ["waiting", "in-progress", "finished"]
+        },
+        "currentQuestionIndex": {
+          "type": "number",
+          "description": "The index of the currently active question."
+        },
+        "createdAt": {
+            "type": "number",
+            "description": "Timestamp when the room was created."
         }
       },
-      "required": [
-        "id",
-        "quizId",
-        "roomCode",
-        "qrCode"
-      ]
+      "required": ["id", "teacherId", "quiz", "status", "currentQuestionIndex", "createdAt"]
     },
     "BattleParticipation": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "BattleParticipation",
+      "description": "Tracks a student's state within a specific battle room.",
       "type": "object",
-      "description": "Represents a student's participation in a battle.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the BattleParticipation entity."
+          "description": "Unique identifier for the participation record."
         },
-        "userId": {
+        "studentId": {
           "type": "string",
-          "description": "Reference to the User (Student) participating in the battle. (Relationship: User 1:N BattleParticipation)"
+          "description": "The UID of the participating student."
+        },
+        "studentName": {
+            "type": "string"
+        },
+        "studentAvatar": {
+            "type": "string"
         },
         "battleRoomId": {
           "type": "string",
-          "description": "Reference to the BattleRoom the student is participating in. (Relationship: BattleRoom 1:N BattleParticipation)"
+          "description": "The ID of the battle room this participation belongs to."
         },
-        "score": {
-          "type": "number",
-          "description": "Student's score in the battle."
+        "answers": {
+          "type": "array",
+          "description": "An array of the student's answers.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "questionId": { "type": "string" },
+              "answerIndex": { "type": "number" },
+              "isCorrect": { "type": "boolean" },
+              "score": { "type": "number" }
+            },
+            "required": ["questionId", "answerIndex", "isCorrect", "score"]
+          }
+        },
+        "totalScore": {
+          "type": "number"
         },
         "malpracticeCount": {
           "type": "number",
-          "description": "Number of times the student attempted malpractice (e.g., tab switching)."
+          "description": "Number of times malpractice was detected."
         },
-        "malpracticeBlocked": {
+        "isBlocked": {
           "type": "boolean",
-          "description": "Student blocked or not."
+          "description": "If true, the student is blocked from continuing the quiz."
         }
       },
-      "required": [
-        "id",
-        "userId",
-        "battleRoomId",
-        "score",
-        "malpracticeCount",
-        "malpracticeBlocked"
-      ]
+      "required": ["id", "studentId", "studentName", "studentAvatar", "battleRoomId", "answers", "totalScore", "malpracticeCount", "isBlocked"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["password"]
   },
   "firestore": {
     "structure": [
@@ -195,57 +166,17 @@
           "schema": {
             "$ref": "#/backend/entities/User"
           },
-          "description": "Stores user data. Includes user's role and profile information.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "Unique identifier for the user."
-            }
-          ]
+          "description": "Stores public profile information for all users."
         }
       },
       {
-        "path": "/users/{teacherId}/quizzes/{quizId}",
+        "path": "/quizzes/{quizId}",
         "definition": {
           "entityName": "Quiz",
           "schema": {
             "$ref": "#/backend/entities/Quiz"
           },
-          "description": "Stores quizzes created by teachers. Includes denormalized 'teacherId' for authorization independence.",
-          "params": [
-            {
-              "name": "teacherId",
-              "description": "Unique identifier for the teacher who created the quiz."
-            },
-            {
-              "name": "quizId",
-              "description": "Unique identifier for the quiz."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{teacherId}/quizzes/{quizId}/questions/{questionId}",
-        "definition": {
-          "entityName": "Question",
-          "schema": {
-            "$ref": "#/backend/entities/Question"
-          },
-          "description": "Stores questions for a specific quiz. Includes denormalized 'quizId' for authorization independence.",
-          "params": [
-            {
-              "name": "teacherId",
-              "description": "Unique identifier for the teacher who created the quiz."
-            },
-            {
-              "name": "quizId",
-              "description": "Unique identifier for the quiz."
-            },
-            {
-              "name": "questionId",
-              "description": "Unique identifier for the question."
-            }
-          ]
+          "description": "Top-level collection for all quizzes created by teachers."
         }
       },
       {
@@ -255,36 +186,19 @@
           "schema": {
             "$ref": "#/backend/entities/BattleRoom"
           },
-          "description": "Stores battle room information. Each room is associated with a quiz.",
-          "params": [
-            {
-              "name": "battleRoomId",
-              "description": "Unique identifier for the battle room."
-            }
-          ]
+          "description": "Top-level collection for all live battle sessions."
         }
       },
       {
-        "path": "/battleRooms/{battleRoomId}/battleParticipations/{battleParticipationId}",
+        "path": "/battleRooms/{battleRoomId}/participants/{participantId}",
         "definition": {
           "entityName": "BattleParticipation",
           "schema": {
             "$ref": "#/backend/entities/BattleParticipation"
           },
-          "description": "Stores student participation data for a specific battle room. Includes denormalized 'battleRoomId' for authorization independence.",
-          "params": [
-            {
-              "name": "battleRoomId",
-              "description": "Unique identifier for the battle room."
-            },
-            {
-              "name": "battleParticipationId",
-              "description": "Unique identifier for the battle participation."
-            }
-          ]
+          "description": "Sub-collection storing participation records for each student in a battle."
         }
       }
-    ],
-    "reasoning": "This Firestore structure is designed to support the Cyber Gladiators application, with a focus on role-based access control, quiz management, and battle room functionality. The structure prioritizes authorization independence and simplifies security rules, enabling robust and scalable operations. Specifically, it ensures Authorization Independence by denormalizing relevant authorization data (e.g., teacherId) to subcollections where needed. Also, this design achieves that all documents in the same collections has the same security posture which improves security rules and reduce complexity.\n\nThe paths are structured to clearly define ownership and relationships between entities. User data is stored in a path-based structure (`/users/{userId}`) for private data. Quizzes and related entities are nested under the teacher's user ID, following a hierarchical path for user-owned data (`/users/{teacherId}/quizzes/{quizId}`). This design allows for secure and efficient ownership-based security rules. This structure supports the required QAPs by segregating data based on role and access needs, ensuring that list operations can be securely performed.\n\n**Authorization Independence and Denormalization:**\n\n*   The `quizzes` subcollection under each `user` document denormalizes the `teacherId` to ensure that all quiz-related operations can be performed independently of the parent `user` document.\n*   `questions` subcollection under each `quiz` document denormalizes the `quizId` to ensure that all question-related operations can be performed independently of the parent `quiz` document.\n*   `battleParticipations` subcollection under each `battleRoom` document denormalizes the `battleRoomId` to ensure that all battle participation operations can be performed independently of the parent `battleRoom` document.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure list operations by segregating data based on role and access needs. For example, only teachers can list quizzes under their user ID, while students can only access battle rooms they are participating in.\n\n*   **Ownership**: By using paths like `/users/{userId}/quizzes/{quizId}`, we ensure that only the teacher (`userId`) can manage their quizzes, enforcing ownership at the data structure level."
+    ]
   }
 }
