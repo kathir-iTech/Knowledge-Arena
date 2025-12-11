@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -16,6 +17,7 @@ interface QuizResultsProps {
 
 const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
   const rankedPlayers: BattlePlayer[] = room.participants
+    .filter(p => p.id !== room.teacherId)
     .map(p => ({
       ...p,
       score: room.scores[p.id] || 0,
