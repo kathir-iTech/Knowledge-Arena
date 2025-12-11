@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState } from 'react';
@@ -150,17 +151,18 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
              {battleRooms.map(room => (
                <AccordionItem key={room.id} value={room.id} className="bg-secondary/50 rounded-md px-4">
                   <div className="flex items-center w-full">
-                    <AccordionTrigger className="w-full">
+                    <AccordionTrigger className="w-full flex-grow">
                         <div className="w-full flex justify-between items-center pr-4">
                           <div className="flex items-center gap-2">
                             Room Code: <span className="font-mono text-primary">{room.id}</span>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); copyToClipboard(room.id)}}>
-                              <Copy className="h-4 w-4" />
-                            </Button>
                           </div>
                           <div className="text-sm text-muted-foreground">{room.studentIds.length} participant(s)</div>
                         </div>
                     </AccordionTrigger>
+                    
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); copyToClipboard(room.id)}}>
+                        <Copy className="h-4 w-4" />
+                    </Button>
 
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -301,3 +303,5 @@ export default TeacherDashboard;
     
 
       
+
+    
