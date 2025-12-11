@@ -137,12 +137,12 @@ const PastBattleRoomItem: React.FC<{ room: Room, onDelete: (roomId: string) => v
             <AccordionTrigger className="w-full flex-grow py-4">
                 <div className="w-full flex justify-between items-center pr-4">
                   <div className="flex flex-col items-start text-left">
-                    <span className="font-medium">{room.quiz.topic}</span>
+                    <span className="font-medium">{room.quiz?.topic || 'Untitled Battle'}</span>
                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         Room Code: <span className="font-mono text-primary">{room.id}</span>
                       </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">{room.studentIds.length} participant(s)</div>
+                  <div className="text-sm text-muted-foreground">{room.studentIds?.length || 0} participant(s)</div>
                 </div>
             </AccordionTrigger>
             
