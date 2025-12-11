@@ -94,7 +94,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
       batch.set(resultRef, newResult);
 
       // 2. Add the result ID to the room's results array
-      const roomRef = doc(firestore, 'rooms', room.id);
+      const roomRef = doc(firestore, 'battleRooms', room.id);
       batch.update(roomRef, {
         battleResultIds: arrayUnion(resultRef.id),
       });
@@ -164,7 +164,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
     if (isTeacher && firestore) {
       const nextIndex = currentQuestionIndex + 1;
       if (nextIndex < quiz.questions.length) {
-         const roomRef = doc(firestore, 'rooms', room.id);
+         const roomRef = doc(firestore, 'battleRooms', room.id);
          updateDocumentNonBlocking(roomRef, { currentQuestionIndex: nextIndex });
       } else {
         // Teacher finishes for everyone

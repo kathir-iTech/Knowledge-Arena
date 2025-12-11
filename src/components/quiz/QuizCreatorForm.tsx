@@ -19,7 +19,7 @@ import { PlusCircle, Trash2, Send } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { doc, collection, writeBatch } from 'firebase/firestore';
+import { doc, writeBatch } from 'firebase/firestore';
 import type { Quiz, Room, User, Question } from '@/lib/types';
 
 
@@ -91,7 +91,7 @@ export function QuizCreatorForm() {
 
     // 2. Create the Battle Room document
     const roomCode = uuidv4().slice(0, 6).toUpperCase();
-    const roomRef = doc(firestore, 'rooms', roomCode);
+    const roomRef = doc(firestore, 'battleRooms', roomCode);
     
     const creatorAsParticipant: User = {
       id: user.id,

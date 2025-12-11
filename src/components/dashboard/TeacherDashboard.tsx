@@ -116,7 +116,7 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
     if (!firestore) return;
     setIsLoading(true);
     const roomsQuery = query(
-      collection(firestore, 'rooms'),
+      collection(firestore, 'battleRooms'),
       where('quiz.id', '==', quiz.id),
       where('teacherId', '==', quiz.teacherId)
     );
@@ -128,7 +128,7 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
   
   const handleDeleteRoom = (roomId: string) => {
     if (!firestore) return;
-    const roomRef = doc(firestore, 'rooms', roomId);
+    const roomRef = doc(firestore, 'battleRooms', roomId);
     deleteDocumentNonBlocking(roomRef);
     // Optimistically remove from UI
     setBattleRooms(prev => prev.filter(room => room.id !== roomId));
@@ -209,7 +209,7 @@ const TeacherDashboard = () => {
   const firestore = useFirestore();
 
   const quizzesQuery = useMemoFirebase(
-    () => (user && firestore ? query(collection(firestore, `rooms`), where('teacherId', '==', user.id)) : null),
+    () => (user && firestore ? query(collection(firestore, `battleRooms`), where('teacherId', '==', user.id)) : null),
     [user, firestore]
   );
   
@@ -305,4 +305,5 @@ export default TeacherDashboard;
       
 
     
+
 
