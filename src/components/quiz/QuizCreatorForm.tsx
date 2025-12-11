@@ -116,11 +116,20 @@ export function QuizCreatorForm() {
     batch.set(roomRef, newRoom);
     
     await batch.commit();
+
+    navigator.clipboard.writeText(roomCode).then(() => {
+      toast({
+          title: "Battle Room Created & Code Copied!",
+          description: `Your room code is ${roomCode}. It has been copied to your clipboard. Redirecting...`
+      })
+    }).catch(err => {
+        console.error('Failed to copy room code: ', err);
+        toast({
+            title: "Battle Room Created!",
+            description: `Your room code is ${roomCode}. Could not copy to clipboard. Redirecting...`
+        })
+    });
     
-    toast({
-        title: "Battle Room Created!",
-        description: `Your room code is ${roomCode}. Redirecting you to the waiting room...`
-    })
 
     router.push(`/battle/${roomCode}`);
   };
