@@ -10,7 +10,7 @@ import BattleRoom from '@/components/quiz/BattleRoom';
 import QuizResults from '@/components/quiz/QuizResults';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, writeBatch } from 'firebase/firestore';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
@@ -19,61 +19,85 @@ export default function BattlePage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const roomRef = useMemoFirebase(() => firestore ? doc(firestore, 'battleRooms', params.roomCode) : null, [firestore, params.roomCode]);
-  const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<Room>(roomRef);
-
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [isJoining, setIsJoining] = useState(true);
+  
+  const roomCode = params.roomCode.toUpperCase();
+  const roomRef = useMemoFirebase(() => firestore ? doc(firestore, 'battleRooms', roomCode) : null, [firestore, roomCode]);
+  const { data: room, isLoading: isRoomLoading } = useDoc<Room>(roomRef);
+  
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [isQuizLoading, setIsQuizLoading] = useState(true);
 
   useEffect(() => {
-    if (isAuthLoading || isRoomLoading || !firestore) return;
+    if (isAuthLoading || !firestore || !authUser || !roomCode) return;
 
-    if (!room && !isRoomLoading) {
-      toast({ variant: 'destructive', title: 'Error', description: 'This battle room does not exist.' });
-      router.push('/');
-      return;
-    }
+    const joinRoom = async () => {
+      const userRef = doc(firestore, 'users', authUser.uid);
+      const roomDocRef = doc(firestore, 'battleRooms', roomCode);
 
-    if (authUser && room) {
-        // Fetch user profile to get latest details
-        const userRef = doc(firestore, 'users', authUser.uid);
-        getDoc(userRef).then(userDoc => {
-             if (!userDoc.exists()) {
-                toast({ variant: "destructive", title: "Error", description: "Could not find your user profile." });
-                router.push('/');
-                return;
-            }
-            const userProfile = userDoc.data() as User;
-            
-            // Check if user is already a participant
-            if (!room.participants.some(p => p.id === authUser.uid)) {
-                 updateDoc(roomRef!, {
-                    participants: arrayUnion(userProfile)
-                }).catch(err => console.error("Failed to add participant:", err));
-            }
-            setIsJoining(false);
-        });
+      try {
+        const [userDoc, roomDoc] = await Promise.all([getDoc(userRef), getDoc(roomDocRef)]);
 
-      // Fetch the quiz associated with the room
-      if(room.quizId && room.teacherId) {
-          const quizRef = doc(firestore, `users/${room.teacherId}/quizzes`, room.quizId);
-          getDoc(quizRef).then(quizDoc => {
-            if (quizDoc.exists()) {
-              setQuiz({ id: quizDoc.id, ...quizDoc.data() } as Quiz);
-            } else {
-              toast({ variant: 'destructive', title: 'Error', description: 'Could not find the quiz for this room.' });
-              router.push('/');
-            }
-            setIsQuizLoading(false);
-          });
-      } else {
-        toast({ variant: 'destructive', title: 'Error', description: 'This room is missing key information.' });
+        if (!roomDoc.exists()) {
+          toast({ variant: 'destructive', title: 'Error', description: 'This battle room does not exist.' });
+          router.push('/');
+          return;
+        }
+
+        if (!userDoc.exists()) {
+          toast({ variant: "destructive", title: "Error", description: "Could not find your user profile." });
+          router.push('/');
+          return;
+        }
+
+        const roomData = roomDoc.data() as Room;
+        const userProfile = userDoc.data() as User;
+        
+        // Add student to participants if they are not already in and are not the teacher
+        const isParticipant = roomData.participants.some(p => p.id === authUser.uid);
+        if (userProfile.role === 'Student' && !isParticipant) {
+           await updateDoc(roomDocRef, {
+             participants: arrayUnion(userProfile)
+           });
+        }
+      } catch (error) {
+        console.error("Error joining room:", error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not join the battle room.' });
         router.push('/');
+      } finally {
+        setIsJoining(false);
       }
-    }
+    };
 
-  }, [room, isRoomLoading, authUser, isAuthLoading, router, toast, firestore, params.roomCode, roomRef]);
+    joinRoom();
+
+  }, [isAuthLoading, firestore, authUser, roomCode, router, toast]);
+
+  useEffect(() => {
+    if (!room || !firestore) return;
+
+    // Fetch the quiz associated with the room
+    if(room.quizId && room.teacherId) {
+        const quizRef = doc(firestore, `users/${room.teacherId}/quizzes`, room.quizId);
+        getDoc(quizRef).then(quizDoc => {
+          if (quizDoc.exists()) {
+            setQuiz({ id: quizDoc.id, ...quizDoc.data() } as Quiz);
+          } else {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not find the quiz for this room.' });
+            router.push('/');
+          }
+          setIsQuizLoading(false);
+        }).catch(err => {
+            console.error("Error fetching quiz:", err);
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to load the quiz.' });
+            router.push('/');
+            setIsQuizLoading(false);
+        });
+    } else if (!isRoomLoading) {
+      toast({ variant: 'destructive', title: 'Error', description: 'This room is missing key information.' });
+      router.push('/');
+    }
+  }, [room, isRoomLoading, firestore, router, toast]);
 
 
   const handleStartBattle = () => {
@@ -102,7 +126,7 @@ export default function BattlePage() {
   if (!currentUserInRoom) {
      return (
         <div className="flex flex-col items-center justify-center h-screen p-4">
-            <h1 className="text-2xl font-headline text-primary mb-4">Joining battle...</h1>
+            <h1 className="text-2xl font-headline text-primary mb-4">Finalizing entry...</h1>
             <Skeleton className="w-full max-w-lg h-64" />
         </div>
     );
@@ -110,15 +134,15 @@ export default function BattlePage() {
 
 
   if (room.status === 'waiting') {
-    return <WaitingRoom room={{...room, id: params.roomCode}} quiz={quiz} user={currentUserInRoom} onStart={handleStartBattle} />;
+    return <WaitingRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom} onStart={handleStartBattle} />;
   }
 
   if (room.status === 'playing') {
-    return <BattleRoom room={{...room, id: params.roomCode}} quiz={quiz} user={currentUserInRoom} onFinish={handleFinishBattle} />;
+    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom} onFinish={handleFinishBattle} />;
   }
 
   if (room.status === 'finished') {
-    return <QuizResults room={{...room, id: params.roomCode}} quiz={quiz} />;
+    return <QuizResults room={{...room, id: roomCode}} quiz={quiz} />;
   }
 
   return notFound();
