@@ -111,9 +111,10 @@ export function QuizCreatorForm() {
       participants: [creatorAsParticipant],
       studentIds: [user.id], // Add teacher to studentIds to grant access
       status: 'waiting',
-      scores: { [user.id]: 0 },
+      scores: {},
       currentQuestionIndex: 0,
       startTime: 0,
+      battleResultIds: [],
     };
     batch.set(roomRef, newRoom);
     

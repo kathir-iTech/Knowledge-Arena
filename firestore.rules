@@ -1,3 +1,4 @@
+
 /**
  * Core Philosophy: This ruleset enforces a strict role-based security model for a teacher/student application.
  * Access is primarily determined by user ownership, established either through the document's path (for user data and teacher-created content)
@@ -11,10 +12,10 @@
  * - /battleResults/{battleResultId}: A top-level collection for student results from battles.
  *
  * Key Security Decisions:
- * - User Isolation: Users can only access their own data under /users/{userId}. Listing all users is disabled.
+ * - User Isolation: Users can only access their own data under /users/{userId}. Listing all users is disabled for privacy but allowed for the leaderboard.
  * - Teacher Ownership: Teachers have exclusive control over the quizzes and questions they create, enforced by nesting them under their user path.
  * - Shared Battle Rooms: Battle Rooms are secured using a denormalized 'teacherId' for owner controls and a 'studentIds' array for participant access.
- * - Result Privacy: Battle results can only be created, modified, or deleted by the student who earned them. Teachers are granted read-only access to the results of their battles for grading purposes.
+ * - Result Privacy: Battle results can only be created by the student who earned them. Teachers are granted read-only access to the results of their battles for grading purposes.
  *
  * Denormalization for Authorization:
  * To ensure fast and secure rules, this model relies on denormalization.
@@ -48,15 +49,15 @@ service cloud.firestore {
     }
 
     /**
-     * @description Manages user profile documents. Access is restricted to the user themselves.
+     * @description Manages user profile documents. Access is restricted to the user themselves for writes, but any signed-in user can read for profiles/leaderboards.
      * @path /users/{userId}
-     * @allow (create) An authenticated user with UID 'user123' can create their own profile at `/users/user123`.
-     * @deny (get) An authenticated user 'user456' cannot read the profile at `/users/user123`.
-     * @principle Restricts access to a user's own data tree.
+     * @allow (read) Any signed-in user can view profiles.
+     * @deny (write) An authenticated user 'user456' cannot write to the profile at `/users/user123`.
+     * @principle Restricts write access to a user's own data tree, but allows reads for app functionality.
      */
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
-      allow list: if isSignedIn();
+      allow read, list: if isSignedIn();
+      allow write: if isOwner(userId);
     }
 
     /**
@@ -67,8 +68,7 @@ service cloud.firestore {
      * @principle Enforces document ownership based on the collection path.
      */
     match /users/{teacherId}/quizzes/{quizId} {
-      allow read, write: if isOwner(teacherId);
-      allow list: if isOwner(teacherId);
+      allow read, write, list: if isOwner(teacherId);
 
       /**
        * @description Secures questions within a teacher's quiz, inheriting ownership from the parent quiz.
@@ -78,8 +78,7 @@ service cloud.firestore {
        * @principle Inherits ownership from the parent document's path.
        */
       match /questions/{questionId} {
-        allow read, write: if isOwner(teacherId);
-        allow list: if isOwner(teacherId);
+        allow read, write, list: if isOwner(teacherId);
       }
     }
 
@@ -88,12 +87,12 @@ service cloud.firestore {
      * Students listed in `studentIds` can access the room's state.
      * @path /battleRooms/{battleRoomId}
      * @allow (get) A student whose UID is in the `studentIds` array can read the battle room document.
-     * @deny (update) A student participant cannot update the battle room (e.g., add other students).
+     * @deny (update) A student participant cannot update the battle room (e.g., add other students), except to add themselves.
      * @principle Enforces shared access via a collaborator list (`studentIds`) and a single owner (`teacherId`).
      */
     match /battleRooms/{battleRoomId} {
       allow get: if isSignedIn() && (request.auth.uid == resource.data.teacherId || request.auth.uid in resource.data.studentIds);
-      allow list: if false;
+      allow list: if isSignedIn(); // Allow teachers to list rooms for their dashboard
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.teacherId;
       // Allow teacher to update the room, and students to be added to the room
       allow update: if isSignedIn() && (request.auth.uid == resource.data.teacherId || request.auth.uid in request.resource.data.studentIds);
@@ -102,18 +101,16 @@ service cloud.firestore {
 
     /**
      * @description Manages individual student results from a battle.
-     * A student has full control over their own result. The teacher of the battle room can read the result.
+     * A student has full control over their own result. The teacher of the battle room can read all results for that room.
      * @path /battleResults/{battleResultId}
      * @allow (create) A student with UID 'student123' can create a result document where 'studentId' is 'student123'.
      * @deny (update) A student 'student456' cannot update a result owned by 'student123'.
      * @principle Enforces document ownership via an internal `studentId` field, while allowing a `teacherId` read-only access.
      */
     match /battleResults/{battleResultId} {
-      allow get: if isSignedIn() && (request.auth.uid == resource.data.studentId || request.auth.uid == resource.data.teacherId);
-      allow list: if false;
+      allow get, list: if isSignedIn() && (request.auth.uid == resource.data.studentId || request.auth.uid == resource.data.teacherId);
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.studentId;
-      allow update: if resource != null && isSignedIn() && request.auth.uid == resource.data.studentId && request.resource.data.studentId == resource.data.studentId && request.resource.data.teacherId == resource.data.teacherId;
-      allow delete: if resource != null && isSignedIn() && request.auth.uid == resource.data.studentId;
+      allow update, delete: if resource != null && isSignedIn() && request.auth.uid == resource.data.studentId;
     }
   }
 }

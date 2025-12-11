@@ -7,7 +7,7 @@ import type { User } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Crown } from 'lucide-react';
+import { Crown, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function LeaderboardPage() {
@@ -31,27 +31,19 @@ export default function LeaderboardPage() {
     <div className="p-4 md:p-8">
       <header className="mb-8">
         <h1 className="text-4xl font-headline tracking-tight text-primary">Top Gladiators</h1>
-        <p className="text-muted-foreground">See who reigns supreme in the arena.</p>
+        <p className="text-muted-foreground">See who reigns supreme in the arena based on total XP.</p>
       </header>
       <Card className="border-accent/50 shadow-lg shadow-accent/10">
         <CardHeader>
-          <CardTitle className="font-headline">Leaderboard</CardTitle>
+          <CardTitle className="font-headline">Overall Leaderboard</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-             <div className="space-y-4">
-                {[...Array(5)].map((_, i) => (
-                    <div key={i} className="flex items-center gap-4 p-2">
-                        <Skeleton className="h-10 w-16" />
-                        <Skeleton className="h-12 w-12 rounded-full" />
-                        <div className="flex-1 space-y-2">
-                            <Skeleton className="h-4 w-3/4" />
-                        </div>
-                        <Skeleton className="h-6 w-1/4" />
-                    </div>
-                ))}
-            </div>
-          ) : (
+          {isLoading && (
+             <div className="flex justify-center items-center p-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+             </div>
+          )}
+          {!isLoading && users && (
           <Table>
             <TableHeader>
               <TableRow>
@@ -61,7 +53,7 @@ export default function LeaderboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users && users.map((user, index) => (
+              {users.map((user, index) => (
                 <TableRow key={user.id} className={index < 3 ? 'bg-secondary' : ''}>
                   <TableCell>
                     <div className="flex items-center justify-center h-full">
@@ -82,6 +74,9 @@ export default function LeaderboardPage() {
             </TableBody>
           </Table>
           )}
+           {!isLoading && !users && (
+            <p className="text-center text-muted-foreground p-8">Could not load leaderboard data.</p>
+           )}
         </CardContent>
       </Card>
     </div>

@@ -1,24 +1,153 @@
+
 "use client";
 
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, BarChart, Users, History } from 'lucide-react';
+import { PlusCircle, BarChart, Users, History, ChevronDown, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
-import type { Quiz } from '@/lib/types';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import type { Quiz, Room, BattleResult } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+
+
+const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
+  const firestore = useFirestore();
+  const [results, setResults] = useState<BattleResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  React.useEffect(() => {
+    const fetchResults = async () => {
+      if (!firestore || room.battleResultIds.length === 0) {
+        setIsLoading(false);
+        return;
+      }
+      const resultsQuery = query(
+        collection(firestore, 'battleResults'),
+        where('__name__', 'in', room.battleResultIds),
+        orderBy('score', 'desc')
+      );
+      const resultsSnapshot = await getDocs(resultsQuery);
+      const resultsData = resultsSnapshot.docs.map(doc => doc.data() as BattleResult);
+      setResults(resultsData);
+      setIsLoading(false);
+    };
+
+    fetchResults();
+  }, [firestore, room.battleResultIds]);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center p-4">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
+  }
+
+  if (results.length === 0) {
+    return <p className="text-sm text-muted-foreground p-4 text-center">No results yet for this battle.</p>;
+  }
+
+  return (
+    <div className="p-4 bg-background rounded-md">
+       <h4 className="font-semibold mb-2">Battle Results (Room: {room.id})</h4>
+       <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Rank</TableHead>
+              <TableHead>Student</TableHead>
+              <TableHead className="text-right">Score</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {results.map((result, index) => (
+               <TableRow key={result.studentId}>
+                  <TableCell className="font-bold">{index + 1}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                       <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-muted text-sm">{result.studentAvatar}</AvatarFallback>
+                       </Avatar>
+                       <span>{result.studentName}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-primary">{result.score}</TableCell>
+               </TableRow>
+            ))}
+          </TableBody>
+       </Table>
+    </div>
+  );
+};
+
+
+const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
+  const firestore = useFirestore();
+  const [battleRooms, setBattleRooms] = useState<Room[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const fetchBattleRooms = async () => {
+    if (!firestore) return;
+    setIsLoading(true);
+    const roomsQuery = query(
+      collection(firestore, 'battleRooms'),
+      where('quizId', '==', quiz.id),
+      where('teacherId', '==', quiz.teacherId)
+    );
+    const roomsSnapshot = await getDocs(roomsQuery);
+    const roomsData = roomsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
+    setBattleRooms(roomsData);
+    setIsLoading(false);
+  };
+
+  return (
+    <AccordionItem value={quiz.id}>
+      <AccordionTrigger onClick={fetchBattleRooms}>
+        <div className="flex justify-between items-center w-full pr-4">
+            <span className="font-medium">{quiz.topic}</span>
+            <span className="text-sm text-muted-foreground">{quiz.questions.length} questions</span>
+        </div>
+      </AccordionTrigger>
+      <AccordionContent>
+        {isLoading && <div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>}
+        {!isLoading && battleRooms.length === 0 && <p className="text-sm text-muted-foreground p-4">No battle rooms found for this quiz.</p>}
+        {!isLoading && battleRooms.length > 0 && (
+           <Accordion type="single" collapsible className="w-full space-y-2">
+             {battleRooms.map(room => (
+               <AccordionItem key={room.id} value={room.id} className="bg-secondary/50 rounded-md px-4">
+                  <AccordionTrigger>
+                      <div className="w-full flex justify-between items-center pr-4">
+                        <div>Room Code: <span className="font-mono text-primary">{room.id}</span></div>
+                        <div className="text-sm text-muted-foreground">{room.studentIds.length} participant(s)</div>
+                      </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                      <BattleRoomResults room={room} />
+                  </AccordionContent>
+               </AccordionItem>
+             ))}
+           </Accordion>
+        )}
+      </AccordionContent>
+    </AccordionItem>
+  );
+};
+
 
 const TeacherDashboard = () => {
   const { user } = useAuth();
   const firestore = useFirestore();
 
-  const quizzesRef = useMemoFirebase(
+  const quizzesQuery = useMemoFirebase(
     () => (user && firestore ? query(collection(firestore, `users/${user.id}/quizzes`)) : null),
     [user, firestore]
   );
-  const { data: quizzes, isLoading: isLoadingQuizzes } = useCollection<Quiz>(quizzesRef);
+  const { data: quizzes, isLoading: isLoadingQuizzes } = useCollection<Quiz>(quizzesQuery);
 
   return (
     <div className="p-4 md:p-8 space-y-8">
@@ -68,7 +197,7 @@ const TeacherDashboard = () => {
       <Card>
         <CardHeader>
             <CardTitle className="font-headline text-2xl flex items-center gap-2"><History /> Past Quizzes</CardTitle>
-            <CardDescription>Review the quizzes you've created.</CardDescription>
+            <CardDescription>Review the quizzes you've created and their battle results.</CardDescription>
         </CardHeader>
         <CardContent>
             {isLoadingQuizzes && (
@@ -78,17 +207,14 @@ const TeacherDashboard = () => {
                     <Skeleton className="h-10 w-full" />
                 </div>
             )}
-            {quizzes && quizzes.length > 0 ? (
-                <ul className="space-y-2">
-                    {quizzes.map(quiz => (
-                        <li key={quiz.id} className="flex items-center justify-between p-3 bg-secondary rounded-md">
-                           <span className="font-medium">{quiz.topic}</span>
-                           <span className="text-sm text-muted-foreground">{quiz.questions.length} questions</span>
-                        </li>
-                    ))}
-                </ul>
+             {quizzes && quizzes.length > 0 ? (
+               <Accordion type="single" collapsible className="w-full">
+                {quizzes.map(quiz => (
+                  <PastQuizItem key={quiz.id} quiz={quiz} />
+                ))}
+              </Accordion>
             ) : (
-                !isLoadingQuizzes && <p className="text-muted-foreground text-center">You haven't created any quizzes yet.</p>
+                !isLoadingQuizzes && <p className="text-muted-foreground text-center py-8">You haven't created any quizzes yet.</p>
             )}
         </CardContent>
       </Card>

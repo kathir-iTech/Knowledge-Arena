@@ -1,17 +1,19 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import type { Room, Quiz, User, Question } from '@/lib/types';
+import type { Room, Quiz, User, Question, BattleResult } from '@/lib/types';
 import { useVisibilityChange } from '@/hooks/useVisibilityChange';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle, XCircle, Shield, Clock } from 'lucide-react';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, writeBatch, arrayUnion } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
+import { v4 as uuidv4 } from 'uuid';
 
 interface BattleRoomProps {
   room: Room;
@@ -25,7 +27,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [score, setScore] = useState(room.scores[user.id] || 0);
+  const [score, setScore] = useState(0);
   const router = useRouter();
   const { addXp } = useAuth();
   const firestore = useFirestore();
@@ -47,7 +49,13 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
   // Sync with Firestore state
   useEffect(() => {
       setCurrentQuestionIndex(room.currentQuestionIndex);
-  }, [room.currentQuestionIndex])
+      // Reset local state for the new question
+      setShowResult(false);
+      setSelectedAnswer(null);
+      if(quiz.questions[room.currentQuestionIndex]) {
+        setTimeLeft(quiz.questions[room.currentQuestionIndex].timer);
+      }
+  }, [room.currentQuestionIndex, quiz.questions]);
 
 
   useEffect(() => {
@@ -61,6 +69,46 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
     return () => clearInterval(timer);
   }, [timeLeft, showResult, user.role]);
 
+  const finishBattle = useCallback(async (finalScore: number) => {
+    if (!firestore || user.role !== 'Student') {
+      onFinish();
+      return;
+    }
+
+    try {
+      const batch = writeBatch(firestore);
+      
+      // 1. Create a new BattleResult document
+      const resultRef = doc(firestore, 'battleResults', uuidv4());
+      const newResult: BattleResult = {
+        id: resultRef.id,
+        battleRoomId: room.id,
+        studentId: user.id,
+        teacherId: room.teacherId,
+        studentName: user.name,
+        studentAvatar: user.avatar,
+        score: finalScore,
+        completedAt: Date.now(),
+      };
+      batch.set(resultRef, newResult);
+
+      // 2. Add the result ID to the room's results array
+      const roomRef = doc(firestore, 'battleRooms', room.id);
+      batch.update(roomRef, {
+        battleResultIds: arrayUnion(resultRef.id),
+      });
+      
+      await batch.commit();
+      addXp(finalScore); // Add XP to user's total
+    } catch (error) {
+      console.error("Failed to save battle result:", error);
+    } finally {
+      onFinish(); // This will trigger the room status to 'finished'
+    }
+
+  }, [firestore, user, room.id, room.teacherId, onFinish, addXp]);
+
+
   const handleAnswer = useCallback((answerIndex: number | null) => {
     if (showResult || user.role === 'Teacher') return;
 
@@ -69,31 +117,27 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
 
     let points = 0;
     if (answerIndex === currentQuestion.correctAnswer) {
+      // Base 50 points, plus up to 50 bonus points for speed
       points = 50 + Math.floor(timeLeft * (50 / currentQuestion.timer));
       const newScore = score + points;
       setScore(newScore);
-      
-      if (firestore) {
-        const roomRef = doc(firestore, 'battleRooms', room.id);
-        const newScores = { ...room.scores, [user.id]: newScore };
-        updateDocumentNonBlocking(roomRef, { scores: newScores });
-      }
     }
 
+    // Wait 3 seconds to show the result before moving on
     setTimeout(() => {
-      if (currentQuestionIndex < quiz.questions.length - 1) {
-        // Only teacher can advance the question
-        // Students wait for the room state to change
-      } else {
-        addXp(score + points); // final score
-        onFinish();
+      // For students, we just wait. The teacher advancing the question will trigger a re-render.
+      // If it's the last question, the student finalizes their own score.
+      if (currentQuestionIndex >= quiz.questions.length - 1) {
+        finishBattle(score + points);
       }
     }, 3000);
-  }, [showResult, user.role, currentQuestion, timeLeft, score, firestore, room.id, room.scores, user.id, currentQuestionIndex, quiz.questions.length, addXp, onFinish]);
+
+  }, [showResult, user.role, currentQuestion, timeLeft, score, currentQuestionIndex, quiz.questions.length, finishBattle]);
+
 
   useEffect(() => {
-    if (timeLeft <= 0 && !showResult && user.role !== 'Teacher') {
-      handleAnswer(null);
+    if (timeLeft <= 0 && !showResult && user.role === 'Student') {
+      handleAnswer(null); // Auto-submit with no answer when time runs out
     }
   }, [timeLeft, showResult, handleAnswer, user.role]);
 
@@ -106,7 +150,13 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
   };
   
   if (!currentQuestion) {
-    return <div>Loading question...</div>;
+    // This can happen briefly if the teacher finishes the battle
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen">
+          <Loader2 className="w-12 h-12 animate-spin text-primary" />
+          <p className="text-muted-foreground mt-4">Waiting for next question...</p>
+        </div>
+    );
   }
 
   const handleNextQuestion = () => {
@@ -115,9 +165,8 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
       if (nextIndex < quiz.questions.length) {
          const roomRef = doc(firestore, 'battleRooms', room.id);
          updateDocumentNonBlocking(roomRef, { currentQuestionIndex: nextIndex });
-         setShowResult(false); // Reset for next question view
-         setSelectedAnswer(null);
       } else {
+        // Teacher finishes for everyone
         onFinish();
       }
     }

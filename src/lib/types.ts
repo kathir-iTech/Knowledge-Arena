@@ -35,7 +35,20 @@ export interface Room {
   scores: { [userId: string]: number };
   currentQuestionIndex: number;
   startTime: number;
+  battleResultIds: string[];
 }
+
+export interface BattleResult {
+  id: string;
+  battleRoomId: string;
+  studentId: string;
+  teacherId: string;
+  studentName: string;
+  studentAvatar: string;
+  score: number;
+  completedAt: number;
+}
+
 
 export interface BattlePlayer extends User {
   score: number;
