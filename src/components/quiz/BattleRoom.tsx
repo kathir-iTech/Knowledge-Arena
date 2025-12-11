@@ -9,7 +9,7 @@ import { useVisibilityChange } from '@/hooks/useVisibilityChange';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, XCircle, Shield, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, Shield, Clock, Loader2 } from 'lucide-react';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc, writeBatch, arrayUnion } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
@@ -32,10 +32,11 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
   const { addXp } = useAuth();
   const firestore = useFirestore();
 
+  const isTeacher = user.role === 'Teacher';
   const currentQuestion = quiz.questions[currentQuestionIndex];
 
   useVisibilityChange(() => {
-    if (user.role === 'Student') {
+    if (!isTeacher) {
       router.push('/kicked');
     }
   });
@@ -59,7 +60,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
 
 
   useEffect(() => {
-    if (showResult || timeLeft <= 0 || user.role === 'Teacher') {
+    if (showResult || timeLeft <= 0 || isTeacher) {
       return;
     }
     const timer = setInterval(() => {
@@ -67,10 +68,10 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft, showResult, user.role]);
+  }, [timeLeft, showResult, isTeacher]);
 
   const finishBattle = useCallback(async (finalScore: number) => {
-    if (!firestore || user.role !== 'Student') {
+    if (!firestore || isTeacher) {
       onFinish();
       return;
     }
@@ -106,11 +107,11 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
       onFinish(); // This will trigger the room status to 'finished'
     }
 
-  }, [firestore, user, room.id, room.teacherId, onFinish, addXp]);
+  }, [firestore, user, room.id, room.teacherId, onFinish, addXp, isTeacher]);
 
 
   const handleAnswer = useCallback((answerIndex: number | null) => {
-    if (showResult || user.role === 'Teacher') return;
+    if (showResult || isTeacher) return;
 
     setSelectedAnswer(answerIndex);
     setShowResult(true);
@@ -132,20 +133,20 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
       }
     }, 3000);
 
-  }, [showResult, user.role, currentQuestion, timeLeft, score, currentQuestionIndex, quiz.questions.length, finishBattle]);
+  }, [showResult, isTeacher, currentQuestion, timeLeft, score, currentQuestionIndex, quiz.questions.length, finishBattle]);
 
 
   useEffect(() => {
-    if (timeLeft <= 0 && !showResult && user.role === 'Student') {
+    if (timeLeft <= 0 && !showResult && !isTeacher) {
       handleAnswer(null); // Auto-submit with no answer when time runs out
     }
-  }, [timeLeft, showResult, handleAnswer, user.role]);
+  }, [timeLeft, showResult, handleAnswer, isTeacher]);
 
 
   const getButtonClass = (index: number) => {
-    if (!showResult && user.role !== 'Teacher') return 'bg-secondary hover:bg-primary/20';
+    if (!showResult && !isTeacher) return 'bg-secondary hover:bg-primary/20';
     if (index === currentQuestion.correctAnswer) return 'bg-green-500/80 ring-2 ring-green-400';
-    if (index === selectedAnswer && user.role === 'Student') return 'bg-red-500/80';
+    if (index === selectedAnswer && !isTeacher) return 'bg-red-500/80';
     return 'bg-secondary opacity-50';
   };
   
@@ -160,7 +161,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
   }
 
   const handleNextQuestion = () => {
-    if (user.role === 'Teacher' && firestore) {
+    if (isTeacher && firestore) {
       const nextIndex = currentQuestionIndex + 1;
       if (nextIndex < quiz.questions.length) {
          const roomRef = doc(firestore, 'battleRooms', room.id);
@@ -178,14 +179,14 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="text-2xl font-headline text-primary">{quiz.topic}</CardTitle>
-            {user.role === 'Student' && (
+            {!isTeacher && (
               <div className="flex items-center gap-2 text-lg font-mono">
                 <Clock className="w-5 h-5" />
                 {timeLeft}s
               </div>
             )}
           </div>
-           {user.role === 'Student' && <Progress value={(timeLeft / currentQuestion.timer) * 100} className="w-full h-2" />}
+           {!isTeacher && <Progress value={(timeLeft / currentQuestion.timer) * 100} className="w-full h-2" />}
           <CardDescription>Question {currentQuestionIndex + 1} of {quiz.questions.length}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -195,7 +196,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
               <Button
                 key={index}
                 onClick={() => handleAnswer(index)}
-                disabled={showResult || user.role === 'Teacher'}
+                disabled={showResult || isTeacher}
                 className={cn("h-auto min-h-16 text-wrap p-4 text-base justify-start transition-all duration-300", getButtonClass(index))}
               >
                 <span className="font-bold mr-4">{String.fromCharCode(65 + index)}.</span>
@@ -204,20 +205,20 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
             ))}
           </div>
 
-          {(showResult || user.role === 'Teacher') && (
+          {(showResult || isTeacher) && (
             <Card className="mt-6 bg-secondary p-4">
                 <div className="flex items-start gap-4">
-                    {user.role === 'Student' && (
+                    {!isTeacher && (
                         selectedAnswer === currentQuestion.correctAnswer ? (
                             <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
                         ) : (
                             <XCircle className="w-8 h-8 text-red-400 shrink-0" />
                         )
                     )}
-                     {user.role === 'Teacher' && <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />}
+                     {isTeacher && <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />}
                     <div>
                         <h3 className="font-bold text-lg">
-                           {user.role === 'Teacher' ? `Correct Answer: ${currentQuestion.options[currentQuestion.correctAnswer]}` : (selectedAnswer === currentQuestion.correctAnswer ? 'Correct!' : 'Incorrect')}
+                           {isTeacher ? `Correct Answer: ${currentQuestion.options[currentQuestion.correctAnswer]}` : (selectedAnswer === currentQuestion.correctAnswer ? 'Correct!' : 'Incorrect')}
                         </h3>
                         <p className="text-muted-foreground">{currentQuestion.explanation}</p>
                     </div>
@@ -225,7 +226,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
             </Card>
           )}
           
-          {user.role === 'Teacher' && (
+          {isTeacher && (
             <div className="flex justify-end mt-4">
               <Button onClick={handleNextQuestion}>
                 {currentQuestionIndex < quiz.questions.length - 1 ? 'Next Question' : 'Finish Battle'}
@@ -235,7 +236,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
 
         </CardContent>
       </Card>
-        {user.role === 'Student' && (
+        {!isTeacher && (
             <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Shield className="w-4 h-4 text-green-500" />
                 <span>Fair play mode is active. Do not switch tabs.</span>
