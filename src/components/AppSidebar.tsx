@@ -49,8 +49,10 @@ const AppSidebar = () => {
                 <SidebarMenuItem key={item.label}>
                   <Link href={item.href} passHref>
                     <SidebarMenuButton asChild isActive={isActive}>
-                      <item.icon />
-                      <span>{item.label}</span>
+                      <>
+                        <item.icon />
+                        <span>{item.label}</span>
+                      </>
                     </SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>
