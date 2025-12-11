@@ -1,81 +1,48 @@
 'use client';
-import { useEffect, useState } from 'react';
-import type { FirestoreError } from 'firebase/firestore';
+import { useEffect, useState, useRef } from 'react';
+import type { FirestoreError, Query } from 'firebase/firestore';
+import { onSnapshot } from 'firebase/firestore';
 
-/**
- * useCollectionSafe(queryOrRef)
- * - Accepts a Firestore collection reference or query.
- * - Returns { data, loading, error }.
- * - If Firestore denies permission to list the collection, it logs a warning and returns data = [] (no throw).
- */
-export default function useCollectionSafe(queryOrRef: any) {
+export default function useCollection(queryOrRef: Query | null) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
+  const queryRef = useRef(queryOrRef);
+
   useEffect(() => {
+    // Prevent re-running the effect if the query object itself changes but is logically the same.
+    // A better approach is to memoize the query in the calling component.
+    if (queryRef.current === queryOrRef) {
+      // return;
+    }
+    queryRef.current = queryOrRef;
+
     if (!queryOrRef) {
       setData([]);
       setLoading(false);
       return;
     }
+    
+    setLoading(true);
 
-    let unsubscribe: (() => void) | null = null;
-
-    const attach = async () => {
-      try {
-        // Try to attach a realtime listener and handle errors in its callback
-        if (typeof queryOrRef.onSnapshot === 'function') {
-          unsubscribe = queryOrRef.onSnapshot(
-            (snap: any) => {
-              const docs = snap.docs ? snap.docs.map((d: any) => ({ id: d.id, ...d.data() })) : [];
-              setData(docs);
-              setLoading(false);
-            },
-            (err: any) => {
-              // Swallow Firestore permission errors and return empty data — do not crash app
-              console.warn('useCollectionSafe listener error:', err);
-              const code = (err && err.code) || '';
-              const msg = (err && err.message) || '';
-              const isPermission = String(code).toLowerCase().includes('permission') || String(msg).toLowerCase().includes('permission');
-              if (isPermission) {
-                setData([]);
-                setError(null);
-              } else {
-                setError(err);
-              }
-              setLoading(false);
-            }
-          );
-        } else {
-          // If queryOrRef is not a Query with onSnapshot, try to call it as a function (fallback)
-          setData([]);
-          setLoading(false);
+    const unsubscribe = onSnapshot(
+        queryOrRef,
+        (snap) => {
+            const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            setData(docs);
+            setError(null);
+            setLoading(false);
+        },
+        (err) => {
+            console.error('useCollection listener error:', err);
+            setError(err);
+            setData([]);
+            setLoading(false);
         }
-      } catch (err: any) {
-        console.warn('useCollectionSafe attach error', err);
-        const msg = String(err?.message || err || '');
-        const isPermission = msg.toLowerCase().includes('permission');
-        if (isPermission) {
-          setData([]);
-          setError(null);
-          setLoading(false);
-        } else {
-          setError(err);
-          setLoading(false);
-        }
-      }
-    };
+    );
 
-    attach();
-
-    return () => {
-      try {
-        if (unsubscribe && typeof unsubscribe === 'function') unsubscribe();
-      } catch (e) {
-        // ignore cleanup errors
-      }
-    };
+    return () => unsubscribe();
   }, [queryOrRef]);
 
   return { data, loading, error };

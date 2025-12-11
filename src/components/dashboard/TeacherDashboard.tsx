@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, BarChart, Users, History, Loader2, Trash2, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore, useCollectionSafe, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, orderBy, doc, writeBatch } from 'firebase/firestore';
-import type { Quiz, Room, BattleResult, User } from '@/lib/types';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where, getDocs, orderBy, doc, writeBatch, deleteDoc } from 'firebase/firestore';
+import type { Room, BattleResult, User } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -31,41 +31,25 @@ import { useToast } from '@/hooks/use-toast';
 const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
   const firestore = useFirestore();
   const [results, setResults] = useState<BattleResult[]>([]);
-  const [participants, setParticipants] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchDetails = async () => {
-      if (!firestore) {
+      if (!firestore || !room.battleResultIds || room.battleResultIds.length === 0) {
         setIsLoading(false);
         return;
       }
       setIsLoading(true);
 
       try {
-        // Fetch Battle Results
-        if (room.battleResultIds && room.battleResultIds.length > 0) {
-          const resultsQuery = query(
-            collection(firestore, 'battleResults'),
-            where('__name__', 'in', room.battleResultIds),
-            orderBy('score', 'desc')
-          );
-          const resultsSnapshot = await getDocs(resultsQuery);
-          const resultsData = resultsSnapshot.docs.map(doc => doc.data() as BattleResult);
-          setResults(resultsData);
-        } else {
-          setResults([]);
-        }
-
-        // Fetch Participant User documents
-        if (room.studentIds && room.studentIds.length > 0) {
-            const usersQuery = query(collection(firestore, 'users'), where('id', 'in', room.studentIds));
-            const usersSnapshot = await getDocs(usersQuery);
-            const usersData = usersSnapshot.docs.map(doc => doc.data() as User);
-            setParticipants(usersData);
-        } else {
-            setParticipants([]);
-        }
+        const resultsQuery = query(
+          collection(firestore, 'battleResults'),
+          where('battleRoomId', '==', room.id),
+          orderBy('score', 'desc')
+        );
+        const resultsSnapshot = await getDocs(resultsQuery);
+        const resultsData = resultsSnapshot.docs.map(doc => doc.data() as BattleResult);
+        setResults(resultsData);
 
       } catch (error) {
         console.error("Error fetching battle details:", error);
@@ -75,7 +59,7 @@ const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
     };
 
     fetchDetails();
-  }, [firestore, room.battleResultIds, room.studentIds]);
+  }, [firestore, room.id, room.battleResultIds]);
 
   if (isLoading) {
     return (
@@ -193,46 +177,32 @@ const TeacherDashboard = () => {
     [user, firestore]
   );
   
-  const { data: rooms, loading: isLoadingRooms } = useCollectionSafe(battleRoomsQuery);
-  const [optimisticRooms, setOptimisticRooms] = useState<Room[] | null>(null);
+  const { data: rooms, loading: isLoadingRooms } = useCollection(battleRoomsQuery);
   const { toast } = useToast();
-
-  useEffect(() => {
-    if (rooms) {
-      setOptimisticRooms(rooms as Room[]);
-    }
-  }, [rooms]);
   
-  const handleDeleteRoom = (roomId: string) => {
-    if (!firestore || !optimisticRooms) return;
-    const roomToDelete = optimisticRooms.find(r => r.id === roomId);
-    if (!roomToDelete) return;
-
-    const batch = writeBatch(firestore);
+  const handleDeleteRoom = async (roomId: string) => {
+    if (!firestore) return;
     
-    // Delete the room itself
-    const roomRef = doc(firestore, 'battleRooms', roomId);
-    batch.delete(roomRef);
+    try {
+      const batch = writeBatch(firestore);
+      
+      const resultsQuery = query(collection(firestore, 'battleResults'), where('battleRoomId', '==', roomId));
+      const resultsSnapshot = await getDocs(resultsQuery);
+      resultsSnapshot.forEach(doc => {
+          batch.delete(doc.ref);
+      });
+      
+      const roomRef = doc(firestore, 'battleRooms', roomId);
+      batch.delete(roomRef);
 
-    // Delete all associated battle results
-    if (roomToDelete.battleResultIds && roomToDelete.battleResultIds.length > 0) {
-        roomToDelete.battleResultIds.forEach(resultId => {
-            const resultRef = doc(firestore, 'battleResults', resultId);
-            batch.delete(resultRef);
-        });
+      await batch.commit();
+
+      toast({ title: 'Success', description: 'Battle room and its results have been deleted.' });
+    } catch (e) {
+      console.error("Failed to delete room and results:", e);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the battle room.' });
     }
-
-    batch.commit().then(() => {
-        setOptimisticRooms(prev => prev ? prev.filter(room => room.id !== roomId) : null);
-        toast({ title: 'Success', description: 'Battle room and its results have been deleted.' });
-    }).catch(e => {
-        console.error("Failed to delete room and results:", e);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the battle room.' });
-    })
   }
-
-  const displayedRooms = optimisticRooms ?? rooms;
-
 
   return (
     <div className="p-4 md:p-8 space-y-8">
@@ -258,7 +228,7 @@ const TeacherDashboard = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoadingRooms ? <Skeleton className="h-8 w-1/4 mt-1" /> : <div className="text-2xl font-bold">{displayedRooms?.length || 0}</div> }
+            {isLoadingRooms ? <Skeleton className="h-8 w-1/4 mt-1" /> : <div className="text-2xl font-bold">{rooms?.length || 0}</div> }
             <p className="text-xs text-muted-foreground">Number of battles you have hosted</p>
           </CardContent>
         </Card>
@@ -292,9 +262,9 @@ const TeacherDashboard = () => {
                     <Skeleton className="h-16 w-full" />
                 </div>
             )}
-             {displayedRooms && displayedRooms.length > 0 ? (
+             {rooms && rooms.length > 0 ? (
                <Accordion type="single" collapsible className="w-full space-y-2">
-                {displayedRooms.map(room => (
+                {rooms.map(room => (
                   <PastBattleRoomItem key={room.id} room={room as Room} onDelete={handleDeleteRoom} />
                 ))}
               </Accordion>

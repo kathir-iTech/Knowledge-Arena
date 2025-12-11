@@ -4,22 +4,23 @@ import React from 'react';
 import { useUser } from '@/firebase';
 import { usePathname, redirect } from 'next/navigation';
 import AppSidebar from '@/components/AppSidebar';
-import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { Skeleton } from './ui/skeleton';
 import { BotMessageSquare } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { user: firebaseUser, isUserLoading } = useUser();
-  const { user: contextUser } = useAuth();
+  const { user: contextUser, isLoading: isAuthContextLoading } = useAuth();
+  
+  const isLoading = isUserLoading || isAuthContextLoading;
   const user = contextUser || firebaseUser;
   const isAuthenticated = !!user;
   const pathname = usePathname();
   
-  // Use the role from our application context which is more reliable
   const userRole = contextUser?.role;
 
-  if (isUserLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -31,41 +32,39 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const isAuthPage = pathname === '/';
-  const isKickedPage = pathname === '/kicked';
+  const publicPages = ['/', '/kicked', '/cheating-detected'];
+  const isPublicPage = publicPages.includes(pathname);
 
-  // If user is not authenticated and not on a public page, redirect to login
-  if (!isAuthenticated && !isAuthPage && !isKickedPage) {
+  if (!isAuthenticated && !isPublicPage) {
     redirect('/');
+    return null;
   }
 
-  // If user is authenticated and on the login page, redirect to their dashboard
-  if (isAuthenticated && isAuthPage) {
+  if (isAuthenticated && pathname === '/') {
      if (userRole === 'Teacher') {
       redirect('/teacher/dashboard');
     } else if (userRole === 'Student') {
       redirect('/student/dashboard');
     }
+    return null;
   }
 
-  // Render auth/kicked pages without the main layout
-  if (isAuthPage || isKickedPage) {
+  if (isPublicPage) {
     return <>{children}</>;
   }
 
-  // Enforce strict role-based access control for all other pages
   if (isAuthenticated && userRole) {
     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
     const isStudentPage = pathname.startsWith('/student') || pathname.startsWith('/battle');
 
     if (userRole === 'Teacher' && isStudentPage) {
        redirect('/teacher/dashboard');
-       return null; // Return null to prevent rendering the student page
+       return null;
     }
     
     if (userRole === 'Student' && isTeacherPage) {
        redirect('/student/dashboard');
-       return null; // Return null to prevent rendering the teacher page
+       return null;
     }
   }
 

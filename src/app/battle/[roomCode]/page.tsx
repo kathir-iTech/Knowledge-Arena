@@ -3,9 +3,9 @@
 
 import { useState, useEffect } from 'react';
 import { notFound, useRouter, useParams } from 'next/navigation';
-import { useAuth, useFirebase } from '@/firebase';
-import { useMemoFirebase, useDoc } from '@/firebase';
-import type { Room, User } from '@/lib/types';
+import { useAuth as useAppAuth } from '@/hooks/useAuth';
+import { useFirebase, useDoc, useMemoFirebase } from '@/firebase';
+import type { Room } from '@/lib/types';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import BattleRoom from '@/components/quiz/BattleRoom';
 import QuizResults from '@/components/quiz/QuizResults';
@@ -16,7 +16,7 @@ import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
-  const { user: appUser, isLoading: isAuthLoading } = useAuth();
+  const { user: appUser, isLoading: isAuthLoading } = useAppAuth();
   const { firestore } = useFirebase();
   const router = useRouter();
   const { toast } = useToast();
@@ -25,19 +25,15 @@ export default function BattlePage() {
   
   const roomCode = params.roomCode.toUpperCase();
 
-  // This useEffect handles joining the room and adding the user to the participants list.
   useEffect(() => {
-    // Wait until we have the user and their role
     if (isAuthLoading || !firestore || !appUser || !roomCode) return;
-    
-    // Teachers don't need to join, they are already in.
-    if(appUser.role === 'Teacher') {
+
+    if (appUser.role === 'Teacher') {
         setIsJoining(false);
         return;
     }
 
     const joinRoom = async () => {
-      if (!firestore) return;
       const roomDocRef = doc(firestore, 'battleRooms', roomCode);
       const studentId = appUser.id;
 
@@ -51,7 +47,6 @@ export default function BattlePage() {
         
         const roomData = roomSnap.data() as Room;
         if(roomData.studentIds.includes(studentId)) {
-            // Already joined
             setIsJoining(false);
             return;
         }
@@ -59,14 +54,11 @@ export default function BattlePage() {
         await updateDoc(roomDocRef, {
           studentIds: arrayUnion(studentId)
         });
-        // success — proceed as normal
         setIsJoining(false);
       } catch (err: any) {
         console.error('Failed to add student to room:', err);
-        // This is where the permission error would likely be caught.
         toast({ variant: 'destructive', title: 'Could not join battle', description: 'You may not have permission to join this room, or it may no longer be active.' });
-        router.push('/student/dashboard');
-        return;
+        router.push('/cheating-detected');
       }
     };
 
@@ -109,7 +101,6 @@ export default function BattlePage() {
     );
   }
   
-  // After loading, if there's no room data, it might not exist.
   if (!room) {
     return (
        <div className="flex flex-col items-center justify-center h-screen p-4">
@@ -120,7 +111,6 @@ export default function BattlePage() {
     )
   }
 
-  // If a teacher tries to access a room that is not theirs, deny access.
   if (appUser.role === 'Teacher' && appUser.id !== room.teacherId) {
     toast({ variant: "destructive", title: "Access Denied", description: "You cannot join a battle created by another teacher." });
     router.push('/teacher/dashboard');
@@ -130,6 +120,15 @@ export default function BattlePage() {
   const isTeacherObserver = appUser.id === room.teacherId;
   const quiz = room.quiz;
   
+  if (!quiz) {
+     return (
+       <div className="flex flex-col items-center justify-center h-screen p-4">
+            <h1 className="text-2xl font-headline text-destructive mb-4">Quiz Data Missing</h1>
+            <p className="text-muted-foreground">The quiz for this battle room could not be loaded.</p>
+        </div>
+    )
+  }
+
   if (room.status === 'waiting') {
     return <WaitingRoom room={{...room, id: roomCode}} quiz={quiz} user={appUser} onStart={handleStartBattle} isTeacherObserver={isTeacherObserver} />;
   }

@@ -27,7 +27,6 @@ export interface Quiz {
 
 export interface Room {
   id: string;
-  quizId: string;
   quiz: Quiz; // Denormalized for easy access
   teacherId: string; // userId of teacher who created the quiz
   studentIds: string[];
@@ -52,5 +51,3 @@ export interface BattleResult {
 export interface BattlePlayer extends User {
   score: number;
 }
-
-    

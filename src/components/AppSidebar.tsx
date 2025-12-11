@@ -24,7 +24,6 @@ const AppSidebar = () => {
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
   
   if (!user) {
-    // Or a loading state
     return null; 
   }
 

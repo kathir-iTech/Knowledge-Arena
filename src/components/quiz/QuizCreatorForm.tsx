@@ -19,8 +19,8 @@ import { PlusCircle, Trash2, Send, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { doc, writeBatch } from 'firebase/firestore';
-import type { Quiz, Room, Question } from '@/lib/types';
+import { doc, setDoc } from 'firebase/firestore';
+import type { Quiz, Room } from '@/lib/types';
 
 
 const questionSchema = z.object({
@@ -82,11 +82,9 @@ export function QuizCreatorForm() {
     setIsSubmitting(true);
 
     try {
-        const batch = writeBatch(firestore);
         const quizId = uuidv4();
-
-        // 1. Create the Quiz document in the user's subcollection
-        const quizRef = doc(firestore, 'users', user.id, 'quizzes', quizId);
+        const roomCode = uuidv4().slice(0, 6).toUpperCase();
+        
         const newQuiz: Quiz = {
             id: quizId,
             topic: values.topic,
@@ -94,24 +92,9 @@ export function QuizCreatorForm() {
             questions: values.questions,
             createdAt: Date.now(),
         };
-        batch.set(quizRef, newQuiz);
-
-        // 2. Create the Battle Room document
-        const roomCode = uuidv4().slice(0, 6).toUpperCase();
-        const roomRef = doc(firestore, 'battleRooms', roomCode);
-        
-        // This is the data that will be denormalized into the battle room.
-        const roomQuizData: Quiz = {
-           id: newQuiz.id,
-           topic: newQuiz.topic,
-           teacherId: newQuiz.teacherId, // Ensure teacherId is included here
-           questions: newQuiz.questions,
-           createdAt: newQuiz.createdAt,
-        };
 
         const newRoom: Omit<Room, 'id'> = {
-          quizId: newQuiz.id,
-          quiz: roomQuizData,
+          quiz: newQuiz, // Denormalize the entire quiz object
           teacherId: user.id,
           studentIds: [],
           status: 'waiting',
@@ -120,10 +103,10 @@ export function QuizCreatorForm() {
           battleResultIds: [],
           createdAt: Date.now(),
         };
-        batch.set(roomRef, newRoom);
         
-        await batch.commit();
-
+        const roomRef = doc(firestore, 'battleRooms', roomCode);
+        await setDoc(roomRef, newRoom);
+        
         navigator.clipboard.writeText(roomCode).then(() => {
           toast({
               title: "Battle Room Created & Code Copied!",

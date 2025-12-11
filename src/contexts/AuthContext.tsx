@@ -47,8 +47,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser({ id: userDoc.id, ...userDoc.data() } as User);
         } else {
             console.warn(`User document not found for uid: ${uid}`);
+            if (auth) {
+                signOut(auth); 
+            }
             setUser(null);
-            signOut(auth); // Log out if no firestore doc
         }
     } catch (error) {
         console.error("Error fetching user document:", error);
@@ -74,6 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
   const login = async (credentials: { email: string, password?: string }) => {
+    if (!auth) throw new Error("Auth service not available");
     if (!credentials.password) {
         toast({
             variant: "destructive",
@@ -105,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signup = async (credentials: { name: string; email: string; password?: string }) => {
+    if (!auth || !firestore) throw new Error("Firebase services not available");
     if (!credentials.password) {
         toast({
             variant: "destructive",
@@ -153,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    if (!auth) return;
     await signOut(auth);
     setUser(null);
   };
@@ -175,6 +180,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resetPassword = async (email: string) => {
+    if (!auth) return;
     try {
       await sendPasswordResetEmail(auth, email);
     } catch (error: any) {

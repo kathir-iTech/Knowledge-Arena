@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import type { Room, Quiz, BattleResult, User } from '@/lib/types';
+import type { Room, Quiz, BattleResult } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -32,7 +32,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
       try {
         const resultsQuery = query(
           collection(firestore, 'battleResults'),
-          where('__name__', 'in', room.battleResultIds),
+          where('battleRoomId', '==', room.id),
           orderBy('score', 'desc')
         );
         const snapshot = await getDocs(resultsQuery);
@@ -45,7 +45,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
       }
     };
     fetchResults();
-  }, [firestore, room.battleResultIds]);
+  }, [firestore, room.id, room.battleResultIds]);
 
 
   const getRankIcon = (rank: number) => {

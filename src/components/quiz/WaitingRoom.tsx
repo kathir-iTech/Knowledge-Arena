@@ -22,11 +22,17 @@ interface WaitingRoomProps {
 }
 
 const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, isTeacherObserver }) => {
-  const shareableLink = typeof window !== 'undefined' ? window.location.href : '';
+  const [shareableLink, setShareableLink] = useState('');
   const { toast } = useToast();
   const firestore = useFirestore();
   const [participants, setParticipants] = useState<User[]>([]);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setShareableLink(window.location.href);
+    }
+  }, []);
 
   useEffect(() => {
     if (!room || !firestore) {
@@ -37,36 +43,28 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, is
     const fetchParticipants = async () => {
         setIsLoadingParticipants(true);
         const studentIds = room.studentIds || [];
-        const allIds = Array.from(new Set([room.teacherId, ...studentIds]));
-
-        if (allIds.length === 0) {
-            setParticipants([]);
-            setIsLoadingParticipants(false);
+        
+        if (studentIds.length === 0) {
+            // Fetch just the teacher if no students
+            try {
+                const teacherDoc = await getDoc(doc(firestore, 'users', room.teacherId));
+                if (teacherDoc.exists()) {
+                    setParticipants([teacherDoc.data() as User]);
+                }
+            } catch (err) {
+                 console.error("Error fetching teacher:", err);
+            } finally {
+                setIsLoadingParticipants(false);
+            }
             return;
         }
         
         try {
-            // Firestore 'in' query can take at most 30 items
-            const participantPromises = [];
-            for (let i = 0; i < allIds.length; i += 30) {
-                const chunk = allIds.slice(i, i + 30);
-                const q = query(collection(firestore, 'users'), where('id', 'in', chunk));
-                participantPromises.push(getDocs(q));
-            }
-            
-            const participantSnapshots = await Promise.all(participantPromises);
-            const participantData = participantSnapshots
-                .flatMap(snap => snap.docs)
-                .filter(doc => doc.exists())
-                .map(doc => ({ id: doc.id, ...doc.data() } as User));
-            
-            // Add teacher to the list if not already present from studentIds
-            const teacherDoc = await getDoc(doc(firestore, 'users', room.teacherId));
-            if (teacherDoc.exists() && !participantData.find(p => p.id === room.teacherId)) {
-                participantData.push({ id: teacherDoc.id, ...teacherDoc.data() } as User);
-            }
-
-            setParticipants(participantData);
+            const allIds = Array.from(new Set([room.teacherId, ...studentIds]));
+            const usersQuery = query(collection(firestore, 'users'), where('id', 'in', allIds));
+            const usersSnapshot = await getDocs(usersQuery);
+            const usersData = usersSnapshot.docs.map(doc => doc.data() as User);
+            setParticipants(usersData);
         } catch (err) {
             console.error("Error fetching participants:", err);
             toast({ variant: 'destructive', title: 'Error', description: 'Could not load participant data.' });
@@ -138,9 +136,11 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, is
                 <Copy className="w-6 h-6" />
               </Button>
             </div>
-            <div className="bg-white p-4 rounded-lg">
-              <QRCode value={shareableLink} size={128} />
-            </div>
+            {shareableLink && (
+              <div className="bg-white p-4 rounded-lg">
+                <QRCode value={shareableLink} size={128} />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -154,9 +154,9 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, is
               disabled={studentCount === 0 || isLoadingParticipants}
             >
               <ShieldCheck className="mr-3 h-6 w-6" />
-               {studentCount === 0 
+               {isLoadingParticipants ? 'Loading...' : (studentCount === 0 
                 ? 'Waiting for students to join...'
-                : `Start Battle for ${studentCount} Gladiator(s)`}
+                : `Start Battle for ${studentCount} Gladiator(s)`)}
             </Button>
         </div>
       )}
