@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from 'react';
 import { notFound, useRouter, useParams } from 'next/navigation';
-import { useUser, useFirestore, useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
+import { useAuth } from '@/hooks/useAuth';
+import { useFirestore, useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
 import type { Room, Quiz, User } from '@/lib/types';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import BattleRoom from '@/components/quiz/BattleRoom';
@@ -14,7 +15,7 @@ import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
-  const { user: authUser, isUserLoading: isAuthLoading } = useUser();
+  const { user: appUser, isLoading: isAuthLoading } = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
@@ -24,47 +25,38 @@ export default function BattlePage() {
   const roomCode = params.roomCode.toUpperCase();
 
   // This useEffect handles joining the room and adding the user to the participants list.
-  // It runs before the useDoc hook tries to fetch the room data.
   useEffect(() => {
-    if (isAuthLoading || !firestore || !authUser || !roomCode) return;
+    // Wait until we have the user and their role
+    if (isAuthLoading || !firestore || !appUser || !roomCode) return;
 
     const joinRoom = async () => {
-      const userRef = doc(firestore, 'users', authUser.uid);
       const roomDocRef = doc(firestore, 'battleRooms', roomCode);
 
       try {
-        const [userDoc, roomDoc] = await Promise.all([getDoc(userRef), getDoc(roomDocRef)]);
+        const roomDoc = await getDoc(roomDocRef);
 
         if (!roomDoc.exists()) {
           toast({ variant: 'destructive', title: 'Error', description: 'This battle room does not exist.' });
           router.push('/');
           return;
         }
-        
-        if (!userDoc.exists()) {
-            toast({ variant: "destructive", title: "Error", description: "Could not find your user profile." });
-            router.push('/');
-            return;
-        }
 
         const roomData = roomDoc.data() as Room;
-        const userProfile = userDoc.data() as User;
+        const isParticipant = roomData.studentIds?.includes(appUser.id);
+        const isTeacher = appUser.id === roomData.teacherId;
         
-        const isParticipant = roomData.studentIds?.includes(authUser.uid);
-        const isTeacher = authUser.uid === roomData.teacherId;
-
         // If the user is a student and not already in the studentIds array, add them.
-        if (userProfile.role === 'Student' && !isParticipant) {
+        if (appUser.role === 'Student' && !isParticipant) {
            // This single update is what the security rules allow.
            await updateDoc(roomDocRef, {
-             studentIds: arrayUnion(authUser.uid)
+             studentIds: arrayUnion(appUser.id)
            });
         }
         
-        // If the teacher re-joins, we don't need to do anything as their access is based on teacherId
+        // If a teacher re-joins, their access is based on teacherId, but we add them to studentIds for consistency in participation tracking
         if(isTeacher && !isParticipant) {
-            await updateDoc(roomDocRef, {
-             studentIds: arrayUnion(authUser.uid)
+           await updateDoc(roomDocRef, {
+             studentIds: arrayUnion(appUser.id)
            });
         }
         
@@ -79,7 +71,7 @@ export default function BattlePage() {
 
     joinRoom();
 
-  }, [isAuthLoading, firestore, authUser, roomCode, router, toast]);
+  }, [isAuthLoading, firestore, appUser, roomCode, router, toast]);
 
   const roomRef = useMemoFirebase(() => {
     // Wait until joining is complete before creating the ref
@@ -117,6 +109,28 @@ export default function BattlePage() {
     }
   }, [room, isRoomLoading, firestore, router, toast]);
 
+  const [participants, setParticipants] = useState<User[]>([]);
+  const [areParticipantsLoading, setAreParticipantsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!room || !firestore || room.studentIds.length === 0) {
+      if(room) setAreParticipantsLoading(false);
+      return;
+    };
+    
+    setAreParticipantsLoading(true);
+    const participantPromises = room.studentIds.map(id => getDoc(doc(firestore, 'users', id)));
+    Promise.all(participantPromises).then(participantDocs => {
+      const participantData = participantDocs.filter(doc => doc.exists()).map(doc => doc.data() as User);
+      setParticipants(participantData);
+      setAreParticipantsLoading(false);
+    }).catch(err => {
+      console.error("Error fetching participants:", err);
+      setAreParticipantsLoading(false);
+    })
+
+  }, [room, firestore]);
+
 
   const handleStartBattle = () => {
     if (roomRef && firestore) {
@@ -130,7 +144,7 @@ export default function BattlePage() {
     }
   };
   
-  if (isAuthLoading || isJoining || isRoomLoading || isQuizLoading || !authUser || !room || !quiz) {
+  if (isAuthLoading || isJoining || isRoomLoading || isQuizLoading || areParticipantsLoading || !appUser || !room || !quiz) {
     return (
         <div className="flex flex-col items-center justify-center h-screen p-4">
             <h1 className="text-2xl font-headline text-primary mb-4">Entering Arena...</h1>
@@ -139,35 +153,25 @@ export default function BattlePage() {
     );
   }
   
-  const isTeacher = authUser.uid === room.teacherId;
-  const isParticipant = room.studentIds?.includes(authUser.uid);
-
-  // If after joining, the user is still not a participant, there's a problem.
-  if (!isParticipant && !isJoining) {
-     toast({ variant: "destructive", title: "Access Denied", description: "You are not a participant in this room." });
+  const isTeacher = appUser.role === 'Teacher';
+  
+  // After all loading, if the user is not in the studentIds array, they don't have access.
+  if (!room.studentIds.includes(appUser.id)) {
+     toast({ variant: "destructive", title: "Access Denied", description: "You do not have permission to access this room." });
      router.push('/');
      return null;
   }
   
-  const currentUser = isTeacher ? { ...authUser, ...room.participants.find(p => p.id === authUser.uid) } : room.participants.find(p => p.id === authUser.uid);
-
-
-  if (!currentUser && !isJoining) {
-      toast({ variant: "destructive", title: "Error", description: "Your profile could not be loaded for this battle." });
-      router.push('/');
-      return null;
-  }
-
   if (room.status === 'waiting') {
-    return <WaitingRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUser} onStart={handleStartBattle} isTeacherObserver={isTeacher} />;
+    return <WaitingRoom room={{...room, id: roomCode, participants: participants}} quiz={quiz} user={appUser} onStart={handleStartBattle} isTeacherObserver={isTeacher} />;
   }
 
   if (room.status === 'playing') {
-    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUser} onFinish={handleFinishBattle} isTeacherObserver={isTeacher} />;
+    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={appUser} onFinish={handleFinishBattle} isTeacherObserver={isTeacher} />;
   }
 
   if (room.status === 'finished') {
-    return <QuizResults room={{...room, id: roomCode}} quiz={quiz} />;
+    return <QuizResults room={{...room, id: roomCode, participants: participants}} quiz={quiz} />;
   }
 
   return notFound();

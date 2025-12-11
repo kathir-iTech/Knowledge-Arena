@@ -1,16 +1,15 @@
 "use client";
 
-import { useUser } from '@/firebase';
+import { useAuth } from '@/hooks/useAuth';
 import { redirect } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BotMessageSquare } from 'lucide-react';
 import { LoginForm } from '@/components/auth/LoginForm';
 
 export default function Home() {
-  const { user, isUserLoading } = useUser();
-  const userRole = (user?.reloadUserInfo as any)?.customAttributes?.role;
-
-  if (isUserLoading) {
+  const { user, isLoading } = useAuth();
+  
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -23,7 +22,7 @@ export default function Home() {
   }
 
   if (user) {
-    if (userRole === 'Teacher') {
+    if (user.role === 'Teacher') {
       redirect('/teacher/dashboard');
     } else {
       redirect('/student/dashboard');

@@ -34,32 +34,38 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { auth, firestore, user: firebaseUser, isUserLoading } = useFirebase();
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const fetchUserDocument = useCallback(async (uid: string) => {
+    if (!firestore) return;
+    const userRef = doc(firestore, 'users', uid);
+    const userDoc = await getDoc(userRef);
+    if (userDoc.exists()) {
+      setUser(userDoc.data() as User);
+    }
+    setIsLoading(false);
+  }, [firestore]);
+
+
   useEffect(() => {
-    if (isUserLoading) return;
+    setIsLoading(isUserLoading);
     if (firebaseUser) {
-      const userRef = doc(firestore, 'users', firebaseUser.uid);
-      getDoc(userRef).then(userDoc => {
-        if (userDoc.exists()) {
-          setUser(userDoc.data() as User);
-        } else {
-          // Handle case where auth user exists but no firestore doc.
-          // This can happen in signup.
-        }
-      });
+      fetchUserDocument(firebaseUser.uid);
     } else {
       setUser(null);
+      setIsLoading(false);
     }
-  }, [firebaseUser, isUserLoading, firestore]);
+  }, [firebaseUser, isUserLoading, fetchUserDocument]);
 
 
   const login = async (credentials: { email: string, password?: string }) => {
-    const password = credentials.password || 'password'; // fallback for old behavior
+    const password = credentials.password || 'password';
     try {
       await signInWithEmailAndPassword(auth, credentials.email, password);
+      // Auth state change will trigger useEffect to fetch user doc
     } catch (error: any) {
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
           toast({
           variant: "destructive",
           title: "Login Failed",
@@ -69,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toast({
           variant: "destructive",
           title: "Login Error",
-          description: "An unexpected error occurred during login.",
+          description: error.message || "An unexpected error occurred during login.",
         });
       }
       throw error;
@@ -77,8 +83,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signup = async (credentials: { name: string; email: string; password?: string }) => {
-    const password = credentials.password || 'password'; // fallback for old behavior
+    const password = credentials.password || 'password';
     try {
+      setIsLoading(true);
       const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, password);
       const role = credentials.email.endsWith('@staffs.com') ? 'Teacher' : 'Student';
       const newUser: User = {
@@ -102,10 +109,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
          toast({
             variant: "destructive",
             title: "Signup Failed",
-            description: "An unexpected error occurred during signup.",
+            description: error.message || "An unexpected error occurred during signup.",
          });
        }
       throw error;
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -135,11 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await sendPasswordResetEmail(auth, email);
     } catch (error: any) {
-      // Don't reveal if the user exists or not for security reasons.
-      // The toast in the component handles the user-facing message.
       console.error("Password reset error:", error);
-      // We can re-throw if we want the component to handle it, but for now we just log it.
-      // The component will show a generic success message regardless.
     }
   };
 
@@ -148,7 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         isAuthenticated: !!user,
-        isLoading: isUserLoading,
+        isLoading: isLoading,
         login,
         signup,
         logout,
