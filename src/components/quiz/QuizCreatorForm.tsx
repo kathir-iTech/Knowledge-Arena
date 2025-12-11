@@ -1,6 +1,7 @@
 
 "use client";
 
+import React from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -18,8 +19,8 @@ import { PlusCircle, Trash2, Send, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { doc, writeBatch, getDoc } from 'firebase/firestore';
-import type { Quiz, Room, Question } from '@/lib/types';
+import { doc, writeBatch } from 'firebase/firestore';
+import type { Quiz, Room } from '@/lib/types';
 
 
 const questionSchema = z.object({
@@ -91,6 +92,7 @@ export function QuizCreatorForm() {
             topic: values.topic,
             teacherId: user.id,
             questions: values.questions,
+            createdAt: Date.now(),
         };
         batch.set(quizRef, newQuiz);
 
@@ -100,13 +102,13 @@ export function QuizCreatorForm() {
         
         const newRoom: Omit<Room, 'id'> = {
           quizId: newQuiz.id,
-          quiz: newQuiz, // Embed the full quiz object for easy access
           teacherId: user.id,
-          studentIds: [], // Start with an empty student list
+          studentIds: [],
           status: 'waiting',
           currentQuestionIndex: 0,
           startTime: 0,
           battleResultIds: [],
+          createdAt: Date.now(),
         };
         batch.set(roomRef, newRoom);
         
