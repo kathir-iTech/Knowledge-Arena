@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, BarChart, Users, History, Loader2, Trash2, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, orderBy, doc, writeBatch, deleteDoc } from 'firebase/firestore';
-import type { Room, BattleResult, User } from '@/lib/types';
+import { useFirestore } from '@/firebase';
+import { collection, query, where, getDocs, orderBy, doc, writeBatch, deleteDoc, onSnapshot } from 'firebase/firestore';
+import type { Room, BattleResult } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -171,14 +171,41 @@ const PastBattleRoomItem: React.FC<{ room: Room, onDelete: (roomId: string) => v
 const TeacherDashboard = () => {
   const { user } = useAuth();
   const firestore = useFirestore();
-
-  const battleRoomsQuery = useMemoFirebase(
-    () => (user && firestore ? query(collection(firestore, `battleRooms`), where('teacherId', '==', user.id), orderBy('createdAt', 'desc')) : null),
-    [user, firestore]
-  );
-  
-  const { data: rooms, loading: isLoadingRooms } = useCollection(battleRoomsQuery);
   const { toast } = useToast();
+  
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
+
+  useEffect(() => {
+    if (!user || !firestore) {
+        setIsLoadingRooms(false);
+        return;
+    }
+
+    setIsLoadingRooms(true);
+    const roomsQuery = query(
+        collection(firestore, 'battleRooms'), 
+        where('teacherId', '==', user.id), 
+        orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(roomsQuery, 
+        (querySnapshot) => {
+            const roomsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
+            setRooms(roomsData);
+            setIsLoadingRooms(false);
+        },
+        (error) => {
+            console.error("Error fetching battle rooms:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch past battles.' });
+            setIsLoadingRooms(false);
+        }
+    );
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, [user, firestore, toast]);
+
   
   const handleDeleteRoom = async (roomId: string) => {
     if (!firestore) return;
@@ -228,7 +255,7 @@ const TeacherDashboard = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoadingRooms ? <Skeleton className="h-8 w-1/4 mt-1" /> : <div className="text-2xl font-bold">{rooms?.length || 0}</div> }
+            {isLoadingRooms ? <Skeleton className="h-8 w-1/4 mt-1" /> : <div className="text-2xl font-bold">{rooms.length}</div> }
             <p className="text-xs text-muted-foreground">Number of battles you have hosted</p>
           </CardContent>
         </Card>
@@ -262,10 +289,10 @@ const TeacherDashboard = () => {
                     <Skeleton className="h-16 w-full" />
                 </div>
             )}
-             {rooms && rooms.length > 0 ? (
+             {rooms.length > 0 ? (
                <Accordion type="single" collapsible className="w-full space-y-2">
                 {rooms.map(room => (
-                  <PastBattleRoomItem key={room.id} room={room as Room} onDelete={handleDeleteRoom} />
+                  <PastBattleRoomItem key={room.id} room={room} onDelete={handleDeleteRoom} />
                 ))}
               </Accordion>
             ) : (
