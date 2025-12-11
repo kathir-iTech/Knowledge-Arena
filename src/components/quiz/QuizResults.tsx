@@ -37,20 +37,32 @@ const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
           <CardDescription>The results are in for "{quiz.topic}".</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex justify-center gap-4 md:gap-8">
-            {rankedPlayers.slice(0, 3).map((player, index) => (
+          <div className="flex justify-center items-end gap-4 md:gap-8">
+            {rankedPlayers.slice(0, 3).map((player, index) => {
+                const rank = index + 1;
+                let orderClass = '';
+                let scaleClass = '';
+                if (rank === 1) {
+                    orderClass = 'order-2';
+                    scaleClass = 'scale-110';
+                } else if (rank === 2) {
+                    orderClass = 'order-1';
+                } else {
+                    orderClass = 'order-3';
+                }
+              return (
               <div
                 key={player.id}
-                className={`flex flex-col items-center gap-2 p-4 rounded-lg bg-secondary ${index === 0 ? 'order-2 scale-110' : (index === 1 ? 'order-1' : 'order-3')}`}
+                className={`flex flex-col items-center gap-2 p-4 rounded-lg bg-secondary ${orderClass} ${scaleClass}`}
               >
-                {getRankIcon(index + 1)}
+                {getRankIcon(rank)}
                 <Avatar className="h-20 w-20 border-4 border-primary">
                   <AvatarFallback className="text-4xl bg-muted">{player.avatar}</AvatarFallback>
                 </Avatar>
-                <span className="font-bold text-lg">{player.name}</span>
+                <span className="font-bold text-lg text-center">{player.name}</span>
                 <span className="font-mono text-primary">{player.score} pts</span>
               </div>
-            ))}
+            )})}
           </div>
           
           <Table>
@@ -63,7 +75,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
             </TableHeader>
             <TableBody>
               {rankedPlayers.map((player, index) => (
-                <TableRow key={player.id}>
+                <TableRow key={player.id} className={index < 3 ? 'bg-secondary/50' : ''}>
                   <TableCell className="text-center font-bold">{index + 1}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">

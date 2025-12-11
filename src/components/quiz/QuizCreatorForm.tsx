@@ -16,12 +16,13 @@ import { Separator } from '@/components/ui/separator';
 import { PlusCircle, Trash2, Send } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, setDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import type { Quiz, Room, User } from '@/lib/types';
+import { useFirestore, setDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
+import { doc, collection } from 'firebase/firestore';
+import type { Quiz, Room, User, Question } from '@/lib/types';
 
 
 const questionSchema = z.object({
+  id: z.string().default(() => uuidv4()),
   text: z.string().min(5, "Question text must be at least 5 characters."),
   options: z.tuple([
     z.string().min(1, "Option 1 is required."),
@@ -60,6 +61,7 @@ export function QuizCreatorForm() {
 
   const addQuestion = () => {
     append({
+      id: uuidv4(),
       text: '',
       options: ['', '', '', ''],
       correctAnswer: 0,
@@ -68,24 +70,26 @@ export function QuizCreatorForm() {
     });
   };
 
-  const onSubmit = (values: z.infer<typeof quizSchema>) => {
+  const onSubmit = async (values: z.infer<typeof quizSchema>) => {
     if (!user || !firestore) {
         toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to create a quiz.' });
         return;
     }
-    const quizId = uuidv4().slice(0, 6).toUpperCase();
-    const quizRef = doc(firestore, 'quizzes', quizId);
-
+    
+    // Create the Quiz document
+    const quizRef = doc(collection(firestore, 'quizzes'));
     const newQuiz: Omit<Quiz, 'id'> = {
         topic: values.topic,
         createdBy: user.id,
-        questions: values.questions.map(q => ({ ...q, id: uuidv4() })),
+        questions: values.questions,
     };
-    
-    setDocumentNonBlocking(quizRef, newQuiz);
+    await setDocumentNonBlocking(quizRef, newQuiz);
+    const quizId = quizRef.id;
 
-    const roomRef = doc(firestore, 'battleRooms', quizId);
-    // The creator of the room is the teacher, who is also the first participant.
+    // Create the Battle Room document with a 6-char ID
+    const roomCode = uuidv4().slice(0, 6).toUpperCase();
+    const roomRef = doc(firestore, 'battleRooms', roomCode);
+    
     const creatorAsParticipant: User = {
       id: user.id,
       name: user.name,
@@ -103,14 +107,14 @@ export function QuizCreatorForm() {
       currentQuestionIndex: 0,
       startTime: 0,
     };
-    setDocumentNonBlocking(roomRef, newRoom);
+    await setDocumentNonBlocking(roomRef, newRoom);
     
     toast({
         title: "Battle Room Created!",
-        description: `Your room code is ${quizId}. Redirecting you to the waiting room...`
+        description: `Your room code is ${roomCode}. Redirecting you to the waiting room...`
     })
 
-    router.push(`/battle/${quizId}`);
+    router.push(`/battle/${roomCode}`);
   };
 
   return (
@@ -166,8 +170,8 @@ export function QuizCreatorForm() {
                         <FormLabel>Options (select the correct one)</FormLabel>
                         <FormControl>
                           <RadioGroup
-                            onValueChange={field.onChange}
-                            defaultValue={field.value.toString()}
+                            onValueChange={(value) => field.onChange(parseInt(value))}
+                            value={field.value.toString()}
                             className="space-y-2"
                           >
                             {[0, 1, 2, 3].map((optionIndex) => (

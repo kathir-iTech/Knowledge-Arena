@@ -21,11 +21,11 @@ interface BattleRoomProps {
 }
 
 const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) => {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(room.currentQuestionIndex);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [score, setScore] = useState(0);
+  const [score, setScore] = useState(room.scores[user.id] || 0);
   const router = useRouter();
   const { addXp } = useAuth();
   const firestore = useFirestore();
@@ -43,9 +43,15 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
       setTimeLeft(currentQuestion.timer);
     }
   }, [currentQuestion]);
+  
+  // Sync with Firestore state
+  useEffect(() => {
+      setCurrentQuestionIndex(room.currentQuestionIndex);
+  }, [room.currentQuestionIndex])
+
 
   useEffect(() => {
-    if (showResult || timeLeft <= 0) {
+    if (showResult || timeLeft <= 0 || user.role === 'Teacher') {
       return;
     }
     const timer = setInterval(() => {
@@ -53,10 +59,10 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft, showResult]);
+  }, [timeLeft, showResult, user.role]);
 
   const handleAnswer = useCallback((answerIndex: number | null) => {
-    if (showResult) return;
+    if (showResult || user.role === 'Teacher') return;
 
     setSelectedAnswer(answerIndex);
     setShowResult(true);
@@ -66,40 +72,55 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
       points = 50 + Math.floor(timeLeft * (50 / currentQuestion.timer));
       const newScore = score + points;
       setScore(newScore);
-
-      const roomRef = doc(firestore, 'battleRooms', room.quizId);
-      const newScores = { ...room.scores, [user.id]: newScore };
-      updateDocumentNonBlocking(roomRef, { scores: newScores });
+      
+      if (firestore) {
+        const roomRef = doc(firestore, 'battleRooms', room.id);
+        const newScores = { ...room.scores, [user.id]: newScore };
+        updateDocumentNonBlocking(roomRef, { scores: newScores });
+      }
     }
 
     setTimeout(() => {
       if (currentQuestionIndex < quiz.questions.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setSelectedAnswer(null);
-        setShowResult(false);
+        // Only teacher can advance the question
+        // Students wait for the room state to change
       } else {
-        addXp(score + points);
+        addXp(score + points); // final score
         onFinish();
       }
     }, 3000);
-  }, [showResult, currentQuestion, timeLeft, score, firestore, room.quizId, room.scores, user.id, currentQuestionIndex, quiz.questions.length, addXp, onFinish]);
+  }, [showResult, user.role, currentQuestion, timeLeft, score, firestore, room.id, room.scores, user.id, currentQuestionIndex, quiz.questions.length, addXp, onFinish]);
 
   useEffect(() => {
-    if (timeLeft <= 0 && !showResult) {
+    if (timeLeft <= 0 && !showResult && user.role !== 'Teacher') {
       handleAnswer(null);
     }
-  }, [timeLeft, showResult, handleAnswer]);
+  }, [timeLeft, showResult, handleAnswer, user.role]);
 
 
   const getButtonClass = (index: number) => {
-    if (!showResult) return 'bg-secondary hover:bg-primary/20';
+    if (!showResult && user.role !== 'Teacher') return 'bg-secondary hover:bg-primary/20';
     if (index === currentQuestion.correctAnswer) return 'bg-green-500/80 ring-2 ring-green-400';
-    if (index === selectedAnswer) return 'bg-red-500/80';
+    if (index === selectedAnswer && user.role === 'Student') return 'bg-red-500/80';
     return 'bg-secondary opacity-50';
   };
   
   if (!currentQuestion) {
     return <div>Loading question...</div>;
+  }
+
+  const handleNextQuestion = () => {
+    if (user.role === 'Teacher' && firestore) {
+      const nextIndex = currentQuestionIndex + 1;
+      if (nextIndex < quiz.questions.length) {
+         const roomRef = doc(firestore, 'battleRooms', room.id);
+         updateDocumentNonBlocking(roomRef, { currentQuestionIndex: nextIndex });
+         setShowResult(false); // Reset for next question view
+         setSelectedAnswer(null);
+      } else {
+        onFinish();
+      }
+    }
   }
 
   return (
@@ -108,12 +129,14 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="text-2xl font-headline text-primary">{quiz.topic}</CardTitle>
-            <div className="flex items-center gap-2 text-lg font-mono">
-              <Clock className="w-5 h-5" />
-              {timeLeft}s
-            </div>
+            {user.role === 'Student' && (
+              <div className="flex items-center gap-2 text-lg font-mono">
+                <Clock className="w-5 h-5" />
+                {timeLeft}s
+              </div>
+            )}
           </div>
-          <Progress value={(timeLeft / currentQuestion.timer) * 100} className="w-full h-2" />
+           {user.role === 'Student' && <Progress value={(timeLeft / currentQuestion.timer) * 100} className="w-full h-2" />}
           <CardDescription>Question {currentQuestionIndex + 1} of {quiz.questions.length}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -123,7 +146,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
               <Button
                 key={index}
                 onClick={() => handleAnswer(index)}
-                disabled={showResult}
+                disabled={showResult || user.role === 'Teacher'}
                 className={cn("h-auto min-h-16 text-wrap p-4 text-base justify-start transition-all duration-300", getButtonClass(index))}
               >
                 <span className="font-bold mr-4">{String.fromCharCode(65 + index)}.</span>
@@ -132,22 +155,33 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
             ))}
           </div>
 
-          {showResult && (
+          {(showResult || user.role === 'Teacher') && (
             <Card className="mt-6 bg-secondary p-4">
                 <div className="flex items-start gap-4">
-                    {selectedAnswer === currentQuestion.correctAnswer ? (
-                        <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
-                    ) : (
-                        <XCircle className="w-8 h-8 text-red-400 shrink-0" />
+                    {user.role === 'Student' && (
+                        selectedAnswer === currentQuestion.correctAnswer ? (
+                            <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
+                        ) : (
+                            <XCircle className="w-8 h-8 text-red-400 shrink-0" />
+                        )
                     )}
+                     {user.role === 'Teacher' && <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />}
                     <div>
                         <h3 className="font-bold text-lg">
-                            {selectedAnswer === currentQuestion.correctAnswer ? 'Correct!' : 'Incorrect'}
+                           {user.role === 'Teacher' ? `Correct Answer: ${currentQuestion.options[currentQuestion.correctAnswer]}` : (selectedAnswer === currentQuestion.correctAnswer ? 'Correct!' : 'Incorrect')}
                         </h3>
                         <p className="text-muted-foreground">{currentQuestion.explanation}</p>
                     </div>
                 </div>
             </Card>
+          )}
+          
+          {user.role === 'Teacher' && (
+            <div className="flex justify-end mt-4">
+              <Button onClick={handleNextQuestion}>
+                {currentQuestionIndex < quiz.questions.length - 1 ? 'Next Question' : 'Finish Battle'}
+              </Button>
+            </div>
           )}
 
         </CardContent>

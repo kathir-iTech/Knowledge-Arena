@@ -17,13 +17,14 @@ export interface Question {
 }
 
 export interface Quiz {
-  id: string; // room code is the quiz id
+  id: string; 
   topic: string;
   createdBy: string; // userId
   questions: Question[];
 }
 
 export interface Room {
+  id: string;
   quizId: string;
   participants: User[];
   status: 'waiting' | 'playing' | 'finished';

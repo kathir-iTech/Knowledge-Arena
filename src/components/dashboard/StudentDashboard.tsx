@@ -21,11 +21,11 @@ const StudentDashboard = () => {
   const handleJoinBattle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (roomCode.trim() && firestore) {
-      const roomRef = doc(firestore, 'battleRooms', roomCode.trim());
+      const roomRef = doc(firestore, 'battleRooms', roomCode.trim().toUpperCase());
       const roomSnap = await getDoc(roomRef);
 
       if (roomSnap.exists()) {
-        router.push(`/battle/${roomCode.trim()}`);
+        router.push(`/battle/${roomCode.trim().toUpperCase()}`);
       } else {
         toast({
           variant: 'destructive',
@@ -65,10 +65,10 @@ const StudentDashboard = () => {
           <form onSubmit={handleJoinBattle} className="flex flex-col sm:flex-row items-center gap-4">
             <Input
               type="text"
-              placeholder="Enter Room Code"
+              placeholder="ENTER ROOM CODE"
               value={roomCode}
               onChange={(e) => setRoomCode(e.target.value)}
-              className="max-w-xs text-lg h-12 text-center font-headline tracking-widest"
+              className="max-w-xs text-lg h-12 text-center font-headline tracking-widest uppercase"
             />
             <Button type="submit" size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground">
               <Swords className="mr-2 h-5 w-5" />
