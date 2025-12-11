@@ -1,5 +1,4 @@
 
-
 export interface User {
   id: string;
   name: string;
@@ -27,12 +26,11 @@ export interface Quiz {
 
 export interface Room {
   id: string;
-  quiz: Quiz;
+  quizId: string;
+  quiz: Quiz; // Denormalized for easy access
   teacherId: string; // userId of teacher who created the quiz
-  participants: User[];
   studentIds: string[];
   status: 'waiting' | 'playing' | 'finished';
-  scores: { [userId: string]: number };
   currentQuestionIndex: number;
   startTime: number;
   battleResultIds: string[];
@@ -48,7 +46,6 @@ export interface BattleResult {
   score: number;
   completedAt: number;
 }
-
 
 export interface BattlePlayer extends User {
   score: number;

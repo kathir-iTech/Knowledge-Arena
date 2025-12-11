@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { PlusCircle, BarChart, Users, History, Loader2, Trash2, Copy } from 'luc
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore, useCollectionSafe, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, query, where, getDocs, orderBy, doc } from 'firebase/firestore';
-import type { Quiz, Room, BattleResult } from '@/lib/types';
+import type { Quiz, Room, BattleResult, User } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -31,27 +31,51 @@ import { useToast } from '@/hooks/use-toast';
 const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
   const firestore = useFirestore();
   const [results, setResults] = useState<BattleResult[]>([]);
+  const [participants, setParticipants] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  React.useEffect(() => {
-    const fetchResults = async () => {
-      if (!firestore || !room.battleResultIds || room.battleResultIds.length === 0) {
+  useEffect(() => {
+    const fetchDetails = async () => {
+      if (!firestore) {
         setIsLoading(false);
         return;
       }
-      const resultsQuery = query(
-        collection(firestore, 'battleResults'),
-        where('__name__', 'in', room.battleResultIds),
-        orderBy('score', 'desc')
-      );
-      const resultsSnapshot = await getDocs(resultsQuery);
-      const resultsData = resultsSnapshot.docs.map(doc => doc.data() as BattleResult);
-      setResults(resultsData);
-      setIsLoading(false);
+      setIsLoading(true);
+
+      try {
+        // Fetch Battle Results
+        if (room.battleResultIds && room.battleResultIds.length > 0) {
+          const resultsQuery = query(
+            collection(firestore, 'battleResults'),
+            where('__name__', 'in', room.battleResultIds),
+            orderBy('score', 'desc')
+          );
+          const resultsSnapshot = await getDocs(resultsQuery);
+          const resultsData = resultsSnapshot.docs.map(doc => doc.data() as BattleResult);
+          setResults(resultsData);
+        } else {
+          setResults([]);
+        }
+
+        // Fetch Participant User documents
+        if (room.studentIds && room.studentIds.length > 0) {
+            const usersQuery = query(collection(firestore, 'users'), where('id', 'in', room.studentIds));
+            const usersSnapshot = await getDocs(usersQuery);
+            const usersData = usersSnapshot.docs.map(doc => doc.data() as User);
+            setParticipants(usersData);
+        } else {
+            setParticipants([]);
+        }
+
+      } catch (error) {
+        console.error("Error fetching battle details:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    fetchResults();
-  }, [firestore, room.battleResultIds]);
+    fetchDetails();
+  }, [firestore, room.battleResultIds, room.studentIds]);
 
   if (isLoading) {
     return (
@@ -62,7 +86,7 @@ const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
   }
 
   if (results.length === 0) {
-    return <p className="text-sm text-muted-foreground p-4 text-center">No results yet for this battle.</p>;
+    return <p className="text-sm text-muted-foreground p-4 text-center">No students have completed this battle yet.</p>;
   }
 
   return (
@@ -108,8 +132,8 @@ const PastBattleRoomItem: React.FC<{ room: Room, onDelete: (roomId: string) => v
   };
 
   return (
-    <AccordionItem value={room.id} className="bg-secondary/50 rounded-md px-4 border-b-0">
-        <div className="flex items-center w-full">
+    <AccordionItem value={room.id} className="bg-secondary/50 rounded-md border-b-0">
+        <div className="flex items-center w-full px-4">
             <AccordionTrigger className="w-full flex-grow py-4">
                 <div className="w-full flex justify-between items-center pr-4">
                   <div className="flex flex-col items-start text-left">
@@ -122,7 +146,7 @@ const PastBattleRoomItem: React.FC<{ room: Room, onDelete: (roomId: string) => v
                 </div>
             </AccordionTrigger>
             
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); copyToClipboard(room.id)}}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); copyToClipboard(room.id)}}>
                 <Copy className="h-4 w-4" />
             </Button>
 
@@ -169,20 +193,41 @@ const TeacherDashboard = () => {
     [user, firestore]
   );
   
-  const { data: rooms, isLoading: isLoadingRooms } = useCollectionSafe(battleRoomsQuery);
+  const { data: rooms, loading: isLoadingRooms } = useCollectionSafe(battleRoomsQuery);
   const [optimisticRooms, setOptimisticRooms] = useState<Room[] | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (rooms) {
-      setOptimisticRooms(rooms);
+      setOptimisticRooms(rooms as Room[]);
     }
   }, [rooms]);
   
   const handleDeleteRoom = (roomId: string) => {
-    if (!firestore) return;
+    if (!firestore || !optimisticRooms) return;
+    const roomToDelete = optimisticRooms.find(r => r.id === roomId);
+    if (!roomToDelete) return;
+
+    const batch = writeBatch(firestore);
+    
+    // Delete the room itself
     const roomRef = doc(firestore, 'battleRooms', roomId);
-    deleteDocumentNonBlocking(roomRef);
-    setOptimisticRooms(prev => prev ? prev.filter(room => room.id !== roomId) : null);
+    batch.delete(roomRef);
+
+    // Delete all associated battle results
+    if (roomToDelete.battleResultIds && roomToDelete.battleResultIds.length > 0) {
+        roomToDelete.battleResultIds.forEach(resultId => {
+            const resultRef = doc(firestore, 'battleResults', resultId);
+            batch.delete(resultRef);
+        });
+    }
+
+    batch.commit().then(() => {
+        setOptimisticRooms(prev => prev ? prev.filter(room => room.id !== roomId) : null);
+        toast({ title: 'Success', description: 'Battle room and its results have been deleted.' });
+    }).catch(e => {
+        console.error("Failed to delete room and results:", e);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not delete the battle room.' });
+    })
   }
 
   const displayedRooms = optimisticRooms ?? rooms;
@@ -241,15 +286,15 @@ const TeacherDashboard = () => {
         <CardContent>
             {isLoadingRooms && (
                 <div className="space-y-2">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
                 </div>
             )}
              {displayedRooms && displayedRooms.length > 0 ? (
                <Accordion type="single" collapsible className="w-full space-y-2">
                 {displayedRooms.map(room => (
-                  <PastBattleRoomItem key={room.id} room={room} onDelete={handleDeleteRoom} />
+                  <PastBattleRoomItem key={room.id} room={room as Room} onDelete={handleDeleteRoom} />
                 ))}
               </Accordion>
             ) : (

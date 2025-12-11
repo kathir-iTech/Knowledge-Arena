@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { notFound, useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore, useMemoFirebase, useDoc } from '@/firebase';
+import { useFirestore, useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
 import type { Room, Quiz, User } from '@/lib/types';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import BattleRoom from '@/components/quiz/BattleRoom';
@@ -41,6 +41,20 @@ export default function BattlePage() {
       const studentId = appUser.id;
 
       try {
+        const roomSnap = await getDoc(roomDocRef);
+        if (!roomSnap.exists()) {
+             toast({ variant: 'destructive', title: 'Room Not Found', description: 'This battle room does not exist.' });
+             router.push('/student/dashboard');
+             return;
+        }
+        
+        const roomData = roomSnap.data() as Room;
+        if(roomData.studentIds.includes(studentId)) {
+            // Already joined
+            setIsJoining(false);
+            return;
+        }
+
         await updateDoc(roomDocRef, {
           studentIds: arrayUnion(studentId)
         });
@@ -65,56 +79,15 @@ export default function BattlePage() {
 
   const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<Room>(roomRef);
 
-  const [participants, setParticipants] = useState<User[]>([]);
-  const [areParticipantsLoading, setAreParticipantsLoading] = useState(true);
-
-  useEffect(() => {
-    if (!room || !firestore) {
-      setAreParticipantsLoading(false);
-      return;
-    }
-
-    const fetchParticipants = async () => {
-        setAreParticipantsLoading(true);
-        const studentIds = room.studentIds || [];
-        const allIds = Array.from(new Set([room.teacherId, ...studentIds]));
-
-        if (allIds.length === 0) {
-            setParticipants([]);
-            setAreParticipantsLoading(false);
-            return;
-        }
-
-        const participantPromises = allIds.map(id => getDoc(doc(firestore, 'users', id)));
-        
-        try {
-            const participantDocs = await Promise.all(participantPromises);
-            const participantData = participantDocs
-                .filter(doc => doc.exists())
-                .map(doc => ({ id: doc.id, ...doc.data() } as User));
-            setParticipants(participantData);
-        } catch (err) {
-            console.error("Error fetching participants:", err);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not load participant data.' });
-        } finally {
-            setAreParticipantsLoading(false);
-        }
-    };
-
-    fetchParticipants();
-
-}, [room, firestore, toast]);
-
-
   const handleStartBattle = () => {
     if (roomRef && firestore) {
-      updateDoc(roomRef, { status: 'playing', startTime: Date.now(), currentQuestionIndex: 0 });
+      updateDocumentNonBlocking(roomRef, { status: 'playing', startTime: Date.now(), currentQuestionIndex: 0 });
     }
   };
 
   const handleFinishBattle = () => {
     if (roomRef && firestore) {
-      updateDoc(roomRef, { status: 'finished' });
+      updateDocumentNonBlocking(roomRef, { status: 'finished' });
     }
   };
   
@@ -125,14 +98,24 @@ export default function BattlePage() {
       }
   }, [roomError, router, toast]);
   
-  // Explicitly check for room and room.quiz before rendering children
-  if (isAuthLoading || isJoining || isRoomLoading || areParticipantsLoading || !appUser || !room || !room.quiz) {
+  if (isAuthLoading || isJoining || isRoomLoading || !appUser) {
     return (
         <div className="flex flex-col items-center justify-center h-screen p-4">
             <h1 className="text-2xl font-headline text-primary mb-4">Entering Arena...</h1>
             <Skeleton className="w-full max-w-lg h-64" />
         </div>
     );
+  }
+  
+  // After loading, if there's no room data, it might not exist.
+  if (!room) {
+    return (
+       <div className="flex flex-col items-center justify-center h-screen p-4">
+            <h1 className="text-2xl font-headline text-destructive mb-4">Battle Not Found</h1>
+            <p className="text-muted-foreground">The room <span className="font-mono text-primary">{roomCode}</span> could not be found.</p>
+            <Button onClick={() => router.push('/')} className="mt-4">Go to Dashboard</Button>
+        </div>
+    )
   }
 
   // If a teacher tries to access a room that is not theirs, deny access.
@@ -143,10 +126,10 @@ export default function BattlePage() {
   }
   
   const isTeacherObserver = appUser.id === room.teacherId;
-  const quiz = room.quiz; // The quiz is now embedded in the room document
+  const quiz = room.quiz;
   
   if (room.status === 'waiting') {
-    return <WaitingRoom room={{...room, id: roomCode, participants: participants}} quiz={quiz} user={appUser} onStart={handleStartBattle} isTeacherObserver={isTeacherObserver} />;
+    return <WaitingRoom room={{...room, id: roomCode}} quiz={quiz} user={appUser} onStart={handleStartBattle} isTeacherObserver={isTeacherObserver} />;
   }
 
   if (room.status === 'playing') {
@@ -154,7 +137,7 @@ export default function BattlePage() {
   }
 
   if (room.status === 'finished') {
-    return <QuizResults room={{...room, id: roomCode, participants: participants}} quiz={quiz} />;
+    return <QuizResults room={{...room, id: roomCode}} quiz={quiz} />;
   }
 
   return notFound();

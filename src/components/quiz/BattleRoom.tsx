@@ -65,7 +65,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
       return;
     }
     const timer = setInterval(() => {
-      setTimeLeft(prev => prev - 1);
+      setTimeLeft(prev => prev > 0 ? prev - 1 : 0);
     }, 1000);
 
     return () => clearInterval(timer);
@@ -81,8 +81,10 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
       const batch = writeBatch(firestore);
       
       // 1. Create a new BattleResult document
-      const resultRef = doc(firestore, 'battleResults', uuidv4());
-      const newResult: Omit<BattleResult, 'id'> = {
+      const resultId = uuidv4();
+      const resultRef = doc(firestore, 'battleResults', resultId);
+      const newResult: BattleResult = {
+        id: resultId,
         battleRoomId: room.id,
         studentId: user.id,
         teacherId: room.teacherId,
@@ -116,21 +118,23 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isT
     setSelectedAnswer(answerIndex);
     setShowResult(true);
 
-    let points = 0;
+    let currentPoints = 0;
     if (answerIndex === currentQuestion.correctAnswer) {
       // Base 50 points, plus up to 50 bonus points for speed
-      points = 50 + Math.floor(timeLeft * (50 / currentQuestion.timer));
-      const newScore = score + points;
+      currentPoints = 50 + Math.floor(timeLeft * (50 / currentQuestion.timer));
+      const newScore = score + currentPoints;
       setScore(newScore);
     }
+    
+    const isLastQuestion = currentQuestionIndex >= quiz.questions.length - 1;
 
     // Wait 3 seconds to show the result before moving on
     setTimeout(() => {
-      // For students, we just wait. The teacher advancing the question will trigger a re-render.
       // If it's the last question, the student finalizes their own score.
-      if (currentQuestionIndex >= quiz.questions.length - 1) {
-        finishBattle(score + points);
+      if (isLastQuestion) {
+        finishBattle(score + currentPoints);
       }
+      // For other questions, we just wait. The teacher advancing the question will trigger the re-render.
     }, 3000);
 
   }, [showResult, isTeacher, currentQuestion, timeLeft, score, currentQuestionIndex, quiz.questions.length, finishBattle]);

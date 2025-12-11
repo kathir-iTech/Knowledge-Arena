@@ -44,11 +44,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userRef = doc(firestore, 'users', uid);
         const userDoc = await getDoc(userRef);
         if (userDoc.exists()) {
-            setUser(userDoc.data() as User);
+            setUser({ id: userDoc.id, ...userDoc.data() } as User);
         } else {
-            // This case can happen if the user exists in Auth but not Firestore
-            // You might want to log them out or create the document here.
+            console.warn(`User document not found for uid: ${uid}`);
             setUser(null);
+            signOut(auth); // Log out if no firestore doc
         }
     } catch (error) {
         console.error("Error fetching user document:", error);
@@ -56,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
         setIsLoading(false);
     }
-  }, [firestore]);
+  }, [firestore, auth]);
 
 
   useEffect(() => {
@@ -86,7 +86,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
       // Auth state change will trigger useEffect to fetch user doc
     } catch (error: any) {
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+      console.error("Login error:", error.code, error.message);
+      if (['auth/wrong-password', 'auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-email'].includes(error.code)) {
           toast({
           variant: "destructive",
           title: "Login Failed",
@@ -129,8 +130,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       await setDoc(doc(firestore, "users", userCredential.user.uid), newUser);
       
-      // Don't call setUser here, let the onAuthStateChanged listener handle it
-      // to ensure a single source of truth for the user state.
+      setUser(newUser);
+      
     } catch (error: any) {
        if (error.code === 'auth/email-already-in-use') {
          toast({
@@ -147,7 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
        }
       throw error;
     } finally {
-        // Don't set loading to false here; let the auth listener do it
+        setIsLoading(false);
     }
   };
 
@@ -157,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateAvatar = async (avatar: string) => {
-    if (user) {
+    if (user && firestore) {
       const userRef = doc(firestore, 'users', user.id);
       await updateDoc(userRef, { avatar });
       setUser(prevUser => prevUser ? { ...prevUser, avatar } : null);
@@ -165,8 +166,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
   
   const addXp = async (amount: number) => {
-    if (user) {
-        const newXp = user.xp + amount;
+    if (user && firestore) {
+        const newXp = (user.xp || 0) + amount;
         const userRef = doc(firestore, 'users', user.id);
         await updateDoc(userRef, { xp: newXp });
         setUser(prevUser => prevUser ? { ...prevUser, xp: newXp } : null);

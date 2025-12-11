@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -15,12 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
-import { PlusCircle, Trash2, Send } from 'lucide-react';
+import { PlusCircle, Trash2, Send, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { doc, writeBatch } from 'firebase/firestore';
-import type { Quiz, Room, User, Question } from '@/lib/types';
+import { doc, writeBatch, getDoc } from 'firebase/firestore';
+import type { Quiz, Room, Question } from '@/lib/types';
 
 
 const questionSchema = z.object({
@@ -47,6 +46,7 @@ export function QuizCreatorForm() {
   const { user } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<z.infer<typeof quizSchema>>({
     resolver: zodResolver(quizSchema),
@@ -78,60 +78,64 @@ export function QuizCreatorForm() {
         return;
     }
     
-    const batch = writeBatch(firestore);
+    setIsSubmitting(true);
 
-    // 1. Define the Quiz object
-    const quizId = uuidv4();
-    const newQuiz: Quiz = {
-        id: quizId,
-        topic: values.topic,
-        teacherId: user.id,
-        questions: values.questions,
-    };
+    try {
+        const batch = writeBatch(firestore);
 
-    // 2. Create the Battle Room document
-    const roomCode = uuidv4().slice(0, 6).toUpperCase();
-    const roomRef = doc(firestore, 'battleRooms', roomCode);
-    
-    const creatorAsParticipant: User = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      role: 'Teacher',
-      xp: user.xp,
-    }
+        // 1. Define and create the Quiz document
+        const quizId = uuidv4();
+        const quizRef = doc(firestore, 'quizzes', quizId);
+        const newQuiz: Quiz = {
+            id: quizId,
+            topic: values.topic,
+            teacherId: user.id,
+            questions: values.questions,
+        };
+        batch.set(quizRef, newQuiz);
 
-    const newRoom: Omit<Room, 'id'> = {
-      quiz: newQuiz, // Embed the full quiz object
-      teacherId: user.id,
-      participants: [creatorAsParticipant],
-      studentIds: [], // Start with an empty student list
-      status: 'waiting',
-      scores: {},
-      currentQuestionIndex: 0,
-      startTime: 0,
-      battleResultIds: [],
-    };
-    batch.set(roomRef, newRoom);
-    
-    await batch.commit();
+        // 2. Create the Battle Room document
+        const roomCode = uuidv4().slice(0, 6).toUpperCase();
+        const roomRef = doc(firestore, 'battleRooms', roomCode);
+        
+        const newRoom: Omit<Room, 'id'> = {
+          quizId: newQuiz.id,
+          quiz: newQuiz, // Embed the full quiz object for easy access
+          teacherId: user.id,
+          studentIds: [], // Start with an empty student list
+          status: 'waiting',
+          currentQuestionIndex: 0,
+          startTime: 0,
+          battleResultIds: [],
+        };
+        batch.set(roomRef, newRoom);
+        
+        await batch.commit();
 
-    navigator.clipboard.writeText(roomCode).then(() => {
-      toast({
-          title: "Battle Room Created & Code Copied!",
-          description: `Your room code is ${roomCode}. It has been copied to your clipboard. Redirecting...`
-      })
-    }).catch(err => {
-        console.error('Failed to copy room code: ', err);
+        navigator.clipboard.writeText(roomCode).then(() => {
+          toast({
+              title: "Battle Room Created & Code Copied!",
+              description: `Your room code is ${roomCode}. It has been copied to your clipboard. Redirecting...`
+          })
+        }).catch(err => {
+            console.error('Failed to copy room code: ', err);
+            toast({
+                title: "Battle Room Created!",
+                description: `Your room code is ${roomCode}. Could not copy to clipboard. Redirecting...`
+            })
+        });
+        
+        router.push(`/battle/${roomCode}`);
+    } catch(e: any) {
+        console.error("Failed to create battle:", e);
         toast({
-            title: "Battle Room Created!",
-            description: `Your room code is ${roomCode}. Could not copy to clipboard. Redirecting...`
+            variant: "destructive",
+            title: "Failed to create battle",
+            description: e.message || "An unexpected error occurred."
         })
-    });
-    
-
-    router.push(`/battle/${roomCode}`);
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -254,13 +258,13 @@ export function QuizCreatorForm() {
             ))}
 
             <div className="flex justify-between items-center">
-                <Button type="button" variant="outline" onClick={addQuestion}>
+                <Button type="button" variant="outline" onClick={addQuestion} disabled={isSubmitting}>
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Add Question
                 </Button>
-                <Button type="submit" size="lg" className="bg-accent hover:bg-accent/90">
-                    <Send className="mr-2 h-4 w-4" />
-                    Launch Battle
+                <Button type="submit" size="lg" className="bg-accent hover:bg-accent/90" disabled={isSubmitting}>
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    {isSubmitting ? 'Launching...' : 'Launch Battle'}
                 </Button>
             </div>
             {form.formState.errors.questions && (

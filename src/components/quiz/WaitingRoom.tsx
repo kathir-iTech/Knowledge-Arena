@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import QRCode from 'react-qr-code';
 import type { Room, Quiz, User } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,9 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ShieldCheck, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useFirestore } from '@/firebase';
+import { collection, query, where, getDocs, doc } from 'firebase/firestore';
+import { Skeleton } from '../ui/skeleton';
 
 interface WaitingRoomProps {
   room: Room;
@@ -21,12 +24,68 @@ interface WaitingRoomProps {
 const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, isTeacherObserver }) => {
   const shareableLink = typeof window !== 'undefined' ? window.location.href : '';
   const { toast } = useToast();
+  const firestore = useFirestore();
+  const [participants, setParticipants] = useState<User[]>([]);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
+
+  useEffect(() => {
+    if (!room || !firestore) {
+      setIsLoadingParticipants(false);
+      return;
+    }
+
+    const fetchParticipants = async () => {
+        setIsLoadingParticipants(true);
+        const studentIds = room.studentIds || [];
+        const allIds = Array.from(new Set([room.teacherId, ...studentIds]));
+
+        if (allIds.length === 0) {
+            setParticipants([]);
+            setIsLoadingParticipants(false);
+            return;
+        }
+        
+        try {
+            // Firestore 'in' query can take at most 30 items
+            const participantPromises = [];
+            for (let i = 0; i < allIds.length; i += 30) {
+                const chunk = allIds.slice(i, i + 30);
+                const q = query(collection(firestore, 'users'), where('id', 'in', chunk));
+                participantPromises.push(getDocs(q));
+            }
+            
+            const participantSnapshots = await Promise.all(participantPromises);
+            const participantData = participantSnapshots
+                .flatMap(snap => snap.docs)
+                .filter(doc => doc.exists())
+                .map(doc => ({ id: doc.id, ...doc.data() } as User));
+            
+            // Add teacher to the list if not already present from studentIds
+            const teacherDoc = await getDoc(doc(firestore, 'users', room.teacherId));
+            if (teacherDoc.exists() && !participantData.find(p => p.id === room.teacherId)) {
+                participantData.push({ id: teacherDoc.id, ...teacherDoc.data() } as User);
+            }
+
+            setParticipants(participantData);
+        } catch (err) {
+            console.error("Error fetching participants:", err);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not load participant data.' });
+        } finally {
+            setIsLoadingParticipants(false);
+        }
+    };
+
+    fetchParticipants();
+
+  }, [room, firestore, toast]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       toast({ title: 'Copied!', description: `${text} copied to your clipboard.` });
     });
   };
+
+  const studentCount = participants.filter(p => p.role === 'Student').length;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 space-y-6">
@@ -39,20 +98,31 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, is
         <Card className="md:col-span-2 border-accent/50">
           <CardHeader>
             <CardTitle className="font-headline">Gladiators in the Arena</CardTitle>
-            <CardDescription>{room.participants.length} participant(s) have joined.</CardDescription>
+            <CardDescription>{studentCount} student(s) have joined.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-4">
-              {room.participants.map(p => (
-                <div key={p.id} className="flex flex-col items-center gap-2 text-center">
-                  <Avatar className="h-16 w-16">
-                    <AvatarFallback className="text-3xl bg-secondary">{p.avatar}</AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium max-w-20 truncate">{p.name}</span>
-                   {p.id === room.teacherId && <span className="text-xs text-primary">(Host)</span>}
+             {isLoadingParticipants ? (
+                 <div className="flex flex-wrap gap-4">
+                     {[...Array(3)].map((_, i) => (
+                        <div key={i} className="flex flex-col items-center gap-2">
+                            <Skeleton className="h-16 w-16 rounded-full" />
+                            <Skeleton className="h-4 w-20" />
+                        </div>
+                     ))}
+                 </div>
+             ) : (
+                <div className="flex flex-wrap gap-4">
+                  {participants.map(p => (
+                    <div key={p.id} className="flex flex-col items-center gap-2 text-center">
+                      <Avatar className="h-16 w-16">
+                        <AvatarFallback className="text-3xl bg-secondary">{p.avatar}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium max-w-20 truncate">{p.name}</span>
+                       {p.id === room.teacherId && <span className="text-xs text-primary">(Host)</span>}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+             )}
           </CardContent>
         </Card>
         
@@ -81,12 +151,12 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, is
               size="lg" 
               className="w-full bg-accent hover:bg-accent/80 text-accent-foreground text-lg py-8" 
               onClick={onStart}
-              disabled={room.participants.filter(p => p.id !== room.teacherId).length === 0}
+              disabled={studentCount === 0 || isLoadingParticipants}
             >
               <ShieldCheck className="mr-3 h-6 w-6" />
-               {room.participants.filter(p => p.id !== room.teacherId).length === 0 
+               {studentCount === 0 
                 ? 'Waiting for students to join...'
-                : `Start Battle for ${room.participants.filter(p => p.id !== room.teacherId).length} Gladiator(s)`}
+                : `Start Battle for ${studentCount} Gladiator(s)`}
             </Button>
         </div>
       )}
