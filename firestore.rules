@@ -22,11 +22,18 @@ service cloud.firestore {
         resource.data.teacherId == request.auth.uid ||
         
         // Case 2: The user is a student joining the room.
+        // This is the only operation they can perform.
         (
-          // The only field they are allowed to change is 'studentIds'.
-          request.resource.data.keys().hasOnly(['studentIds']) &&
-          // They must be adding themselves to the list, not removing or changing others.
-          request.resource.data.studentIds == resource.data.studentIds.concat([request.auth.uid])
+          // They must be adding themselves to the studentIds list.
+          request.resource.data.studentIds == resource.data.studentIds.concat([request.auth.uid]) &&
+          // No other fields can be changed by the student.
+          request.resource.data.quiz == resource.data.quiz &&
+          request.resource.data.teacherId == resource.data.teacherId &&
+          request.resource.data.status == resource.data.status &&
+          request.resource.data.currentQuestionIndex == resource.data.currentQuestionIndex &&
+          request.resource.data.startTime == resource.data.startTime &&
+          request.resource.data.battleResultIds == resource.data.battleResultIds &&
+          request.resource.data.createdAt == resource.data.createdAt
         )
       );
       allow delete: if request.auth != null && resource.data.teacherId == request.auth.uid;
