@@ -1,0 +1,77 @@
+"use client";
+
+import React from 'react';
+import QRCode from 'react-qr-code';
+import type { Room, Quiz, User } from '@/lib/types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { ShieldCheck } from 'lucide-react';
+
+interface WaitingRoomProps {
+  room: Room;
+  quiz: Quiz;
+  user: User;
+  onStart: () => void;
+}
+
+const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart }) => {
+  const isTeacher = user.id === room.quizId.split('-')[0]; // Simple check based on room ID convention
+  const shareableLink = typeof window !== 'undefined' ? window.location.href : '';
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 space-y-6">
+      <header className="text-center">
+        <h1 className="text-4xl font-headline text-primary tracking-tight">Battle Room: {quiz.topic}</h1>
+        <p className="text-muted-foreground">The battle will begin shortly. Awaiting the host's command.</p>
+      </header>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl">
+        <Card className="md:col-span-2 border-accent/50">
+          <CardHeader>
+            <CardTitle className="font-headline">Gladiators in the Arena</CardTitle>
+            <CardDescription>{room.participants.length} participant(s) have joined.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-4">
+              {room.participants.map(p => (
+                <div key={p.id} className="flex flex-col items-center gap-2">
+                  <Avatar className="h-16 w-16">
+                    <AvatarFallback className="text-3xl bg-secondary">{p.avatar}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium max-w-20 truncate">{p.name}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-secondary">
+          <CardHeader>
+            <CardTitle className="font-headline">Join the Battle</CardTitle>
+            <CardDescription>Use this code or QR to enter the arena.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-4">
+            <div className="text-5xl font-mono font-bold tracking-widest text-primary bg-background/50 p-4 rounded-lg">
+              {room.quizId}
+            </div>
+            <div className="bg-white p-4 rounded-lg">
+              <QRCode value={shareableLink} size={128} />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {isTeacher && (
+        <div className="w-full max-w-6xl">
+            <Button size="lg" className="w-full bg-accent hover:bg-accent/80 text-accent-foreground text-lg py-8" onClick={onStart}>
+              <ShieldCheck className="mr-3 h-6 w-6" />
+              Start Battle for {room.participants.length} Gladiator(s)
+            </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default WaitingRoom;
