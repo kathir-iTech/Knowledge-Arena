@@ -3,20 +3,21 @@
 
 import { useState, useEffect } from 'react';
 import { notFound, useRouter, useParams } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
-import { useFirestore, useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
+import { useAuth, useFirebase } from '@/firebase';
+import { useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
 import type { Room, Quiz, User } from '@/lib/types';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import BattleRoom from '@/components/quiz/BattleRoom';
 import QuizResults from '@/components/quiz/QuizResults';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
   const { user: appUser, isLoading: isAuthLoading } = useAuth();
-  const firestore = useFirestore();
+  const { firestore } = useFirebase();
   const router = useRouter();
   const { toast } = useToast();
 

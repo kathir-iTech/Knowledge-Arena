@@ -93,8 +93,6 @@ export function QuizCreatorForm() {
             questions: values.questions,
             createdAt: Date.now(),
         };
-        // NOTE: We are not creating a separate quiz document anymore.
-        // It will be denormalized inside the battleRoom.
 
         // 2. Create the Battle Room document
         const roomCode = uuidv4().slice(0, 6).toUpperCase();
