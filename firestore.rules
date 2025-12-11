@@ -1,0 +1,136 @@
+/**
+ * Core Philosophy: This ruleset enforces a strict role-based security model for a teacher/student application.
+ * Access is primarily determined by user ownership, established either through the document's path (for user data and teacher-created content)
+ * or through specific ownership fields within the document (for collaborative battle rooms and student results).
+ *
+ * Data Structure:
+ * - /users/{userId}: Private user profiles, only accessible by the owner.
+ * - /users/{teacherId}/quizzes/{quizId}: Quizzes created by a teacher, nested to enforce ownership.
+ * - /users/{teacherId}/quizzes/{quizId}/questions/{questionId}: Questions for a quiz, inheriting ownership.
+ * - /battleRooms/{battleRoomId}: A top-level collection for collaborative quiz sessions.
+ * - /battleResults/{battleResultId}: A top-level collection for student results from battles.
+ *
+ * Key Security Decisions:
+ * - User Isolation: Users can only access their own data under /users/{userId}. Listing all users is disabled.
+ * - Teacher Ownership: Teachers have exclusive control over the quizzes and questions they create, enforced by nesting them under their user path.
+ * - Shared Battle Rooms: Battle Rooms are secured using a denormalized 'teacherId' for owner controls and a 'studentIds' array for participant access. Only the teacher can create, delete, or modify the room.
+ * - Result Privacy: Battle results can only be created, modified, or deleted by the student who earned them. Teachers are granted read-only access to the results of their battles for grading purposes.
+ *
+ * Denormalization for Authorization:
+ * To ensure fast and secure rules, this model relies on denormalization.
+ * - Battle Rooms MUST contain a 'teacherId' field copied from the original quiz to allow for teacher-only write operations without extra reads.
+ * - Battle Results MUST contain both a 'studentId' (for student ownership) and a 'teacherId' (for teacher read access), preventing slow and costly `get()` calls to parent documents.
+ *
+ * Structural Segregation:
+ * Teacher-specific content (quizzes, questions) is segregated into a private user subcollection.
+ * Collaborative content (battle rooms) and student-generated data (results) are in separate, top-level collections with their own distinct security models.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    //--- Global Helper Functions ---//
+
+    /**
+     * Returns true if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Returns true if the user's UID matches the provided userId.
+     * Used for path-based security where the owner's ID is in the path.
+     * @param userId The user ID to check against the authenticated user.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Returns true if a document exists and the user is the owner via the path.
+     * Used for secure update and delete operations to prevent modifying non-existent data.
+     * @param userId The user ID from the path to check ownership.
+     */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    /**
+     * @description Manages user profile documents. Access is restricted to the user themselves.
+     * @path /users/{userId}
+     * @allow (create) An authenticated user with UID 'user123' can create their own profile at `/users/user123`.
+     * @deny (get) An authenticated user 'user456' cannot read the profile at `/users/user123`.
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Secures quizzes created by teachers. Only the teacher who owns the quiz can access or manage it.
+     * @path /users/{teacherId}/quizzes/{quizId}
+     * @allow (create) A teacher with UID 'teacher123' can create a quiz at `/users/teacher123/quizzes/quizABC`.
+     * @deny (list) A student or another teacher cannot list quizzes under `/users/teacher123/quizzes`.
+     * @principle Enforces document ownership based on the collection path.
+     */
+    match /users/{teacherId}/quizzes/{quizId} {
+      allow get: if isOwner(teacherId);
+      allow list: if isOwner(teacherId);
+      allow create: if isOwner(teacherId) && request.resource.data.teacherId == teacherId;
+      allow update: if isExistingOwner(teacherId) && request.resource.data.teacherId == resource.data.teacherId;
+      allow delete: if isExistingOwner(teacherId);
+
+      /**
+       * @description Secures questions within a teacher's quiz, inheriting ownership from the parent quiz.
+       * @path /users/{teacherId}/quizzes/{quizId}/questions/{questionId}
+       * @allow (get) A teacher with UID 'teacher123' can read a question at `/users/teacher123/quizzes/quizABC/questions/q1`.
+       * @deny (delete) A teacher with UID 'teacher456' cannot delete a question at `/users/teacher123/quizzes/quizABC/questions/q1`.
+       * @principle Inherits ownership from the parent document's path.
+       */
+      match /questions/{questionId} {
+        allow get: if isOwner(teacherId);
+        allow list: if isOwner(teacherId);
+        allow create: if isOwner(teacherId) && request.resource.data.quizId == quizId;
+        allow update: if isExistingOwner(teacherId) && request.resource.data.quizId == resource.data.quizId;
+        allow delete: if isExistingOwner(teacherId);
+      }
+    }
+
+    /**
+     * @description Secures collaborative battle rooms. The teacher who created the room is the owner.
+     * Students listed in `studentIds` can read the room's state but cannot modify it.
+     * @path /battleRooms/{battleRoomId}
+     * @allow (get) A student whose UID is in the `studentIds` array can read the battle room document.
+     * @deny (update) A student participant cannot update the battle room (e.g., add other students).
+     * @principle Enforces shared access via a collaborator list (`studentIds`) and a single owner (`teacherId`).
+     */
+    match /battleRooms/{battleRoomId} {
+      allow get: if isSignedIn() && (request.auth.uid == resource.data.teacherId || request.auth.uid in resource.data.studentIds);
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.teacherId;
+      allow update: if resource != null && isSignedIn() && request.auth.uid == resource.data.teacherId && request.resource.data.teacherId == resource.data.teacherId;
+      allow delete: if resource != null && isSignedIn() && request.auth.uid == resource.data.teacherId;
+    }
+
+    /**
+     * @description Manages individual student results from a battle.
+     * A student has full control over their own result. The teacher of the battle room can read the result.
+     * @path /battleResults/{battleResultId}
+     * @allow (create) A student with UID 'student123' can create a result document where 'studentId' is 'student123'.
+     * @deny (update) A student 'student456' cannot update a result owned by 'student123'.
+     * @principle Enforces document ownership via an internal `studentId` field, while allowing a `teacherId` read-only access.
+     */
+    match /battleResults/{battleResultId} {
+      allow get: if isSignedIn() && (request.auth.uid == resource.data.studentId || request.auth.uid == resource.data.teacherId);
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.studentId;
+      allow update: if resource != null && isSignedIn() && request.auth.uid == resource.data.studentId && request.resource.data.studentId == resource.data.studentId && request.resource.data.teacherId == resource.data.teacherId;
+      allow delete: if resource != null && isSignedIn() && request.auth.uid == resource.data.studentId;
+    }
+  }
+}
