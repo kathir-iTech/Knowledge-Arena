@@ -15,14 +15,18 @@ service cloud.firestore {
       // Any authenticated user can read a room to get its details
       allow read: if request.auth != null;
       
-      // Only a teacher can create a room
+      // Only a user with the 'Teacher' role can create a room
       allow create: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
       
-      // A student can update a room *only* to add themselves to the studentIds list.
-      // This is the only modification a student is allowed to make.
+      // Allow a user to update a room ONLY to add their UID to the studentIds list.
+      // This is a secure way to let students join a room.
       allow update: if request.auth != null &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Student' &&
-                      request.resource.data.studentIds == resource.data.studentIds.concat([request.auth.uid]);
+      				// Ensure the user is a student
+      				get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Student' &&
+                    // Ensure the ONLY field being changed is studentIds
+                    request.resource.data.keys().removeAll(['studentIds']).size() == resource.data.keys().removeAll(['studentIds']).size() &&
+                    // Ensure they are only adding themselves to the list
+                    request.resource.data.studentIds == resource.data.studentIds.union([request.auth.uid]);
 
       // Only the teacher who created the room can delete it
       allow delete: if request.auth != null && resource.data.teacherId == request.auth.uid;

@@ -12,7 +12,6 @@ import QuizResults from '@/components/quiz/QuizResults';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
@@ -37,6 +36,7 @@ export default function BattlePage() {
     }
 
     const joinRoom = async () => {
+      if (!firestore) return;
       const roomDocRef = doc(firestore, 'battleRooms', roomCode);
       const studentId = appUser.id;
 
@@ -90,13 +90,13 @@ export default function BattlePage() {
 
   const handleStartBattle = () => {
     if (roomRef && firestore) {
-      updateDocumentNonBlocking(roomRef, { status: 'playing', startTime: Date.now(), currentQuestionIndex: 0 });
+      updateDoc(roomRef, { status: 'playing', startTime: Date.now(), currentQuestionIndex: 0 });
     }
   };
 
   const handleFinishBattle = () => {
     if (roomRef && firestore) {
-      updateDocumentNonBlocking(roomRef, { status: 'finished' });
+      updateDoc(roomRef, { status: 'finished' });
     }
   };
   
