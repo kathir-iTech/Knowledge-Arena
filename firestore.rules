@@ -13,7 +13,7 @@
  * Key Security Decisions:
  * - User Isolation: Users can only access their own data under /users/{userId}. Listing all users is disabled.
  * - Teacher Ownership: Teachers have exclusive control over the quizzes and questions they create, enforced by nesting them under their user path.
- * - Shared Battle Rooms: Battle Rooms are secured using a denormalized 'teacherId' for owner controls and a 'studentIds' array for participant access. Only the teacher can create, delete, or modify the room.
+ * - Shared Battle Rooms: Battle Rooms are secured using a denormalized 'teacherId' for owner controls and a 'studentIds' array for participant access.
  * - Result Privacy: Battle results can only be created, modified, or deleted by the student who earned them. Teachers are granted read-only access to the results of their battles for grading purposes.
  *
  * Denormalization for Authorization:
@@ -46,24 +46,6 @@ service cloud.firestore {
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-
-    /**
-     * Returns true if a document exists and the user is the owner via the path.
-     * Used for secure update and delete operations to prevent modifying non-existent data.
-     * @param userId The user ID from the path to check ownership.
-     */
-    function isExistingOwner(userId) {
-      return resource != null && isOwner(userId);
-    }
-    
-    function isParticipant(roomId) {
-      return isSignedIn() && get(/databases/$(database)/documents/battleRooms/$(roomId)).data.participants.hasAny([request.auth.uid]);
-    }
-    
-    function isTeacherOfRoom(roomId) {
-        return isSignedIn() && request.auth.uid == get(/databases/$(database)/documents/battleRooms/$(roomId)).data.teacherId;
-    }
-
 
     /**
      * @description Manages user profile documents. Access is restricted to the user themselves.
@@ -103,17 +85,18 @@ service cloud.firestore {
 
     /**
      * @description Secures collaborative battle rooms. The teacher who created the room is the owner.
-     * Students listed in `studentIds` can read the room's state but cannot modify it.
+     * Students listed in `studentIds` can access the room's state.
      * @path /battleRooms/{battleRoomId}
      * @allow (get) A student whose UID is in the `studentIds` array can read the battle room document.
      * @deny (update) A student participant cannot update the battle room (e.g., add other students).
      * @principle Enforces shared access via a collaborator list (`studentIds`) and a single owner (`teacherId`).
      */
     match /battleRooms/{battleRoomId} {
-      allow get: if isSignedIn() && (request.auth.uid == resource.data.teacherId || request.auth.uid in resource.data.participants.map(p => p.id));
+      allow get: if isSignedIn() && (request.auth.uid == resource.data.teacherId || request.auth.uid in resource.data.studentIds);
       allow list: if false;
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.teacherId;
-      allow update: if isSignedIn() && request.auth.uid == resource.data.teacherId || request.auth.uid in resource.data.participants.map(p => p.id);
+      // Allow teacher to update the room, and students to be added to the room
+      allow update: if isSignedIn() && (request.auth.uid == resource.data.teacherId || request.auth.uid in request.resource.data.studentIds);
       allow delete: if resource != null && isSignedIn() && request.auth.uid == resource.data.teacherId;
     }
 

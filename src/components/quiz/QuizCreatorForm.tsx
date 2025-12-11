@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -18,7 +19,7 @@ import { PlusCircle, Trash2, Send } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { doc, collection, setDoc } from 'firebase/firestore';
+import { doc, collection, setDoc, writeBatch } from 'firebase/firestore';
 import type { Quiz, Room, User, Question } from '@/lib/types';
 
 
@@ -77,7 +78,9 @@ export function QuizCreatorForm() {
         return;
     }
     
-    // Create the Quiz document
+    const batch = writeBatch(firestore);
+
+    // 1. Create the Quiz document
     const quizPath = `users/${user.id}/quizzes`;
     const quizRef = doc(collection(firestore, quizPath));
 
@@ -86,10 +89,10 @@ export function QuizCreatorForm() {
         teacherId: user.id,
         questions: values.questions,
     };
-    await setDoc(quizRef, newQuiz);
+    batch.set(quizRef, newQuiz);
     const quizId = quizRef.id;
 
-    // Create the Battle Room document with a 6-char ID
+    // 2. Create the Battle Room document
     const roomCode = uuidv4().slice(0, 6).toUpperCase();
     const roomRef = doc(firestore, 'battleRooms', roomCode);
     
@@ -104,14 +107,17 @@ export function QuizCreatorForm() {
 
     const newRoom: Omit<Room, 'id'> = {
       quizId: quizId,
+      teacherId: user.id,
       participants: [creatorAsParticipant],
+      studentIds: [user.id], // Add teacher to studentIds to grant access
       status: 'waiting',
       scores: { [user.id]: 0 },
       currentQuestionIndex: 0,
       startTime: 0,
-      teacherId: user.id,
     };
-    await setDoc(roomRef, newRoom);
+    batch.set(roomRef, newRoom);
+    
+    await batch.commit();
     
     toast({
         title: "Battle Room Created!",

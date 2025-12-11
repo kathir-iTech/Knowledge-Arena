@@ -10,7 +10,7 @@ import BattleRoom from '@/components/quiz/BattleRoom';
 import QuizResults from '@/components/quiz/QuizResults';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, updateDoc, arrayUnion, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
@@ -22,12 +22,9 @@ export default function BattlePage() {
   const [isJoining, setIsJoining] = useState(true);
   
   const roomCode = params.roomCode.toUpperCase();
-  const roomRef = useMemoFirebase(() => firestore ? doc(firestore, 'battleRooms', roomCode) : null, [firestore, roomCode]);
-  const { data: room, isLoading: isRoomLoading } = useDoc<Room>(roomRef);
-  
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [isQuizLoading, setIsQuizLoading] = useState(true);
 
+  // This useEffect handles joining the room and adding the user to the participants list.
+  // It runs before the useDoc hook tries to fetch the room data.
   useEffect(() => {
     if (isAuthLoading || !firestore || !authUser || !roomCode) return;
 
@@ -43,21 +40,22 @@ export default function BattlePage() {
           router.push('/');
           return;
         }
-
+        
         if (!userDoc.exists()) {
-          toast({ variant: "destructive", title: "Error", description: "Could not find your user profile." });
-          router.push('/');
-          return;
+            toast({ variant: "destructive", title: "Error", description: "Could not find your user profile." });
+            router.push('/');
+            return;
         }
 
         const roomData = roomDoc.data() as Room;
         const userProfile = userDoc.data() as User;
         
-        // Add student to participants if they are not already in and are not the teacher
-        const isParticipant = roomData.participants.some(p => p.id === authUser.uid);
+        const isParticipant = roomData.studentIds.includes(authUser.uid);
+
         if (userProfile.role === 'Student' && !isParticipant) {
            await updateDoc(roomDocRef, {
-             participants: arrayUnion(userProfile)
+             participants: arrayUnion(userProfile),
+             studentIds: arrayUnion(authUser.uid)
            });
         }
       } catch (error) {
@@ -65,7 +63,7 @@ export default function BattlePage() {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not join the battle room.' });
         router.push('/');
       } finally {
-        setIsJoining(false);
+        setIsJoining(false); // Finished joining, allow useDoc to proceed
       }
     };
 
@@ -73,10 +71,20 @@ export default function BattlePage() {
 
   }, [isAuthLoading, firestore, authUser, roomCode, router, toast]);
 
+  const roomRef = useMemoFirebase(() => {
+    // Wait until joining is complete before creating the ref
+    if (isJoining || !firestore) return null;
+    return doc(firestore, 'battleRooms', roomCode);
+  }, [isJoining, firestore, roomCode]);
+
+  const { data: room, isLoading: isRoomLoading } = useDoc<Room>(roomRef);
+  
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [isQuizLoading, setIsQuizLoading] = useState(true);
+
   useEffect(() => {
     if (!room || !firestore) return;
 
-    // Fetch the quiz associated with the room
     if(room.quizId && room.teacherId) {
         const quizRef = doc(firestore, `users/${room.teacherId}/quizzes`, room.quizId);
         getDoc(quizRef).then(quizDoc => {
@@ -112,7 +120,7 @@ export default function BattlePage() {
     }
   };
   
-  if (isAuthLoading || isRoomLoading || isJoining || isQuizLoading || !authUser || !room || !quiz) {
+  if (isAuthLoading || isJoining || isRoomLoading || isQuizLoading || !authUser || !room || !quiz) {
     return (
         <div className="flex flex-col items-center justify-center h-screen p-4">
             <h1 className="text-2xl font-headline text-primary mb-4">Entering Arena...</h1>
@@ -123,22 +131,18 @@ export default function BattlePage() {
   
   const currentUserInRoom = room.participants.find(p => p.id === authUser.uid);
 
-  if (!currentUserInRoom) {
-     return (
-        <div className="flex flex-col items-center justify-center h-screen p-4">
-            <h1 className="text-2xl font-headline text-primary mb-4">Finalizing entry...</h1>
-            <Skeleton className="w-full max-w-lg h-64" />
-        </div>
-    );
+  if (!currentUserInRoom && !isJoining) {
+     toast({ variant: "destructive", title: "Access Denied", description: "You are not a participant in this room." });
+     router.push('/');
+     return null;
   }
 
-
   if (room.status === 'waiting') {
-    return <WaitingRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom} onStart={handleStartBattle} />;
+    return <WaitingRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom!} onStart={handleStartBattle} />;
   }
 
   if (room.status === 'playing') {
-    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom} onFinish={handleFinishBattle} />;
+    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom!} onFinish={handleFinishBattle} />;
   }
 
   if (room.status === 'finished') {

@@ -1,4 +1,5 @@
 
+
 export interface User {
   id: string;
   name: string;
@@ -29,6 +30,7 @@ export interface Room {
   quizId: string;
   teacherId: string; // userId of teacher who created the quiz
   participants: User[];
+  studentIds: string[];
   status: 'waiting' | 'playing' | 'finished';
   scores: { [userId: string]: number };
   currentQuestionIndex: number;
