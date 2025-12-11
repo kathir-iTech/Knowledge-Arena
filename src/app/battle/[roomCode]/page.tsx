@@ -44,6 +44,8 @@ export default function BattlePage() {
         });
 
       } catch (error: any) {
+        console.error("Error joining room:", error);
+        // Check if the room exists as a fallback to give a better error message
         try {
             const roomDoc = await getDoc(roomDocRef);
             if (!roomDoc.exists()) {
@@ -55,7 +57,6 @@ export default function BattlePage() {
             console.error("Error checking room existence:", getErr);
         }
 
-        console.error("Error joining room:", error);
         toast({ variant: 'destructive', title: 'Error', description: 'Could not join the battle room. You may not have permission.' });
         router.push('/');
 
@@ -79,7 +80,7 @@ export default function BattlePage() {
   const [areParticipantsLoading, setAreParticipantsLoading] = useState(true);
 
   useEffect(() => {
-    if (!room || !firestore || room.studentIds.length === 0) {
+    if (!room || !firestore || !room.studentIds || room.studentIds.length === 0) {
       if(room) setAreParticipantsLoading(false);
       return;
     };
@@ -117,7 +118,8 @@ export default function BattlePage() {
       }
   }, [roomError, router, toast]);
   
-  if (isAuthLoading || isJoining || isRoomLoading || areParticipantsLoading || !appUser || !room) {
+  // Explicitly check for room and room.quiz before rendering children
+  if (isAuthLoading || isJoining || isRoomLoading || areParticipantsLoading || !appUser || !room || !room.quiz) {
     return (
         <div className="flex flex-col items-center justify-center h-screen p-4">
             <h1 className="text-2xl font-headline text-primary mb-4">Entering Arena...</h1>
