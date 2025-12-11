@@ -17,8 +17,8 @@ import { PlusCircle, Trash2, Send } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, setDocumentNonBlocking } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
-import type { Quiz, Room } from '@/lib/types';
+import { doc } from 'firebase/firestore';
+import type { Quiz, Room, User } from '@/lib/types';
 
 
 const questionSchema = z.object({
@@ -82,19 +82,34 @@ export function QuizCreatorForm() {
         questions: values.questions.map(q => ({ ...q, id: uuidv4() })),
     };
     
-    setDocumentNonBlocking(quizRef, newQuiz, {});
+    setDocumentNonBlocking(quizRef, newQuiz);
 
     const roomRef = doc(firestore, 'battleRooms', quizId);
+    // The creator of the room is the teacher, who is also the first participant.
+    const creatorAsParticipant: User = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar,
+      role: 'Teacher',
+      xp: user.xp,
+    }
+
     const newRoom: Room = {
       quizId: quizId,
-      participants: [user],
+      participants: [creatorAsParticipant],
       status: 'waiting',
       scores: { [user.id]: 0 },
       currentQuestionIndex: 0,
       startTime: 0,
     };
-    setDocumentNonBlocking(roomRef, newRoom, {});
+    setDocumentNonBlocking(roomRef, newRoom);
     
+    toast({
+        title: "Battle Room Created!",
+        description: `Your room code is ${quizId}. Redirecting you to the waiting room...`
+    })
+
     router.push(`/battle/${quizId}`);
   };
 
@@ -227,8 +242,10 @@ export function QuizCreatorForm() {
                     Launch Battle
                 </Button>
             </div>
-            {form.formState.errors.questions?.root && (
-                 <p className="text-sm font-medium text-destructive">{form.formState.errors.questions.root.message}</p>
+            {form.formState.errors.questions && (
+                 <p className="text-sm font-medium text-destructive">
+                    {form.formState.errors.questions.message || form.formState.errors.questions.root?.message}
+                 </p>
             )}
           </form>
         </Form>
