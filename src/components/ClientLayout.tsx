@@ -43,7 +43,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   if (isAuthenticated && isAuthPage) {
      if (userRole === 'Teacher') {
       redirect('/teacher/dashboard');
-    } else {
+    } else if (userRole === 'Student') {
       redirect('/student/dashboard');
     }
   }
@@ -54,16 +54,18 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   }
 
   // Enforce strict role-based access control for all other pages
-  if (isAuthenticated) {
+  if (isAuthenticated && userRole) {
     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
     const isStudentPage = pathname.startsWith('/student') || pathname.startsWith('/battle');
 
     if (userRole === 'Teacher' && isStudentPage) {
        redirect('/teacher/dashboard');
+       return null; // Return null to prevent rendering the student page
     }
     
     if (userRole === 'Student' && isTeacherPage) {
        redirect('/student/dashboard');
+       return null; // Return null to prevent rendering the teacher page
     }
   }
 
