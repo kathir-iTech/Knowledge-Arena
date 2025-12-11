@@ -4,6 +4,7 @@ import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
+import useCollectionSafe from './firestore/use-collection';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
@@ -40,9 +41,10 @@ export function getSdks(firebaseApp: FirebaseApp) {
   };
 }
 
+export { useCollectionSafe };
 export * from './provider';
 export * from './client-provider';
-export * from './firestore/use-collection';
+// export * from './firestore/use-collection'; // This is replaced by the named export above
 export * from './firestore/use-doc';
 export * from './non-blocking-updates';
 export * from './non-blocking-login';

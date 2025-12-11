@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, BarChart, Users, History, ChevronDown, Loader2, Trash2, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore, useCollection, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useCollectionSafe, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, query, where, getDocs, orderBy, doc } from 'firebase/firestore';
 import type { Quiz, Room, BattleResult } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
@@ -213,7 +213,7 @@ const TeacherDashboard = () => {
     [user, firestore]
   );
   
-  const { data: rooms, isLoading: isLoadingQuizzes } = useCollection<Room>(quizzesQuery);
+  const { data: rooms, isLoading: isLoadingQuizzes } = useCollectionSafe(quizzesQuery);
   
   // Sort rooms by startTime on the client side to avoid needing a composite index
   const sortedRooms = React.useMemo(() => {
@@ -305,3 +305,4 @@ export default TeacherDashboard;
       
 
     
+
