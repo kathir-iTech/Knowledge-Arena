@@ -2,7 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // USERS
     // Teachers can list all users.
     // Authenticated users can read any profile.
     // Users can only create/update their own profile.
