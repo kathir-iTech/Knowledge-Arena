@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, BarChart, Users, History, Loader2, Trash2, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore, useCollectionSafe, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, getDocs, orderBy, doc } from 'firebase/firestore';
+import { useFirestore, useCollectionSafe, useMemoFirebase } from '@/firebase';
+import { collection, query, where, getDocs, orderBy, doc, writeBatch } from 'firebase/firestore';
 import type { Quiz, Room, BattleResult, User } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -189,12 +189,13 @@ const TeacherDashboard = () => {
   const firestore = useFirestore();
 
   const battleRoomsQuery = useMemoFirebase(
-    () => (user && firestore ? query(collection(firestore, `battleRooms`), where('teacherId', '==', user.id), orderBy('startTime', 'desc')) : null),
+    () => (user && firestore ? query(collection(firestore, `battleRooms`), where('teacherId', '==', user.id), orderBy('createdAt', 'desc')) : null),
     [user, firestore]
   );
   
   const { data: rooms, loading: isLoadingRooms } = useCollectionSafe(battleRoomsQuery);
   const [optimisticRooms, setOptimisticRooms] = useState<Room[] | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (rooms) {
@@ -307,3 +308,5 @@ const TeacherDashboard = () => {
 };
 
 export default TeacherDashboard;
+
+    

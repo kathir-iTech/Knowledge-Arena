@@ -22,6 +22,7 @@ export interface Quiz {
   topic: string;
   teacherId: string; // userId
   questions: Question[];
+  createdAt: number;
 }
 
 export interface Room {
@@ -34,6 +35,7 @@ export interface Room {
   currentQuestionIndex: number;
   startTime: number;
   battleResultIds: string[];
+  createdAt: number;
 }
 
 export interface BattleResult {
@@ -50,3 +52,5 @@ export interface BattleResult {
 export interface BattlePlayer extends User {
   score: number;
 }
+
+    

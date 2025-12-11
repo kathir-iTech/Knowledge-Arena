@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
 import { doc, writeBatch } from 'firebase/firestore';
-import type { Quiz, Room } from '@/lib/types';
+import type { Quiz, Room, Question } from '@/lib/types';
 
 
 const questionSchema = z.object({
@@ -84,9 +84,9 @@ export function QuizCreatorForm() {
     try {
         const batch = writeBatch(firestore);
 
-        // 1. Define and create the Quiz document under the correct user path
+        // 1. Define and create the Quiz document
         const quizId = uuidv4();
-        const quizRef = doc(firestore, 'users', user.id, 'quizzes', quizId);
+        const quizRef = doc(firestore, 'quizzes', quizId);
         const newQuiz: Quiz = {
             id: quizId,
             topic: values.topic,
@@ -281,3 +281,5 @@ export function QuizCreatorForm() {
     </Card>
   );
 }
+
+    

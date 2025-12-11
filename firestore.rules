@@ -35,9 +35,9 @@ service cloud.firestore {
       allow update: if request.auth != null && (
         // Teacher can change status, question index, etc.
         (resource.data.teacherId == request.auth.uid) ||
-        // Student can only add themselves to the studentIds array
+        // Student can ONLY add themselves to the studentIds array
         (
-          request.resource.data.keys().hasOnly(['studentIds']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['studentIds']) &&
           request.resource.data.studentIds.size() == resource.data.studentIds.size() + 1 &&
           request.auth.uid in request.resource.data.studentIds
         )
@@ -55,3 +55,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
