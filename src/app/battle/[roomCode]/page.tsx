@@ -11,7 +11,7 @@ import BattleRoom from '@/components/quiz/BattleRoom';
 import QuizResults from '@/components/quiz/QuizResults';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -37,30 +37,54 @@ export default function BattlePage() {
         return;
     }
 
-    const joinRoom = () => {
+    const joinRoom = async () => {
       const roomDocRef = doc(firestore, 'battleRooms', roomCode);
       const studentId = appUser.id;
 
-      updateDoc(roomDocRef, { studentIds: arrayUnion(studentId) })
-        .then(() => {
-           setIsJoining(false);
-        })
-        .catch(async (error) => {
-          console.error("Error joining room:", error);
-
-          // Create and emit a contextual permission error
-          const permissionError = new FirestorePermissionError({
-              path: roomDocRef.path,
-              operation: 'update',
-              requestResourceData: { studentIds: arrayUnion(studentId) }
+      try {
+        await updateDoc(roomDocRef, {
+          studentIds: arrayUnion(studentId)
+        });
+        // success — proceed as normal
+        setIsJoining(false);
+      } catch (err: any) {
+        // Detect permission errors from Firestore (code or message)
+        const isPermissionError =
+          (err && err.code && typeof err.code === 'string' && err.code.toLowerCase().includes('permission')) ||
+          (err && err.message && typeof err.message === 'string' && err.message.toLowerCase().includes('permission'));
+      
+        // Log an event in the room's events collection for audit (non-blocking)
+        try {
+          const eventsCol = collection(firestore, `battleRooms/${roomCode}/events`);
+          await addDoc(eventsCol, {
+            type: 'join-denied',
+            detail: {
+              reason: isPermissionError ? 'permission-denied' : 'update-failed',
+              errorMessage: err?.message || String(err)
+            },
+            participantId: studentId || null,
+            ts: serverTimestamp()
           });
-          errorEmitter.emit('permission-error', permissionError);
-          
-          // Provide user feedback and redirect
-          toast({ variant: 'destructive', title: 'Error Joining Battle', description: 'You may not have permission or the room may not exist.' });
+        } catch (logErr) {
+          // ignore logging errors — do not crash the app for that
+          console.warn('Failed to write join-denied event', logErr);
+        }
+      
+        // Handle permission denial gracefully in UI:
+        if (isPermissionError) {
+          toast({ variant: 'destructive', title: 'Could not join battle', description: 'You may not have permission to join this room.' });
           router.push('/student/dashboard');
           setIsJoining(false);
-        });
+          return; // stop further processing
+        }
+      
+        // For other errors, rethrow or show message
+        console.error('Failed to add student to room:', err);
+        toast({ variant: 'destructive', title: 'Error Joining Battle', description: 'The room may not exist or an error occurred.' });
+        router.push('/student/dashboard');
+        setIsJoining(false);
+        return;
+      }
     };
 
     joinRoom();
