@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { PlusCircle, Trash2, Send } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, setDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
+import { useFirestore, setDocumentNonBlocking } from '@/firebase';
 import { doc, collection } from 'firebase/firestore';
 import type { Quiz, Room, User, Question } from '@/lib/types';
 
@@ -83,7 +83,7 @@ export function QuizCreatorForm() {
 
     const newQuiz: Omit<Quiz, 'id'> = {
         topic: values.topic,
-        createdBy: user.id,
+        teacherId: user.id,
         questions: values.questions,
     };
     await setDocumentNonBlocking(quizRef, newQuiz);
@@ -109,6 +109,7 @@ export function QuizCreatorForm() {
       scores: { [user.id]: 0 },
       currentQuestionIndex: 0,
       startTime: 0,
+      teacherId: user.id, // Add teacherId to the room for rule validation
     };
     await setDocumentNonBlocking(roomRef, newRoom);
     

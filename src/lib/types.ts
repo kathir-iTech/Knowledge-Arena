@@ -20,14 +20,14 @@ export interface Question {
 export interface Quiz {
   id: string; 
   topic: string;
-  createdBy: string; // userId
+  teacherId: string; // userId
   questions: Question[];
 }
 
 export interface Room {
   id: string;
   quizId: string;
-  createdBy?: string; // userId of teacher who created the quiz
+  teacherId: string; // userId of teacher who created the quiz
   participants: User[];
   status: 'waiting' | 'playing' | 'finished';
   scores: { [userId: string]: number };

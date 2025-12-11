@@ -10,7 +10,7 @@ import BattleRoom from '@/components/quiz/BattleRoom';
 import QuizResults from '@/components/quiz/QuizResults';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, updateDoc, arrayUnion, collection } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
@@ -56,8 +56,8 @@ export default function BattlePage() {
         });
 
       // Fetch the quiz associated with the room
-      if(room.quizId && room.createdBy) {
-          const quizRef = doc(firestore, `users/${room.createdBy}/quizzes`, room.quizId);
+      if(room.quizId && room.teacherId) {
+          const quizRef = doc(firestore, `users/${room.teacherId}/quizzes`, room.quizId);
           getDoc(quizRef).then(quizDoc => {
             if (quizDoc.exists()) {
               setQuiz({ id: quizDoc.id, ...quizDoc.data() } as Quiz);
@@ -68,17 +68,8 @@ export default function BattlePage() {
             setIsQuizLoading(false);
           });
       } else {
-         // Backwards compatibility for rooms made before createdBy was added.
-         const quizRef = doc(firestore, 'quizzes', room.quizId);
-          getDoc(quizRef).then(quizDoc => {
-            if (quizDoc.exists()) {
-              setQuiz({ id: quizDoc.id, ...quizDoc.data() } as Quiz);
-            } else {
-              toast({ variant: 'destructive', title: 'Error', description: 'Could not find the quiz for this room.' });
-              router.push('/');
-            }
-            setIsQuizLoading(false);
-          });
+        toast({ variant: 'destructive', title: 'Error', description: 'This room is missing key information.' });
+        router.push('/');
       }
     }
 
