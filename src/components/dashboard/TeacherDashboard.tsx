@@ -160,13 +160,13 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
                         </div>
                     </AccordionTrigger>
                     
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); copyToClipboard(room.id)}}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); copyToClipboard(room.id)}}>
                         <Copy className="h-4 w-4" />
                     </Button>
 
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                         <Button variant="ghost" size="icon" className="ml-2 shrink-0">
+                         <Button variant="ghost" size="icon" className="ml-2 shrink-0 h-8 w-8">
                            <Trash2 className="h-4 w-4 text-destructive" />
                          </Button>
                       </AlertDialogTrigger>
@@ -305,5 +305,6 @@ export default TeacherDashboard;
       
 
     
+
 
 

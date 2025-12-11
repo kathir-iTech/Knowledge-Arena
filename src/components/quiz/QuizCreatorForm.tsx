@@ -106,7 +106,7 @@ export function QuizCreatorForm() {
       quiz: newQuiz, // Embed the full quiz object
       teacherId: user.id,
       participants: [creatorAsParticipant],
-      studentIds: [user.id], // Add teacher to studentIds to grant access
+      studentIds: [], // Start with an empty student list
       status: 'waiting',
       scores: {},
       currentQuestionIndex: 0,

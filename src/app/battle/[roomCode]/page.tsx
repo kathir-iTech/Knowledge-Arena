@@ -69,23 +69,41 @@ export default function BattlePage() {
   const [areParticipantsLoading, setAreParticipantsLoading] = useState(true);
 
   useEffect(() => {
-    if (!room || !firestore || !room.studentIds || room.studentIds.length === 0) {
-      if(room) setAreParticipantsLoading(false);
+    if (!room || !firestore) {
+      setAreParticipantsLoading(false);
       return;
-    };
-    
-    setAreParticipantsLoading(true);
-    const participantPromises = room.studentIds.map(id => getDoc(doc(firestore, 'users', id)));
-    Promise.all(participantPromises).then(participantDocs => {
-      const participantData = participantDocs.filter(doc => doc.exists()).map(doc => ({ id: doc.id, ...doc.data() } as User));
-      setParticipants(participantData);
-      setAreParticipantsLoading(false);
-    }).catch(err => {
-      console.error("Error fetching participants:", err);
-      setAreParticipantsLoading(false);
-    })
+    }
 
-  }, [room, firestore]);
+    const fetchParticipants = async () => {
+        setAreParticipantsLoading(true);
+        const studentIds = room.studentIds || [];
+        const allIds = Array.from(new Set([room.teacherId, ...studentIds]));
+
+        if (allIds.length === 0) {
+            setParticipants([]);
+            setAreParticipantsLoading(false);
+            return;
+        }
+
+        const participantPromises = allIds.map(id => getDoc(doc(firestore, 'users', id)));
+        
+        try {
+            const participantDocs = await Promise.all(participantPromises);
+            const participantData = participantDocs
+                .filter(doc => doc.exists())
+                .map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setParticipants(participantData);
+        } catch (err) {
+            console.error("Error fetching participants:", err);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not load participant data.' });
+        } finally {
+            setAreParticipantsLoading(false);
+        }
+    };
+
+    fetchParticipants();
+
+}, [room, firestore, toast]);
 
 
   const handleStartBattle = () => {
