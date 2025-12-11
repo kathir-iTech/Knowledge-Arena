@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -77,7 +78,9 @@ export function QuizCreatorForm() {
     }
     
     // Create the Quiz document
-    const quizRef = doc(collection(firestore, 'quizzes'));
+    const quizPath = `users/${user.id}/quizzes`;
+    const quizRef = doc(collection(firestore, quizPath));
+
     const newQuiz: Omit<Quiz, 'id'> = {
         topic: values.topic,
         createdBy: user.id,

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -54,16 +55,30 @@ export default function BattlePage({ params }: { params: { roomCode: string } })
         });
 
       // Fetch the quiz associated with the room
-      const quizRef = doc(firestore, 'quizzes', room.quizId);
-      getDoc(quizRef).then(quizDoc => {
-        if (quizDoc.exists()) {
-          setQuiz({ id: quizDoc.id, ...quizDoc.data() } as Quiz);
-        } else {
-          toast({ variant: 'destructive', title: 'Error', description: 'Could not find the quiz for this room.' });
-          router.push('/');
-        }
-        setIsQuizLoading(false);
-      });
+      if(room.quizId && room.createdBy) {
+          const quizRef = doc(firestore, `users/${room.createdBy}/quizzes`, room.quizId);
+          getDoc(quizRef).then(quizDoc => {
+            if (quizDoc.exists()) {
+              setQuiz({ id: quizDoc.id, ...quizDoc.data() } as Quiz);
+            } else {
+              toast({ variant: 'destructive', title: 'Error', description: 'Could not find the quiz for this room.' });
+              router.push('/');
+            }
+            setIsQuizLoading(false);
+          });
+      } else {
+         // Backwards compatibility for rooms made before createdBy was added.
+         const quizRef = doc(firestore, 'quizzes', room.quizId);
+          getDoc(quizRef).then(quizDoc => {
+            if (quizDoc.exists()) {
+              setQuiz({ id: quizDoc.id, ...quizDoc.data() } as Quiz);
+            } else {
+              toast({ variant: 'destructive', title: 'Error', description: 'Could not find the quiz for this room.' });
+              router.push('/');
+            }
+            setIsQuizLoading(false);
+          });
+      }
     }
 
   }, [room, isRoomLoading, authUser, isAuthLoading, router, toast, firestore, params.roomCode, roomRef]);
