@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, BarChart, Users, History } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Quiz } from '@/lib/types';
 import { Skeleton } from '../ui/skeleton';
@@ -14,7 +14,10 @@ const TeacherDashboard = () => {
   const { user } = useAuth();
   const firestore = useFirestore();
 
-  const quizzesRef = user ? query(collection(firestore, `users/${user.id}/quizzes`)) : null;
+  const quizzesRef = useMemoFirebase(
+    () => (user && firestore ? query(collection(firestore, `users/${user.id}/quizzes`)) : null),
+    [user, firestore]
+  );
   const { data: quizzes, isLoading: isLoadingQuizzes } = useCollection<Quiz>(quizzesRef);
 
   return (
