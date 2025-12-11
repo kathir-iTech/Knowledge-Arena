@@ -12,6 +12,8 @@ import QuizResults from '@/components/quiz/QuizResults';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
@@ -35,34 +37,30 @@ export default function BattlePage() {
         return;
     }
 
-    const joinRoom = async () => {
+    const joinRoom = () => {
       const roomDocRef = doc(firestore, 'battleRooms', roomCode);
+      const studentId = appUser.id;
 
-      try {
-        await updateDoc(roomDocRef, {
-          studentIds: arrayUnion(appUser.id)
+      updateDoc(roomDocRef, { studentIds: arrayUnion(studentId) })
+        .then(() => {
+           setIsJoining(false);
+        })
+        .catch(async (error) => {
+          console.error("Error joining room:", error);
+
+          // Create and emit a contextual permission error
+          const permissionError = new FirestorePermissionError({
+              path: roomDocRef.path,
+              operation: 'update',
+              requestResourceData: { studentIds: arrayUnion(studentId) }
+          });
+          errorEmitter.emit('permission-error', permissionError);
+          
+          // Provide user feedback and redirect
+          toast({ variant: 'destructive', title: 'Error Joining Battle', description: 'You may not have permission or the room may not exist.' });
+          router.push('/student/dashboard');
+          setIsJoining(false);
         });
-
-      } catch (error: any) {
-        console.error("Error joining room:", error);
-        // Check if the room exists as a fallback to give a better error message
-        try {
-            const roomDoc = await getDoc(roomDocRef);
-            if (!roomDoc.exists()) {
-                toast({ variant: 'destructive', title: 'Error', description: 'This battle room does not exist.' });
-                router.push('/');
-                return;
-            }
-        } catch (getErr) {
-            console.error("Error checking room existence:", getErr);
-        }
-
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not join the battle room. You may not have permission.' });
-        router.push('/');
-
-      } finally {
-        setIsJoining(false);
-      }
     };
 
     joinRoom();
