@@ -13,6 +13,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { useFirebase } from '@/firebase';
 
@@ -20,11 +21,12 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (credentials: { email: string }) => Promise<void>;
-  signup: (credentials: { name: string; email: string }) => Promise<void>;
+  login: (credentials: { email: string, password?: string }) => Promise<void>;
+  signup: (credentials: { name: string; email: string; password?: string }) => Promise<void>;
   logout: () => void;
   updateAvatar: (avatar: string) => Promise<void>;
   addXp: (amount: number) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -52,30 +54,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [firebaseUser, isUserLoading, firestore]);
 
 
-  const login = async (credentials: { email: string }) => {
-    // NOTE: This app uses email as a username, not for a real email/password flow
-    // For simplicity, we use a fixed password.
+  const login = async (credentials: { email: string, password?: string }) => {
+    const password = credentials.password || 'password'; // fallback for old behavior
     try {
-      await signInWithEmailAndPassword(auth, credentials.email, 'password');
-    } catch (error) {
-      // If login fails, try to sign up the user with a default name.
-      // This is a simplified flow for demo purposes.
-      try {
-        await signup({name: credentials.email.split('@')[0], email: credentials.email});
-      } catch (signupError) {
-         toast({
+      await signInWithEmailAndPassword(auth, credentials.email, password);
+    } catch (error: any) {
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+          toast({
           variant: "destructive",
           title: "Login Failed",
-          description: "No account found with that email and we could not create a new one.",
+          description: "Invalid email or password.",
         });
-        throw new Error("User not found and signup failed");
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Login Error",
+          description: "An unexpected error occurred during login.",
+        });
       }
+      throw error;
     }
   };
 
-  const signup = async (credentials: { name: string; email: string }) => {
+  const signup = async (credentials: { name: string; email: string; password?: string }) => {
+    const password = credentials.password || 'password'; // fallback for old behavior
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, 'password');
+      const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, password);
       const role = credentials.email.endsWith('@staffs.com') ? 'Teacher' : 'Student';
       const newUser: User = {
         id: userCredential.user.uid,
@@ -87,13 +91,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       await setDoc(doc(firestore, "users", userCredential.user.uid), newUser);
       setUser(newUser);
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Signup Failed",
-        description: "An account with this email already exists or another error occurred.",
-      });
-      throw new Error("User already exists or another error occurred");
+    } catch (error: any) {
+       if (error.code === 'auth/email-already-in-use') {
+         toast({
+            variant: "destructive",
+            title: "Signup Failed",
+            description: "An account with this email already exists.",
+         });
+       } else {
+         toast({
+            variant: "destructive",
+            title: "Signup Failed",
+            description: "An unexpected error occurred during signup.",
+         });
+       }
+      throw error;
     }
   };
 
@@ -119,6 +131,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error: any) {
+      // Don't reveal if the user exists or not for security reasons.
+      // The toast in the component handles the user-facing message.
+      console.error("Password reset error:", error);
+      // We can re-throw if we want the component to handle it, but for now we just log it.
+      // The component will show a generic success message regardless.
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -129,7 +153,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signup,
         logout,
         updateAvatar,
-        addXp
+        addXp,
+        resetPassword
       }}
     >
       {children}
