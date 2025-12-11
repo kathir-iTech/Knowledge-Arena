@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 
 const EMOJIS = [
-  '🤖', '👾', '🔮', '🧠', '👻', ' Samurai', '🧑‍🚀', '🧛', '🧟', '🧞', '🦹', '🦸',
+  '🤖', '👾', '🔮', '🧠', '👻', '🧑‍🚀', '🧛', '🧟', '🧞', '🦹', '🦸',
   '🧙', '🧚', '🧑‍💻', '👨‍🎤', '🕵️', '💂', '👨‍🎨', '👨‍🔬', '👨‍🔧', '👨‍⚖️', '👨‍🚀', '👨‍🚒'
 ];
 
@@ -26,9 +26,9 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ isOpen, setIsOpen, c
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[425px] bg-background border-border">
+      <DialogContent className="sm:max-w-[425px] bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="font-headline text-primary">Choose Your Gladiator</DialogTitle>
+          <DialogTitle className="font-headline text-primary">Choose Your Avatar</DialogTitle>
           <DialogDescription>Select an emoji to represent you in the arena.</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-6 gap-4 py-4">

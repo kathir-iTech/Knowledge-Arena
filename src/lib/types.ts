@@ -1,53 +1,49 @@
 
 export interface User {
-  id: string;
+  id: string; // Firebase Auth UID
   name: string;
   email: string;
-  role: 'Student' | 'Teacher';
-  avatar: string; // emoji
-  xp: number;
+  role: 'Teacher' | 'Student';
+  avatar: string; // Emoji
 }
 
 export interface Question {
   id: string;
   text: string;
-  answerOptions: string[];
+  options: string[];
   correctAnswerIndex: number;
-  explanation: string;
   timer: number; // in seconds
 }
 
 export interface Quiz {
-  id: string; 
-  topic: string;
-  teacherId: string; // userId
-  questions: Question[];
-  createdAt: number;
-}
-
-export interface Room {
   id: string;
-  quiz: Quiz; // Denormalized for easy access
-  teacherId: string; // userId of teacher who created the quiz
-  studentIds: string[];
-  status: 'waiting' | 'playing' | 'finished';
-  currentQuestionIndex: number;
-  startTime: number;
-  battleResultIds: string[];
-  createdAt: number;
-}
-
-export interface BattleResult {
-  id: string;
-  battleRoomId: string;
-  studentId: string;
   teacherId: string;
+  title: string;
+  questions: Question[];
+}
+
+export interface BattleRoom {
+  id: string; // The room code
+  teacherId: string;
+  quiz: Quiz; // Denormalized quiz object
+  status: 'waiting' | 'in-progress' | 'finished';
+  currentQuestionIndex: number;
+  createdAt: number;
+}
+
+export interface BattleParticipation {
+  id: string; // studentId
+  studentId: string;
   studentName: string;
   studentAvatar: string;
-  score: number;
-  completedAt: number;
-}
-
-export interface BattlePlayer extends User {
-  score: number;
+  battleRoomId: string;
+  answers: {
+    questionId: string;
+    answerIndex: number | null; // null if timed out
+    isCorrect: boolean;
+    score: number;
+  }[];
+  totalScore: number;
+  malpracticeCount: number;
+  isBlocked: boolean;
 }

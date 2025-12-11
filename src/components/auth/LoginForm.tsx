@@ -11,7 +11,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -31,9 +30,10 @@ const signupSchema = z.object({
 
 export function LoginForm() {
   const [activeTab, setActiveTab] = useState('login');
-  const { login, signup, resetPassword } = useAuth();
+  const { login, signup } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
+
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -47,10 +47,11 @@ export function LoginForm() {
 
   const onLoginSubmit = async (values: z.infer<typeof loginSchema>) => {
     setIsLoading(true);
+    setError(null);
     try {
       await login(values);
-    } catch (error) {
-      // Toast is handled in AuthContext
+    } catch (err: any) {
+      setError(err.message || "Failed to login.");
     } finally {
       setIsLoading(false);
     }
@@ -58,32 +59,11 @@ export function LoginForm() {
 
   const onSignupSubmit = async (values: z.infer<typeof signupSchema>) => {
     setIsLoading(true);
+    setError(null);
     try {
       await signup(values);
-    } catch (error) {
-      // Toast is handled in AuthContext
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleForgotPassword = async () => {
-    const email = loginForm.getValues("email");
-    if (!email) {
-      toast({
-        variant: "destructive",
-        title: "Email required",
-        description: "Please enter your email address to reset your password.",
-      });
-      return;
-    }
-    setIsLoading(true);
-    try {
-      await resetPassword(email);
-      toast({
-        title: "Password Reset Email Sent",
-        description: `If an account exists for ${email}, a password reset link has been sent.`,
-      });
+    } catch (err: any) {
+       setError(err.message || "Failed to sign up.");
     } finally {
       setIsLoading(false);
     }
@@ -91,7 +71,7 @@ export function LoginForm() {
 
 
   return (
-    <Card className="border-accent/50 shadow-lg shadow-accent/10">
+    <Card className="border-border shadow-lg shadow-primary/10">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="login">Login</TabsTrigger>
@@ -127,17 +107,6 @@ export function LoginForm() {
                     </FormItem>
                   )}
                 />
-                 <div className="text-right">
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="p-0 h-auto text-xs"
-                      onClick={handleForgotPassword}
-                      disabled={isLoading}
-                    >
-                      Forgot Password?
-                    </Button>
-                  </div>
               </CardContent>
               <CardFooter>
                 <Button type="submit" className="w-full" disabled={isLoading}>
@@ -158,9 +127,9 @@ export function LoginForm() {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Gladiator Name</FormLabel>
+                      <FormLabel>Full Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="Your cool name" {...field} />
+                        <Input placeholder="Your name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
