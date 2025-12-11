@@ -4,8 +4,8 @@
 import { useState, useEffect } from 'react';
 import { notFound, useRouter, useParams } from 'next/navigation';
 import { useAuth, useFirebase } from '@/firebase';
-import { useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
-import type { Room, Quiz, User } from '@/lib/types';
+import { useMemoFirebase, useDoc } from '@/firebase';
+import type { Room, User } from '@/lib/types';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import BattleRoom from '@/components/quiz/BattleRoom';
 import QuizResults from '@/components/quiz/QuizResults';
@@ -63,7 +63,8 @@ export default function BattlePage() {
         setIsJoining(false);
       } catch (err: any) {
         console.error('Failed to add student to room:', err);
-        toast({ variant: 'destructive', title: 'Could not join battle', description: 'You may not have permission to join this room, or it may not exist.' });
+        // This is where the permission error would likely be caught.
+        toast({ variant: 'destructive', title: 'Could not join battle', description: 'You may not have permission to join this room, or it may no longer be active.' });
         router.push('/student/dashboard');
         return;
       }
@@ -82,13 +83,13 @@ export default function BattlePage() {
 
   const handleStartBattle = () => {
     if (roomRef && firestore) {
-      updateDocumentNonBlocking(roomRef, { status: 'playing', startTime: Date.now(), currentQuestionIndex: 0 });
+      updateDoc(roomRef, { status: 'playing', startTime: Date.now(), currentQuestionIndex: 0 });
     }
   };
 
   const handleFinishBattle = () => {
     if (roomRef && firestore) {
-      updateDocumentNonBlocking(roomRef, { status: 'finished' });
+      updateDoc(roomRef, { status: 'finished' });
     }
   };
   

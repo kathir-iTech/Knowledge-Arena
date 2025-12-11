@@ -19,8 +19,8 @@ import { PlusCircle, Trash2, Send, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { doc, writeBatch } from 'firebase/firestore';
-import type { Quiz, Room } from '@/lib/types';
+import { doc, writeBatch, collection, serverTimestamp } from 'firebase/firestore';
+import type { Quiz, Room, Question } from '@/lib/types';
 
 
 const questionSchema = z.object({
@@ -74,8 +74,8 @@ export function QuizCreatorForm() {
   };
 
   const onSubmit = async (values: z.infer<typeof quizSchema>) => {
-    if (!user || !firestore) {
-        toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to create a quiz.' });
+    if (!user || !firestore || user.role !== 'Teacher') {
+        toast({ variant: 'destructive', title: 'Error', description: 'You must be a logged-in teacher to create a quiz.' });
         return;
     }
     
@@ -83,9 +83,10 @@ export function QuizCreatorForm() {
 
     try {
         const batch = writeBatch(firestore);
-
-        // 1. Define the Quiz data
         const quizId = uuidv4();
+
+        // 1. Create the Quiz document in the user's subcollection
+        const quizRef = doc(firestore, 'users', user.id, 'quizzes', quizId);
         const newQuiz: Quiz = {
             id: quizId,
             topic: values.topic,
@@ -93,14 +94,24 @@ export function QuizCreatorForm() {
             questions: values.questions,
             createdAt: Date.now(),
         };
+        batch.set(quizRef, newQuiz);
 
         // 2. Create the Battle Room document
         const roomCode = uuidv4().slice(0, 6).toUpperCase();
         const roomRef = doc(firestore, 'battleRooms', roomCode);
         
+        // This is the data that will be denormalized into the battle room.
+        const roomQuizData: Quiz = {
+           id: newQuiz.id,
+           topic: newQuiz.topic,
+           teacherId: newQuiz.teacherId,
+           questions: newQuiz.questions,
+           createdAt: newQuiz.createdAt,
+        };
+
         const newRoom: Omit<Room, 'id'> = {
           quizId: newQuiz.id,
-          quiz: newQuiz, // Denormalize the full quiz object
+          quiz: roomQuizData,
           teacherId: user.id,
           studentIds: [],
           status: 'waiting',
@@ -132,7 +143,7 @@ export function QuizCreatorForm() {
         toast({
             variant: "destructive",
             title: "Failed to create battle",
-            description: e.message || "An unexpected error occurred."
+            description: e.message || "An unexpected error occurred. Check security rules and Firestore paths."
         })
     } finally {
         setIsSubmitting(false);
