@@ -19,7 +19,7 @@ import { PlusCircle, Trash2, Send, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { doc, writeBatch, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, writeBatch } from 'firebase/firestore';
 import type { Quiz, Room, Question } from '@/lib/types';
 
 
@@ -104,7 +104,7 @@ export function QuizCreatorForm() {
         const roomQuizData: Quiz = {
            id: newQuiz.id,
            topic: newQuiz.topic,
-           teacherId: newQuiz.teacherId,
+           teacherId: newQuiz.teacherId, // Ensure teacherId is included here
            questions: newQuiz.questions,
            createdAt: newQuiz.createdAt,
         };
@@ -204,7 +204,7 @@ export function QuizCreatorForm() {
                         <FormControl>
                           <RadioGroup
                             onValueChange={(value) => field.onChange(parseInt(value))}
-                            value={field.value.toString()}
+                            value={String(field.value)}
                             className="space-y-2"
                           >
                             {[0, 1, 2, 3].map((optionIndex) => (
@@ -215,7 +215,7 @@ export function QuizCreatorForm() {
                                 render={({ field: optionField }) => (
                                     <FormItem className="flex items-center space-x-3 space-y-0">
                                       <FormControl>
-                                        <RadioGroupItem value={optionIndex.toString()} />
+                                        <RadioGroupItem value={String(optionIndex)} />
                                       </FormControl>
                                       <Input placeholder={`Option ${optionIndex + 1}`} {...optionField} />
                                     </FormItem>
@@ -290,5 +290,3 @@ export function QuizCreatorForm() {
     </Card>
   );
 }
-
-    
