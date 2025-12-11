@@ -1,11 +1,24 @@
-import { getAllUsers } from '@/lib/mock-data';
+
+"use client";
+
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy } from 'firebase/firestore';
+import type { User } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Crown } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function LeaderboardPage() {
-  const users = getAllUsers();
+  const firestore = useFirestore();
+  
+  const usersQuery = useMemoFirebase(
+    () => (firestore ? query(collection(firestore, 'users'), orderBy('xp', 'desc')) : null),
+    [firestore]
+  );
+
+  const { data: users, isLoading } = useCollection<User>(usersQuery);
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Crown className="w-6 h-6 text-yellow-400" />;
@@ -25,6 +38,20 @@ export default function LeaderboardPage() {
           <CardTitle className="font-headline">Leaderboard</CardTitle>
         </CardHeader>
         <CardContent>
+          {isLoading ? (
+             <div className="space-y-4">
+                {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 p-2">
+                        <Skeleton className="h-10 w-16" />
+                        <Skeleton className="h-12 w-12 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                            <Skeleton className="h-4 w-3/4" />
+                        </div>
+                        <Skeleton className="h-6 w-1/4" />
+                    </div>
+                ))}
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -34,7 +61,7 @@ export default function LeaderboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user, index) => (
+              {users && users.map((user, index) => (
                 <TableRow key={user.id} className={index < 3 ? 'bg-secondary' : ''}>
                   <TableCell>
                     <div className="flex items-center justify-center h-full">
@@ -54,6 +81,7 @@ export default function LeaderboardPage() {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </div>
