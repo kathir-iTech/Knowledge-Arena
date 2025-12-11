@@ -15,19 +15,10 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // QUIZZES
-    // Only teachers can create, update, or delete quizzes they own.
-    // Any authenticated user can read any quiz.
-    match /quizzes/{quizId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.teacherId == request.auth.uid && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
-      allow update, delete: if request.auth != null && resource.data.teacherId == request.auth.uid;
-    }
-
     // BATTLE ROOMS
     // Any authenticated user can read a battle room.
     // Only teachers can create battle rooms.
-    // Only the teacher who owns the room can start/end it.
+    // Only the teacher who owns the room can update it to start/end it.
     // Students can join by adding their ID to the studentIds list.
     match /battleRooms/{roomId} {
       allow read: if request.auth != null;
@@ -55,5 +46,3 @@ service cloud.firestore {
     }
   }
 }
-
-    

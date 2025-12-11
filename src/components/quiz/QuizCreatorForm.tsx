@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
 import { doc, writeBatch } from 'firebase/firestore';
-import type { Quiz, Room, Question } from '@/lib/types';
+import type { Quiz, Room } from '@/lib/types';
 
 
 const questionSchema = z.object({
@@ -84,9 +84,8 @@ export function QuizCreatorForm() {
     try {
         const batch = writeBatch(firestore);
 
-        // 1. Define and create the Quiz document
+        // 1. Define the Quiz data
         const quizId = uuidv4();
-        const quizRef = doc(firestore, 'quizzes', quizId);
         const newQuiz: Quiz = {
             id: quizId,
             topic: values.topic,
@@ -94,7 +93,8 @@ export function QuizCreatorForm() {
             questions: values.questions,
             createdAt: Date.now(),
         };
-        batch.set(quizRef, newQuiz);
+        // NOTE: We are not creating a separate quiz document anymore.
+        // It will be denormalized inside the battleRoom.
 
         // 2. Create the Battle Room document
         const roomCode = uuidv4().slice(0, 6).toUpperCase();
@@ -265,7 +265,7 @@ export function QuizCreatorForm() {
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Add Question
                 </Button>
-                <Button type="submit" size="lg" className="bg-accent hover:bg-accent/90" disabled={isSubmitting}>
+                <Button type="submit" size="lg" className="bg-accent hover:bg-accent/90" disabled={isSubmitting || fields.length === 0}>
                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                     {isSubmitting ? 'Launching...' : 'Launch Battle'}
                 </Button>
@@ -281,5 +281,3 @@ export function QuizCreatorForm() {
     </Card>
   );
 }
-
-    
