@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { notFound, useRouter } from 'next/navigation';
+import { notFound, useRouter, useParams } from 'next/navigation';
 import { useUser, useFirestore, useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
 import type { Room, Quiz, User } from '@/lib/types';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
@@ -12,7 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { doc, getDoc, updateDoc, arrayUnion, collection } from 'firebase/firestore';
 
-export default function BattlePage({ params }: { params: { roomCode: string } }) {
+export default function BattlePage() {
+  const params = useParams<{ roomCode: string }>();
   const { user: authUser, isUserLoading: isAuthLoading } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
