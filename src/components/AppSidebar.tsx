@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Swords, Trophy, LogOut, BotMessageSquare, LayoutDashboard } from 'lucide-react';
+import { Swords, Trophy, LogOut, BotMessageSquare, LayoutDashboard } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -23,12 +23,17 @@ const AppSidebar = () => {
   const pathname = usePathname();
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
   
-  const isTeacher = user?.role === 'Teacher';
+  if (!user) {
+    // Or a loading state
+    return null; 
+  }
+
+  const isTeacher = user.role === 'Teacher';
 
   const navItems = isTeacher
     ? [
         { href: '/teacher/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { href: '/create-quiz', label: 'Create Quiz', icon: Swords },
+        { href: '/create-quiz', label: 'Create Battle', icon: Swords },
         { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
       ]
     : [

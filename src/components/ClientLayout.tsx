@@ -7,12 +7,17 @@ import AppSidebar from '@/components/AppSidebar';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { Skeleton } from './ui/skeleton';
 import { BotMessageSquare } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { user, isUserLoading } = useUser();
+  const { user: firebaseUser, isUserLoading } = useUser();
+  const { user: contextUser } = useAuth();
+  const user = contextUser || firebaseUser;
   const isAuthenticated = !!user;
   const pathname = usePathname();
-  const userRole = (user?.reloadUserInfo as any)?.customAttributes?.role;
+  
+  // Use the role from our application context which is more reliable
+  const userRole = contextUser?.role;
 
   if (isUserLoading) {
     return (
@@ -29,10 +34,12 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const isAuthPage = pathname === '/';
   const isKickedPage = pathname === '/kicked';
 
+  // If user is not authenticated and not on a public page, redirect to login
   if (!isAuthenticated && !isAuthPage && !isKickedPage) {
     redirect('/');
   }
 
+  // If user is authenticated and on the login page, redirect to their dashboard
   if (isAuthenticated && isAuthPage) {
      if (userRole === 'Teacher') {
       redirect('/teacher/dashboard');
@@ -41,22 +48,22 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Render children without the main layout for specific pages
+  // Render auth/kicked pages without the main layout
   if (isAuthPage || isKickedPage) {
     return <>{children}</>;
   }
 
-  // Enforce role-based access
+  // Enforce strict role-based access control for all other pages
   if (isAuthenticated) {
-    if (userRole === 'Teacher' && !pathname.startsWith('/teacher')) {
-      if (pathname.startsWith('/student') || pathname.startsWith('/battle')) {
-         redirect('/teacher/dashboard');
-      }
+    const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
+    const isStudentPage = pathname.startsWith('/student') || pathname.startsWith('/battle');
+
+    if (userRole === 'Teacher' && isStudentPage) {
+       redirect('/teacher/dashboard');
     }
-    if (userRole === 'Student' && !pathname.startsWith('/student')) {
-       if (pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz')) {
-         redirect('/student/dashboard');
-       }
+    
+    if (userRole === 'Student' && isTeacherPage) {
+       redirect('/student/dashboard');
     }
   }
 
