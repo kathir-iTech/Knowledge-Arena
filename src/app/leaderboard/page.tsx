@@ -2,7 +2,7 @@
 "use client";
 
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { User } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +14,7 @@ export default function LeaderboardPage() {
   const firestore = useFirestore();
   
   const usersQuery = useMemoFirebase(
-    () => (firestore ? query(collection(firestore, 'users'), orderBy('xp', 'desc')) : null),
+    () => (firestore ? query(collection(firestore, 'users'), where('role', '==', 'Student'), orderBy('xp', 'desc')) : null),
     [firestore]
   );
 
