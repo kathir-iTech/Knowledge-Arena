@@ -58,12 +58,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signInWithEmailAndPassword(auth, credentials.email, 'password');
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Login Failed",
-        description: "No account found with that email. Please sign up.",
-      });
-      throw new Error("User not found");
+      // If login fails, try to sign up the user with a default name.
+      // This is a simplified flow for demo purposes.
+      try {
+        await signup({name: credentials.email.split('@')[0], email: credentials.email});
+      } catch (signupError) {
+         toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "No account found with that email and we could not create a new one.",
+        });
+        throw new Error("User not found and signup failed");
+      }
     }
   };
 
