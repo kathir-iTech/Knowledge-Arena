@@ -20,19 +20,15 @@ const StudentDashboard = () => {
 
   const handleJoinBattle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (roomCode.trim() && firestore) {
-      const roomRef = doc(firestore, 'battleRooms', roomCode.trim().toUpperCase());
-      const roomSnap = await getDoc(roomRef);
-
-      if (roomSnap.exists()) {
+    if (roomCode.trim()) {
+        // Optimistically navigate. The battle page will handle if the room doesn't exist.
         router.push(`/battle/${roomCode.trim().toUpperCase()}`);
-      } else {
+    } else {
         toast({
-          variant: 'destructive',
-          title: 'Room not found',
-          description: 'The battle room code you entered is invalid.',
+            variant: 'destructive',
+            title: 'Invalid Code',
+            description: 'Please enter a room code.',
         });
-      }
     }
   };
   
