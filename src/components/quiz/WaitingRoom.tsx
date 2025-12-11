@@ -15,10 +15,11 @@ interface WaitingRoomProps {
   quiz: Quiz;
   user: User;
   onStart: () => void;
+  isTeacherObserver: boolean;
 }
 
-const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart }) => {
-  const isTeacher = user.role === 'Teacher';
+const WaitingRoom: React.FC<WaitingRoomProps> = ({ room, quiz, user, onStart, isTeacherObserver }) => {
+  const isTeacher = user.role === 'Teacher' || isTeacherObserver;
   const shareableLink = typeof window !== 'undefined' ? window.location.href : '';
   const { toast } = useToast();
 

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { notFound, useRouter, useParams } from 'next/navigation';
-import { useUser, useFirestore, useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
 import type { Room, Quiz, User } from '@/lib/types';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import BattleRoom from '@/components/quiz/BattleRoom';
@@ -50,12 +50,21 @@ export default function BattlePage() {
         const roomData = roomDoc.data() as Room;
         const userProfile = userDoc.data() as User;
         
-        const isParticipant = roomData.studentIds.includes(authUser.uid);
+        const isParticipant = roomData.studentIds?.includes(authUser.uid);
 
+        // If the user is a student and not already in the studentIds array, add them.
         if (userProfile.role === 'Student' && !isParticipant) {
            await updateDoc(roomDocRef, {
-             participants: arrayUnion(userProfile),
-             studentIds: arrayUnion(authUser.uid)
+             studentIds: arrayUnion(authUser.uid),
+             // Also add their profile to the participants array for display purposes
+             participants: arrayUnion({
+                id: userProfile.id,
+                name: userProfile.name,
+                email: userProfile.email,
+                avatar: userProfile.avatar,
+                role: userProfile.role,
+                xp: userProfile.xp,
+             })
            });
         }
       } catch (error) {
@@ -109,14 +118,14 @@ export default function BattlePage() {
 
 
   const handleStartBattle = () => {
-    if (roomRef) {
-      updateDocumentNonBlocking(roomRef, { status: 'playing', startTime: Date.now(), currentQuestionIndex: 0 });
+    if (roomRef && firestore) {
+      updateDoc(roomRef, { status: 'playing', startTime: Date.now(), currentQuestionIndex: 0 });
     }
   };
 
   const handleFinishBattle = () => {
-    if (roomRef) {
-      updateDocumentNonBlocking(roomRef, { status: 'finished' });
+    if (roomRef && firestore) {
+      updateDoc(roomRef, { status: 'finished' });
     }
   };
   
@@ -132,18 +141,36 @@ export default function BattlePage() {
   const isTeacher = authUser.uid === room.teacherId;
   const currentUserInRoom = room.participants.find(p => p.id === authUser.uid);
 
-  if (!currentUserInRoom && !isJoining) {
+  // If after joining, the user is still not in the participant list (and is not the teacher), there's a problem.
+  if (!isTeacher && !room.studentIds?.includes(authUser.uid) && !isJoining) {
      toast({ variant: "destructive", title: "Access Denied", description: "You are not a participant in this room." });
      router.push('/');
      return null;
   }
+  
+  // The teacher can observe but their full profile might not be in the `participants` if they rejoined.
+  // We allow them to proceed if they are the teacher.
+  // For students, their `currentUserInRoom` profile is required.
+  if (!currentUserInRoom && !isTeacher) {
+      if (!isJoining) {
+        toast({ variant: "destructive", title: "Error", description: "Your profile could not be loaded for this battle." });
+        router.push('/');
+        return null;
+      }
+      return (
+        <div className="flex flex-col items-center justify-center h-screen p-4">
+            <h1 className="text-2xl font-headline text-primary mb-4">Finalizing Entry...</h1>
+            <Skeleton className="w-full max-w-lg h-64" />
+        </div>
+      );
+  }
 
   if (room.status === 'waiting') {
-    return <WaitingRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom!} onStart={handleStartBattle} />;
+    return <WaitingRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom || user} onStart={handleStartBattle} isTeacherObserver={isTeacher} />;
   }
 
   if (room.status === 'playing') {
-    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom!} onFinish={handleFinishBattle} isTeacherObserver={isTeacher} />;
+    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom || user} onFinish={handleFinishBattle} isTeacherObserver={isTeacher} />;
   }
 
   if (room.status === 'finished') {
