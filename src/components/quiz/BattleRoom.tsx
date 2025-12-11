@@ -20,9 +20,10 @@ interface BattleRoomProps {
   quiz: Quiz;
   user: User;
   onFinish: () => void;
+  isTeacherObserver: boolean;
 }
 
-const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) => {
+const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish, isTeacherObserver }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(room.currentQuestionIndex);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
@@ -32,7 +33,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
   const { addXp } = useAuth();
   const firestore = useFirestore();
 
-  const isTeacher = user.role === 'Teacher';
+  const isTeacher = user.role === 'Teacher' || isTeacherObserver;
   const currentQuestion = quiz.questions[currentQuestionIndex];
 
   useVisibilityChange(() => {
@@ -81,8 +82,7 @@ const BattleRoom: React.FC<BattleRoomProps> = ({ room, quiz, user, onFinish }) =
       
       // 1. Create a new BattleResult document
       const resultRef = doc(firestore, 'battleResults', uuidv4());
-      const newResult: BattleResult = {
-        id: resultRef.id,
+      const newResult: Omit<BattleResult, 'id'> = {
         battleRoomId: room.id,
         studentId: user.id,
         teacherId: room.teacherId,

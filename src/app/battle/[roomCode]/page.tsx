@@ -129,6 +129,7 @@ export default function BattlePage() {
     );
   }
   
+  const isTeacher = authUser.uid === room.teacherId;
   const currentUserInRoom = room.participants.find(p => p.id === authUser.uid);
 
   if (!currentUserInRoom && !isJoining) {
@@ -142,7 +143,7 @@ export default function BattlePage() {
   }
 
   if (room.status === 'playing') {
-    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom!} onFinish={handleFinishBattle} />;
+    return <BattleRoom room={{...room, id: roomCode}} quiz={quiz} user={currentUserInRoom!} onFinish={handleFinishBattle} isTeacherObserver={isTeacher} />;
   }
 
   if (room.status === 'finished') {
