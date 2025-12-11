@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, BarChart, Users, History, ChevronDown, Loader2, Trash2 } from 'lucide-react';
+import { PlusCircle, BarChart, Users, History, ChevronDown, Loader2, Trash2, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore, useCollection, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, query, where, getDocs, orderBy, doc } from 'firebase/firestore';
@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { useToast } from '@/hooks/use-toast';
 
 
 const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
@@ -102,7 +103,14 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
   const firestore = useFirestore();
   const [battleRooms, setBattleRooms] = useState<Room[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
   
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({ title: 'Copied!', description: `Room code ${text} copied to your clipboard.` });
+    });
+  };
+
   const fetchBattleRooms = async () => {
     if (!firestore) return;
     setIsLoading(true);
@@ -144,7 +152,12 @@ const PastQuizItem: React.FC<{ quiz: Quiz }> = ({ quiz }) => {
                   <div className="flex items-center w-full">
                     <AccordionTrigger className="w-full">
                         <div className="w-full flex justify-between items-center pr-4">
-                          <div>Room Code: <span className="font-mono text-primary">{room.id}</span></div>
+                          <div className="flex items-center gap-2">
+                            Room Code: <span className="font-mono text-primary">{room.id}</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); copyToClipboard(room.id)}}>
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
                           <div className="text-sm text-muted-foreground">{room.studentIds.length} participant(s)</div>
                         </div>
                     </AccordionTrigger>
@@ -286,3 +299,5 @@ const TeacherDashboard = () => {
 export default TeacherDashboard;
 
     
+
+      
