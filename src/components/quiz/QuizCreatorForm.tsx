@@ -91,7 +91,7 @@ export function QuizCreatorForm() {
 
     // 2. Create the Battle Room document
     const roomCode = uuidv4().slice(0, 6).toUpperCase();
-    const roomRef = doc(firestore, 'battleRooms', roomCode);
+    const roomRef = doc(firestore, 'rooms', roomCode);
     
     const creatorAsParticipant: User = {
       id: user.id,

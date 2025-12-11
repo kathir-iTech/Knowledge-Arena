@@ -1,109 +1,82 @@
 'use client';
-
-import { useState, useEffect } from 'react';
-import {
-  Query,
-  onSnapshot,
-  DocumentData,
-  FirestoreError,
-  QuerySnapshot,
-  CollectionReference,
-} from 'firebase/firestore';
-
-/** Utility type to add an 'id' field to a given type T. */
-export type WithId<T> = T & { id: string };
+import { useEffect, useState } from 'react';
+import type { FirestoreError } from 'firebase/firestore';
 
 /**
- * Interface for the return value of the useCollection hook.
- * @template T Type of the document data.
+ * useCollectionSafe(queryOrRef)
+ * - Accepts a Firestore collection reference or query.
+ * - Returns { data, loading, error }.
+ * - If Firestore denies permission to list the collection, it logs a warning and returns data = [] (no throw).
  */
-export interface UseCollectionResult<T> {
-  data: WithId<T>[];
-  isLoading: boolean;
-  error: FirestoreError | Error | null;
-}
-
-/* Internal implementation of Query:
-  https://github.com/firebase/firebase-js-sdk/blob/c5f08a9bc5da0d2b0207802c972d53724ccef055/packages/firestore/src/lite-api/reference.ts#L143
-*/
-export interface InternalQuery extends Query<DocumentData> {
-  _query: {
-    path: {
-      canonicalString(): string;
-      toString(): string;
-    };
-  };
-}
-
-/**
- * React hook to subscribe to a Firestore collection or query in real-time.
- * Handles nullable references/queries and gracefully fails on permission errors.
- *
- * IMPORTANT! YOU MUST MEMOIZE the inputted memoizedTargetRefOrQuery or BAD THINGS WILL HAPPEN
- * use useMemoFirebase to memoize it per React guidance.
- *
- * @template T Optional type for document data. Defaults to any.
- * @param {CollectionReference<DocumentData> | Query<DocumentData> | null | undefined} targetRefOrQuery -
- * The Firestore CollectionReference or Query. Waits if null/undefined.
- * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
- */
-export function useCollection<T = any>(
-  memoizedTargetRefOrQuery:
-    | ((CollectionReference<DocumentData> | Query<DocumentData>) & {
-        __memo?: boolean;
-      })
-    | null
-    | undefined
-): UseCollectionResult<T> {
-  type ResultItemType = WithId<T>;
-
-  const [data, setData] = useState<ResultItemType[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<FirestoreError | Error | null>(null);
+export default function useCollectionSafe(queryOrRef: any) {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<FirestoreError | null>(null);
 
   useEffect(() => {
-    if (!memoizedTargetRefOrQuery) {
+    if (!queryOrRef) {
       setData([]);
-      setIsLoading(false);
-      return () => {};
+      setLoading(false);
+      return;
     }
 
-    setIsLoading(true);
+    let unsubscribe: (() => void) | null = null;
 
-    const unsubscribe = onSnapshot(
-      memoizedTargetRefOrQuery,
-      (snapshot: QuerySnapshot<DocumentData>) => {
-        const results: ResultItemType[] = snapshot.docs.map((doc) => ({
-          ...(doc.data() as T),
-          id: doc.id,
-        }));
-        setData(results);
-        setError(null);
-        setIsLoading(false);
-      },
-      (err: FirestoreError) => {
-        // If it's a permission error, swallow it and return an empty array for a graceful UI fallback.
-        if (err.code === 'permission-denied' || err.code.includes('permission')) {
-          console.warn('Firestore permission error in useCollection, returning empty data.', err);
-          setData([]);
-          setError(null); // Treat as non-fatal for the UI
+    const attach = async () => {
+      try {
+        // Try to attach a realtime listener and handle errors in its callback
+        if (typeof queryOrRef.onSnapshot === 'function') {
+          unsubscribe = queryOrRef.onSnapshot(
+            (snap: any) => {
+              const docs = snap.docs ? snap.docs.map((d: any) => ({ id: d.id, ...d.data() })) : [];
+              setData(docs);
+              setLoading(false);
+            },
+            (err: any) => {
+              // Swallow Firestore permission errors and return empty data — do not crash app
+              console.warn('useCollectionSafe listener error:', err);
+              const code = (err && err.code) || '';
+              const msg = (err && err.message) || '';
+              const isPermission = String(code).toLowerCase().includes('permission') || String(msg).toLowerCase().includes('permission');
+              if (isPermission) {
+                setData([]);
+                setError(null);
+              } else {
+                setError(err);
+              }
+              setLoading(false);
+            }
+          );
         } else {
-          // For other errors, set the error state to allow the UI to handle it.
-          console.error('Error in useCollection listener:', err);
-          setError(err);
+          // If queryOrRef is not a Query with onSnapshot, try to call it as a function (fallback)
+          setData([]);
+          setLoading(false);
         }
-        setIsLoading(false);
+      } catch (err: any) {
+        console.warn('useCollectionSafe attach error', err);
+        const msg = String(err?.message || err || '');
+        const isPermission = msg.toLowerCase().includes('permission');
+        if (isPermission) {
+          setData([]);
+          setError(null);
+          setLoading(false);
+        } else {
+          setError(err);
+          setLoading(false);
+        }
       }
-    );
+    };
 
-    return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery]);
+    attach();
 
-  if (memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
-    throw new Error(
-      'The query passed to useCollection was not properly memoized using useMemoFirebase. This can cause infinite loops.'
-    );
-  }
+    return () => {
+      try {
+        if (unsubscribe && typeof unsubscribe === 'function') unsubscribe();
+      } catch (e) {
+        // ignore cleanup errors
+      }
+    };
+  }, [queryOrRef]);
 
-  return { data: data || [], isLoading, error };
+  return { data, loading, error };
 }

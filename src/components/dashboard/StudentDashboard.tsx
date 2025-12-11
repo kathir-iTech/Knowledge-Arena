@@ -39,7 +39,7 @@ const StudentDashboard = () => {
 
     setIsJoining(true);
     try {
-        const roomRef = doc(firestore, 'battleRooms', code);
+        const roomRef = doc(firestore, 'rooms', code);
         const roomSnap = await getDoc(roomRef);
 
         if (roomSnap.exists()) {

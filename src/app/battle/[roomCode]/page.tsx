@@ -37,7 +37,7 @@ export default function BattlePage() {
 
     const joinRoom = async () => {
       if (!firestore) return;
-      const roomDocRef = doc(firestore, 'battleRooms', roomCode);
+      const roomDocRef = doc(firestore, 'rooms', roomCode);
       const studentId = appUser.id;
 
       try {
@@ -60,7 +60,7 @@ export default function BattlePage() {
 
   const roomRef = useMemoFirebase(() => {
     if (isJoining || !firestore) return null;
-    return doc(firestore, 'battleRooms', roomCode);
+    return doc(firestore, 'rooms', roomCode);
   }, [isJoining, firestore, roomCode]);
 
   const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<Room>(roomRef);
