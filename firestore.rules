@@ -6,12 +6,13 @@
  *
  * Data Structure:
  * - /users/{userId}: Private user profiles, only accessible by the owner for writes. Read access for leaderboards.
+ * - /users/{userId}/quizzes/{quizId}: Quizzes owned by a teacher.
  * - /battleRooms/{battleRoomId}: A top-level collection for collaborative quiz sessions. Quiz data is denormalized here.
  * - /battleResults/{battleResultId}: A top-level collection for student results from battles.
  *
  * Key Security Decisions:
  * - User Isolation: Users can only write to their own data under /users/{userId}. Listing all users is allowed for the leaderboard.
- * - Teacher Ownership: Teachers have exclusive control over the battle rooms they create.
+ * - Teacher Ownership: Teachers have exclusive control over the quizzes and battle rooms they create.
  * - Shared Battle Rooms: Battle Rooms are secured using a denormalized 'teacherId' for owner controls and a 'studentIds' array for participant access.
  * - Result Privacy: Battle results can only be created by the student who earned them. Teachers are granted read-only access to the results of their battles for grading purposes.
  *
@@ -56,6 +57,17 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, list: if isSignedIn();
       allow write: if isOwner(userId);
+
+      /**
+       * @description Secures a teacher's private collection of quizzes. Only the teacher who owns this subcollection can read or write to it.
+       * @path /users/{teacherId}/quizzes/{quizId}
+       * @allow (read) Teacher 'teacher123' can read documents at `/users/teacher123/quizzes`.
+       * @deny (read) Teacher 'teacher456' cannot read documents at `/users/teacher123/quizzes`.
+       * @principle Enforces strict path-based ownership for nested teacher-specific data.
+       */
+      match /quizzes/{quizId} {
+        allow read, write: if isOwner(userId); // The {userId} is the {teacherId} from the parent path
+      }
     }
     
     /**
@@ -90,3 +102,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
