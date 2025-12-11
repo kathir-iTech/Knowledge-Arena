@@ -84,9 +84,9 @@ export function QuizCreatorForm() {
     try {
         const batch = writeBatch(firestore);
 
-        // 1. Define and create the Quiz document
+        // 1. Define and create the Quiz document under the correct user path
         const quizId = uuidv4();
-        const quizRef = doc(firestore, 'quizzes', quizId);
+        const quizRef = doc(firestore, 'users', user.id, 'quizzes', quizId);
         const newQuiz: Quiz = {
             id: quizId,
             topic: values.topic,
@@ -102,6 +102,7 @@ export function QuizCreatorForm() {
         
         const newRoom: Omit<Room, 'id'> = {
           quizId: newQuiz.id,
+          quiz: newQuiz, // Denormalize the full quiz object
           teacherId: user.id,
           studentIds: [],
           status: 'waiting',
