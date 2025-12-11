@@ -23,7 +23,8 @@ const BattleRoomResults: React.FC<{ room: Room }> = ({ room }) => {
 
   React.useEffect(() => {
     const fetchResults = async () => {
-      if (!firestore || room.battleResultIds.length === 0) {
+      // Defensive check for battleResultIds
+      if (!firestore || !room.battleResultIds || room.battleResultIds.length === 0) {
         setIsLoading(false);
         return;
       }
