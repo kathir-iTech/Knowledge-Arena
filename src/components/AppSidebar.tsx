@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Swords, Trophy, LogOut, BotMessageSquare, LayoutDashboard } from 'lucide-react';
+import { Swords, LogOut, BotMessageSquare, LayoutDashboard } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -34,11 +34,9 @@ const AppSidebar = () => {
     ? [
         { href: '/teacher/dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/create-quiz', label: 'Create Battle', icon: Swords },
-        { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
       ]
     : [
         { href: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
       ];
 
 
