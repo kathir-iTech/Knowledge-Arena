@@ -194,13 +194,20 @@ const TeacherDashboard = () => {
   const firestore = useFirestore();
 
   const quizzesQuery = useMemoFirebase(
-    () => (user && firestore ? query(collection(firestore, `battleRooms`), where('teacherId', '==', user.id), orderBy('startTime', 'desc')) : null),
+    () => (user && firestore ? query(collection(firestore, `battleRooms`), where('teacherId', '==', user.id)) : null),
     [user, firestore]
   );
   
   const { data: rooms, isLoading: isLoadingQuizzes } = useCollection<Room>(quizzesQuery);
+  
+  // Sort rooms by startTime on the client side to avoid needing a composite index
+  const sortedRooms = React.useMemo(() => {
+    if (!rooms) return [];
+    return [...rooms].sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
+  }, [rooms]);
+
   // This is a hack to get unique quizzes from the rooms
-  const quizzes = rooms ? [...new Map(rooms.map(room => [room.quiz.id, room.quiz])).values()] : [];
+  const quizzes = sortedRooms ? [...new Map(sortedRooms.map(room => [room.quiz.id, room.quiz])).values()] : [];
 
 
   return (
@@ -277,3 +284,5 @@ const TeacherDashboard = () => {
 };
 
 export default TeacherDashboard;
+
+    
