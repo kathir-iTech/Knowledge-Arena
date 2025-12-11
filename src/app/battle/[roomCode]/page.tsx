@@ -53,23 +53,6 @@ export default function BattlePage() {
           (err && err.code && typeof err.code === 'string' && err.code.toLowerCase().includes('permission')) ||
           (err && err.message && typeof err.message === 'string' && err.message.toLowerCase().includes('permission'));
       
-        // Log an event in the room's events collection for audit (non-blocking)
-        try {
-          const eventsCol = collection(firestore, `battleRooms/${roomCode}/events`);
-          await addDoc(eventsCol, {
-            type: 'join-denied',
-            detail: {
-              reason: isPermissionError ? 'permission-denied' : 'update-failed',
-              errorMessage: err?.message || String(err)
-            },
-            participantId: studentId || null,
-            ts: serverTimestamp()
-          });
-        } catch (logErr) {
-          // ignore logging errors — do not crash the app for that
-          console.warn('Failed to write join-denied event', logErr);
-        }
-      
         // Handle permission denial gracefully in UI:
         if (isPermissionError) {
           toast({ variant: 'destructive', title: 'Could not join battle', description: 'You may not have permission to join this room.' });

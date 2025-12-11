@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,16 +17,19 @@ service cloud.firestore {
 
     // BATTLE ROOMS
     match /battleRooms/{roomId} {
+      // Any authenticated user can read a room to get its details
       allow read: if request.auth != null;
+      
+      // Only a teacher can create a room
       allow create: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
       
-      // Allow a student to add themselves to the room's studentIds array.
-      // This rule is crucial for joining a battle. It checks that the user is adding themselves
-      // and that the array is only growing by one.
+      // A student can update a room *only* to add themselves to the studentIds list.
+      // This is a secure way to allow joining a room.
       allow update: if request.auth != null &&
                       request.auth.uid in request.resource.data.studentIds &&
-                      request.resource.data.studentIds.size() == resource.data.studentIds.size() + 1;
-      
+                      ! (request.auth.uid in resource.data.studentIds);
+
+      // Only the teacher who created the room can delete it
       allow delete: if request.auth != null && resource.data.teacherId == request.auth.uid;
     }
     

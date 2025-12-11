@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -5,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Swords, BarChart } from 'lucide-react';
+import { Swords, BarChart, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
@@ -13,6 +14,7 @@ import { doc, getDoc } from 'firebase/firestore';
 
 const StudentDashboard = () => {
   const [roomCode, setRoomCode] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -20,15 +22,44 @@ const StudentDashboard = () => {
 
   const handleJoinBattle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (roomCode.trim()) {
-        // Optimistically navigate. The battle page will handle if the room doesn't exist.
-        router.push(`/battle/${roomCode.trim().toUpperCase()}`);
-    } else {
+    const code = roomCode.trim().toUpperCase();
+    if (!code) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Code',
+        description: 'Please enter a room code.',
+      });
+      return;
+    }
+
+    if (!firestore) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not connect to the database.' });
+        return;
+    }
+
+    setIsJoining(true);
+    try {
+        const roomRef = doc(firestore, 'battleRooms', code);
+        const roomSnap = await getDoc(roomRef);
+
+        if (roomSnap.exists()) {
+            router.push(`/battle/${code}`);
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Room Not Found',
+                description: 'The battle room code you entered does not exist.',
+            });
+        }
+    } catch (error) {
+        console.error("Error checking room:", error);
         toast({
             variant: 'destructive',
-            title: 'Invalid Code',
-            description: 'Please enter a room code.',
+            title: 'Error',
+            description: 'Could not verify the room code. Please try again.',
         });
+    } finally {
+        setIsJoining(false);
     }
   };
   
@@ -65,10 +96,11 @@ const StudentDashboard = () => {
               value={roomCode}
               onChange={(e) => setRoomCode(e.target.value)}
               className="max-w-xs text-lg h-12 text-center font-headline tracking-widest uppercase"
+              disabled={isJoining}
             />
-            <Button type="submit" size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-              <Swords className="mr-2 h-5 w-5" />
-              Join Battle
+            <Button type="submit" size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isJoining}>
+              {isJoining ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Swords className="mr-2 h-5 w-5" />}
+              {isJoining ? 'Verifying...' : 'Join Battle'}
             </Button>
           </form>
         </CardContent>
