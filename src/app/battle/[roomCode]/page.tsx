@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { notFound, useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore, useMemoFirebase, useDoc, updateDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useMemoFirebase, useDoc } from '@/firebase';
 import type { Room, Quiz, User } from '@/lib/types';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import BattleRoom from '@/components/quiz/BattleRoom';
@@ -12,6 +12,7 @@ import QuizResults from '@/components/quiz/QuizResults';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 export default function BattlePage() {
   const params = useParams<{ roomCode: string }>();
@@ -46,24 +47,9 @@ export default function BattlePage() {
         // success — proceed as normal
         setIsJoining(false);
       } catch (err: any) {
-        // Detect permission errors from Firestore (code or message)
-        const isPermissionError =
-          (err && err.code && typeof err.code === 'string' && err.code.toLowerCase().includes('permission')) ||
-          (err && err.message && typeof err.message === 'string' && err.message.toLowerCase().includes('permission'));
-      
-        // Handle permission denial gracefully in UI:
-        if (isPermissionError) {
-          toast({ variant: 'destructive', title: 'Could not join battle', description: 'You may not have permission to join this room.' });
-          router.push('/student/dashboard');
-          setIsJoining(false);
-          return; // stop further processing
-        }
-      
-        // For other errors, rethrow or show message
         console.error('Failed to add student to room:', err);
-        toast({ variant: 'destructive', title: 'Error Joining Battle', description: 'The room may not exist or an error occurred.' });
+        toast({ variant: 'destructive', title: 'Could not join battle', description: 'You may not have permission to join this room, or it may not exist.' });
         router.push('/student/dashboard');
-        setIsJoining(false);
         return;
       }
     };
