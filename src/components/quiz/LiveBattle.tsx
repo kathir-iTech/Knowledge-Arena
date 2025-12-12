@@ -78,7 +78,14 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     setSelectedAnswer(answerIndex);
 
     const isCorrect = answerIndex === currentQuestion.correctAnswerIndex;
-    const scoreGained = isCorrect ? 50 + Math.floor(timeLeft * (50 / currentQuestion.timer)) : 0;
+    let scoreGained = 0;
+    if (isCorrect) {
+        // Award up to 100 points based on time left.
+        scoreGained = Math.floor(100 * (timeLeft / currentQuestion.timer));
+    } else {
+        // Deduct 50 for incorrect answer
+        scoreGained = -50;
+    }
     
     const newAnswer = {
       questionId: currentQuestion.id,
