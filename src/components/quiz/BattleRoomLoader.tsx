@@ -29,17 +29,12 @@ export default function BattleRoomLoader() {
 
   const isTeacher = room && user ? user.id === room.teacherId : false;
 
-  // Fetch participants for everyone if the room status is 'waiting'.
-  // This allows students and teachers to see who else is in the waiting room.
+  // Fetch all participants ONLY if the user is a teacher.
+  // This is the core fix to prevent student permission errors.
   const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !roomCode || !room) return null;
-    // Only subscribe to the collection if the room is in the 'waiting' state.
-    // After it starts, students don't need the full list, and it saves reads.
-    if (room.status === 'waiting') {
-      return collection(firestore, `battleRooms/${roomCode}/participants`);
-    }
-    return null;
-  }, [firestore, roomCode, room]);
+    if (!firestore || !roomCode || !isTeacher) return null;
+    return collection(firestore, `battleRooms/${roomCode}/participants`);
+  }, [firestore, roomCode, isTeacher]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
@@ -68,10 +63,8 @@ export default function BattleRoomLoader() {
   const isLoading = 
     isAuthLoading || 
     isRoomLoading || 
-    (!isTeacher && isStudentParticipationLoading) || 
-    // Participants are essential for the waiting room, so we wait for them there.
-    (room?.status === 'waiting' && areParticipantsLoading);
-
+    (isTeacher && areParticipantsLoading) || // Teachers wait for participants
+    (!isTeacher && isStudentParticipationLoading); // Students wait for their own doc
 
   if (isLoading) {
     return (
@@ -112,10 +105,12 @@ export default function BattleRoomLoader() {
   
   switch (room.status) {
     case 'waiting':
+      // Students in the waiting room will not have the 'participants' prop.
+      // The WaitingRoom component must handle this gracefully.
       return (
         <WaitingRoom
           room={room}
-          participants={participants || []}
+          participants={participants || []} 
           onStartBattle={handleStartBattle}
           isTeacher={isTeacher}
           areParticipantsLoading={areParticipantsLoading}
