@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import type { BattleRoom, User, BattleParticipation, Question } from '@/lib/types';
+import type { BattleRoom, User, BattleParticipation } from '@/lib/types';
 import { useVisibilityChange } from '@/hooks/useVisibilityChange';
 
 import { Button } from '@/components/ui/button';
@@ -69,13 +69,14 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
   
   // Timer countdown
   useEffect(() => {
+    let timer: NodeJS.Timeout;
     if (timeLeft > 0 && !showResult && !isTeacher) {
-      const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
-      return () => clearTimeout(timer);
+      timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
     } else if (timeLeft === 0 && !showResult && !isTeacher) {
         // Auto-submit when timer runs out
         handleAnswer(null);
     }
+    return () => clearTimeout(timer);
   }, [timeLeft, showResult, isTeacher]);
 
   const handleAnswer = useCallback((answerIndex: number | null) => {
@@ -152,7 +153,7 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
               </div>
             )}
           </div>
-          <Progress value={(timeLeft / currentQuestion.timer) * 100} className="w-full h-2 mt-2" />
+          <Progress value={currentQuestion.timer > 0 ? (timeLeft / currentQuestion.timer) * 100 : 0} className="w-full h-2 mt-2" />
           <CardDescription>Question {room.currentQuestionIndex + 1} of {room.quiz.questions.length}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

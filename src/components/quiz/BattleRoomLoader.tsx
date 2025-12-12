@@ -3,21 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { useDoc, useCollection } from '@/firebase';
-import { doc, collection, updateDoc, writeBatch } from 'firebase/firestore';
+import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { doc, collection } from 'firebase/firestore';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { Loader2, ShieldX } from 'lucide-react';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import LiveBattle from '@/components/quiz/LiveBattle';
 import QuizResults from '@/components/quiz/QuizResults';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { useMemoFirebase } from '@/firebase';
 
 export default function BattleRoomLoader() {
   const { roomCode } = useParams();
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
-  const firestore = useMemoFirebase(() => useFirestore(), []);
+  const firestore = useFirestore();
 
   const roomRef = useMemoFirebase(() => {
     if (!firestore || !roomCode) return null;

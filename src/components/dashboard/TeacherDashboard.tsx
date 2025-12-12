@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw } from 'lucide-react';
@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
@@ -38,7 +38,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
     const { toast } = useToast();
 
     const fetchParticipants = async () => {
-        if (!firestore) return;
+        if (!firestore || participants.length > 0) return;
         setIsLoadingParticipants(true);
         try {
             const participantsQuery = query(
@@ -50,6 +50,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
             setParticipants(participantsData);
         } catch (error) {
             console.error("Error fetching participants: ", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not load participants.' });
         } finally {
             setIsLoadingParticipants(false);
         }
@@ -64,7 +65,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
             malpracticeCount: 0
         }).then(() => {
             toast({ title: 'Success', description: 'Student attempt has been reset.' });
-            // Refresh the participant list
+            // Refresh the participant list to reflect the change
             setParticipants(prev => prev.map(p => p.id === studentId ? { ...p, isBlocked: false, malpracticeCount: 0 } : p));
         }).catch(err => {
             console.error("Error resetting attempt:", err);
@@ -76,7 +77,6 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         if (!firestore) return;
         setIsDeleting(true);
         try {
-            // We can simplify this later, for now we delete one by one.
             const participantsQuery = collection(firestore, 'battleRooms', room.id, 'participants');
             const participantsSnapshot = await getDocs(participantsQuery);
             participantsSnapshot.forEach(pDoc => {
@@ -94,8 +94,6 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         }
     }
     
-    const participantCount = participants.length;
-
     return (
         <Card className="bg-secondary/50">
             <CardHeader className="flex flex-row items-start sm:items-center justify-between">
@@ -108,7 +106,8 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                 <div className="flex items-center gap-2 sm:gap-4 mt-2 sm:mt-0">
                      <div className="flex items-center gap-2 text-muted-foreground">
                         <Users className="w-5 h-5"/>
-                        <span>{participantCount}</span>
+                        {/* Placeholder for count, will be dynamic */}
+                        <span>{participants.length}</span>
                     </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -121,12 +120,12 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                           <AlertDialogDescription>
                             This action cannot be undone. This will permanently delete the battle room
-                             and all associated participant data. This action is non-blocking.
+                             and all associated participant data.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleDelete}>
+                          <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
                             {isDeleting ? <Loader2 className="animate-spin" /> : "Delete"}
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -134,47 +133,45 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                     </AlertDialog>
                 </div>
             </CardHeader>
-             {(room.status === 'finished' && participantCount > 0) && (
-                 <CardContent>
-                    <Accordion type="single" collapsible onValueChange={() => { if(participants.length === 0) fetchParticipants() }}>
-                        <AccordionItem value="item-1">
-                            <AccordionTrigger>View Leaderboard & Attempts</AccordionTrigger>
-                            <AccordionContent>
-                                {isLoadingParticipants ? <Loader2 className="mx-auto my-4 animate-spin" /> : (
-                                    <div className="space-y-2">
-                                        {participants.length > 0 ? participants.map((p, index) => (
-                                           <div key={p.id} className="flex items-center justify-between p-2 rounded-md bg-background/50">
-                                               <div className="flex items-center gap-3">
-                                                  <span className="font-bold w-6 text-center">{index + 1}</span>
-                                                  <Avatar className="h-8 w-8">
-                                                    <AvatarFallback className="text-lg bg-muted">{p.studentAvatar}</AvatarFallback>
-                                                  </Avatar>
-                                                  <div className='flex flex-col'>
-                                                    <span>{p.studentName}</span>
-                                                    {p.isBlocked && <span className="text-xs text-destructive">Blocked (Malpractice)</span>}
-                                                  </div>
-                                               </div>
-                                               <div className="flex items-center gap-2">
-                                                    {p.isBlocked && (
-                                                         <Button variant="outline" size="sm" onClick={() => resetStudentAttempt(p.id)}>
-                                                            <RefreshCw className="w-3 h-3 mr-1" />
-                                                            Reset
-                                                        </Button>
-                                                    )}
-                                                    <div className="flex items-center gap-2 font-mono text-primary">
-                                                        <Trophy className="w-4 h-4 text-yellow-400" />
-                                                        {p.totalScore} pts
-                                                    </div>
-                                               </div>
+             <CardContent>
+                <Accordion type="single" collapsible onValueChange={fetchParticipants}>
+                    <AccordionItem value="item-1">
+                        <AccordionTrigger>View Leaderboard & Attempts</AccordionTrigger>
+                        <AccordionContent>
+                            {isLoadingParticipants ? <Loader2 className="mx-auto my-4 animate-spin" /> : (
+                                <div className="space-y-2">
+                                    {participants.length > 0 ? participants.map((p, index) => (
+                                       <div key={p.id} className="flex items-center justify-between p-2 rounded-md bg-background/50">
+                                           <div className="flex items-center gap-3">
+                                              <span className="font-bold w-6 text-center">{index + 1}</span>
+                                              <Avatar className="h-8 w-8">
+                                                <AvatarFallback className="text-lg bg-muted">{p.studentAvatar}</AvatarFallback>
+                                              </Avatar>
+                                              <div className='flex flex-col'>
+                                                <span>{p.studentName}</span>
+                                                {p.isBlocked && <span className="text-xs text-destructive">Blocked (Malpractice)</span>}
+                                              </div>
                                            </div>
-                                        )) : <p className="text-center text-muted-foreground">No participants recorded for this battle.</p>}
-                                    </div>
-                                )}
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
-                 </CardContent>
-            )}
+                                           <div className="flex items-center gap-2">
+                                                {p.isBlocked && (
+                                                     <Button variant="outline" size="sm" onClick={() => resetStudentAttempt(p.id)}>
+                                                        <RefreshCw className="w-3 h-3 mr-1" />
+                                                        Reset
+                                                    </Button>
+                                                )}
+                                                <div className="flex items-center gap-2 font-mono text-primary">
+                                                    <Trophy className="w-4 h-4 text-yellow-400" />
+                                                    {p.totalScore} pts
+                                                </div>
+                                           </div>
+                                       </div>
+                                    )) : <p className="text-center text-muted-foreground">No participants recorded for this battle.</p>}
+                                </div>
+                            )}
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+             </CardContent>
         </Card>
     );
 }
@@ -200,7 +197,7 @@ export default function TeacherDashboard() {
             id: doc.id,
         } as BattleRoom));
         
-        // Sort on the client side
+        // Sort on the client side to avoid needing an index
         rooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
         setBattleRooms(rooms);
