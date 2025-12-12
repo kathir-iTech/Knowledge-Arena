@@ -51,22 +51,27 @@ service cloud.firestore {
     match /battleRooms/{roomId}/participants/{participantId} {
       allow get: if isSignedIn();
       allow list: if isRoomTeacher(roomId) || isRoomFinished(roomId);
+      
+      // Allow create if student is creating their own doc.
+      // Prevent re-creating doc if already blocked.
       allow create: if isOwner(participantId);
       
       allow update: if isSignedIn() && (
         // Case 1: Student updating their own progress and score.
+        // They cannot un-block themselves or change their malpractice count here.
         (isOwner(participantId) && 
          isRoomInProgress(roomId) &&
          request.resource.data.isBlocked == resource.data.isBlocked &&
          request.resource.data.malpracticeCount == resource.data.malpracticeCount
         ) ||
-        // Case 1.1: Student's client reports malpractice.
+        // Case 2: Student's client reports malpractice.
+        // This is the only way a student can change these fields.
         (isOwner(participantId) && 
          isRoomInProgress(roomId) &&
          request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
          request.resource.data.isBlocked == true
         ) ||
-        // Case 2: Teacher resetting a student's malpractice block.
+        // Case 3: Teacher resetting a student's malpractice block.
         (isRoomTeacher(roomId) &&
          request.resource.data.isBlocked == false &&
          request.resource.data.malpracticeCount == 0
@@ -77,5 +82,3 @@ service cloud.firestore {
     }
   }
 }
-
-    

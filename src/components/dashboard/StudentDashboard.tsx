@@ -55,7 +55,24 @@ export default function StudentDashboard() {
         return;
       }
       
+      // Check if student is already a participant and if they are blocked
       const participantRef = doc(firestore, 'battleRooms', roomCodeUpper, 'participants', user.id);
+      const participantSnap = await getDoc(participantRef);
+
+      if (participantSnap.exists()) {
+          const participantData = participantSnap.data() as BattleParticipation;
+          if (participantData.isBlocked) {
+              toast({
+                  variant: 'destructive',
+                  title: 'Action Denied',
+                  description: 'You are blocked from this battle due to malpractice. Please ask your teacher to reset your attempt.',
+              });
+              setIsLoading(false);
+              return;
+          }
+      }
+      
+      // If not blocked or not a participant yet, create/overwrite the participation document
       const newParticipant: BattleParticipation = {
         id: user.id,
         studentId: user.id,
@@ -67,9 +84,10 @@ export default function StudentDashboard() {
         totalScore: 0,
         malpracticeCount: 0,
         isBlocked: false,
-        currentQuestionIndex: 0, // Start at the first question
+        currentQuestionIndex: 0,
       };
 
+      // Use merge:false to ensure we start fresh if they are rejoining (and not blocked)
       setDocumentNonBlocking(participantRef, newParticipant, { merge: false });
       
       router.push(`/battle/${roomCodeUpper}`);
@@ -100,7 +118,7 @@ export default function StudentDashboard() {
         <p className="text-muted-foreground">Welcome, Gladiator {user.name}. Your next challenge awaits.</p>
       </header>
 
-       <div className="flex justify-center">
+       <div className="flex justify-center px-4">
          <Card className="w-full max-w-md border-accent/50 shadow-lg shadow-accent/10">
           <CardHeader>
             <CardTitle className="font-headline text-center text-2xl">Enter the Arena</CardTitle>
