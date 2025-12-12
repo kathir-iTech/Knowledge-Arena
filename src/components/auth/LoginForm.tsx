@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -185,6 +186,7 @@ export function LoginForm() {
           </Form>
         </TabsContent>
       </Tabs>
+      {error && <p className="text-destructive text-center text-sm p-4">{error}</p>}
     </Card>
   );
 }

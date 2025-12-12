@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -11,6 +12,7 @@ import WaitingRoom from '@/components/quiz/WaitingRoom';
 import LiveBattle from '@/components/quiz/LiveBattle';
 import QuizResults from '@/components/quiz/QuizResults';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { Button } from '../ui/button';
 
 export default function BattleRoomLoader() {
   const { roomCode } = useParams();
@@ -31,22 +33,7 @@ export default function BattleRoomLoader() {
   const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<BattleRoom>(roomRef);
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
 
-  const [localStatus, setLocalStatus] = useState<'loading' | 'error' | 'waiting' | 'in-progress' | 'finished'>('loading');
-
-  useEffect(() => {
-    if (isRoomLoading || areParticipantsLoading) {
-      setLocalStatus('loading');
-    } else if (roomError) {
-      console.error(roomError);
-      setLocalStatus('error');
-    } else if (room) {
-      setLocalStatus(room.status);
-    } else if (!isRoomLoading && !room) {
-        // If room isn't loading but is null, it doesn't exist
-        setLocalStatus('error');
-    }
-  }, [room, isRoomLoading, roomError, areParticipantsLoading]);
-
+  const localStatus = room?.status || 'loading';
 
   const handleStartBattle = async () => {
     if (roomRef) {
@@ -56,12 +43,13 @@ export default function BattleRoomLoader() {
 
   const handleFinishBattle = async () => {
     if (roomRef) {
-      updateDocumentNonBlocking(roomRef, { status: 'finished' });
+      const finalParticipantCount = participants?.length || 0;
+      updateDocumentNonBlocking(roomRef, { status: 'finished', participantCount: finalParticipantCount });
     }
   };
 
 
-  if (isAuthLoading || localStatus === 'loading') {
+  if (isAuthLoading || isRoomLoading || areParticipantsLoading) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -70,7 +58,7 @@ export default function BattleRoomLoader() {
     );
   }
   
-  if (localStatus === 'error' || !room || !user || !room.quiz) {
+  if (roomError || (!isRoomLoading && !room)) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">
         <ShieldX className="h-12 w-12 text-destructive" />
@@ -81,12 +69,18 @@ export default function BattleRoomLoader() {
     );
   }
 
+  if (!user || !room.quiz) {
+     return (
+      <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
+     )
+  }
+
   const isTeacher = user.id === room.teacherId;
   const studentParticipation = participants?.find(p => p.studentId === user.id);
   
   // If a student who is not in the participants list tries to access, they're not allowed.
   // This can happen if they navigate directly without joining.
-  if (!isTeacher && !isAuthLoading && !areParticipantsLoading && !studentParticipation) {
+  if (!isTeacher && !studentParticipation) {
     router.push('/cheating-detected');
     return null;
   }
@@ -119,6 +113,6 @@ export default function BattleRoomLoader() {
     case 'finished':
       return <QuizResults room={room} participants={participants || []} />;
     default:
-      return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin"/></div>
+      return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
   }
 }

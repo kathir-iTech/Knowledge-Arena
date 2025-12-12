@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -8,12 +9,13 @@ import * as z from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore }from '@/firebase';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Textarea } from '../ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, PlusCircle, Loader2 } from 'lucide-react';
@@ -23,14 +25,14 @@ import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 const questionSchema = z.object({
   id: z.string(),
-  text: z.string().min(1, 'Question text cannot be empty.'),
+  text: z.string().min(5, 'Question text must be at least 5 characters long.'),
   options: z.array(z.string().min(1, 'Option text cannot be empty.')).min(2, 'Must have at least 2 options.'),
   correctAnswerIndex: z.coerce.number().min(0, 'You must select a correct answer.'),
-  timer: z.coerce.number().min(5, 'Timer must be at least 5 seconds.'),
+  timer: z.coerce.number().min(5, 'Timer must be at least 5 seconds.').max(120, 'Timer cannot exceed 120 seconds.'),
 });
 
 const quizSchema = z.object({
-  title: z.string().min(1, 'Quiz title is required.'),
+  title: z.string().min(3, 'Quiz title must be at least 3 characters long.'),
   questions: z.array(questionSchema).min(1, 'A quiz must have at least one question.'),
 });
 
@@ -97,6 +99,7 @@ export function QuizCreatorForm() {
             status: 'waiting',
             currentQuestionIndex: 0,
             createdAt: Date.now(),
+            participantCount: 0,
         };
 
         const roomRef = doc(firestore, 'battleRooms', battleRoomId);
@@ -123,6 +126,21 @@ export function QuizCreatorForm() {
     }
   };
   
+  const addOption = (questionIndex: number) => {
+    const options = form.getValues(`questions.${questionIndex}.options`);
+    if (options.length < 4) {
+       form.setValue(`questions.${questionIndex}.options`, [...options, '']);
+    }
+  };
+  
+  const removeOption = (questionIndex: number, optionIndex: number) => {
+     const options = form.getValues(`questions.${questionIndex}.options`);
+     if (options.length > 2) {
+       const newOptions = options.filter((_, i) => i !== optionIndex);
+       form.setValue(`questions.${questionIndex}.options`, newOptions);
+     }
+  }
+
 
   return (
     <Form {...form}>
@@ -171,29 +189,54 @@ export function QuizCreatorForm() {
                   <FormItem>
                     <FormLabel>Question Text</FormLabel>
                     <FormControl>
-                      <Input placeholder="What is the capital of France?" {...field} />
+                      <Textarea placeholder="What is the capital of France?" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {field.options.map((_, optionIndex) => (
-                <FormField
-                  key={`${field.id}-option-${optionIndex}`}
-                  control={form.control}
-                  name={`questions.${index}.options.${optionIndex}`}
-                  render={({ field }) => (
-                    <FormItem>
-                       <FormLabel className="sr-only">Option {optionIndex + 1}</FormLabel>
-                      <FormControl>
-                        <Input placeholder={`Option ${optionIndex + 1}`} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
+            <div>
+              <FormLabel>Answer Options</FormLabel>
+              <div className="space-y-2 mt-2">
+                {form.watch(`questions.${index}.options`).map((_, optionIndex) => (
+                  <FormField
+                    key={`${field.id}-option-${optionIndex}`}
+                    control={form.control}
+                    name={`questions.${index}.options.${optionIndex}`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center gap-2">
+                          <FormControl>
+                            <Input placeholder={`Option ${optionIndex + 1}`} {...field} />
+                          </FormControl>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeOption(index, optionIndex)}
+                            disabled={form.getValues(`questions.${index}.options`).length <= 2}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => addOption(index)}
+                disabled={form.getValues(`questions.${index}.options`).length >= 4}
+              >
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Option
+              </Button>
+            </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
@@ -202,7 +245,7 @@ export function QuizCreatorForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Correct Answer</FormLabel>
-                       <Select onValueChange={field.onChange} defaultValue={field.value > -1 ? String(field.value) : undefined}>
+                       <Select onValueChange={field.onChange} value={field.value > -1 ? String(field.value) : undefined}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select the correct option" />
@@ -211,7 +254,7 @@ export function QuizCreatorForm() {
                         <SelectContent>
                           {form.watch(`questions.${index}.options`).map((opt, optIndex) => (
                             <SelectItem key={optIndex} value={String(optIndex)}>
-                              {`Option ${optIndex + 1}: ${opt.substring(0,50) || '...'}`}
+                              {`Option ${optIndex + 1}: ${opt.substring(0,50) || '(empty)'}`}
                             </SelectItem>
                           ))}
                         </SelectContent>

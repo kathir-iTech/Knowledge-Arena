@@ -63,7 +63,7 @@ const AppSidebar = () => {
             )}
           <SidebarMenu>
             {navItems.map((item) => (
-              <SidebarMenuItem key={item.label}>
+              <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
                   <Link href={item.href}>
                     <item.icon />

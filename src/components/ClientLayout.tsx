@@ -35,12 +35,6 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   const publicPages = ['/'];
   const isPublicPage = publicPages.includes(pathname);
-
-  // If user is not authenticated and trying to access a protected page, redirect to home/login.
-  if (!isAuthenticated && !isPublicPage) {
-    redirect('/');
-    return null;
-  }
   
   // These pages are standalone and should not have the main layout
   const specialPages = ['/kicked', '/cheating-detected'];
@@ -48,23 +42,29 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       return <>{children}</>;
   }
 
-  // If user is authenticated and on the home page, redirect to their dashboard
-  if (isAuthenticated && pathname === '/') {
+  // If user is NOT authenticated:
+  if (!isAuthenticated) {
+    // If they are not on the public home/login page, redirect them there.
+    if (!isPublicPage) {
+      redirect('/');
+      return null;
+    }
+    // Otherwise, show the public page (the login form).
+    return <>{children}</>;
+  }
+  
+  // If user IS authenticated:
+  if (pathname === '/') {
      if (userRole === 'Teacher') {
       redirect('/teacher/dashboard');
-    } else if (userRole === 'Student') {
+    } else {
       redirect('/student/dashboard');
     }
     return null; // Show loading or nothing while redirecting
   }
-
-  // If a non-authenticated user is on the home page, show the login form.
-  if (!isAuthenticated && isPublicPage) {
-    return <>{children}</>;
-  }
   
-  // Role-based routing protection for authenticated users
-  if (isAuthenticated && userRole) {
+  // Role-based routing protection for authenticated users on protected pages
+  if (userRole) {
     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
     const isStudentPage = pathname.startsWith('/student') || pathname.startsWith('/battle');
 
@@ -79,7 +79,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // If authenticated and not on a special/public page, show the main layout with sidebar
+  // If authenticated and on a protected page, show the main layout with sidebar
   return (
     <SidebarProvider>
       <AppSidebar />

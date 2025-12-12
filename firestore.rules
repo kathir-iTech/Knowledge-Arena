@@ -9,6 +9,7 @@ service cloud.firestore {
     }
 
     function isTeacher() {
+      // Check role from the user's own document, which they have read access to.
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
     }
 
@@ -17,44 +18,44 @@ service cloud.firestore {
     }
     
     function isRoomTeacher(roomId) {
+      // Must be a teacher and the teacherId on the room document must match their UID.
       return isTeacher() && get(/databases/$(database)/documents/battleRooms/$(roomId)).data.teacherId == request.auth.uid;
     }
 
-    // USER--
-    // Users can create their own profile.
-    // Users can read and update their own profile.
-    // Signed-in users can read other users' public profiles (for names/avatars).
+    // USER PROFILES
+    // Users can create their own profile upon signup.
+    // Users can read and update their own profile data (e.g., avatar).
+    // Any signed-in user can read another user's profile (needed for displaying names/avatars in leaderboards).
     match /users/{userId} {
       allow create: if isOwner(userId);
       allow get: if isSignedIn();
       allow update: if isOwner(userId);
-      allow delete: if false;
+      allow delete: if false; // Do not allow users to delete their profiles.
     }
 
-    // QUIZZES
-    // Only teachers can create, read, update, or delete quizzes.
-    // Quizzes are owned by the teacher who created them.
+    // QUIZZES collection is no longer used, as quizzes are embedded directly into Battle Rooms.
+    // Denying all direct access to a separate /quizzes collection.
     match /quizzes/{quizId} {
-      allow read, write: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
-      allow create: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
-      allow update, delete: if isTeacher() && resource.data.teacherId == request.auth.uid;
+        allow read, write: if false;
     }
 
     // BATTLE ROOMS
     // Only teachers can create battle rooms.
-    // The hosting teacher can update or delete the room.
-    // Any signed-in user can read a room to join it.
+    // The hosting teacher can update the room status (start/finish) or delete the room.
+    // Any signed-in user can read a room to join it or view its status.
     match /battleRooms/{roomId} {
-      allow get, list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isTeacher(); // Only teachers can list rooms on their dashboard.
       allow create: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
       allow update, delete: if isRoomTeacher(roomId);
     }
     
     // BATTLE PARTICIPANTS
     // A student can create their own participation record to join a battle.
-    // A student can update their own record (e.g., to submit answers).
-    // A student CANNOT update their own `isBlocked` or `malpracticeCount` status.
+    // A student can update their own record to submit answers.
+    // A student CANNOT change their own `isBlocked` or `totalScore` directly. Malpractice updates are an exception.
     // The hosting teacher can read all participant data and can update a student's record to reset a malpractice block.
+    // The hosting teacher can delete participant records when cleaning up a battle room.
     match /battleRooms/{roomId}/participants/{participantId} {
       allow get: if isSignedIn() && (isOwner(participantId) || isRoomTeacher(roomId));
       allow list: if isRoomTeacher(roomId);
@@ -62,12 +63,23 @@ service cloud.firestore {
       
       allow update: if isSignedIn() && (
         // Case 1: Student updating their own answers.
-        // They can change anything EXCEPT their blocked status.
-        (isOwner(participantId) && request.resource.data.isBlocked == resource.data.isBlocked && request.resource.data.malpracticeCount == resource.data.malpracticeCount) ||
+        // They can change their answers array and total score, but not other sensitive fields.
+        (isOwner(participantId) && 
+         request.resource.data.isBlocked == resource.data.isBlocked &&
+         request.resource.data.malpracticeCount == resource.data.malpracticeCount
+        ) ||
+        // Case 1.1: Student's client reports malpractice.
+        // It can increment the count by 1 and set isBlocked to true.
+        (isOwner(participantId) && 
+         request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
+         request.resource.data.isBlocked == true
+        ) ||
         // Case 2: Teacher resetting a student's malpractice block.
+        // Teacher can set isBlocked to false and reset malpracticeCount.
         (isRoomTeacher(roomId))
       );
+
+      allow delete: if isRoomTeacher(roomId);
     }
   }
 }
-

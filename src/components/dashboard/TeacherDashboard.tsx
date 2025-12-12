@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -5,7 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw } from 'lucide-react';
@@ -43,10 +44,11 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         try {
             const participantsQuery = query(
                 collection(firestore, 'battleRooms', room.id, 'participants'),
-                orderBy('totalScore', 'desc')
+                // orderBy('totalScore', 'desc') // This requires an index, so we sort client-side
             );
             const snapshot = await getDocs(participantsQuery);
             const participantsData = snapshot.docs.map(doc => doc.data() as BattleParticipation);
+            participantsData.sort((a,b) => b.totalScore - a.totalScore); // Sort client-side
             setParticipants(participantsData);
         } catch (error) {
             console.error("Error fetching participants: ", error);
@@ -77,6 +79,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         if (!firestore) return;
         setIsDeleting(true);
         try {
+            // This can be slow for many participants. Consider a Cloud Function for large-scale deletion.
             const participantsQuery = collection(firestore, 'battleRooms', room.id, 'participants');
             const participantsSnapshot = await getDocs(participantsQuery);
             participantsSnapshot.forEach(pDoc => {
@@ -87,6 +90,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
             deleteDocumentNonBlocking(roomRef);
 
             toast({ title: "Battle Deletion Initiated", description: `Battle room ${room.id} will be removed.` });
+            // The UI will update automatically via the onSnapshot listener on the dashboard
         } catch (error) {
              console.error("Error deleting battle room:", error);
              toast({ variant: "destructive", title: "Deletion Failed", description: "Could not delete the battle room." });
@@ -106,8 +110,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                 <div className="flex items-center gap-2 sm:gap-4 mt-2 sm:mt-0">
                      <div className="flex items-center gap-2 text-muted-foreground">
                         <Users className="w-5 h-5"/>
-                        {/* Placeholder for count, will be dynamic */}
-                        <span>{participants.length}</span>
+                        <span>{participants.length || room.participantCount || 0}</span>
                     </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -134,7 +137,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                 </div>
             </CardHeader>
              <CardContent>
-                <Accordion type="single" collapsible onValueChange={fetchParticipants}>
+                <Accordion type="single" collapsible onValueChange={() => { if(!participants.length) fetchParticipants() }}>
                     <AccordionItem value="item-1">
                         <AccordionTrigger>View Leaderboard & Attempts</AccordionTrigger>
                         <AccordionContent>
@@ -211,8 +214,8 @@ export default function TeacherDashboard() {
   }, [firestore, user]);
 
 
-  if (!user) {
-    return <div className="flex justify-center items-center h-full"><Loader2 className="w-16 h-16 animate-spin text-primary" /></div>;
+  if (!user || isLoading) {
+    return <div className="flex justify-center items-center h-full p-8"><Loader2 className="w-16 h-16 animate-spin text-primary" /></div>;
   }
   
   return (
@@ -237,11 +240,7 @@ export default function TeacherDashboard() {
                 </Link>
             </CardHeader>
             <CardContent>
-                {isLoading ? (
-                    <div className="flex justify-center items-center h-40">
-                        <Loader2 className="w-8 h-8 animate-spin" />
-                    </div>
-                ) : battleRooms.length > 0 ? (
+                {battleRooms.length > 0 ? (
                     <div className="space-y-4">
                         {battleRooms.map(room => <PastBattleRoomItem key={room.id} room={room} />)}
                     </div>

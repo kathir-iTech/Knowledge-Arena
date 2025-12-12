@@ -29,6 +29,7 @@ export interface BattleRoom {
   status: 'waiting' | 'in-progress' | 'finished';
   currentQuestionIndex: number;
   createdAt: number;
+  participantCount?: number; // Number of students who were in the room when it finished
 }
 
 export interface BattleParticipation {
