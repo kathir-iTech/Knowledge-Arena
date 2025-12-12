@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFirestore } from '@/firebase';
-import { doc, getDoc, updateDoc, arrayUnion, collection } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Loader2, Swords } from 'lucide-react';
-import type { BattleRoom } from '@/lib/types';
+import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -54,10 +55,22 @@ export default function StudentDashboard() {
         return;
       }
       
-      // Non-blocking update to add student to the list
-      updateDocumentNonBlocking(roomRef, {
-        studentIds: arrayUnion(user.id)
-      });
+      // Create a participation document for the student
+      const participantRef = doc(firestore, 'battleRooms', roomCodeUpper, 'participants', user.id);
+      const newParticipant: BattleParticipation = {
+        id: user.id,
+        studentId: user.id,
+        studentName: user.name,
+        studentAvatar: user.avatar,
+        battleRoomId: roomCodeUpper,
+        answers: [],
+        totalScore: 0,
+        malpracticeCount: 0,
+        isBlocked: false,
+      };
+
+      // Use non-blocking write to create the participant document
+      setDocumentNonBlocking(participantRef, newParticipant, { merge: false });
       
       // Navigate immediately
       router.push(`/battle/${roomCodeUpper}`);
@@ -78,7 +91,7 @@ export default function StudentDashboard() {
   };
 
   if (!user) {
-    return <Loader2 className="w-16 h-16 animate-spin" />;
+    return <div className="flex justify-center items-center h-full"><Loader2 className="w-16 h-16 animate-spin" /></div>;
   }
 
   return (
@@ -98,8 +111,8 @@ export default function StudentDashboard() {
             <Input
               value={roomCode}
               onChange={(e) => setRoomCode(e.target.value)}
-              placeholder="Enter Room Code"
-              className="text-center text-lg h-12 tracking-widest font-mono"
+              placeholder="ENTER ROOM CODE"
+              className="text-center text-2xl h-14 tracking-widest font-mono"
               maxLength={6}
             />
             <Button type="submit" className="w-full text-lg h-12" disabled={isLoading || roomCode.length < 6}>

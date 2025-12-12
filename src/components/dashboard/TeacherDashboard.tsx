@@ -3,12 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
-import type { BattleRoom, BattleResult } from '@/lib/types';
+import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, orderBy, deleteDoc, doc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, onSnapshot, doc, writeBatch, Unsubscribe } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Loader2, Trash2, Users, Trophy } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -17,32 +17,58 @@ import {
 } from "@/components/ui/accordion";
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
-    const [results, setResults] = useState<BattleResult[]>([]);
-    const [isLoadingResults, setIsLoadingResults] = useState(false);
+    const [participants, setParticipants] = useState<BattleParticipation[]>([]);
+    const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const firestore = useFirestore();
     const { toast } = useToast();
 
-    const fetchResults = async () => {
-        if (!firestore || !room.battleResultIds || room.battleResultIds.length === 0) return;
-        setIsLoadingResults(true);
+    const fetchParticipants = async () => {
+        if (!firestore) return;
+        setIsLoadingParticipants(true);
         try {
-            const resultsQuery = query(
-                collection(firestore, 'battleResults'),
-                where('battleRoomId', '==', room.id),
-                orderBy('score', 'desc')
+            const participantsQuery = query(
+                collection(firestore, 'battleRooms', room.id, 'participants'),
+                orderBy('totalScore', 'desc')
             );
-            const snapshot = await getDocs(resultsQuery);
-            const battleResults = snapshot.docs.map(doc => doc.data() as BattleResult);
-            setResults(battleResults);
+            const snapshot = await getDocs(participantsQuery);
+            const participantsData = snapshot.docs.map(doc => doc.data() as BattleParticipation);
+            setParticipants(participantsData);
         } catch (error) {
-            console.error("Error fetching results: ", error);
+            console.error("Error fetching participants: ", error);
         } finally {
-            setIsLoadingResults(false);
+            setIsLoadingParticipants(false);
         }
+    };
+    
+    const resetStudentAttempt = (studentId: string) => {
+        if (!firestore) return;
+
+        const participantRef = doc(firestore, 'battleRooms', room.id, 'participants', studentId);
+        updateDoc(participantRef, {
+            isBlocked: false,
+            malpracticeCount: 0
+        }).then(() => {
+            toast({ title: 'Success', description: 'Student attempt has been reset.' });
+            // Refresh the participant list
+            setParticipants(prev => prev.map(p => p.id === studentId ? { ...p, isBlocked: false, malpracticeCount: 0 } : p));
+        }).catch(err => {
+            console.error("Error resetting attempt:", err);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not reset student attempt.' });
+        });
     };
 
     const handleDelete = async () => {
@@ -51,21 +77,16 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         try {
             const batch = writeBatch(firestore);
 
-            // Delete all associated results
-            if (room.battleResultIds && room.battleResultIds.length > 0) {
-                 const resultsQuery = query(collection(firestore, 'battleResults'), where('battleRoomId', '==', room.id));
-                 const resultsSnapshot = await getDocs(resultsQuery);
-                 resultsSnapshot.forEach(doc => batch.delete(doc.ref));
-            }
+            const participantsQuery = collection(firestore, 'battleRooms', room.id, 'participants');
+            const participantsSnapshot = await getDocs(participantsQuery);
+            participantsSnapshot.forEach(doc => batch.delete(doc.ref));
             
-            // Delete the battle room itself
             const roomRef = doc(firestore, 'battleRooms', room.id);
             batch.delete(roomRef);
             
             await batch.commit();
 
-            toast({ title: "Battle Deleted", description: `Battle room ${room.id} and all its results have been removed.` });
-             // Note: The parent component will refetch and this item will disappear.
+            toast({ title: "Battle Deleted", description: `Battle room ${room.id} and all its data have been removed.` });
         } catch (error) {
              console.error("Error deleting battle room:", error);
              toast({ variant: "destructive", title: "Deletion Failed", description: "Could not delete the battle room." });
@@ -73,50 +94,80 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         }
     }
 
-    const participantCount = room.studentIds?.length || 0;
+    const participantCount = room.participantCount || 0;
 
     return (
         <Card className="bg-secondary/50">
-            <CardHeader className="flex flex-row items-center justify-between">
-                <div>
+            <CardHeader className="flex flex-row items-start sm:items-center justify-between">
+                <div className="flex-1">
                     <CardTitle className="text-xl font-headline">
-                        {room.quiz?.topic || 'Untitled Battle'}
+                        {room.quiz?.title || 'Untitled Battle'}
                     </CardTitle>
                     <CardDescription>Room Code: <span className="font-mono text-primary">{room.id}</span></CardDescription>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4 mt-2 sm:mt-0">
                      <div className="flex items-center gap-2 text-muted-foreground">
                         <Users className="w-5 h-5"/>
                         <span>{participantCount}</span>
                     </div>
-                   <Button variant="destructive" size="icon" onClick={handleDelete} disabled={isDeleting}>
-                     {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-                   </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="icon" disabled={isDeleting}>
+                           <Trash2 />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the battle room
+                             and all associated participant data.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleDelete}>
+                            {isDeleting ? <Loader2 className="animate-spin" /> : "Delete"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                 </div>
             </CardHeader>
-             {participantCount > 0 && (
+             {(room.status === 'finished' && participantCount > 0) && (
                  <CardContent>
-                    <Accordion type="single" collapsible onValueChange={() => { if(results.length === 0) fetchResults() }}>
+                    <Accordion type="single" collapsible onValueChange={() => { if(participants.length === 0) fetchParticipants() }}>
                         <AccordionItem value="item-1">
-                            <AccordionTrigger>View Leaderboard</AccordionTrigger>
+                            <AccordionTrigger>View Leaderboard & Attempts</AccordionTrigger>
                             <AccordionContent>
-                                {isLoadingResults ? <Loader2 className="mx-auto my-4 animate-spin" /> : (
+                                {isLoadingParticipants ? <Loader2 className="mx-auto my-4 animate-spin" /> : (
                                     <div className="space-y-2">
-                                        {results.length > 0 ? results.map((result, index) => (
-                                           <div key={result.studentId} className="flex items-center justify-between p-2 rounded-md bg-background/50">
+                                        {participants.length > 0 ? participants.map((p, index) => (
+                                           <div key={p.id} className="flex items-center justify-between p-2 rounded-md bg-background/50">
                                                <div className="flex items-center gap-3">
                                                   <span className="font-bold w-6 text-center">{index + 1}</span>
                                                   <Avatar className="h-8 w-8">
-                                                    <AvatarFallback className="text-lg bg-muted">{result.studentAvatar}</AvatarFallback>
+                                                    <AvatarFallback className="text-lg bg-muted">{p.studentAvatar}</AvatarFallback>
                                                   </Avatar>
-                                                  <span>{result.studentName}</span>
+                                                  <div className='flex flex-col'>
+                                                    <span>{p.studentName}</span>
+                                                    {p.isBlocked && <span className="text-xs text-destructive">Blocked (Malpractice)</span>}
+                                                  </div>
                                                </div>
-                                               <div className="flex items-center gap-2 font-mono text-primary">
-                                                  <Trophy className="w-4 h-4 text-yellow-400" />
-                                                  {result.score} pts
+                                               <div className="flex items-center gap-2">
+                                                    {p.isBlocked && (
+                                                         <Button variant="outline" size="sm" onClick={() => resetStudentAttempt(p.id)}>
+                                                            <RefreshCw className="w-3 h-3 mr-1" />
+                                                            Reset
+                                                        </Button>
+                                                    )}
+                                                    <div className="flex items-center gap-2 font-mono text-primary">
+                                                        <Trophy className="w-4 h-4 text-yellow-400" />
+                                                        {p.totalScore} pts
+                                                    </div>
                                                </div>
                                            </div>
-                                        )) : <p className="text-center text-muted-foreground">No results recorded for this battle.</p>}
+                                        )) : <p className="text-center text-muted-foreground">No participants recorded for this battle.</p>}
                                     </div>
                                 )}
                             </AccordionContent>
@@ -137,33 +188,37 @@ export default function TeacherDashboard() {
   useEffect(() => {
     if (!firestore || !user) return;
 
-    const fetchRooms = async () => {
-      setIsLoading(true);
-      try {
-        const roomsQuery = query(
-          collection(firestore, 'battleRooms'),
-          where('teacherId', '==', user.id),
-          orderBy('createdAt', 'desc')
-        );
-        const snapshot = await getDocs(roomsQuery);
-        const rooms = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BattleRoom));
-        setBattleRooms(rooms);
-      } catch (error) {
-        console.error("Error fetching battle rooms: ", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    setIsLoading(true);
+    const roomsQuery = query(
+        collection(firestore, 'battleRooms'),
+        where('teacherId', '==', user.id),
+        orderBy('createdAt', 'desc')
+    );
 
-    fetchRooms();
+    const unsubscribe = onSnapshot(roomsQuery, (snapshot) => {
+        const rooms = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                ...data,
+                id: doc.id,
+                participantCount: data.participants?.length || 0
+            } as BattleRoom;
+        });
+        setBattleRooms(rooms);
+        setIsLoading(false);
+    }, (error) => {
+        console.error("Error fetching battle rooms: ", error);
+        setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [firestore, user]);
 
 
   if (!user) {
-    return <Loader2 className="w-16 h-16 animate-spin text-primary" />;
+    return <div className="flex justify-center items-center h-full"><Loader2 className="w-16 h-16 animate-spin text-primary" /></div>;
   }
   
-
   return (
     <div className="p-4 md:p-8 space-y-8">
       <header>
@@ -172,11 +227,11 @@ export default function TeacherDashboard() {
       </header>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2">
+        <Card className="md:col-span-3">
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                    <CardTitle>Past Battles</CardTitle>
-                    <CardDescription>Review the results of your previously hosted battles.</CardDescription>
+                    <CardTitle>Your Battles</CardTitle>
+                    <CardDescription>Review results and manage your previously hosted battles.</CardDescription>
                 </div>
                  <Link href="/create-quiz" passHref>
                     <Button>
@@ -198,27 +253,10 @@ export default function TeacherDashboard() {
                     <div className="text-center py-10 border-2 border-dashed border-border rounded-lg">
                         <p className="text-muted-foreground">You haven't hosted any battles yet.</p>
                         <Link href="/create-quiz" passHref>
-                            <Button variant="link" className="mt-2">Create your first quiz</Button>
+                            <Button variant="link" className="mt-2">Create your first quiz to get started</Button>
                         </Link>
                     </div>
                 )}
-            </CardContent>
-        </Card>
-        <Card>
-            <CardHeader>
-                <CardTitle>Stats</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                 <div className="flex justify-between items-center p-4 bg-secondary rounded-lg">
-                    <span className="font-medium">Battles Hosted</span>
-                    <span className="font-bold text-2xl text-primary">{battleRooms.length}</span>
-                </div>
-                 <div className="flex justify-between items-center p-4 bg-secondary rounded-lg">
-                    <span className="font-medium">Total Participants</span>
-                    <span className="font-bold text-2xl text-primary">
-                        {battleRooms.reduce((acc, room) => acc + (room.studentIds?.length || 0), 0)}
-                    </span>
-                </div>
             </CardContent>
         </Card>
       </div>
