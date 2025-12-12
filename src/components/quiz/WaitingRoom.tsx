@@ -56,7 +56,7 @@ export default function WaitingRoom({ room, participants, onStartBattle, isTeach
           </CardHeader>
           <CardContent>
                 <div className="flex flex-wrap gap-4">
-                  {areParticipantsLoading && isTeacher ? (
+                  {isTeacher && areParticipantsLoading ? (
                      Array.from({ length: 3 }).map((_, i) => (
                       <div key={i} className="flex flex-col items-center gap-2 text-center">
                         <Skeleton className="h-16 w-16 rounded-full" />

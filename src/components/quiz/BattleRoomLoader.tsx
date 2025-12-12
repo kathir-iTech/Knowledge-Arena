@@ -30,15 +30,15 @@ export default function BattleRoomLoader() {
   // Determine if the user is the teacher for this room *after* room data is loaded.
   const isTeacher = room && user ? user.id === room.teacherId : false;
 
-  // This collection listener is now for BOTH teacher and student, to get live updates for the room.
+  // Fetch participants only if the user is a teacher AND the room has loaded.
   const participantsRef = useMemoFirebase(() => {
     if (!firestore || !roomCode || !isTeacher) return null;
-    // Only fetch the collection if the user is a teacher.
     return collection(firestore, `battleRooms/${roomCode}/participants`);
   }, [firestore, roomCode, isTeacher]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
+  // Fetch the individual student's participation document if they are not a teacher.
   const studentParticipationRef = useMemoFirebase(() => {
     if (!firestore || !roomCode || !user || isTeacher) return null;
     return doc(firestore, 'battleRooms', roomCode as string, 'participants', user.id);
@@ -59,7 +59,8 @@ export default function BattleRoomLoader() {
     }
   };
 
-  // Consolidate loading states
+  // Consolidate loading states. The component is loading if auth is loading, the room is loading,
+  // or if it's a student and their specific participation doc is still loading.
   const isLoading = isAuthLoading || isRoomLoading || (!isTeacher && isStudentParticipationLoading);
 
 
@@ -72,7 +73,7 @@ export default function BattleRoomLoader() {
     );
   }
   
-  if (roomError || (!isRoomLoading && !room)) {
+  if (roomError || !room) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">
         <ShieldX className="h-12 w-12 text-destructive" />
@@ -105,10 +106,11 @@ export default function BattleRoomLoader() {
       return (
         <WaitingRoom
           room={room}
-          participants={participants || []}
+          participants={participants || []} // For teacher view
           onStartBattle={handleStartBattle}
           isTeacher={isTeacher}
-          areParticipantsLoading={areParticipantsLoading}
+          // The participants list is only loading if it's a teacher
+          areParticipantsLoading={isTeacher && areParticipantsLoading}
         />
       );
     case 'in-progress':
