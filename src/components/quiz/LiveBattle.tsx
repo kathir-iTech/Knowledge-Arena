@@ -11,10 +11,11 @@ import { useVisibilityChange } from '@/hooks/useVisibilityChange';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Clock, Loader2, CheckCircle, XCircle, Shield, Trophy, Users } from 'lucide-react';
+import { Clock, Loader2, CheckCircle, XCircle, Shield, Trophy, Users, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import QuizResults from './QuizResults';
 
 interface LiveBattleProps {
   room: BattleRoom;
@@ -31,17 +32,26 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   
+  const currentQuestionIndex = useMemo(() => {
+    if (isTeacher) return room.currentQuestionIndex;
+    return participation?.currentQuestionIndex ?? 0;
+  }, [isTeacher, room.currentQuestionIndex, participation?.currentQuestionIndex]);
+
   const currentQuestion = useMemo(() => {
-    return room.quiz.questions[room.currentQuestionIndex];
-  }, [room.currentQuestionIndex, room.quiz.questions]);
+    return room.quiz.questions[currentQuestionIndex];
+  }, [currentQuestionIndex, room.quiz.questions]);
 
   const [timeLeft, setTimeLeft] = useState(currentQuestion?.timer || 0);
+  
+  const participantRef = useMemo(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'battleRooms', room.id, 'participants', user.id);
+  }, [firestore, room.id, user]);
 
   const onMalpractice = useCallback(() => {
-    if (isTeacher || !participation || !firestore || participation.isBlocked) return;
+    if (isTeacher || !participation || !participantRef || participation.isBlocked) return;
 
     const newMalpracticeCount = (participation.malpracticeCount || 0) + 1;
-    const participantRef = doc(firestore, 'battleRooms', room.id, 'participants', user.id);
     
     updateDocumentNonBlocking(participantRef, {
         malpracticeCount: newMalpracticeCount,
@@ -50,7 +60,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     
     router.push('/kicked');
 
-  }, [isTeacher, participation, firestore, room.id, user.id, router]);
+  }, [isTeacher, participation, participantRef, router]);
 
   useVisibilityChange(onMalpractice);
 
@@ -62,17 +72,9 @@ export default function LiveBattle({ room, user, participation, allParticipants,
         setShowResult(false);
     }
   }, [currentQuestion]);
-  
-  const onFinishBattle = useCallback(() => {
-    if (!isTeacher || !firestore) return;
-    const roomRef = doc(firestore, 'battleRooms', room.id);
-    const finalParticipantCount = allParticipants?.length || 0;
-    updateDocumentNonBlocking(roomRef, { status: 'finished', participantCount: finalParticipantCount });
-  }, [isTeacher, firestore, room.id, allParticipants]);
-
 
   const handleAnswer = useCallback((answerIndex: number | null) => {
-    if (showResult || isTeacher || !participation || !firestore || !currentQuestion) return;
+    if (showResult || isTeacher || !participation || !participantRef || !currentQuestion) return;
     
     setShowResult(true);
     setSelectedAnswer(answerIndex);
@@ -80,10 +82,8 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     const isCorrect = answerIndex === currentQuestion.correctAnswerIndex;
     let scoreGained = 0;
     if (isCorrect) {
-        // Award up to 100 points based on time left.
         scoreGained = Math.floor(100 * (timeLeft / currentQuestion.timer));
     } else {
-        // Deduct 50 for incorrect answer
         scoreGained = -50;
     }
     
@@ -96,31 +96,15 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     
     const newTotalScore = (participation.totalScore || 0) + scoreGained;
     const newAnswers = [...(participation.answers || []), newAnswer];
-    const isLastQuestion = room.currentQuestionIndex >= room.quiz.questions.length - 1;
-    
-    const participantRef = doc(firestore, 'battleRooms', room.id, 'participants', user.id);
     
     const updateData: Partial<BattleParticipation> = {
       answers: newAnswers,
       totalScore: newTotalScore,
     };
 
-    if (isLastQuestion) {
-      updateData.status = 'finished';
-    }
-
     updateDocumentNonBlocking(participantRef, updateData);
-    
-    // Auto-advance for teacher after a delay to show result
-    if (isTeacher) {
-        setTimeout(() => {
-            if (isLastQuestion) {
-                onFinishBattle();
-            }
-        }, 3000); 
-    }
 
-  }, [showResult, isTeacher, participation, firestore, currentQuestion, timeLeft, room.id, user.id, room.currentQuestionIndex, room.quiz.questions.length, onFinishBattle]);
+  }, [showResult, isTeacher, participation, participantRef, currentQuestion, timeLeft, room.id, user.id]);
   
   // Timer countdown effect
   useEffect(() => {
@@ -135,15 +119,15 @@ export default function LiveBattle({ room, user, participation, allParticipants,
 
 
   const handleNextQuestion = () => {
-    if (!isTeacher || !firestore) return;
+    if (isTeacher || !participantRef || !participation) return;
 
-    const nextIndex = room.currentQuestionIndex + 1;
-    const roomRef = doc(firestore, 'battleRooms', room.id);
-
+    const nextIndex = currentQuestionIndex + 1;
+    
     if (nextIndex < room.quiz.questions.length) {
-      updateDocumentNonBlocking(roomRef, { currentQuestionIndex: nextIndex });
+      updateDocumentNonBlocking(participantRef, { currentQuestionIndex: nextIndex });
     } else {
-      onFinishBattle();
+      // Last question answered, mark as finished
+      updateDocumentNonBlocking(participantRef, { status: 'finished' });
     }
   };
 
@@ -155,11 +139,16 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     return 'bg-secondary opacity-50';
   };
   
+  if (participation?.status === 'finished') {
+    return <QuizResults room={room} isTeacher={isTeacher} participants={allParticipants || []} isLoading={false} />;
+  }
+
   if (!currentQuestion) {
+    // This can happen if the student finishes but the component hasn't redirected yet.
+    // Or if there's a data mismatch. A loading state is safe.
     return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
   }
 
-  // This handles the case where a student joins but their participation doc hasn't loaded yet.
   if (!isTeacher && !participation) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
@@ -168,6 +157,8 @@ export default function LiveBattle({ room, user, participation, allParticipants,
       </div>
     );
   }
+
+  const isLastQuestion = currentQuestionIndex >= room.quiz.questions.length - 1;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
@@ -194,7 +185,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
             )}
           </div>
           <Progress value={currentQuestion.timer > 0 ? (timeLeft / currentQuestion.timer) * 100 : 0} className="w-full h-2 mt-2" />
-          <CardDescription>Question {room.currentQuestionIndex + 1} of {room.quiz.questions.length}</CardDescription>
+          <CardDescription>Question {currentQuestionIndex + 1} of {room.quiz.questions.length}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="text-xl md:text-2xl text-center font-medium">{currentQuestion.text}</p>
@@ -213,21 +204,27 @@ export default function LiveBattle({ room, user, participation, allParticipants,
           </div>
 
           {showResult && !isTeacher && (
-            <Card className="mt-6 bg-secondary/50 p-4">
-                <div className="flex items-start gap-4">
-                    {selectedAnswer === currentQuestion.correctAnswerIndex ? (
-                        <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
-                    ) : (
-                        <XCircle className="w-8 h-8 text-red-400 shrink-0" />
-                    )}
-                    <div>
-                        <h3 className="font-bold text-lg">
-                           {selectedAnswer === currentQuestion.correctAnswerIndex ? 'Correct!' : 'Incorrect'}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">The correct answer was: {currentQuestion.options[currentQuestion.correctAnswerIndex]}</p>
+             <div className="flex flex-col items-center gap-4">
+                <Card className="mt-6 bg-secondary/50 p-4 w-full">
+                    <div className="flex items-start gap-4">
+                        {selectedAnswer === currentQuestion.correctAnswerIndex ? (
+                            <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
+                        ) : (
+                            <XCircle className="w-8 h-8 text-red-400 shrink-0" />
+                        )}
+                        <div>
+                            <h3 className="font-bold text-lg">
+                               {selectedAnswer === currentQuestion.correctAnswerIndex ? 'Correct!' : 'Incorrect'}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">The correct answer was: {currentQuestion.options[currentQuestion.correctAnswerIndex]}</p>
+                        </div>
                     </div>
-                </div>
-            </Card>
+                </Card>
+                <Button onClick={handleNextQuestion}>
+                    {isLastQuestion ? 'Finish Battle' : 'Next Question'}
+                    <ArrowRight className="ml-2"/>
+                </Button>
+            </div>
           )}
           
           {isTeacher && (
@@ -242,11 +239,6 @@ export default function LiveBattle({ room, user, participation, allParticipants,
                         </div>
                     </div>
                 </Card>
-                 <div className="flex justify-end mt-4">
-                    <Button onClick={handleNextQuestion}>
-                        {room.currentQuestionIndex < room.quiz.questions.length - 1 ? 'Next Question' : 'Finish Battle'}
-                    </Button>
-                </div>
             </div>
           )}
 

@@ -67,6 +67,7 @@ export default function StudentDashboard() {
         totalScore: 0,
         malpracticeCount: 0,
         isBlocked: false,
+        currentQuestionIndex: 0, // Start at the first question
       };
 
       setDocumentNonBlocking(participantRef, newParticipant, { merge: false });

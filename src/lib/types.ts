@@ -27,7 +27,7 @@ export interface BattleRoom {
   teacherId: string;
   quiz: Quiz; // Denormalized quiz object
   status: 'waiting' | 'in-progress' | 'finished';
-  currentQuestionIndex: number;
+  currentQuestionIndex: number; // No longer used for student progression
   createdAt: number;
   participantCount?: number; // Number of students who were in the room when it finished
 }
@@ -48,4 +48,5 @@ export interface BattleParticipation {
   totalScore: number;
   malpracticeCount: number;
   isBlocked: boolean;
+  currentQuestionIndex: number; // Tracks the student's individual progress
 }

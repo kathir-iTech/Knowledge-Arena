@@ -41,7 +41,7 @@ service cloud.firestore {
 
     // BATTLE ROOMS
     match /battleRooms/{roomId} {
-      allow get: if isSignedIn(); // Allow any signed-in user to read a room doc
+      allow get: if isSignedIn();
       allow list: if isTeacher(); 
       allow create: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
       allow update, delete: if isRoomTeacher(roomId);
@@ -49,12 +49,12 @@ service cloud.firestore {
     
     // BATTLE PARTICIPANTS
     match /battleRooms/{roomId}/participants/{participantId} {
-      allow get: if isSignedIn(); // Allow reading single participant doc
+      allow get: if isSignedIn();
       allow list: if isRoomTeacher(roomId) || isRoomFinished(roomId);
       allow create: if isOwner(participantId);
       
       allow update: if isSignedIn() && (
-        // Case 1: Student updating their own answers and score.
+        // Case 1: Student updating their own progress and score.
         (isOwner(participantId) && 
          isRoomInProgress(roomId) &&
          request.resource.data.isBlocked == resource.data.isBlocked &&
