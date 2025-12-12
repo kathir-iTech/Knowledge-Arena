@@ -2,17 +2,18 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useFirestore, updateDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
+import { doc, collection } from 'firebase/firestore';
 import type { BattleRoom, User, BattleParticipation } from '@/lib/types';
 import { useVisibilityChange } from '@/hooks/useVisibilityChange';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Clock, Loader2, CheckCircle, XCircle, Shield, Trophy } from 'lucide-react';
+import { Clock, Loader2, CheckCircle, XCircle, Shield, Trophy, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { Avatar, AvatarFallback } from '../ui/avatar';
 
 interface LiveBattleProps {
   room: BattleRoom;
@@ -27,6 +28,16 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
   const firestore = useFirestore();
   const { toast } = useToast();
 
+  // --- Start of Fix ---
+  // Only fetch all participants if the user is a teacher
+  const participantsRef = useMemoFirebase(() => {
+    if (!firestore || !isTeacher) return null; // Return null for students
+    return collection(firestore, `battleRooms/${room.id}/participants`);
+  }, [firestore, room.id, isTeacher]);
+
+  const { data: allParticipants } = useCollection<BattleParticipation>(participantsRef);
+  // --- End of Fix ---
+
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   
@@ -34,7 +45,7 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
     return room.quiz.questions[room.currentQuestionIndex];
   }, [room.currentQuestionIndex, room.quiz.questions]);
 
-  const [timeLeft, setTimeLeft] = useState(currentQuestion.timer);
+  const [timeLeft, setTimeLeft] = useState(currentQuestion?.timer || 0);
 
   const onMalpractice = useCallback(() => {
     if (isTeacher || !participation || !firestore) return;
@@ -42,7 +53,6 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
     const newMalpracticeCount = (participation.malpracticeCount || 0) + 1;
     const participantRef = doc(firestore, 'battleRooms', room.id, 'participants', user.id);
     
-    // Non-blocking update
     updateDocumentNonBlocking(participantRef, {
         malpracticeCount: newMalpracticeCount,
         isBlocked: newMalpracticeCount >= 1 // Block on first offense
@@ -60,27 +70,26 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
 
   useVisibilityChange(onMalpractice);
 
-  // Reset state when question changes
   useEffect(() => {
-    setTimeLeft(currentQuestion.timer);
-    setSelectedAnswer(null);
-    setShowResult(false);
+    if(currentQuestion) {
+        setTimeLeft(currentQuestion.timer);
+        setSelectedAnswer(null);
+        setShowResult(false);
+    }
   }, [currentQuestion]);
   
-  // Timer countdown
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (timeLeft > 0 && !showResult && !isTeacher) {
       timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
     } else if (timeLeft === 0 && !showResult && !isTeacher) {
-        // Auto-submit when timer runs out
         handleAnswer(null);
     }
     return () => clearTimeout(timer);
   }, [timeLeft, showResult, isTeacher]);
 
   const handleAnswer = useCallback((answerIndex: number | null) => {
-    if (showResult || isTeacher || !participation || !firestore) return;
+    if (showResult || isTeacher || !participation || !firestore || !currentQuestion) return;
     
     setShowResult(true);
     setSelectedAnswer(answerIndex);
@@ -105,7 +114,6 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
       totalScore: newTotalScore,
     });
 
-    // Let teacher control next question
   }, [showResult, isTeacher, participation, firestore, currentQuestion, timeLeft, room.id, user.id]);
 
   const handleNextQuestion = () => {
@@ -124,9 +132,8 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
   const getButtonClass = (index: number) => {
     if (!showResult && !isTeacher) return 'bg-secondary hover:bg-primary/20';
     
-    // After answering (or for teacher view)
-    if (index === currentQuestion.correctAnswerIndex) return 'bg-green-500/80 ring-2 ring-green-400';
-    if (index === selectedAnswer && index !== currentQuestion.correctAnswerIndex) return 'bg-red-500/80';
+    if (currentQuestion && index === currentQuestion.correctAnswerIndex) return 'bg-green-500/80 ring-2 ring-green-400';
+    if (index === selectedAnswer && currentQuestion && index !== currentQuestion.correctAnswerIndex) return 'bg-red-500/80';
     return 'bg-secondary opacity-50';
   };
   
@@ -140,7 +147,12 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="text-2xl font-headline text-primary">{room.quiz.title}</CardTitle>
-            {!isTeacher && (
+            {isTeacher ? (
+                 <div className="flex items-center gap-2 text-lg font-mono">
+                    <Users className="w-5 h-5" />
+                    {allParticipants?.length || 0} Gladiators
+                </div>
+            ) : (
               <div className="flex items-center gap-4">
                  <div className="flex items-center gap-2 text-lg font-mono text-yellow-400">
                     <Trophy className="w-5 h-5" />
@@ -175,14 +187,13 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
           {(showResult || isTeacher) && (
             <Card className="mt-6 bg-secondary/50 p-4">
                 <div className="flex items-start gap-4">
-                    {!isTeacher && (
+                    {isTeacher ? <CheckCircle className="w-8 h-8 text-green-400 shrink-0" /> : (
                         selectedAnswer === currentQuestion.correctAnswerIndex ? (
                             <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
                         ) : (
                             <XCircle className="w-8 h-8 text-red-400 shrink-0" />
                         )
                     )}
-                     {isTeacher && <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />}
                     <div>
                         <h3 className="font-bold text-lg">
                            {isTeacher ? `Correct Answer: ${currentQuestion.options[currentQuestion.correctAnswerIndex]}` : (selectedAnswer === currentQuestion.correctAnswerIndex ? 'Correct!' : 'Incorrect')}
@@ -202,6 +213,30 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
 
         </CardContent>
       </Card>
+      
+      {isTeacher && allParticipants && (
+         <Card className="w-full max-w-4xl mt-4">
+            <CardHeader>
+                <CardTitle>Live Leaderboard</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="flex flex-wrap gap-4">
+                  {[...allParticipants].sort((a,b) => b.totalScore - a.totalScore).map(p => (
+                    <div key={p.id} className="flex items-center gap-3 p-2 rounded-md bg-secondary">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-sm bg-muted">{p.studentAvatar}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium max-w-20 truncate">{p.studentName}</span>
+                        <span className='text-xs text-primary font-mono'>{p.totalScore} pts</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+            </CardContent>
+         </Card>
+      )}
+
         {!isTeacher && (
             <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Shield className="w-4 h-4 text-green-500" />
