@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -7,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 
 const EMOJIS = [
-  '🤖', '👾', '🔮', '🧠', '👻', '🧑', '🧛', '🧟', '🧞', '🦹', '🦸', '🧙',
-  '🧚', '🧑', '👨‍🎤', '🕵️', '💂', '👨‍🎨', '👨‍🔬', '👨‍🔧', '👨‍⚖️', '👨‍🚒', '', '🧑‍🍳'
+  "🤖", "👾", "🔮", "🧠", "👻", "🧑", "🧛", "🧟", "🧞", "🦹", "🦸", "🧙",
+  "🧚", "🧑‍💻", "👨‍🎤", "🕵️", "💂", "👨‍🎨", "👨‍🔬", "👨‍🔧", "👨‍⚖️",
+  "👨‍🚒", "🧑‍🌾", "🧑‍🍳"
 ];
 
 interface AvatarEditorProps {
@@ -18,7 +18,7 @@ interface AvatarEditorProps {
 }
 
 export const AvatarEditor: React.FC<AvatarEditorProps> = ({ isOpen, setIsOpen, currentAvatar }) => {
-  const { updateAvatar } = useAuth();
+  const { user, updateAvatar } = useAuth();
 
   const handleSelectAvatar = async (emoji: string) => {
     await updateAvatar(emoji);
@@ -30,6 +30,11 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ isOpen, setIsOpen, c
       <DialogContent className="sm:max-w-[425px] bg-card border-border">
         <DialogHeader>
           <DialogTitle className="font-headline text-primary">Choose Your Avatar</DialogTitle>
+           {user && (
+            <p className="text-sm text-muted-foreground">
+              Logged in as: <span className="font-semibold text-primary">{user.name}</span>
+            </p>
+          )}
           <DialogDescription>Select an emoji to represent you in the arena.</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-6 gap-4 py-4">
