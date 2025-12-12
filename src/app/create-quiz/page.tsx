@@ -1,5 +1,3 @@
-// This file is intentionally blank for now.
-// The actual content will be in the QuizCreatorForm component.
 import { QuizCreatorForm } from "@/components/quiz/QuizCreatorForm";
 
 export default function CreateQuizPage() {

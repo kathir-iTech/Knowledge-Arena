@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -13,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Clock, Loader2, CheckCircle, XCircle, Shield, Trophy, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 
 interface LiveBattleProps {
@@ -28,7 +26,6 @@ interface LiveBattleProps {
 export default function LiveBattle({ room, user, participation, allParticipants, onFinishBattle, isTeacher }: LiveBattleProps) {
   const router = useRouter();
   const firestore = useFirestore();
-  const { toast } = useToast();
 
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
@@ -40,7 +37,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   const [timeLeft, setTimeLeft] = useState(currentQuestion?.timer || 0);
 
   const onMalpractice = useCallback(() => {
-    if (isTeacher || !participation || !firestore) return;
+    if (isTeacher || !participation || !firestore || participation.isBlocked) return;
 
     const newMalpracticeCount = (participation.malpracticeCount || 0) + 1;
     const participantRef = doc(firestore, 'battleRooms', room.id, 'participants', user.id);
@@ -49,8 +46,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
         malpracticeCount: newMalpracticeCount,
         isBlocked: true
     });
-
-    // No need for a toast, as they will be redirected immediately
+    
     router.push('/kicked');
 
   }, [isTeacher, participation, firestore, room.id, user.id, router]);
@@ -72,6 +68,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     setSelectedAnswer(answerIndex);
 
     const isCorrect = answerIndex === currentQuestion.correctAnswerIndex;
+    // Score: 50 base points for correct + up to 50 bonus for speed
     const scoreGained = isCorrect ? 50 + Math.floor(timeLeft * (50 / currentQuestion.timer)) : 0;
     
     const newAnswer = {
@@ -97,7 +94,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
         if (isLastQuestion && isTeacher) {
             onFinishBattle();
         }
-    }, 3000);
+    }, 3000); // Wait 3 seconds before auto-advancing on last question for teacher
 
   }, [showResult, isTeacher, participation, firestore, currentQuestion, timeLeft, room.id, user.id, room.currentQuestionIndex, room.quiz.questions.length, onFinishBattle]);
   
@@ -106,7 +103,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     if (timeLeft > 0 && !showResult && !isTeacher) {
       timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
     } else if (timeLeft === 0 && !showResult && !isTeacher) {
-        handleAnswer(null);
+        handleAnswer(null); // Timeout
     }
     return () => clearTimeout(timer);
   }, [timeLeft, showResult, isTeacher, handleAnswer]);
@@ -192,6 +189,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
                         <h3 className="font-bold text-lg">
                            {selectedAnswer === currentQuestion.correctAnswerIndex ? 'Correct!' : 'Incorrect'}
                         </h3>
+                        <p className="text-sm text-muted-foreground">The correct answer was: {currentQuestion.options[currentQuestion.correctAnswerIndex]}</p>
                     </div>
                 </div>
             </Card>

@@ -8,10 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFirestore } from '@/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Loader2, Swords } from 'lucide-react';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
-import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 export default function StudentDashboard() {
@@ -55,7 +54,6 @@ export default function StudentDashboard() {
         return;
       }
       
-      // Create a participation document for the student
       const participantRef = doc(firestore, 'battleRooms', roomCodeUpper, 'participants', user.id);
       const newParticipant: BattleParticipation = {
         id: user.id,
@@ -69,10 +67,8 @@ export default function StudentDashboard() {
         isBlocked: false,
       };
 
-      // Use non-blocking write to create the participant document
       setDocumentNonBlocking(participantRef, newParticipant, { merge: false });
       
-      // Navigate immediately
       router.push(`/battle/${roomCodeUpper}`);
 
     } catch (error: any) {

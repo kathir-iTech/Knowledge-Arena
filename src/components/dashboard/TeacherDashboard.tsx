@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -29,7 +28,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '@/components/ui/badge';
 
 const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
@@ -62,24 +61,18 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         if (!firestore) return;
 
         const participantRef = doc(firestore, 'battleRooms', room.id, 'participants', studentId);
-        updateDoc(participantRef, {
+        updateDocumentNonBlocking(participantRef, {
             isBlocked: false,
             malpracticeCount: 0
-        }).then(() => {
-            toast({ title: 'Success', description: 'Student attempt has been reset.' });
-            // Refresh the participant list to reflect the change
-            setParticipants(prev => prev.map(p => p.id === studentId ? { ...p, isBlocked: false, malpracticeCount: 0 } : p));
-        }).catch(err => {
-            console.error("Error resetting attempt:", err);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not reset student attempt.' });
         });
+        toast({ title: 'Success', description: 'Student attempt has been reset.' });
+        setParticipants(prev => prev.map(p => p.id === studentId ? { ...p, isBlocked: false, malpracticeCount: 0 } : p));
     };
 
     const handleDelete = async () => {
         if (!firestore) return;
         setIsDeleting(true);
         try {
-            // This can be slow for many participants. Consider a Cloud Function for large-scale deletion.
             const participantsQuery = collection(firestore, 'battleRooms', room.id, 'participants');
             const participantsSnapshot = await getDocs(participantsQuery);
             participantsSnapshot.forEach(pDoc => {
@@ -90,7 +83,6 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
             deleteDocumentNonBlocking(roomRef);
 
             toast({ title: "Battle Deletion Initiated", description: `Battle room ${room.id} will be removed.` });
-            // The UI will update automatically via the onSnapshot listener on the dashboard
         } catch (error) {
              console.error("Error deleting battle room:", error);
              toast({ variant: "destructive", title: "Deletion Failed", description: "Could not delete the battle room." });
@@ -222,7 +214,6 @@ export default function TeacherDashboard() {
             id: doc.id,
         } as BattleRoom));
         
-        // Sort on the client side to avoid needing an index
         rooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
         setBattleRooms(rooms);
@@ -280,5 +271,3 @@ export default function TeacherDashboard() {
     </div>
   );
 }
-
-    

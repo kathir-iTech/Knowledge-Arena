@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useState, useEffect, useCallback } from 'react';
@@ -10,7 +9,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
-import { useFirebase, useUser as useFirebaseUserHook } from '@/firebase'; // Renamed to avoid conflict
+import { useFirebase, useUser as useFirebaseUserHook } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -20,7 +19,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: { email: string; password: string }) => Promise<void>;
   signup: (credentials: { name: string; email: string; password: string }) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateAvatar: (avatar: string) => Promise<void>;
 }
 
@@ -30,7 +29,6 @@ const EMOJIS = [
   '🤖', '👾', '🔮', '🧠', '👻', '🧑‍🚀', '🧛', '🧟', '🧞', '🦹', '🦸',
   '🧙', '🧚', '🧑‍💻', '👨‍🎤', '🕵️', '💂', '👨‍🎨', '👨‍🔬', '👨‍🔧', '👨‍⚖️', '👨‍🚀', '👨‍🚒'
 ];
-const getRandomAvatar = () => EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { auth, firestore } = useFirebase();
@@ -38,6 +36,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  const getRandomAvatar = useCallback(() => {
+    return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+  }, []);
 
   const fetchUserDocument = useCallback(async (uid: string) => {
     if (!firestore) return;

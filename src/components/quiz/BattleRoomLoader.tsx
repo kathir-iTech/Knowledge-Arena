@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -27,52 +26,36 @@ export default function BattleRoomLoader() {
 
   const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<BattleRoom>(roomRef);
 
-  const isTeacher = room && user ? user.id === room.teacherId : false;
+  const isTeacher = useMemo(() => room && user ? user.id === room.teacherId : false, [room, user]);
 
-  // This hook now runs for BOTH teacher and student when in the waiting room or finished.
-  // The security rules have been updated to allow 'list' for anyone in a 'waiting' or 'finished' room.
-  // The teacher also gets the list when the game is 'in-progress' for the live leaderboard.
   const participantsRef = useMemo(() => {
-    if (!firestore || !roomCode || !room?.status) return null;
-    if (room.status === 'waiting' || room.status === 'finished' || (isTeacher && room.status === 'in-progress')) {
-      return collection(firestore, `battleRooms/${roomCode}/participants`);
-    }
-    return null;
-  }, [firestore, roomCode, room?.status, isTeacher]);
+    if (!firestore || !roomCode) return null;
+    return collection(firestore, `battleRooms/${roomCode}/participants`);
+  }, [firestore, roomCode]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
-  // This hook is ONLY for the student's individual data during the 'in-progress' state.
-  const studentParticipationRef = useMemo(() => {
-    if (!firestore || !roomCode || !user || isTeacher || room?.status !== 'in-progress') return null;
-    return doc(firestore, 'battleRooms', roomCode as string, 'participants', user.id);
-  }, [firestore, roomCode, user, isTeacher, room?.status]);
-  
-  const { data: studentParticipation, isLoading: isStudentParticipationLoading } = useDoc<BattleParticipation>(studentParticipationRef);
+  const studentParticipation = useMemo(() => {
+    if (isTeacher || !participants || !user) return undefined;
+    return participants.find(p => p.studentId === user.id);
+  }, [participants, user, isTeacher]);
 
-  const handleStartBattle = async () => {
+  const handleStartBattle = () => {
     if (roomRef && isTeacher) {
       updateDocumentNonBlocking(roomRef, { status: 'in-progress', currentQuestionIndex: 0 });
     }
   };
 
-  const handleFinishBattle = async () => {
+  const handleFinishBattle = () => {
     if (roomRef && isTeacher) {
       const finalParticipantCount = participants?.length || 0;
       updateDocumentNonBlocking(roomRef, { status: 'finished', participantCount: finalParticipantCount });
     }
   };
 
-  // Simplified loading state
-  const isLoading = 
-    isAuthLoading || 
-    isRoomLoading ||
-    (room && room.status === 'waiting' && areParticipantsLoading) ||
-    (room && isTeacher && room.status === 'in-progress' && areParticipantsLoading) ||
-    (room && !isTeacher && room.status === 'in-progress' && isStudentParticipationLoading);
+  const isLoading = isAuthLoading || isRoomLoading;
 
-
-  if (isAuthLoading || isRoomLoading || !room) {
+  if (isLoading) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -81,7 +64,7 @@ export default function BattleRoomLoader() {
     );
   }
   
-  if (roomError) {
+  if (roomError || !room) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">
         <ShieldX className="h-12 w-12 text-destructive" />
@@ -91,21 +74,17 @@ export default function BattleRoomLoader() {
       </div>
     );
   }
-
-  if (!user || !room.quiz) {
-     return (
-      <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
-     )
-  }
   
-  // This check is now more robust for students.
+  if (!user) {
+    return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
+  }
+
   if (room.status === 'in-progress' && !isTeacher && studentParticipation?.isBlocked) {
     router.push('/kicked');
     return null;
   }
   
-  // This check prevents students who haven't properly joined from seeing a battle in progress
-  if (room.status === 'in-progress' && !isTeacher && !studentParticipation && !isStudentParticipationLoading) {
+  if (room.status === 'in-progress' && !isTeacher && !studentParticipation && !areParticipantsLoading) {
       router.push('/cheating-detected');
       return null;
   }
@@ -122,26 +101,18 @@ export default function BattleRoomLoader() {
         />
       );
     case 'in-progress':
-        if(isLoading) {
-            return (
-                <div className="flex h-screen flex-col items-center justify-center gap-4">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                    <p className="text-muted-foreground">Starting Battle...</p>
-                </div>
-            );
-        }
       return (
         <LiveBattle
           room={room}
           user={user}
           participation={studentParticipation}
-          allParticipants={participants} // Pass live participants list to teacher
+          allParticipants={participants}
           onFinishBattle={handleFinishBattle}
           isTeacher={isTeacher}
         />
       );
     case 'finished':
-       return <QuizResults room={room} isTeacher={isTeacher} />;
+       return <QuizResults room={room} isTeacher={isTeacher} participants={participants || []} isLoading={areParticipantsLoading} />;
     default:
       return (
         <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">

@@ -1,9 +1,8 @@
-
 'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,7 +25,7 @@ import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 const questionSchema = z.object({
   id: z.string(),
   text: z.string().min(5, 'Question text must be at least 5 characters long.'),
-  options: z.array(z.string().min(1, 'Option text cannot be empty.')).min(2, 'Must have at least 2 options.'),
+  options: z.array(z.string().min(1, 'Option text cannot be empty.')).min(2, 'Must have at least 2 options.').max(4, 'You can have at most 4 options.'),
   correctAnswerIndex: z.coerce.number().min(0, 'You must select a correct answer.'),
   timer: z.coerce.number().min(5, 'Timer must be at least 5 seconds.').max(120, 'Timer cannot exceed 120 seconds.'),
 });
@@ -104,7 +103,6 @@ export function QuizCreatorForm() {
 
         const roomRef = doc(firestore, 'battleRooms', battleRoomId);
         
-        // Use non-blocking write for faster UI response
         setDocumentNonBlocking(roomRef, newBattleRoom, { merge: false });
 
         toast({
@@ -112,7 +110,6 @@ export function QuizCreatorForm() {
             description: `Room code: ${battleRoomId}. Redirecting you...`,
         });
 
-        // Redirect immediately to the new battle room waiting area
         router.push(`/battle/${battleRoomId}`);
 
     } catch (error: any) {
@@ -253,7 +250,7 @@ export function QuizCreatorForm() {
                         </FormControl>
                         <SelectContent>
                           {form.watch(`questions.${index}.options`).map((opt, optIndex) => (
-                            <SelectItem key={optIndex} value={String(optIndex)}>
+                            <SelectItem key={optIndex} value={String(optIndex)} disabled={!opt}>
                               {`Option ${optIndex + 1}: ${opt.substring(0,50) || '(empty)'}`}
                             </SelectItem>
                           ))}

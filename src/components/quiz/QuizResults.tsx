@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -9,26 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Crown, Home, Loader2 } from 'lucide-react';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection } from 'firebase/firestore';
 
 interface QuizResultsProps {
   room: BattleRoom;
   isTeacher: boolean;
+  participants: BattleParticipation[];
+  isLoading: boolean;
 }
 
-export default function QuizResults({ room, isTeacher }: QuizResultsProps) {
-  const firestore = useFirestore();
-
-  // All users (students and teachers) need to see the results.
-  // The security rules should be updated to allow this.
-  const participantsRef = useMemo(() => {
-    if (!firestore) return null;
-    return collection(firestore, `battleRooms/${room.id}/participants`);
-  }, [firestore, room.id]);
-
-  const { data: participants, isLoading } = useCollection<BattleParticipation>(participantsRef);
-
+export default function QuizResults({ room, isTeacher, participants, isLoading }: QuizResultsProps) {
+  
   if (isLoading) {
      return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
@@ -116,7 +105,7 @@ export default function QuizResults({ room, isTeacher }: QuizResultsProps) {
           )}
 
           <div className="text-center pt-4">
-            <Link href="/" passHref>
+            <Link href={isTeacher ? "/teacher/dashboard" : "/student/dashboard"} passHref>
               <Button size="lg">
                 <Home className="mr-2 h-5 w-5" />
                 Return to Dashboard

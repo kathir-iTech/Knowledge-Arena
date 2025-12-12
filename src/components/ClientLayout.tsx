@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -32,20 +31,16 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // If there's no user and they are not on the public login page, force them there.
   if (!user && !isPublicPage) {
     redirect('/');
     return null;
   }
   
-  // If there is no user and they are on the public login page, show it.
   if (!user && isPublicPage) {
     return <>{children}</>;
   }
   
-  // If there is a user
   if (user) {
-    // and they are on the root login page, redirect them to their dashboard
     if (pathname === '/') {
        if (user.role === 'Teacher') {
         redirect('/teacher/dashboard');
@@ -55,7 +50,6 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       return null;
     }
 
-    // Role-based protection for authenticated users
     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
     const isStudentPage = pathname.startsWith('/student') || pathname.startsWith('/battle');
 
@@ -69,7 +63,6 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
        return null;
     }
     
-    // Otherwise, show the authenticated layout with the sidebar.
     return (
       <SidebarProvider>
         <AppSidebar />
@@ -78,6 +71,5 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Fallback for any unhandled case (should not be reached)
   return <>{children}</>;
 }
