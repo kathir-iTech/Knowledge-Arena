@@ -165,7 +165,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <Card className="w-full max-w-4xl border-accent/50 shadow-lg shadow-accent/10">
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <CardTitle className="text-2xl font-headline text-primary">{room.quiz.title}</CardTitle>
             {isTeacher ? (
                  <div className="flex items-center gap-2 text-lg font-mono">

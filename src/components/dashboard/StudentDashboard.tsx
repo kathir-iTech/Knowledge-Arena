@@ -100,31 +100,34 @@ export default function StudentDashboard() {
         <p className="text-muted-foreground">Welcome, Gladiator {user.name}. Your next challenge awaits.</p>
       </header>
 
-       <Card className="max-w-md mx-auto border-accent/50 shadow-lg shadow-accent/10">
-        <CardHeader>
-          <CardTitle className="font-headline text-center text-2xl">Enter the Arena</CardTitle>
-          <CardDescription className="text-center">Enter the code provided by your teacher to join the battle.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleJoinBattle} className="space-y-4">
-            <Input
-              value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value)}
-              placeholder="ENTER ROOM CODE"
-              className="text-center text-2xl h-14 tracking-widest font-mono"
-              maxLength={6}
-            />
-            <Button type="submit" className="w-full text-lg h-12" disabled={isLoading || roomCode.length < 6}>
-              {isLoading ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                <Swords className="mr-2 h-5 w-5" />
-              )}
-              Join Battle
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+       <div className="flex justify-center">
+         <Card className="w-full max-w-md border-accent/50 shadow-lg shadow-accent/10">
+          <CardHeader>
+            <CardTitle className="font-headline text-center text-2xl">Enter the Arena</CardTitle>
+            <CardDescription className="text-center">Enter the code provided by your teacher to join the battle.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleJoinBattle} className="space-y-4">
+              <Input
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value)}
+                placeholder="ROOM CODE"
+                className="text-center text-2xl h-14 tracking-widest font-mono uppercase"
+                maxLength={6}
+                autoCapitalize="characters"
+              />
+              <Button type="submit" className="w-full text-lg h-12" disabled={isLoading || roomCode.length < 6}>
+                {isLoading ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                ) : (
+                  <Swords className="mr-2 h-5 w-5" />
+                )}
+                Join Battle
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+       </div>
     </div>
   );
 }

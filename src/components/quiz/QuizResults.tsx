@@ -47,38 +47,43 @@ export default function QuizResults({ room, isTeacher, participants, isLoading }
         <CardContent className="space-y-6">
           {rankedPlayers.length > 0 ? (
             <>
-            <div className="flex justify-center items-end gap-4 md:gap-8">
-                {rankedPlayers.slice(0, 3).map((player, index) => {
-                    const rank = index + 1;
-                    let orderClass = '';
-                    let scaleClass = '';
-                    if (rank === 1) {
-                        orderClass = 'order-2';
-                        scaleClass = 'scale-110';
-                    } else if (rank === 2) {
-                        orderClass = 'order-1';
-                    } else {
-                        orderClass = 'order-3';
-                    }
-                  return (
-                  <div
-                    key={player.studentId}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-lg bg-secondary ${orderClass} ${scaleClass}`}
-                  >
-                    {getRankIcon(rank)}
-                    <Avatar className="h-20 w-20 border-4 border-primary">
-                      <AvatarFallback className="text-4xl bg-muted">{player.studentAvatar}</AvatarFallback>
+            <div className="flex justify-center items-end gap-2 md:gap-4 p-4">
+                {rankedPlayers.slice(1, 2).map((player) => (
+                  <div key={player.studentId} className="flex flex-col items-center gap-2 p-2 md:p-4 rounded-lg bg-secondary order-2 md:order-1">
+                    {getRankIcon(2)}
+                    <Avatar className="h-16 w-16 md:h-20 md:w-20 border-4 border-slate-400">
+                      <AvatarFallback className="text-3xl md:text-4xl bg-muted">{player.studentAvatar}</AvatarFallback>
                     </Avatar>
-                    <span className="font-bold text-lg text-center">{player.studentName}</span>
-                    <span className="font-mono text-primary">{player.totalScore} pts</span>
+                    <span className="font-bold text-sm md:text-lg text-center max-w-20 truncate">{player.studentName}</span>
+                    <span className="font-mono text-primary text-xs md:text-base">{player.totalScore} pts</span>
                   </div>
-                )})}
-              </div>
+                ))}
+                {rankedPlayers.slice(0, 1).map((player) => (
+                    <div key={player.studentId} className="flex flex-col items-center gap-2 p-3 md:p-6 rounded-lg bg-secondary order-1 md:order-2 scale-110">
+                        {getRankIcon(1)}
+                        <Avatar className="h-20 w-20 md:h-24 md:w-24 border-4 border-yellow-400">
+                            <AvatarFallback className="text-4xl md:text-5xl bg-muted">{player.studentAvatar}</AvatarFallback>
+                        </Avatar>
+                        <span className="font-bold text-base md:text-xl text-center max-w-24 truncate">{player.studentName}</span>
+                        <span className="font-mono text-primary text-sm md:text-lg">{player.totalScore} pts</span>
+                    </div>
+                ))}
+                {rankedPlayers.slice(2, 3).map((player) => (
+                    <div key={player.studentId} className="flex flex-col items-center gap-2 p-2 md:p-4 rounded-lg bg-secondary order-3">
+                        {getRankIcon(3)}
+                        <Avatar className="h-16 w-16 md:h-20 md:w-20 border-4 border-yellow-600">
+                            <AvatarFallback className="text-3xl md:text-4xl bg-muted">{player.studentAvatar}</AvatarFallback>
+                        </Avatar>
+                        <span className="font-bold text-sm md:text-lg text-center max-w-20 truncate">{player.studentName}</span>
+                        <span className="font-mono text-primary text-xs md:text-base">{player.totalScore} pts</span>
+                    </div>
+                ))}
+            </div>
               
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[100px] text-center">Rank</TableHead>
+                    <TableHead className="w-[80px] text-center">Rank</TableHead>
                     <TableHead>Gladiator</TableHead>
                     <TableHead className="text-right">Score</TableHead>
                   </TableRow>

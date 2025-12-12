@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -278,23 +279,26 @@ export function QuizCreatorForm() {
           </Card>
         ))}
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() =>
-            append({ id: uuidv4(), text: '', options: ['', ''], correctAnswerIndex: -1, timer: 30 })
-          }
-        >
-          <PlusCircle className="mr-2 h-4 w-4" /> Add Question
-        </Button>
-        
-        <Button type="submit" className="w-full text-lg h-12" disabled={isSubmitting}>
-          {isSubmitting ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          ) : (
-             'Create Quiz'
-          )}
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                append({ id: uuidv4(), text: '', options: ['', ''], correctAnswerIndex: -1, timer: 30 })
+              }
+              className="w-full sm:w-auto"
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Question
+            </Button>
+            
+            <Button type="submit" className="w-full sm:w-auto flex-grow text-lg h-12" disabled={isSubmitting}>
+              {isSubmitting ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                 'Create Battle & Start'
+              )}
+            </Button>
+        </div>
       </form>
     </Form>
   );

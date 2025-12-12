@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useAuth } from '@/hooks/useAuth';
@@ -11,7 +12,7 @@ export default function Home() {
   
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
+      <div className="flex items-center justify-center h-screen bg-background p-4">
         <div className="flex flex-col items-center gap-4">
           <BrainCircuit className="w-16 h-16 text-primary mx-auto animate-pulse" />
           <h1 className="text-2xl font-headline text-primary">KNOWLEDGE ARENA</h1>

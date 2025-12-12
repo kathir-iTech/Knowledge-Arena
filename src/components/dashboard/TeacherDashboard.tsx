@@ -164,34 +164,38 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
 
     return (
         <Card className="bg-secondary/50">
-            <CardHeader className="flex flex-row items-start sm:items-center justify-between">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex-1">
                     <CardTitle className="text-xl font-headline">
                         {room.quiz?.title || 'Untitled Battle'}
                     </CardTitle>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center flex-wrap gap-2 mt-1">
                         <div className="flex items-center gap-1 text-muted-foreground">
-                            <span>Room Code:</span>
+                            <span>Code:</span>
                             <span className="font-mono text-primary">{room.id}</span>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyToClipboard(room.id)}>
                                 <Copy className="w-4 h-4"/>
                             </Button>
                         </div>
                         <Badge variant={getStatusVariant(room.status)}>{room.status}</Badge>
+                         <div className="flex items-center gap-2 text-muted-foreground">
+                            <Users className="w-5 h-5"/>
+                            <span>{participants.length || room.participantCount || 0}</span>
+                        </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-4 mt-2 sm:mt-0">
+                <div className="flex items-center gap-2 self-start sm:self-center">
                     {room.status === 'in-progress' && (
-                        <Button variant="outline" onClick={handleFinishBattle}>
-                           Finish Battle
+                        <Button variant="outline" size="sm" onClick={handleFinishBattle}>
+                           Finish
                         </Button>
                     )}
                      {room.status === 'finished' && (
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="secondary" disabled={isResetting}>
-                                    {isResetting ? <Loader2 className="animate-spin" /> : <RefreshCw className="mr-2" />}
-                                    Reset Battle
+                                <Button variant="secondary" size="sm" disabled={isResetting}>
+                                    {isResetting ? <Loader2 className="animate-spin w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                                    <span className='ml-2 hidden sm:inline'>Reset</span>
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
@@ -211,14 +215,10 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                             </AlertDialogContent>
                         </AlertDialog>
                     )}
-                     <div className="flex items-center gap-2 text-muted-foreground">
-                        <Users className="w-5 h-5"/>
-                        <span>{participants.length || room.participantCount || 0}</span>
-                    </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="icon" disabled={isDeleting}>
-                           <Trash2 />
+                        <Button variant="destructive" size="icon" className='h-9 w-9' disabled={isDeleting}>
+                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
@@ -248,7 +248,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                                 {isLoadingParticipants ? <Loader2 className="mx-auto my-4 animate-spin" /> : (
                                     <div className="space-y-2">
                                         {participants.length > 0 ? participants.map((p, index) => (
-                                        <div key={p.id} className="flex items-center justify-between p-2 rounded-md bg-background/50">
+                                        <div key={p.id} className="flex items-center justify-between p-2 rounded-md bg-background/50 flex-wrap gap-2">
                                             <div className="flex items-center gap-3">
                                                 <span className="font-bold w-6 text-center">{index + 1}</span>
                                                 <Avatar className="h-8 w-8">
@@ -266,7 +266,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                                                             Reset
                                                         </Button>
                                                     )}
-                                                    <div className="flex items-center gap-2 font-mono text-primary">
+                                                    <div className="flex items-center gap-2 font-mono text-primary text-sm">
                                                         <Trophy className="w-4 h-4 text-yellow-400" />
                                                         {p.totalScore} pts
                                                     </div>
@@ -331,13 +331,13 @@ export default function TeacherDashboard() {
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-3">
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                     <CardTitle>Your Battles</CardTitle>
                     <CardDescription>Manage your active sessions or review past results.</CardDescription>
                 </div>
                  <Link href="/create-quiz" passHref>
-                    <Button>
+                    <Button className='w-full md:w-auto'>
                         <PlusCircle className="mr-2" />
                         Create New Quiz
                     </Button>
@@ -362,7 +362,3 @@ export default function TeacherDashboard() {
     </div>
   );
 }
-
-    
-
-    
