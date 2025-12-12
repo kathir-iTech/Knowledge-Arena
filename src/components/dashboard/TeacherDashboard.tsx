@@ -9,7 +9,7 @@ import { useFirestore } from '@/firebase';
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw, Rocket } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -30,6 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { Badge } from '@/components/ui/badge';
 
 const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
     const [participants, setParticipants] = useState<BattleParticipation[]>([]);
@@ -39,12 +40,11 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
     const { toast } = useToast();
 
     const fetchParticipants = async () => {
-        if (!firestore || participants.length > 0) return;
+        if (!firestore || (participants.length > 0 && room.status === 'finished')) return;
         setIsLoadingParticipants(true);
         try {
             const participantsQuery = query(
                 collection(firestore, 'battleRooms', room.id, 'participants'),
-                // orderBy('totalScore', 'desc') // This requires an index, so we sort client-side
             );
             const snapshot = await getDocs(participantsQuery);
             const participantsData = snapshot.docs.map(doc => doc.data() as BattleParticipation);
@@ -98,6 +98,15 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         }
     }
     
+    const getStatusVariant = (status: BattleRoom['status']) => {
+        switch (status) {
+            case 'waiting': return 'secondary';
+            case 'in-progress': return 'default';
+            case 'finished': return 'outline';
+            default: return 'outline';
+        }
+    }
+
     return (
         <Card className="bg-secondary/50">
             <CardHeader className="flex flex-row items-start sm:items-center justify-between">
@@ -105,9 +114,20 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                     <CardTitle className="text-xl font-headline">
                         {room.quiz?.title || 'Untitled Battle'}
                     </CardTitle>
-                    <CardDescription>Room Code: <span className="font-mono text-primary">{room.id}</span></CardDescription>
+                    <div className="flex items-center gap-2 mt-1">
+                        <CardDescription>Room Code: <span className="font-mono text-primary">{room.id}</span></CardDescription>
+                        <Badge variant={getStatusVariant(room.status)}>{room.status}</Badge>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4 mt-2 sm:mt-0">
+                    {room.status === 'waiting' && (
+                        <Link href={`/battle/${room.id}`} passHref>
+                             <Button variant="outline">
+                                <Rocket className="mr-2" />
+                                Start Battle
+                            </Button>
+                        </Link>
+                    )}
                      <div className="flex items-center gap-2 text-muted-foreground">
                         <Users className="w-5 h-5"/>
                         <span>{participants.length || room.participantCount || 0}</span>
@@ -136,45 +156,47 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                     </AlertDialog>
                 </div>
             </CardHeader>
-             <CardContent>
-                <Accordion type="single" collapsible onValueChange={() => { if(!participants.length) fetchParticipants() }}>
-                    <AccordionItem value="item-1">
-                        <AccordionTrigger>View Leaderboard & Attempts</AccordionTrigger>
-                        <AccordionContent>
-                            {isLoadingParticipants ? <Loader2 className="mx-auto my-4 animate-spin" /> : (
-                                <div className="space-y-2">
-                                    {participants.length > 0 ? participants.map((p, index) => (
-                                       <div key={p.id} className="flex items-center justify-between p-2 rounded-md bg-background/50">
-                                           <div className="flex items-center gap-3">
-                                              <span className="font-bold w-6 text-center">{index + 1}</span>
-                                              <Avatar className="h-8 w-8">
-                                                <AvatarFallback className="text-lg bg-muted">{p.studentAvatar}</AvatarFallback>
-                                              </Avatar>
-                                              <div className='flex flex-col'>
-                                                <span>{p.studentName}</span>
-                                                {p.isBlocked && <span className="text-xs text-destructive">Blocked (Malpractice)</span>}
-                                              </div>
-                                           </div>
-                                           <div className="flex items-center gap-2">
-                                                {p.isBlocked && (
-                                                     <Button variant="outline" size="sm" onClick={() => resetStudentAttempt(p.id)}>
-                                                        <RefreshCw className="w-3 h-3 mr-1" />
-                                                        Reset
-                                                    </Button>
-                                                )}
-                                                <div className="flex items-center gap-2 font-mono text-primary">
-                                                    <Trophy className="w-4 h-4 text-yellow-400" />
-                                                    {p.totalScore} pts
+             {room.status !== 'waiting' && (
+                 <CardContent>
+                    <Accordion type="single" collapsible onValueChange={() => { if(!participants.length) fetchParticipants() }}>
+                        <AccordionItem value="item-1">
+                            <AccordionTrigger>View Leaderboard & Attempts</AccordionTrigger>
+                            <AccordionContent>
+                                {isLoadingParticipants ? <Loader2 className="mx-auto my-4 animate-spin" /> : (
+                                    <div className="space-y-2">
+                                        {participants.length > 0 ? participants.map((p, index) => (
+                                        <div key={p.id} className="flex items-center justify-between p-2 rounded-md bg-background/50">
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-bold w-6 text-center">{index + 1}</span>
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarFallback className="text-lg bg-muted">{p.studentAvatar}</AvatarFallback>
+                                                </Avatar>
+                                                <div className='flex flex-col'>
+                                                    <span>{p.studentName}</span>
+                                                    {p.isBlocked && <span className="text-xs text-destructive">Blocked (Malpractice)</span>}
                                                 </div>
-                                           </div>
-                                       </div>
-                                    )) : <p className="text-center text-muted-foreground">No participants recorded for this battle.</p>}
-                                </div>
-                            )}
-                        </AccordionContent>
-                    </AccordionItem>
-                </Accordion>
-             </CardContent>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                    {p.isBlocked && (
+                                                        <Button variant="outline" size="sm" onClick={() => resetStudentAttempt(p.id)}>
+                                                            <RefreshCw className="w-3 h-3 mr-1" />
+                                                            Reset
+                                                        </Button>
+                                                    )}
+                                                    <div className="flex items-center gap-2 font-mono text-primary">
+                                                        <Trophy className="w-4 h-4 text-yellow-400" />
+                                                        {p.totalScore} pts
+                                                    </div>
+                                            </div>
+                                        </div>
+                                        )) : <p className="text-center text-muted-foreground">No participants recorded for this battle.</p>}
+                                    </div>
+                                )}
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+                </CardContent>
+             )}
         </Card>
     );
 }
@@ -230,7 +252,7 @@ export default function TeacherDashboard() {
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                     <CardTitle>Your Battles</CardTitle>
-                    <CardDescription>Review results and manage your previously hosted battles.</CardDescription>
+                    <CardDescription>Manage your active sessions or review past results.</CardDescription>
                 </div>
                  <Link href="/create-quiz" passHref>
                     <Button>
@@ -258,3 +280,5 @@ export default function TeacherDashboard() {
     </div>
   );
 }
+
+    
