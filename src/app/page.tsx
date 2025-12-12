@@ -27,8 +27,10 @@ export default function Home() {
     } else {
       redirect('/student/dashboard');
     }
+    return null; // Render nothing while redirecting
   }
 
+  // If no user and not loading, always show the LoginForm.
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
       <div className="w-full max-w-md space-y-6">

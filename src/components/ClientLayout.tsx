@@ -2,24 +2,19 @@
 "use client";
 
 import React from 'react';
-import { useUser } from '@/firebase';
+import { useAuth } from '@/hooks/useAuth';
 import { usePathname, redirect } from 'next/navigation';
 import AppSidebar from '@/components/AppSidebar';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { Skeleton } from './ui/skeleton';
 import { BrainCircuit } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { user: firebaseUser, isUserLoading } = useUser();
-  const { user: contextUser, isLoading: isAuthContextLoading } = useAuth();
-  
-  const isLoading = isUserLoading || isAuthContextLoading;
-  const user = contextUser || (firebaseUser ? { id: firebaseUser.uid, email: firebaseUser.email || '', name: firebaseUser.displayName || 'User', role: 'Student', avatar: '🧑‍💻' } : null);
-  const isAuthenticated = !!user;
+  const { user, isLoading } = useAuth();
   const pathname = usePathname();
   
-  const userRole = contextUser?.role;
+  const isPublicPage = pathname === '/';
+  const specialPages = ['/kicked', '/cheating-detected'];
 
   if (isLoading) {
     return (
@@ -33,57 +28,56 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const publicPages = ['/'];
-  const isPublicPage = publicPages.includes(pathname);
-  
-  // These pages are standalone and should not have the main layout
-  const specialPages = ['/kicked', '/cheating-detected'];
   if (specialPages.includes(pathname)) {
-      return <>{children}</>;
+    return <>{children}</>;
   }
 
-  // If user is NOT authenticated:
-  if (!isAuthenticated) {
-    // If they are not on the public home/login page, redirect them there.
-    if (!isPublicPage) {
-      redirect('/');
-      return null;
-    }
-    // Otherwise, show the public page (the login form).
+  // If there's no user and they are not on the public login page, force them there.
+  if (!user && !isPublicPage) {
+    redirect('/');
+    return null;
+  }
+  
+  // If there is no user and they are on the public login page, show it.
+  if (!user && isPublicPage) {
     return <>{children}</>;
   }
   
-  // If user IS authenticated:
-  if (pathname === '/') {
-     if (userRole === 'Teacher') {
-      redirect('/teacher/dashboard');
-    } else {
-      redirect('/student/dashboard');
+  // If there is a user
+  if (user) {
+    // and they are on the root login page, redirect them to their dashboard
+    if (pathname === '/') {
+       if (user.role === 'Teacher') {
+        redirect('/teacher/dashboard');
+      } else {
+        redirect('/student/dashboard');
+      }
+      return null;
     }
-    return null; // Show loading or nothing while redirecting
-  }
-  
-  // Role-based routing protection for authenticated users on protected pages
-  if (userRole) {
+
+    // Role-based protection for authenticated users
     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
     const isStudentPage = pathname.startsWith('/student') || pathname.startsWith('/battle');
 
-    if (userRole === 'Teacher' && isStudentPage) {
+    if (user.role === 'Teacher' && isStudentPage) {
        redirect('/teacher/dashboard');
        return null;
     }
     
-    if (userRole === 'Student' && isTeacherPage) {
+    if (user.role === 'Student' && isTeacherPage) {
        redirect('/student/dashboard');
        return null;
     }
+    
+    // Otherwise, show the authenticated layout with the sidebar.
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>{children}</SidebarInset>
+      </SidebarProvider>
+    );
   }
 
-  // If authenticated and on a protected page, show the main layout with sidebar
-  return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>{children}</SidebarInset>
-    </SidebarProvider>
-  );
+  // Fallback for any unhandled case (should not be reached)
+  return <>{children}</>;
 }
