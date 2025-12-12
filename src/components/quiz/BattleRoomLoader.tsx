@@ -37,12 +37,13 @@ export default function BattleRoomLoader() {
   // For Teachers (or anyone viewing results): Reference to the entire participants collection
   const participantsCollectionRef = useMemo(() => {
     if (!firestore || !roomCode) return null;
-    // Allow fetching if teacher, or if the room is finished, or if student has finished
-    if (isTeacher || room?.status === 'finished' || studentParticipation?.status === 'finished') {
+    // Allow fetching only if teacher, or if the room is finished.
+    // A student who finishes early cannot see the full leaderboard until the entire room is 'finished'.
+    if (isTeacher || room?.status === 'finished') {
        return collection(firestore, `battleRooms/${roomCode}/participants`);
     }
     return null;
-  }, [firestore, roomCode, isTeacher, room?.status, studentParticipation?.status]);
+  }, [firestore, roomCode, isTeacher, room?.status]);
   const { data: allParticipants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsCollectionRef);
   
   useEffect(() => {
@@ -96,7 +97,9 @@ export default function BattleRoomLoader() {
   // If a student has finished their questions, but the overall battle is still in-progress, show them the results page early.
   // They will see their own rank, and the leaderboard will update as other players finish.
   if (studentParticipation?.status === 'finished') {
-    return <QuizResults room={room} isTeacher={isTeacher} participants={allParticipants || []} isLoading={areParticipantsLoading} />;
+    // Pass only their own data if the full leaderboard isn't available yet.
+    const participantsToShow = allParticipants || [studentParticipation];
+    return <QuizResults room={room} isTeacher={isTeacher} participants={participantsToShow} isLoading={areParticipantsLoading} />;
   }
 
   // If we reach here, the battle is 'in-progress' and the student is 'playing'.

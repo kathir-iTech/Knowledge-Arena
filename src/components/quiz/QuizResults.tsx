@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Crown, Home, Loader2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface QuizResultsProps {
   room: BattleRoom;
@@ -18,6 +19,7 @@ interface QuizResultsProps {
 }
 
 export default function QuizResults({ room, isTeacher, participants, isLoading }: QuizResultsProps) {
+  const { user } = useAuth();
   
   if (isLoading) {
      return (
@@ -37,12 +39,27 @@ export default function QuizResults({ room, isTeacher, participants, isLoading }
     return <span className="text-sm font-bold">{rank}</span>;
   };
 
+  const isPodiumPlayer = (player: BattleParticipation) => {
+    const rank = rankedPlayers.findIndex(p => p.id === player.id);
+    return rank >= 0 && rank < 3;
+  };
+
+  const isFullLeaderboard = room.status === 'finished' || isTeacher;
+
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8">
       <Card className="w-full max-w-4xl border-primary/50 shadow-lg shadow-primary/10">
         <CardHeader className="text-center">
-          <CardTitle className="text-4xl font-headline text-primary">Battle Over!</CardTitle>
-          <CardDescription>The results are in for "{room.quiz.title}".</CardDescription>
+          <CardTitle className="text-4xl font-headline text-primary">
+            {isFullLeaderboard ? 'Battle Over!' : 'You Finished!'}
+          </CardTitle>
+          <CardDescription>
+            {isFullLeaderboard 
+              ? `The results are in for "${room.quiz.title}".`
+              : 'Waiting for other gladiators to complete the challenge.'
+            }
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {rankedPlayers.length > 0 ? (
@@ -90,7 +107,7 @@ export default function QuizResults({ room, isTeacher, participants, isLoading }
                 </TableHeader>
                 <TableBody>
                   {rankedPlayers.map((player, index) => (
-                    <TableRow key={player.studentId} className={index < 3 ? 'bg-secondary/50' : ''}>
+                    <TableRow key={player.studentId} className={cn(user && player.id === user.id ? 'bg-primary/10' : '', index < 3 && 'bg-secondary/50')}>
                       <TableCell className="text-center font-bold">{index + 1}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -105,6 +122,9 @@ export default function QuizResults({ room, isTeacher, participants, isLoading }
                   ))}
                 </TableBody>
               </Table>
+              {!isFullLeaderboard && (
+                <p className="text-center text-xs text-muted-foreground">The leaderboard will update in real-time as other players finish.</p>
+              )}
             </>
           ) : (
              <p className="text-center text-muted-foreground py-8">No participants were recorded for this battle.</p>
