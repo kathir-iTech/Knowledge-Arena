@@ -36,7 +36,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const publicPages = ['/'];
   const isPublicPage = publicPages.includes(pathname);
 
-  // If user is not authenticated and not on a public page, redirect to home
+  // If user is not authenticated and trying to access a protected page, redirect to home/login.
   if (!isAuthenticated && !isPublicPage) {
     redirect('/');
     return null;
@@ -58,11 +58,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return null; // Show loading or nothing while redirecting
   }
 
-  // If on a public page (like login), just render children without sidebar
-  if (isPublicPage) {
+  // If a non-authenticated user is on the home page, show the login form.
+  if (!isAuthenticated && isPublicPage) {
     return <>{children}</>;
   }
-
+  
   // Role-based routing protection for authenticated users
   if (isAuthenticated && userRole) {
     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
@@ -79,7 +79,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
-
+  // If authenticated and not on a special/public page, show the main layout with sidebar
   return (
     <SidebarProvider>
       <AppSidebar />
