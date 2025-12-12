@@ -29,10 +29,12 @@ export default function BattleRoomLoader() {
 
   const isTeacher = !!user && !!room && user.id === room.teacherId;
 
+  // This collection listener is now for BOTH teacher and student, to get live updates for the room.
+  // We will conditionally use the participants data only if the user is a teacher.
   const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !roomCode || !isTeacher) return null;
+    if (!firestore || !roomCode) return null;
     return collection(firestore, `battleRooms/${roomCode}/participants`);
-  }, [firestore, roomCode, isTeacher]);
+  }, [firestore, roomCode]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
@@ -56,6 +58,7 @@ export default function BattleRoomLoader() {
     }
   };
 
+  // Consolidate loading states
   const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading) || (!isTeacher && isStudentParticipationLoading);
 
   if (isLoading) {
@@ -84,14 +87,11 @@ export default function BattleRoomLoader() {
      )
   }
   
-  // This check MUST come before the status switch.
-  // It handles the student's own participation record not existing yet or being blocked.
   if (!isTeacher) {
     if (studentParticipation?.isBlocked) {
         router.push('/kicked');
         return null;
     }
-     // If still loading participation, show loader. If not loading and still no doc, student failed to join.
     if (!studentParticipation && !isStudentParticipationLoading) {
       router.push('/cheating-detected');
       return null;
@@ -103,7 +103,7 @@ export default function BattleRoomLoader() {
       return (
         <WaitingRoom
           room={room}
-          participants={participants || []} 
+          participants={participants || []} // Always pass the live participants list
           onStartBattle={handleStartBattle}
           isTeacher={isTeacher}
         />
