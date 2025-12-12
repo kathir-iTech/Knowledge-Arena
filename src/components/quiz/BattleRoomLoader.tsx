@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useDoc, useCollection, useFirestore } from '@/firebase';
@@ -46,6 +47,26 @@ export default function BattleRoomLoader() {
     }
   };
 
+  useEffect(() => {
+    if (isRoomLoading || isAuthLoading || !room || !user) return;
+
+    // Handle redirects as a side effect
+    if (room.status === 'waiting') {
+      if (isTeacher) {
+        router.push('/teacher/dashboard');
+      } else {
+        router.push('/student/dashboard');
+      }
+    } else if (room.status === 'in-progress') {
+      if (!isTeacher && studentParticipation?.isBlocked) {
+        router.push('/kicked');
+      } else if (!isTeacher && !studentParticipation && !areParticipantsLoading) {
+        router.push('/cheating-detected');
+      }
+    }
+  }, [room, user, isTeacher, studentParticipation, isRoomLoading, isAuthLoading, areParticipantsLoading, router]);
+
+
   const isLoading = isAuthLoading || isRoomLoading;
 
   if (isLoading) {
@@ -72,25 +93,12 @@ export default function BattleRoomLoader() {
     return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
   }
 
-  if (room.status === 'in-progress' && !isTeacher && studentParticipation?.isBlocked) {
-    router.push('/kicked');
-    return null;
-  }
-  
-  if (room.status === 'in-progress' && !isTeacher && !studentParticipation && !areParticipantsLoading) {
-      router.push('/cheating-detected');
-      return null;
+  // Render a loading state while redirecting
+  if (room.status === 'waiting' || (room.status === 'in-progress' && !isTeacher && (studentParticipation?.isBlocked || (!studentParticipation && !areParticipantsLoading)))) {
+      return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>;
   }
   
   switch (room.status) {
-    case 'waiting': // This case should no longer be hit by students directly
-       if(isTeacher) {
-            router.push('/teacher/dashboard'); // Teachers manage from dashboard now
-       } else {
-            router.push('/student/dashboard'); // Students should not be in a waiting room
-       }
-       return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>;
-
     case 'in-progress':
       return (
         <LiveBattle
