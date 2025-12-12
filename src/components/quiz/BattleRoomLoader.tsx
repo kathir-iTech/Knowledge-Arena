@@ -29,17 +29,20 @@ export default function BattleRoomLoader() {
 
   const isTeacher = room && user ? user.id === room.teacherId : false;
 
-  // This is the key change: This hook now runs for BOTH teacher and student when in the waiting room.
+  // This is the key change: This hook now runs for BOTH teacher and student when in the waiting room or finished.
   // The security rules have been updated to allow 'list' for anyone in a 'waiting' or 'finished' room.
-  // This simplifies the logic and ensures the participant list is live for everyone in the waiting room.
+  // The teacher also gets the list when the game is 'in-progress' for the live leaderboard.
   const participantsRef = useMemo(() => {
-    if (!firestore || !roomCode || (room?.status !== 'waiting' && !isTeacher)) return null;
-    return collection(firestore, `battleRooms/${roomCode}/participants`);
+    if (!firestore || !roomCode) return null;
+    if (room?.status === 'waiting' || room?.status === 'finished' || (isTeacher && room?.status === 'in-progress')) {
+      return collection(firestore, `battleRooms/${roomCode}/participants`);
+    }
+    return null;
   }, [firestore, roomCode, room?.status, isTeacher]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
-  // This hook is now ONLY for the student's individual data during the 'in-progress' state.
+  // This hook is ONLY for the student's individual data during the 'in-progress' state.
   const studentParticipationRef = useMemo(() => {
     if (!firestore || !roomCode || !user || isTeacher || room?.status !== 'in-progress') return null;
     return doc(firestore, 'battleRooms', roomCode as string, 'participants', user.id);
@@ -64,8 +67,10 @@ export default function BattleRoomLoader() {
   const isLoading = 
     isAuthLoading || 
     isRoomLoading ||
+    (!room) || // if room is not loaded yet, we are loading
     (room?.status === 'waiting' && areParticipantsLoading) ||
-    (room?.status === 'in-progress' && !isTeacher && isStudentParticipationLoading);
+    (isTeacher && room?.status === 'in-progress' && areParticipantsLoading) ||
+    (!isTeacher && room?.status === 'in-progress' && isStudentParticipationLoading);
 
 
   if (isLoading) {
@@ -123,7 +128,7 @@ export default function BattleRoomLoader() {
           room={room}
           user={user}
           participation={studentParticipation}
-          allParticipants={participants}
+          allParticipants={participants} // Pass live participants list to teacher
           onFinishBattle={handleFinishBattle}
           isTeacher={isTeacher}
         />
