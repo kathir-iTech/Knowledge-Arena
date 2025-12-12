@@ -32,54 +32,41 @@ service cloud.firestore {
     }
 
     // USER PROFILES
-    // Users can create their own profile upon signup.
-    // Users can read and update their own profile data (e.g., avatar).
-    // Any signed-in user can read another user's profile (needed for displaying names/avatars in leaderboards).
     match /users/{userId} {
       allow create: if isOwner(userId);
       allow get: if isSignedIn();
       allow update: if isOwner(userId);
-      allow delete: if false; // Do not allow users to delete their profiles.
+      allow delete: if false;
     }
 
     // BATTLE ROOMS
-    // Only teachers can create battle rooms.
-    // The hosting teacher can update the room status (start/finish) or delete the room.
-    // Any signed-in user can read a room to join it or view its status.
     match /battleRooms/{roomId} {
-      allow get: if isSignedIn();
-      allow list: if isTeacher(); // Only teachers can list rooms on their dashboard.
+      allow get: if isSignedIn(); // Allow any signed-in user to read a room doc
+      allow list: if isTeacher(); 
       allow create: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
       allow update, delete: if isRoomTeacher(roomId);
     }
     
     // BATTLE PARTICIPANTS
-    // A student can create their own participation record to join a battle.
-    // A student can update their own record to submit answers.
-    // The hosting teacher can read all participant data.
-    // ANYONE can read the full participant list for a FINISHED or WAITING battle.
     match /battleRooms/{roomId}/participants/{participantId} {
-      allow get: if isSignedIn(); 
+      allow get: if isSignedIn(); // Allow reading single participant doc
       allow list: if isRoomTeacher(roomId) || isRoomFinished(roomId);
       allow create: if isOwner(participantId);
       
       allow update: if isSignedIn() && (
         // Case 1: Student updating their own answers and score.
-        // They can change their answers array and total score, but not other sensitive fields.
         (isOwner(participantId) && 
          isRoomInProgress(roomId) &&
          request.resource.data.isBlocked == resource.data.isBlocked &&
          request.resource.data.malpracticeCount == resource.data.malpracticeCount
         ) ||
         // Case 1.1: Student's client reports malpractice.
-        // It can increment the count by 1 and set isBlocked to true.
         (isOwner(participantId) && 
          isRoomInProgress(roomId) &&
          request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
          request.resource.data.isBlocked == true
         ) ||
         // Case 2: Teacher resetting a student's malpractice block.
-        // Teacher can set isBlocked to false and reset malpracticeCount.
         (isRoomTeacher(roomId))
       );
 

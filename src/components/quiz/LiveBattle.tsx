@@ -1,8 +1,9 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
+import { useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { BattleRoom, User, BattleParticipation } from '@/lib/types';
 import { useVisibilityChange } from '@/hooks/useVisibilityChange';
@@ -13,17 +14,17 @@ import { Progress } from '@/components/ui/progress';
 import { Clock, Loader2, CheckCircle, XCircle, Shield, Trophy, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 interface LiveBattleProps {
   room: BattleRoom;
   user: User;
-  participation: BattleParticipation | undefined;
+  participation: BattleParticipation | null | undefined;
   allParticipants: BattleParticipation[] | null;
-  onFinishBattle: () => void;
   isTeacher: boolean;
 }
 
-export default function LiveBattle({ room, user, participation, allParticipants, onFinishBattle, isTeacher }: LiveBattleProps) {
+export default function LiveBattle({ room, user, participation, allParticipants, isTeacher }: LiveBattleProps) {
   const router = useRouter();
   const firestore = useFirestore();
 
@@ -53,6 +54,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
 
   useVisibilityChange(onMalpractice);
 
+  // Effect to reset state when the question changes
   useEffect(() => {
     if(currentQuestion) {
         setTimeLeft(currentQuestion.timer);
@@ -61,6 +63,14 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     }
   }, [currentQuestion]);
   
+  const onFinishBattle = useCallback(() => {
+    if (!isTeacher || !firestore) return;
+    const roomRef = doc(firestore, 'battleRooms', room.id);
+    const finalParticipantCount = allParticipants?.length || 0;
+    updateDocumentNonBlocking(roomRef, { status: 'finished', participantCount: finalParticipantCount });
+  }, [isTeacher, firestore, room.id, allParticipants]);
+
+
   const handleAnswer = useCallback((answerIndex: number | null) => {
     if (showResult || isTeacher || !participation || !firestore || !currentQuestion) return;
     
@@ -68,7 +78,6 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     setSelectedAnswer(answerIndex);
 
     const isCorrect = answerIndex === currentQuestion.correctAnswerIndex;
-    // Score: 50 base points for correct + up to 50 bonus for speed
     const scoreGained = isCorrect ? 50 + Math.floor(timeLeft * (50 / currentQuestion.timer)) : 0;
     
     const newAnswer = {
@@ -78,8 +87,8 @@ export default function LiveBattle({ room, user, participation, allParticipants,
       score: scoreGained,
     };
     
-    const newTotalScore = participation.totalScore + scoreGained;
-    const newAnswers = [...participation.answers, newAnswer];
+    const newTotalScore = (participation.totalScore || 0) + scoreGained;
+    const newAnswers = [...(participation.answers || []), newAnswer];
     
     const participantRef = doc(firestore, 'battleRooms', room.id, 'participants', user.id);
     
@@ -88,22 +97,25 @@ export default function LiveBattle({ room, user, participation, allParticipants,
       totalScore: newTotalScore,
     });
     
+    // Auto-advance for teacher after a delay to show result
     const isLastQuestion = room.currentQuestionIndex >= room.quiz.questions.length - 1;
-
-    setTimeout(() => {
-        if (isLastQuestion && isTeacher) {
-            onFinishBattle();
-        }
-    }, 3000); // Wait 3 seconds before auto-advancing on last question for teacher
+    if (isTeacher) {
+        setTimeout(() => {
+            if (isLastQuestion) {
+                onFinishBattle();
+            }
+        }, 3000); 
+    }
 
   }, [showResult, isTeacher, participation, firestore, currentQuestion, timeLeft, room.id, user.id, room.currentQuestionIndex, room.quiz.questions.length, onFinishBattle]);
   
+  // Timer countdown effect
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (timeLeft > 0 && !showResult && !isTeacher) {
       timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
     } else if (timeLeft === 0 && !showResult && !isTeacher) {
-        handleAnswer(null); // Timeout
+        handleAnswer(null); // Submit timeout as the answer
     }
     return () => clearTimeout(timer);
   }, [timeLeft, showResult, isTeacher, handleAnswer]);
@@ -132,6 +144,16 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   
   if (!currentQuestion) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
+  }
+
+  // This handles the case where a student joins but their participation doc hasn't loaded yet.
+  if (!isTeacher && !participation) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="text-muted-foreground">Preparing your station...</p>
+      </div>
+    );
   }
 
   return (
