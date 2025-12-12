@@ -97,7 +97,9 @@ export default function BattleRoomLoader() {
 
   if (!isTeacher && !studentParticipation) {
      if (!isStudentParticipationLoading) {
-      router.push('/cheating-detected');
+      // This case indicates the participation document might have failed to be created or read.
+      // It's a potential failure point, so we direct them away to avoid getting stuck.
+      router.push('/cheating-detected'); // Using this as a generic failure page
       return null;
     }
     // Still loading participation doc, show loader
