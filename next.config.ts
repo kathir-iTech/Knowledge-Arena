@@ -2,6 +2,13 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
+  experimental: {
+    // This allows the Next.js dev server to accept requests from the
+    // Firebase Studio environment.
+    allowedDevOrigins: [
+      'https://*.cloudworkstations.dev',
+    ],
+  },
   // Adding a comment to force a rebuild and clear cache.
   typescript: {
     ignoreBuildErrors: true,
@@ -24,7 +31,7 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
       {
-        protocol: 'https',
+        protocol: 'https' ,
         hostname: 'picsum.photos',
         port: '',
         pathname: '/**',
