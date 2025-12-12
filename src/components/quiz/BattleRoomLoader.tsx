@@ -29,12 +29,12 @@ export default function BattleRoomLoader() {
 
   const isTeacher = room && user ? user.id === room.teacherId : false;
 
-  // This is the key change: This hook now runs for BOTH teacher and student when in the waiting room or finished.
+  // This hook now runs for BOTH teacher and student when in the waiting room or finished.
   // The security rules have been updated to allow 'list' for anyone in a 'waiting' or 'finished' room.
   // The teacher also gets the list when the game is 'in-progress' for the live leaderboard.
   const participantsRef = useMemo(() => {
-    if (!firestore || !roomCode) return null;
-    if (room?.status === 'waiting' || room?.status === 'finished' || (isTeacher && room?.status === 'in-progress')) {
+    if (!firestore || !roomCode || !room?.status) return null;
+    if (room.status === 'waiting' || room.status === 'finished' || (isTeacher && room.status === 'in-progress')) {
       return collection(firestore, `battleRooms/${roomCode}/participants`);
     }
     return null;
@@ -67,13 +67,12 @@ export default function BattleRoomLoader() {
   const isLoading = 
     isAuthLoading || 
     isRoomLoading ||
-    (!room) || // if room is not loaded yet, we are loading
-    (room?.status === 'waiting' && areParticipantsLoading) ||
-    (isTeacher && room?.status === 'in-progress' && areParticipantsLoading) ||
-    (!isTeacher && room?.status === 'in-progress' && isStudentParticipationLoading);
+    (room && room.status === 'waiting' && areParticipantsLoading) ||
+    (room && isTeacher && room.status === 'in-progress' && areParticipantsLoading) ||
+    (room && !isTeacher && room.status === 'in-progress' && isStudentParticipationLoading);
 
 
-  if (isLoading) {
+  if (isAuthLoading || isRoomLoading || !room) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -82,7 +81,7 @@ export default function BattleRoomLoader() {
     );
   }
   
-  if (roomError || !room) {
+  if (roomError) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">
         <ShieldX className="h-12 w-12 text-destructive" />
@@ -100,7 +99,7 @@ export default function BattleRoomLoader() {
   }
   
   // This check is now more robust for students.
-  if (!isTeacher && studentParticipation?.isBlocked) {
+  if (room.status === 'in-progress' && !isTeacher && studentParticipation?.isBlocked) {
     router.push('/kicked');
     return null;
   }
@@ -123,6 +122,14 @@ export default function BattleRoomLoader() {
         />
       );
     case 'in-progress':
+        if(isLoading) {
+            return (
+                <div className="flex h-screen flex-col items-center justify-center gap-4">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                    <p className="text-muted-foreground">Starting Battle...</p>
+                </div>
+            );
+        }
       return (
         <LiveBattle
           room={room}

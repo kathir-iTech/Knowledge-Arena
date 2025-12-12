@@ -29,6 +29,10 @@ service cloud.firestore {
     function isRoomWaiting(roomId) {
       return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'waiting';
     }
+    
+     function isRoomInProgress(roomId) {
+      return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'in-progress';
+    }
 
     // USER PROFILES
     // Users can create their own profile upon signup.
