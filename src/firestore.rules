@@ -52,9 +52,8 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow list: if isRoomTeacher(roomId) || isRoomFinished(roomId);
       
-      // Allow create if student is creating their own doc.
-      // Prevent re-creating doc if already blocked.
-      allow create: if isOwner(participantId);
+      // Allow create only if the document doesn't exist yet and the student owns it.
+      allow create: if isOwner(participantId) && !exists(/databases/$(database)/documents/battleRooms/$(roomId)/participants/$(participantId));
       
       allow update: if isSignedIn() && (
         // Case 1: Student updating their own progress and score.

@@ -55,7 +55,6 @@ export default function StudentDashboard() {
         return;
       }
       
-      // Check if student is already a participant and if they are blocked
       const participantRef = doc(firestore, 'battleRooms', roomCodeUpper, 'participants', user.id);
       const participantSnap = await getDoc(participantRef);
 
@@ -70,9 +69,17 @@ export default function StudentDashboard() {
               setIsLoading(false);
               return;
           }
+          if (participantData.status === 'finished') {
+            toast({
+                variant: 'destructive',
+                title: 'Battle Already Completed',
+                description: 'You have already completed this battle. You cannot re-enter.',
+            });
+            setIsLoading(false);
+            return;
+        }
       }
       
-      // If not blocked or not a participant yet, create/overwrite the participation document
       const newParticipant: BattleParticipation = {
         id: user.id,
         studentId: user.id,
@@ -87,8 +94,7 @@ export default function StudentDashboard() {
         currentQuestionIndex: 0,
       };
 
-      // Use merge:false to ensure we start fresh if they are rejoining (and not blocked)
-      setDocumentNonBlocking(participantRef, newParticipant, { merge: false });
+      setDocumentNonBlocking(participantRef, newParticipant, { merge: true });
       
       router.push(`/battle/${roomCodeUpper}`);
 
