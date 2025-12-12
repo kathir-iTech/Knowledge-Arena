@@ -59,9 +59,9 @@ export default function BattleRoomLoader() {
     }
   };
 
-  // Consolidate loading states. The component is loading if auth is loading, the room is loading,
+  // The component is loading if auth is loading, the room is loading,
   // or if it's a student and their specific participation doc is still loading.
-  const isLoading = isAuthLoading || isRoomLoading || (!isTeacher && isStudentParticipationLoading);
+  const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading && !participants) || (!isTeacher && isStudentParticipationLoading);
 
 
   if (isLoading) {
@@ -109,7 +109,6 @@ export default function BattleRoomLoader() {
           participants={participants || []} // For teacher view
           onStartBattle={handleStartBattle}
           isTeacher={isTeacher}
-          // The participants list is only loading if it's a teacher
           areParticipantsLoading={isTeacher && areParticipantsLoading}
         />
       );
