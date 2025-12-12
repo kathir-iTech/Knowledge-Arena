@@ -44,7 +44,7 @@ const AppSidebar = () => {
         <SidebarHeader>
           <div className="flex items-center gap-3">
             <BrainCircuit className="w-10 h-10 text-primary" />
-            <span className="text-lg font-headline font-bold text-primary whitespace-nowrap">Knowledge Arena</span>
+            <span className="text-lg font-headline font-bold text-primary whitespace-nowrap hidden group-data-[collapsed=false]:inline">Knowledge Arena</span>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -56,8 +56,8 @@ const AppSidebar = () => {
                         </Avatar>
                    </button>
                     <div className="flex-col items-start hidden group-data-[collapsed=false]:flex">
-                    <span className="font-semibold text-sm whitespace-nowrap">{user.name}</span>
-                    <span className="text-xs text-muted-foreground">{user.role}</span>
+                        <span className="font-semibold text-sm whitespace-nowrap">{user.name}</span>
+                        <span className="text-xs text-muted-foreground">{user.role}</span>
                     </div>
                 </div>
             )}
