@@ -61,7 +61,7 @@ service cloud.firestore {
     match /battleRooms/{roomId}/participants/{participantId} {
       allow get: if isSignedIn(); 
       allow list: if isRoomTeacher(roomId) || isRoomFinished(roomId);
-      allow create: if isOwner(participantId) && isRoomInProgress(roomId);
+      allow create: if isOwner(participantId);
       
       allow update: if isSignedIn() && (
         // Case 1: Student updating their own answers and score.
