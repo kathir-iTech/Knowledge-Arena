@@ -55,7 +55,7 @@ const AppSidebar = () => {
                             <AvatarFallback className="bg-muted text-2xl">{user.avatar}</AvatarFallback>
                         </Avatar>
                    </button>
-                    <div className="flex-col items-start hidden group-data-[collapsed=false]:flex">
+                    <div className="flex flex-col items-start overflow-hidden hidden group-data-[collapsed=false]:flex">
                         <span className="font-semibold text-sm whitespace-nowrap">{user.name}</span>
                         <span className="text-xs text-muted-foreground">{user.role}</span>
                     </div>

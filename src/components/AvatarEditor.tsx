@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -21,7 +22,9 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ isOpen, setIsOpen, c
   const { user, updateAvatar } = useAuth();
 
   const handleSelectAvatar = async (emoji: string) => {
-    await updateAvatar(emoji);
+    if (user) {
+      await updateAvatar(emoji);
+    }
     setIsOpen(false);
   };
 
@@ -30,7 +33,7 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ isOpen, setIsOpen, c
       <DialogContent className="sm:max-w-[425px] bg-card border-border">
         <DialogHeader>
           <DialogTitle className="font-headline text-primary">Choose Your Avatar</DialogTitle>
-           {user && (
+          {user && (
             <p className="text-sm text-muted-foreground">
               Logged in as: <span className="font-semibold text-primary">{user.name}</span>
             </p>
