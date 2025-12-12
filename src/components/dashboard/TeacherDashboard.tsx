@@ -36,6 +36,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
     const [participants, setParticipants] = useState<BattleParticipation[]>([]);
     const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
     const firestore = useFirestore();
     const { toast } = useToast();
 
@@ -118,6 +119,34 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
       toast({ title: "Battle Finished", description: `Battle room ${room.id} has been closed.` });
     };
 
+    const handleResetBattle = async () => {
+        if (!firestore) return;
+        setIsResetting(true);
+        try {
+            // Delete all participants
+            const participantsQuery = collection(firestore, 'battleRooms', room.id, 'participants');
+            const participantsSnapshot = await getDocs(participantsQuery);
+            participantsSnapshot.forEach(pDoc => {
+                deleteDocumentNonBlocking(doc(firestore, 'battleRooms', room.id, 'participants', pDoc.id));
+            });
+
+            // Reset the room status
+            const roomRef = doc(firestore, 'battleRooms', room.id);
+            await updateDoc(roomRef, { 
+                status: 'in-progress',
+                participantCount: 0,
+                currentQuestionIndex: 0
+            });
+            
+            toast({ title: "Battle Reset", description: `Battle room ${room.id} is now active again.` });
+        } catch (error) {
+            console.error("Error resetting battle room:", error);
+            toast({ variant: "destructive", title: "Reset Failed", description: "Could not reset the battle room." });
+        } finally {
+            setIsResetting(false);
+        }
+    };
+
     const getStatusVariant = (status: BattleRoom['status']) => {
         switch (status) {
             case 'waiting': return 'secondary';
@@ -156,6 +185,31 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                         <Button variant="outline" onClick={handleFinishBattle}>
                            Finish Battle
                         </Button>
+                    )}
+                     {room.status === 'finished' && (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="secondary" disabled={isResetting}>
+                                    {isResetting ? <Loader2 className="animate-spin" /> : <RefreshCw className="mr-2" />}
+                                    Reset Battle
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will reset the battle, deleting all current scores and participant data. 
+                                    Students will be able to join and take the quiz again. This action cannot be undone.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleResetBattle} disabled={isResetting}>
+                                    {isResetting ? <Loader2 className="animate-spin" /> : "Confirm Reset"}
+                                </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                     )}
                      <div className="flex items-center gap-2 text-muted-foreground">
                         <Users className="w-5 h-5"/>
@@ -308,5 +362,7 @@ export default function TeacherDashboard() {
     </div>
   );
 }
+
+    
 
     
