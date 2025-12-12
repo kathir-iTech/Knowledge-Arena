@@ -53,7 +53,7 @@ service cloud.firestore {
       allow get: if isSignedIn();
       // Allow listing for anyone if room is waiting/finished, or for the teacher if in-progress.
       allow list: if isSignedIn() && (isRoomWaiting(roomId) || isRoomFinished(roomId) || isRoomTeacher(roomId));
-      allow create: if isOwner(participantId) && isRoomWaiting(roomId);
+      allow create: if isOwner(participantId);
       
       allow update: if isSignedIn() && (
         // Student can update their own answers and score during the game.
