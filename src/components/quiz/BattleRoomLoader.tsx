@@ -33,9 +33,9 @@ export default function BattleRoomLoader() {
   // The security rules have been updated to allow 'list' for anyone in a 'waiting' or 'finished' room.
   // This simplifies the logic and ensures the participant list is live for everyone in the waiting room.
   const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !roomCode || room?.status === 'in-progress') return null;
+    if (!firestore || !roomCode || (room?.status === 'in-progress' && !isTeacher)) return null;
     return collection(firestore, `battleRooms/${roomCode}/participants`);
-  }, [firestore, roomCode, room?.status]);
+  }, [firestore, roomCode, room?.status, isTeacher]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
@@ -64,7 +64,7 @@ export default function BattleRoomLoader() {
   const isLoading = 
     isAuthLoading || 
     isRoomLoading ||
-    (room?.status === 'waiting' && areParticipantsLoading) ||
+    (room?.status !== 'in-progress' && areParticipantsLoading) ||
     (room?.status === 'in-progress' && !isTeacher && isStudentParticipationLoading);
 
 
@@ -101,7 +101,7 @@ export default function BattleRoomLoader() {
   }
   
   // This check prevents students who haven't properly joined from seeing a battle in progress
-  if (room.status !== 'waiting' && !isTeacher && !studentParticipation && !isStudentParticipationLoading) {
+  if (room.status === 'in-progress' && !isTeacher && !studentParticipation && !isStudentParticipationLoading) {
       router.push('/cheating-detected');
       return null;
   }
@@ -123,6 +123,7 @@ export default function BattleRoomLoader() {
           room={room}
           user={user}
           participation={studentParticipation}
+          allParticipants={participants}
           onFinishBattle={handleFinishBattle}
           isTeacher={isTeacher}
         />

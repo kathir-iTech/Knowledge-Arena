@@ -1,9 +1,10 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useFirestore, updateDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
+import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import type { BattleRoom, User, BattleParticipation } from '@/lib/types';
 import { useVisibilityChange } from '@/hooks/useVisibilityChange';
 
@@ -19,21 +20,15 @@ interface LiveBattleProps {
   room: BattleRoom;
   user: User;
   participation: BattleParticipation | undefined;
+  allParticipants: BattleParticipation[] | null;
   onFinishBattle: () => void;
   isTeacher: boolean;
 }
 
-export default function LiveBattle({ room, user, participation, onFinishBattle, isTeacher }: LiveBattleProps) {
+export default function LiveBattle({ room, user, participation, allParticipants, onFinishBattle, isTeacher }: LiveBattleProps) {
   const router = useRouter();
   const firestore = useFirestore();
   const { toast } = useToast();
-
-  const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !isTeacher) return null;
-    return collection(firestore, `battleRooms/${room.id}/participants`);
-  }, [firestore, room.id, isTeacher]);
-
-  const { data: allParticipants } = useCollection<BattleParticipation>(participantsRef);
 
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
