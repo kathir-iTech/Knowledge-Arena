@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, orderBy, onSnapshot, doc, writeBatch, Unsubscribe } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw } from 'lucide-react';
@@ -28,6 +28,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
     const [participants, setParticipants] = useState<BattleParticipation[]>([]);
@@ -75,26 +76,25 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         if (!firestore) return;
         setIsDeleting(true);
         try {
-            const batch = writeBatch(firestore);
-
+            // We can simplify this later, for now we delete one by one.
             const participantsQuery = collection(firestore, 'battleRooms', room.id, 'participants');
             const participantsSnapshot = await getDocs(participantsQuery);
-            participantsSnapshot.forEach(doc => batch.delete(doc.ref));
+            participantsSnapshot.forEach(pDoc => {
+                deleteDocumentNonBlocking(doc(firestore, 'battleRooms', room.id, 'participants', pDoc.id));
+            });
             
             const roomRef = doc(firestore, 'battleRooms', room.id);
-            batch.delete(roomRef);
-            
-            await batch.commit();
+            deleteDocumentNonBlocking(roomRef);
 
-            toast({ title: "Battle Deleted", description: `Battle room ${room.id} and all its data have been removed.` });
+            toast({ title: "Battle Deletion Initiated", description: `Battle room ${room.id} will be removed.` });
         } catch (error) {
              console.error("Error deleting battle room:", error);
              toast({ variant: "destructive", title: "Deletion Failed", description: "Could not delete the battle room." });
              setIsDeleting(false);
         }
     }
-
-    const participantCount = room.participantCount || 0;
+    
+    const participantCount = participants.length;
 
     return (
         <Card className="bg-secondary/50">
@@ -121,7 +121,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                           <AlertDialogDescription>
                             This action cannot be undone. This will permanently delete the battle room
-                             and all associated participant data.
+                             and all associated participant data. This action is non-blocking.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -191,19 +191,18 @@ export default function TeacherDashboard() {
     setIsLoading(true);
     const roomsQuery = query(
         collection(firestore, 'battleRooms'),
-        where('teacherId', '==', user.id),
-        orderBy('createdAt', 'desc')
+        where('teacherId', '==', user.id)
     );
 
     const unsubscribe = onSnapshot(roomsQuery, (snapshot) => {
-        const rooms = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                participantCount: data.participants?.length || 0
-            } as BattleRoom;
-        });
+        const rooms = snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+        } as BattleRoom));
+        
+        // Sort on the client side
+        rooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
         setBattleRooms(rooms);
         setIsLoading(false);
     }, (error) => {
