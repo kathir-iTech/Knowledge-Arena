@@ -96,25 +96,21 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     
     const newTotalScore = (participation.totalScore || 0) + scoreGained;
     const newAnswers = [...(participation.answers || []), newAnswer];
+    const isLastQuestion = room.currentQuestionIndex >= room.quiz.questions.length - 1;
     
     const participantRef = doc(firestore, 'battleRooms', room.id, 'participants', user.id);
     
-    updateDocumentNonBlocking(participantRef, {
+    const updateData: Partial<BattleParticipation> = {
       answers: newAnswers,
       totalScore: newTotalScore,
-    });
-    
-    const isLastQuestion = room.currentQuestionIndex >= room.quiz.questions.length - 1;
-    
-    // For students, if it's the last question, end their participation after a delay.
-    if (!isTeacher && isLastQuestion) {
-        setTimeout(() => {
-             // The results page will handle displaying the final state.
-             // The room status itself is only changed by the teacher.
-             // We just need to navigate away.
-        }, 3000);
+    };
+
+    if (isLastQuestion) {
+      updateData.status = 'finished';
     }
 
+    updateDocumentNonBlocking(participantRef, updateData);
+    
     // Auto-advance for teacher after a delay to show result
     if (isTeacher) {
         setTimeout(() => {
@@ -124,7 +120,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
         }, 3000); 
     }
 
-  }, [showResult, isTeacher, participation, firestore, currentQuestion, timeLeft, room.id, user.id, room.currentQuestionIndex, room.quiz.questions.length, onFinishBattle, router]);
+  }, [showResult, isTeacher, participation, firestore, currentQuestion, timeLeft, room.id, user.id, room.currentQuestionIndex, room.quiz.questions.length, onFinishBattle]);
   
   // Timer countdown effect
   useEffect(() => {
@@ -171,13 +167,6 @@ export default function LiveBattle({ room, user, participation, allParticipants,
         <p className="text-muted-foreground">Preparing your station...</p>
       </div>
     );
-  }
-  
-  const isLastQuestion = room.currentQuestionIndex >= room.quiz.questions.length - 1;
-  if (!isTeacher && isLastQuestion && showResult) {
-      setTimeout(() => {
-        // No action needed, the results page will be shown when the room status changes to finished
-      }, 3000)
   }
 
   return (
@@ -280,6 +269,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
                         <span className="text-sm font-medium max-w-20 truncate">{p.studentName}</span>
                         <span className='text-xs text-primary font-mono'>{p.totalScore} pts</span>
                       </div>
+                       {p.status === 'finished' && <CheckCircle className="w-4 h-4 text-green-500" />}
                     </div>
                   ))}
                 </div>

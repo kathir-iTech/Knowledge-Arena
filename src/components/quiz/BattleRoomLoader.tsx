@@ -50,16 +50,17 @@ export default function BattleRoomLoader() {
 
 
   useEffect(() => {
-    if (isRoomLoading || isAuthLoading || !room || !user || isStudentPartLoading) return;
+    if (isRoomLoading || isAuthLoading || isStudentPartLoading || !room || !user ) return;
 
-    if (room.status === 'in-progress') {
-      // If student is blocked, kick them.
-      if (!isTeacher && studentParticipation?.isBlocked) {
+    // This handles navigation based on the student's own status
+    if (!isTeacher && studentParticipation) {
+      if (studentParticipation.isBlocked) {
         router.push('/kicked');
+      } else if (studentParticipation.status === 'finished' && room.status !== 'finished') {
+        // If student is finished but room is still going, they wait on a temporary screen.
+        // Or we can send them to a "waiting for results" screen.
+        // For now, let's keep them in a loading state until room is finished.
       }
-      // If a student tries to join a valid room but doesn't have a participation doc created yet, it's fine.
-      // They are in the process of joining. The check in StudentDashboard handles creation.
-      // An explicit redirect here can cause loops.
     }
   }, [room, user, isTeacher, studentParticipation, isRoomLoading, isAuthLoading, isStudentPartLoading, router]);
 
@@ -90,6 +91,12 @@ export default function BattleRoomLoader() {
     return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
   }
   
+  // If a student has finished their questions, but the overall battle is still in-progress, show them the results page early.
+  // They will see their own rank, and the leaderboard will update as other players finish.
+  if (studentParticipation?.status === 'finished' && room.status !== 'finished') {
+    return <QuizResults room={room} isTeacher={isTeacher} participants={finishedParticipants || allParticipants || []} isLoading={areFinishedParticipantsLoading || areParticipantsLoading} />;
+  }
+
   switch (room.status) {
     case 'in-progress':
       return (
@@ -104,12 +111,17 @@ export default function BattleRoomLoader() {
     case 'finished':
        return <QuizResults room={room} isTeacher={isTeacher} participants={finishedParticipants || []} isLoading={areFinishedParticipantsLoading} />;
     default:
-      return (
-        <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">
-            <h1 className="text-2xl font-bold">Invalid Room State</h1>
-             <p className="text-muted-foreground">This room is in an unexpected state ({room.status}).</p>
-            <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
-      </div>
-      )
+       // This now handles the 'waiting' state, which we want to prevent users from seeing directly.
+       useEffect(() => {
+        if (room.status === 'waiting') {
+            if (isTeacher) {
+                router.push('/teacher/dashboard'); // Teachers manage from dashboard now
+            } else {
+                router.push('/student/dashboard'); // Students should not be in a waiting room
+            }
+        }
+      }, [room.status, isTeacher, router]);
+
+      return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>;
   }
 }

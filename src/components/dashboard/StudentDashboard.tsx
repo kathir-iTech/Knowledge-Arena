@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -61,6 +62,7 @@ export default function StudentDashboard() {
         studentName: user.name,
         studentAvatar: user.avatar,
         battleRoomId: roomCodeUpper,
+        status: 'playing',
         answers: [],
         totalScore: 0,
         malpracticeCount: 0,

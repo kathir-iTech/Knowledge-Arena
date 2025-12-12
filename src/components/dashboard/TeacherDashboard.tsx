@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -8,7 +9,7 @@ import { useFirestore } from '@/firebase';
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw, CheckCircle } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -169,7 +170,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                                                     <AvatarFallback className="text-lg bg-muted">{p.studentAvatar}</AvatarFallback>
                                                 </Avatar>
                                                 <div className='flex flex-col'>
-                                                    <span>{p.studentName}</span>
+                                                    <span className='flex items-center gap-1'>{p.studentName} {p.status === 'finished' && <CheckCircle className="w-4 h-4 text-green-500" />}</span>
                                                     {p.isBlocked && <span className="text-xs text-destructive">Blocked (Malpractice)</span>}
                                                 </div>
                                             </div>

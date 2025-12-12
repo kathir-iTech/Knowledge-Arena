@@ -24,10 +24,6 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'finished';
     }
     
-    function isRoomWaiting(roomId) {
-      return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'waiting';
-    }
-    
      function isRoomInProgress(roomId) {
       return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'in-progress';
     }
@@ -52,11 +48,11 @@ service cloud.firestore {
     match /battleRooms/{roomId}/participants/{participantId} {
       allow get: if isSignedIn();
       // Allow listing for anyone if room is waiting/finished, or for the teacher if in-progress.
-      allow list: if isSignedIn() && (isRoomWaiting(roomId) || isRoomFinished(roomId) || isRoomTeacher(roomId));
+      allow list: if isSignedIn() && (isRoomFinished(roomId) || isRoomTeacher(roomId));
       allow create: if isOwner(participantId);
       
       allow update: if isSignedIn() && (
-        // Student can update their own answers and score during the game.
+        // Student can update their own answers, score and status during the game.
         (isOwner(participantId) && isRoomInProgress(roomId) &&
          request.resource.data.isBlocked == resource.data.isBlocked &&
          request.resource.data.malpracticeCount == resource.data.malpracticeCount) ||

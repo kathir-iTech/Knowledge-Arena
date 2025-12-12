@@ -38,6 +38,7 @@ export interface BattleParticipation {
   studentName: string;
   studentAvatar: string;
   battleRoomId: string;
+  status: 'playing' | 'finished';
   answers: {
     questionId: string;
     answerIndex: number | null; // null if timed out
