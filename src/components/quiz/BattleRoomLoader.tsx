@@ -26,28 +26,22 @@ export default function BattleRoomLoader() {
   }, [firestore, roomCode]);
 
   const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<BattleRoom>(roomRef);
+
   const isTeacher = !!user && !!room && user.id === room.teacherId;
 
-  // This ref is now used by everyone to fetch participants, but rules will control access.
   const participantsRef = useMemoFirebase(() => {
-    // IMPORTANT: Only create this query if we are the teacher.
-    // Students should not attempt to list all participants.
     if (!firestore || !roomCode || !isTeacher) return null;
     return collection(firestore, `battleRooms/${roomCode}/participants`);
   }, [firestore, roomCode, isTeacher]);
 
-  // This hook will now only run for the teacher, as its ref will be null for students.
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
-  // Specific hook for the student's own participation document
   const studentParticipationRef = useMemoFirebase(() => {
     if (!firestore || !roomCode || !user || isTeacher) return null;
     return doc(firestore, 'battleRooms', roomCode as string, 'participants', user.id);
   }, [firestore, roomCode, user, isTeacher]);
   
   const { data: studentParticipation, isLoading: isStudentParticipationLoading } = useDoc<BattleParticipation>(studentParticipationRef);
-
-  const localStatus = room?.status || 'loading';
 
   const handleStartBattle = async () => {
     if (roomRef) {
@@ -62,7 +56,6 @@ export default function BattleRoomLoader() {
     }
   };
 
-  // Consolidate loading states
   const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading) || (!isTeacher && isStudentParticipationLoading);
 
   if (isLoading) {
@@ -91,34 +84,25 @@ export default function BattleRoomLoader() {
      )
   }
   
-  if (localStatus === 'finished') {
-    return <QuizResults room={room} isTeacher={isTeacher} />;
-  }
-
-  if (!isTeacher && !studentParticipation) {
-     if (!isStudentParticipationLoading) {
-      // This case indicates the participation document might have failed to be created or read.
-      // It's a potential failure point, so we direct them away to avoid getting stuck.
-      router.push('/cheating-detected'); // Using this as a generic failure page
+  // This check MUST come before the status switch.
+  // It handles the student's own participation record not existing yet or being blocked.
+  if (!isTeacher) {
+    if (studentParticipation?.isBlocked) {
+        router.push('/kicked');
+        return null;
+    }
+     // If still loading participation, show loader. If not loading and still no doc, student failed to join.
+    if (!studentParticipation && !isStudentParticipationLoading) {
+      router.push('/cheating-detected');
       return null;
     }
-    // Still loading participation doc, show loader
-    return (
-       <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
-    )
   }
   
-  if (studentParticipation?.isBlocked) {
-      router.push('/kicked');
-      return null;
-  }
-
-  switch (localStatus) {
+  switch (room.status) {
     case 'waiting':
       return (
         <WaitingRoom
           room={room}
-          // For teachers, this is the live list. For students, it's an empty array.
           participants={participants || []} 
           onStartBattle={handleStartBattle}
           isTeacher={isTeacher}
@@ -134,7 +118,9 @@ export default function BattleRoomLoader() {
           isTeacher={isTeacher}
         />
       );
+    case 'finished':
+       return <QuizResults room={room} isTeacher={isTeacher} />;
     default:
-      return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
+      return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>;
   }
 }
