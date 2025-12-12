@@ -32,11 +32,10 @@ export default function BattleRoomLoader() {
 
   // This collection listener is now for BOTH teacher and student, to get live updates for the room.
   const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !roomCode) return null;
-    // Only fetch the collection if the user is a teacher OR the room is finished (for results)
-    // The WaitingRoom and LiveBattle components will use this data only if isTeacher is true.
+    if (!firestore || !roomCode || !isTeacher) return null;
+    // Only fetch the collection if the user is a teacher.
     return collection(firestore, `battleRooms/${roomCode}/participants`);
-  }, [firestore, roomCode]);
+  }, [firestore, roomCode, isTeacher]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
@@ -61,7 +60,7 @@ export default function BattleRoomLoader() {
   };
 
   // Consolidate loading states
-  const isLoading = isAuthLoading || isRoomLoading || (!isTeacher && isStudentParticipationLoading) || (isTeacher && areParticipantsLoading);
+  const isLoading = isAuthLoading || isRoomLoading || (!isTeacher && isStudentParticipationLoading);
 
 
   if (isLoading) {
@@ -109,6 +108,7 @@ export default function BattleRoomLoader() {
           participants={participants || []}
           onStartBattle={handleStartBattle}
           isTeacher={isTeacher}
+          areParticipantsLoading={areParticipantsLoading}
         />
       );
     case 'in-progress':

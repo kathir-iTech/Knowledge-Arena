@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -15,9 +16,10 @@ interface WaitingRoomProps {
   participants: BattleParticipation[];
   onStartBattle: () => void;
   isTeacher: boolean;
+  areParticipantsLoading: boolean;
 }
 
-export default function WaitingRoom({ room, participants, onStartBattle, isTeacher }: WaitingRoomProps) {
+export default function WaitingRoom({ room, participants, onStartBattle, isTeacher, areParticipantsLoading }: WaitingRoomProps) {
   const [shareableLink, setShareableLink] = useState('');
   const { toast } = useToast();
 
@@ -50,11 +52,18 @@ export default function WaitingRoom({ room, participants, onStartBattle, isTeach
                 <Users />
                 Gladiators in the Arena
             </CardTitle>
-            <CardDescription>{studentCount} student(s) have joined.</CardDescription>
+            <CardDescription>{isTeacher ? `${studentCount} student(s) have joined.` : "See who's ready for battle."}</CardDescription>
           </CardHeader>
           <CardContent>
                 <div className="flex flex-wrap gap-4">
-                  {participants.length > 0 ? participants.map(p => (
+                  {areParticipantsLoading && isTeacher ? (
+                     Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex flex-col items-center gap-2 text-center">
+                        <Skeleton className="h-16 w-16 rounded-full" />
+                        <Skeleton className="h-4 w-20" />
+                      </div>
+                    ))
+                  ) : participants.length > 0 ? participants.map(p => (
                     <div key={p.id} className="flex flex-col items-center gap-2 text-center">
                       <Avatar className="h-16 w-16">
                         <AvatarFallback className="text-3xl bg-secondary">{p.studentAvatar}</AvatarFallback>
@@ -95,10 +104,12 @@ export default function WaitingRoom({ room, participants, onStartBattle, isTeach
               size="lg" 
               className="w-full bg-accent hover:bg-accent/80 text-accent-foreground text-lg py-8" 
               onClick={onStartBattle}
-              disabled={studentCount === 0}
+              disabled={studentCount === 0 || areParticipantsLoading}
             >
               <ShieldCheck className="mr-3 h-6 w-6" />
-               {studentCount === 0 
+               {areParticipantsLoading 
+                ? 'Loading participants...'
+                : studentCount === 0 
                 ? 'Waiting for students to join...'
                 : `Start Battle for ${studentCount} Gladiator(s)`}
             </Button>
