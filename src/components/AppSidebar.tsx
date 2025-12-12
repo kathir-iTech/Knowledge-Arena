@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -53,10 +54,10 @@ const AppSidebar = () => {
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href} passHref>
                   <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
-                    <>
+                    <a>
                       <item.icon />
                       <span>{item.label}</span>
-                    </>
+                    </a>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
