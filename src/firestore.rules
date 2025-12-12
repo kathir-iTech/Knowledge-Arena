@@ -26,12 +26,9 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'finished';
     }
     
-    function isRoomWaiting(roomId) {
-      return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'waiting';
-    }
-    
-     function isRoomInProgress(roomId) {
-      return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'in-progress';
+    function isRoomInProgress(roomId) {
+      let roomData = get(/databases/$(database)/documents/battleRooms/$(roomId)).data;
+      return roomData.status == 'in-progress';
     }
 
     // USER PROFILES
