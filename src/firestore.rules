@@ -67,10 +67,15 @@ service cloud.firestore {
          request.resource.data.isBlocked == true
         ) ||
         // Case 2: Teacher resetting a student's malpractice block.
-        (isRoomTeacher(roomId))
+        (isRoomTeacher(roomId) &&
+         request.resource.data.isBlocked == false &&
+         request.resource.data.malpracticeCount == 0
+        )
       );
 
       allow delete: if isRoomTeacher(roomId);
     }
   }
 }
+
+    

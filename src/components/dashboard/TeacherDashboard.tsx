@@ -9,7 +9,7 @@ import { useFirestore } from '@/firebase';
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw, CheckCircle } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw, CheckCircle, Copy } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -39,6 +39,26 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
     const firestore = useFirestore();
     const { toast } = useToast();
 
+    useEffect(() => {
+        if (!firestore) return;
+        
+        const participantsQuery = query(
+            collection(firestore, 'battleRooms', room.id, 'participants')
+        );
+
+        const unsubscribe = onSnapshot(participantsQuery, (snapshot) => {
+            const participantsData = snapshot.docs.map(doc => doc.data() as BattleParticipation);
+            participantsData.sort((a,b) => b.totalScore - a.totalScore);
+            setParticipants(participantsData);
+        }, (error) => {
+             console.error("Error fetching participants: ", error);
+             toast({ variant: 'destructive', title: 'Error', description: 'Could not load participants.' });
+        });
+
+        return () => unsubscribe();
+    }, [firestore, room.id, toast]);
+
+
     const fetchParticipants = async () => {
         if (!firestore || (participants.length > 0 && room.status === 'finished')) return;
         setIsLoadingParticipants(true);
@@ -67,7 +87,6 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
             malpracticeCount: 0
         });
         toast({ title: 'Success', description: 'Student attempt has been reset.' });
-        setParticipants(prev => prev.map(p => p.id === studentId ? { ...p, isBlocked: false, malpracticeCount: 0 } : p));
     };
 
     const handleDelete = async () => {
@@ -108,6 +127,12 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         }
     }
 
+    const copyToClipboard = (text: string) => {
+      navigator.clipboard.writeText(text).then(() => {
+        toast({ title: 'Copied!', description: `Room code ${text} copied to your clipboard.` });
+      });
+    };
+
     return (
         <Card className="bg-secondary/50">
             <CardHeader className="flex flex-row items-start sm:items-center justify-between">
@@ -116,7 +141,13 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                         {room.quiz?.title || 'Untitled Battle'}
                     </CardTitle>
                     <div className="flex items-center gap-2 mt-1">
-                        <CardDescription>Room Code: <span className="font-mono text-primary">{room.id}</span></CardDescription>
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                            <span>Room Code:</span>
+                            <span className="font-mono text-primary">{room.id}</span>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyToClipboard(room.id)}>
+                                <Copy className="w-4 h-4"/>
+                            </Button>
+                        </div>
                         <Badge variant={getStatusVariant(room.status)}>{room.status}</Badge>
                     </div>
                 </div>
@@ -174,7 +205,7 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                                                     {p.isBlocked && <span className="text-xs text-destructive">Blocked (Malpractice)</span>}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-4">
                                                     {p.isBlocked && (
                                                         <Button variant="outline" size="sm" onClick={() => resetStudentAttempt(p.id)}>
                                                             <RefreshCw className="w-3 h-3 mr-1" />
@@ -277,3 +308,5 @@ export default function TeacherDashboard() {
     </div>
   );
 }
+
+    
