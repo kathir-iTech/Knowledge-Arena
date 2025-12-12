@@ -29,7 +29,7 @@ const signupSchema = z.object({
 
 
 export function LoginForm() {
-  const [activeTab, setActiveTab] = useState('login');
+  const [activeTab, setActiveTab] = useState('signup');
   const { login, signup } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
