@@ -27,18 +27,22 @@ export default function BattleRoomLoader() {
 
   const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<BattleRoom>(roomRef);
 
-  // Determine if the user is the teacher for this room *after* room data is loaded.
   const isTeacher = room && user ? user.id === room.teacherId : false;
 
-  // Fetch participants only if the user is a teacher AND the room has loaded.
+  // Fetch participants for everyone if the room status is 'waiting' or if the user is a teacher.
+  // This allows students to see who else is in the waiting room.
   const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !roomCode || !isTeacher) return null;
-    return collection(firestore, `battleRooms/${roomCode}/participants`);
-  }, [firestore, roomCode, isTeacher]);
+    if (!firestore || !roomCode || !room) return null;
+    if (room.status === 'waiting' || isTeacher) {
+      return collection(firestore, `battleRooms/${roomCode}/participants`);
+    }
+    return null;
+  }, [firestore, roomCode, room, isTeacher]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
   // Fetch the individual student's participation document if they are not a teacher.
+  // This is still needed for checking block status and for the live battle component.
   const studentParticipationRef = useMemoFirebase(() => {
     if (!firestore || !roomCode || !user || isTeacher) return null;
     return doc(firestore, 'battleRooms', roomCode as string, 'participants', user.id);
@@ -59,9 +63,12 @@ export default function BattleRoomLoader() {
     }
   };
 
-  // The component is loading if auth is loading, the room is loading,
-  // or if it's a student and their specific participation doc is still loading.
-  const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading && !participants) || (!isTeacher && isStudentParticipationLoading);
+  const isLoading = 
+    isAuthLoading || 
+    isRoomLoading || 
+    (!isTeacher && isStudentParticipationLoading) || 
+    // Participants are essential for the waiting room, so we wait for them there.
+    (room?.status === 'waiting' && areParticipantsLoading && !participants);
 
 
   if (isLoading) {
@@ -95,9 +102,8 @@ export default function BattleRoomLoader() {
     return null;
   }
   
-  // This check is for students joining a battle that has already started, or if their participation doc failed to create.
   if (room.status !== 'waiting' && !isTeacher && !studentParticipation && !isStudentParticipationLoading) {
-      router.push('/cheating-detected'); // Or a different page like "Battle in Progress"
+      router.push('/cheating-detected');
       return null;
   }
   
@@ -106,10 +112,10 @@ export default function BattleRoomLoader() {
       return (
         <WaitingRoom
           room={room}
-          participants={participants || []} // For teacher view
+          participants={participants || []}
           onStartBattle={handleStartBattle}
           isTeacher={isTeacher}
-          areParticipantsLoading={isTeacher && areParticipantsLoading}
+          areParticipantsLoading={areParticipantsLoading}
         />
       );
     case 'in-progress':
