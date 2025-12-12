@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useMemo } from 'react';
 import Link from 'next/link';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Crown, Home, Loader2 } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore } from '@/firebase';
 import { collection } from 'firebase/firestore';
 
 interface QuizResultsProps {
@@ -22,7 +22,7 @@ export default function QuizResults({ room, isTeacher }: QuizResultsProps) {
 
   // All users (students and teachers) need to see the results.
   // The security rules should be updated to allow this.
-  const participantsRef = useMemoFirebase(() => {
+  const participantsRef = useMemo(() => {
     if (!firestore) return null;
     return collection(firestore, `battleRooms/${room.id}/participants`);
   }, [firestore, room.id]);
