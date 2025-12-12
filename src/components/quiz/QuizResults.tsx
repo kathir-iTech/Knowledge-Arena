@@ -1,52 +1,22 @@
+'use client';
 
-"use client";
-
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import type { Room, Quiz, BattleResult } from '@/lib/types';
+import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Crown, Home, Loader2 } from 'lucide-react';
-import { useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { Crown, Home } from 'lucide-react';
 
 interface QuizResultsProps {
-  room: Room;
-  quiz: Quiz;
+  room: BattleRoom;
+  participants: BattleParticipation[];
 }
 
-const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
-  const [rankedPlayers, setRankedPlayers] = useState<BattleResult[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const firestore = useFirestore();
-
-  useEffect(() => {
-    const fetchResults = async () => {
-      if (!firestore || !room.battleResultIds || room.battleResultIds.length === 0) {
-        setIsLoading(false);
-        return;
-      }
-      setIsLoading(true);
-      try {
-        const resultsQuery = query(
-          collection(firestore, 'battleResults'),
-          where('battleRoomId', '==', room.id),
-          orderBy('score', 'desc')
-        );
-        const snapshot = await getDocs(resultsQuery);
-        const results = snapshot.docs.map(doc => doc.data() as BattleResult);
-        setRankedPlayers(results);
-      } catch (error) {
-        console.error("Error fetching results: ", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchResults();
-  }, [firestore, room.id, room.battleResultIds]);
-
+export default function QuizResults({ room, participants }: QuizResultsProps) {
+  
+  const rankedPlayers = [...participants].sort((a, b) => b.totalScore - a.totalScore);
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Crown className="w-6 h-6 text-yellow-400" />;
@@ -55,21 +25,12 @@ const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
     return <span className="text-sm font-bold">{rank}</span>;
   };
 
-  if (isLoading) {
-      return (
-          <div className="flex flex-col items-center justify-center h-screen p-4">
-              <Loader2 className="w-12 h-12 animate-spin text-primary" />
-              <h1 className="text-2xl font-headline text-primary mt-4">Calculating Results...</h1>
-          </div>
-      );
-  }
-
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8">
       <Card className="w-full max-w-4xl border-primary/50 shadow-lg shadow-primary/10">
         <CardHeader className="text-center">
           <CardTitle className="text-4xl font-headline text-primary">Battle Over!</CardTitle>
-          <CardDescription>The results are in for "{quiz.topic}".</CardDescription>
+          <CardDescription>The results are in for "{room.quiz.title}".</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {rankedPlayers.length > 0 ? (
@@ -97,7 +58,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
                       <AvatarFallback className="text-4xl bg-muted">{player.studentAvatar}</AvatarFallback>
                     </Avatar>
                     <span className="font-bold text-lg text-center">{player.studentName}</span>
-                    <span className="font-mono text-primary">{player.score} pts</span>
+                    <span className="font-mono text-primary">{player.totalScore} pts</span>
                   </div>
                 )})}
               </div>
@@ -122,14 +83,14 @@ const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
                           {player.studentName}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-mono text-primary">{player.score}</TableCell>
+                      <TableCell className="text-right font-mono text-primary">{player.totalScore}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </>
           ) : (
-             <p className="text-center text-muted-foreground py-8">No results to display for this battle.</p>
+             <p className="text-center text-muted-foreground py-8">No participants recorded for this battle.</p>
           )}
 
           <div className="text-center pt-4">
@@ -145,5 +106,3 @@ const QuizResults: React.FC<QuizResultsProps> = ({ room, quiz }) => {
     </div>
   );
 };
-
-export default QuizResults;

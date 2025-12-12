@@ -1,53 +1,62 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // USERS
-    // Anyone can read their own user document.
-    // Teachers can read all user documents (for displaying participant names, etc.).
-    // Users can create and update their own document.
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isTeacher() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isRoomTeacher(roomId) {
+      return isTeacher() && get(/databases/$(database)/documents/battleRooms/$(roomId)).data.teacherId == request.auth.uid;
+    }
+
+    // USER--
+    // Users can create their own profile.
+    // Users can read and update their own profile.
+    // Signed-in users can read other users' public profiles (for names/avatars).
     match /users/{userId} {
-      allow get, list: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if isOwner(userId);
+      allow get: if isSignedIn();
+      allow update: if isOwner(userId);
       allow delete: if false;
     }
 
-    // QUIZZES (Subcollection of Users)
-    // The teacher who owns the user document can create, read, update, and delete their own quizzes.
-    match /users/{teacherId}/quizzes/{quizId} {
-      allow read, write: if request.auth != null && request.auth.uid == teacherId;
+    // BATTLE ROOMS
+    // Only teachers can create battle rooms.
+    // The hosting teacher can update or delete the room.
+    // Any signed-in user can read a room to join it.
+    match /battleRooms/{roomId} {
+      allow get, list: if isSignedIn();
+      allow create: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
+      allow update, delete: if isRoomTeacher(roomId);
     }
     
-    // BATTLE ROOMS
-    // Any authenticated user can read a battle room to get its details.
-    // Only teachers can create new battle rooms.
-    // The owning teacher can update the room (e.g., to start/end it).
-    // Students can update a room ONLY to add themselves to the studentIds list.
-    // The owning teacher can delete the room.
-    match /battleRooms/{roomId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.teacherId == request.auth.uid;
-      allow update: if request.auth != null && (
-        // Teacher can change status, question index, etc.
-        (resource.data.teacherId == request.auth.uid) ||
-        // Student can ONLY add their own uid to the studentIds array.
-        (
-          request.auth.uid in request.resource.data.studentIds &&
-          !(request.auth.uid in resource.data.studentIds) &&
-          request.resource.data.studentIds.size() == resource.data.studentIds.size() + 1
-        )
+    // BATTLE PARTICIPANTS
+    // A student can create their own participation record to join a battle.
+    // A student can update their own record (e.g., to submit answers).
+    // A student CANNOT update their own `isBlocked` or `malpracticeCount` status.
+    // The hosting teacher can read all participant data and can update a student's record to reset a malpractice block.
+    match /battleRooms/{roomId}/participants/{participantId} {
+      allow get: if isSignedIn() && (isOwner(participantId) || isRoomTeacher(roomId));
+      allow list: if isRoomTeacher(roomId);
+      allow create: if isOwner(participantId);
+      
+      allow update: if isSignedIn() && (
+        // Case 1: Student updating their own answers.
+        // They can change anything EXCEPT their blocked status or malpractice count.
+        (isOwner(participantId) && request.resource.data.isBlocked == resource.data.isBlocked && request.resource.data.malpracticeCount == resource.data.malpracticeCount) ||
+        // Case 2: Teacher resetting a student's malpractice block.
+        (isRoomTeacher(roomId))
       );
-      allow delete: if request.auth != null && resource.data.teacherId == request.auth.uid;
-    }
-
-    // BATTLE RESULTS
-    // Users can create their own results.
-    // Any authenticated user can read results (for leaderboards).
-    match /battleResults/{resultId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.studentId == request.auth.uid;
-      allow update, delete: if false; // Results are immutable
     }
   }
 }
