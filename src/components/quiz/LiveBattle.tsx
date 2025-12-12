@@ -47,18 +47,13 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     
     updateDocumentNonBlocking(participantRef, {
         malpracticeCount: newMalpracticeCount,
-        isBlocked: newMalpracticeCount >= 1 // Block on first offense
+        isBlocked: true
     });
 
-    toast({
-        variant: 'destructive',
-        title: 'Malpractice Detected!',
-        description: 'You have been blocked for navigating away from the quiz.'
-    });
-
+    // No need for a toast, as they will be redirected immediately
     router.push('/kicked');
 
-  }, [isTeacher, participation, firestore, room.id, user.id, router, toast]);
+  }, [isTeacher, participation, firestore, room.id, user.id, router]);
 
   useVisibilityChange(onMalpractice);
 
@@ -99,10 +94,10 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     const isLastQuestion = room.currentQuestionIndex >= room.quiz.questions.length - 1;
 
     setTimeout(() => {
-        if (isLastQuestion) {
+        if (isLastQuestion && isTeacher) {
             onFinishBattle();
         }
-    }, 3000); // Wait 3 seconds before finishing
+    }, 3000);
 
   }, [showResult, isTeacher, participation, firestore, currentQuestion, timeLeft, room.id, user.id, room.currentQuestionIndex, room.quiz.questions.length, onFinishBattle]);
   
@@ -185,7 +180,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
             ))}
           </div>
 
-          {showResult && (
+          {showResult && !isTeacher && (
             <Card className="mt-6 bg-secondary/50 p-4">
                 <div className="flex items-start gap-4">
                     {selectedAnswer === currentQuestion.correctAnswerIndex ? (

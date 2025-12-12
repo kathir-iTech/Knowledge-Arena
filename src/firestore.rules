@@ -63,21 +63,24 @@ service cloud.firestore {
     // ANYONE can read the full participant list for a FINISHED or WAITING battle.
     match /battleRooms/{roomId}/participants/{participantId} {
       allow get: if isSignedIn(); 
-      allow list: if isRoomTeacher(roomId) || isRoomFinished(roomId) || isRoomWaiting(roomId); // Teachers can always list; anyone can list for finished/waiting rooms.
+      allow list: if isRoomTeacher(roomId) || isRoomFinished(roomId) || isRoomWaiting(roomId);
       allow create: if isOwner(participantId);
       
       allow update: if isSignedIn() && (
-        // Case 1: Student updating their own answers.
+        // Case 1: Student updating their own answers and score.
+        // They can change their answers array and total score, but not other sensitive fields.
         (isOwner(participantId) && 
          request.resource.data.isBlocked == resource.data.isBlocked &&
          request.resource.data.malpracticeCount == resource.data.malpracticeCount
         ) ||
         // Case 1.1: Student's client reports malpractice.
+        // It can increment the count by 1 and set isBlocked to true.
         (isOwner(participantId) && 
          request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
          request.resource.data.isBlocked == true
         ) ||
         // Case 2: Teacher resetting a student's malpractice block.
+        // Teacher can set isBlocked to false and reset malpracticeCount.
         (isRoomTeacher(roomId))
       );
 
