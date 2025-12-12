@@ -29,42 +29,44 @@ export default function BattleRoomLoader() {
 
   const isTeacher = room && user ? user.id === room.teacherId : false;
 
-  // Fetch all participants ONLY if the user is a teacher.
-  // This is the core fix to prevent student permission errors.
+  // This is the key change: This hook now runs for BOTH teacher and student when in the waiting room.
+  // The security rules have been updated to allow 'list' for anyone in a 'waiting' or 'finished' room.
+  // This simplifies the logic and ensures the participant list is live for everyone in the waiting room.
   const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !roomCode || !isTeacher) return null;
+    if (!firestore || !roomCode || room?.status === 'in-progress') return null;
     return collection(firestore, `battleRooms/${roomCode}/participants`);
-  }, [firestore, roomCode, isTeacher]);
+  }, [firestore, roomCode, room?.status]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
-  // Fetch the individual student's participation document if they are not a teacher.
-  // This is still needed for checking block status and for the live battle component.
+  // This hook is now ONLY for the student's individual data during the 'in-progress' state.
   const studentParticipationRef = useMemoFirebase(() => {
-    if (!firestore || !roomCode || !user || isTeacher) return null;
+    if (!firestore || !roomCode || !user || isTeacher || room?.status !== 'in-progress') return null;
     return doc(firestore, 'battleRooms', roomCode as string, 'participants', user.id);
-  }, [firestore, roomCode, user, isTeacher]);
+  }, [firestore, roomCode, user, isTeacher, room?.status]);
   
   const { data: studentParticipation, isLoading: isStudentParticipationLoading } = useDoc<BattleParticipation>(studentParticipationRef);
 
   const handleStartBattle = async () => {
-    if (roomRef) {
+    if (roomRef && isTeacher) {
       updateDocumentNonBlocking(roomRef, { status: 'in-progress', currentQuestionIndex: 0 });
     }
   };
 
   const handleFinishBattle = async () => {
-    if (roomRef) {
+    if (roomRef && isTeacher) {
       const finalParticipantCount = participants?.length || 0;
       updateDocumentNonBlocking(roomRef, { status: 'finished', participantCount: finalParticipantCount });
     }
   };
 
+  // Simplified loading state
   const isLoading = 
     isAuthLoading || 
-    isRoomLoading || 
-    (isTeacher && areParticipantsLoading) || // Teachers wait for participants
-    (!isTeacher && isStudentParticipationLoading); // Students wait for their own doc
+    isRoomLoading ||
+    (room?.status === 'waiting' && areParticipantsLoading) ||
+    (room?.status === 'in-progress' && !isTeacher && isStudentParticipationLoading);
+
 
   if (isLoading) {
     return (
@@ -92,6 +94,7 @@ export default function BattleRoomLoader() {
      )
   }
   
+  // This check is now more robust for students.
   if (!isTeacher && studentParticipation?.isBlocked) {
     router.push('/kicked');
     return null;
@@ -105,8 +108,6 @@ export default function BattleRoomLoader() {
   
   switch (room.status) {
     case 'waiting':
-      // Students in the waiting room will not have the 'participants' prop.
-      // The WaitingRoom component must handle this gracefully.
       return (
         <WaitingRoom
           room={room}
