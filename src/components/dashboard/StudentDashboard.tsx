@@ -44,11 +44,11 @@ export default function StudentDashboard() {
       }
       
       const roomData = roomSnap.data() as BattleRoom;
-      if (roomData.status !== 'waiting') {
+      if (roomData.status === 'finished') {
         toast({
             variant: 'destructive',
-            title: 'Battle Not Available',
-            description: `This battle is either already in progress or has finished.`,
+            title: 'Battle Finished',
+            description: `This battle has already ended.`,
         });
         setIsLoading(false);
         return;

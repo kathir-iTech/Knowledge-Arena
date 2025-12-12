@@ -95,7 +95,7 @@ export function QuizCreatorForm() {
             id: battleRoomId,
             teacherId: user.id,
             quiz: newQuiz, // Embed the full quiz object
-            status: 'waiting',
+            status: 'in-progress',
             currentQuestionIndex: 0,
             createdAt: Date.now(),
             participantCount: 0,
@@ -107,10 +107,10 @@ export function QuizCreatorForm() {
 
         toast({
             title: 'Battle Room Created!',
-            description: `Room code: ${battleRoomId}. Redirecting you...`,
+            description: `Room code: ${battleRoomId}. Students can now join instantly.`,
         });
 
-        router.push(`/battle/${battleRoomId}`);
+        router.push(`/teacher/dashboard`);
 
     } catch (error: any) {
         console.error('Failed to create battle:', error);
@@ -292,7 +292,7 @@ export function QuizCreatorForm() {
           {isSubmitting ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
           ) : (
-             'Create & Launch Battle'
+             'Create Quiz'
           )}
         </Button>
       </form>

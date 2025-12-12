@@ -8,7 +8,7 @@ import { useFirestore } from '@/firebase';
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw, Rocket } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -90,6 +90,14 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
         }
     }
     
+    const handleFinishBattle = () => {
+      if (!firestore) return;
+      const roomRef = doc(firestore, 'battleRooms', room.id);
+      const finalParticipantCount = participants?.length || 0;
+      updateDocumentNonBlocking(roomRef, { status: 'finished', participantCount: finalParticipantCount });
+      toast({ title: "Battle Finished", description: `Battle room ${room.id} has been closed.` });
+    };
+
     const getStatusVariant = (status: BattleRoom['status']) => {
         switch (status) {
             case 'waiting': return 'secondary';
@@ -112,13 +120,10 @@ const PastBattleRoomItem = ({ room }: { room: BattleRoom }) => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4 mt-2 sm:mt-0">
-                    {room.status === 'waiting' && (
-                        <Link href={`/battle/${room.id}`} passHref>
-                             <Button variant="outline">
-                                <Rocket className="mr-2" />
-                                Start Battle
-                            </Button>
-                        </Link>
+                    {room.status === 'in-progress' && (
+                        <Button variant="outline" onClick={handleFinishBattle}>
+                           Finish Battle
+                        </Button>
                     )}
                      <div className="flex items-center gap-2 text-muted-foreground">
                         <Users className="w-5 h-5"/>

@@ -7,7 +7,6 @@ import { useDoc, useCollection, useFirestore } from '@/firebase';
 import { doc, collection } from 'firebase/firestore';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { Loader2, ShieldX } from 'lucide-react';
-import WaitingRoom from '@/components/quiz/WaitingRoom';
 import LiveBattle from '@/components/quiz/LiveBattle';
 import QuizResults from '@/components/quiz/QuizResults';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
@@ -39,12 +38,6 @@ export default function BattleRoomLoader() {
     if (isTeacher || !participants || !user) return undefined;
     return participants.find(p => p.studentId === user.id);
   }, [participants, user, isTeacher]);
-
-  const handleStartBattle = () => {
-    if (roomRef && isTeacher) {
-      updateDocumentNonBlocking(roomRef, { status: 'in-progress', currentQuestionIndex: 0 });
-    }
-  };
 
   const handleFinishBattle = () => {
     if (roomRef && isTeacher) {
@@ -90,16 +83,14 @@ export default function BattleRoomLoader() {
   }
   
   switch (room.status) {
-    case 'waiting':
-      return (
-        <WaitingRoom
-          room={room}
-          participants={participants || []} 
-          onStartBattle={handleStartBattle}
-          isTeacher={isTeacher}
-          areParticipantsLoading={areParticipantsLoading}
-        />
-      );
+    case 'waiting': // This case should no longer be hit by students directly
+       if(isTeacher) {
+            router.push('/teacher/dashboard'); // Teachers manage from dashboard now
+       } else {
+            router.push('/student/dashboard'); // Students should not be in a waiting room
+       }
+       return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>;
+
     case 'in-progress':
       return (
         <LiveBattle
