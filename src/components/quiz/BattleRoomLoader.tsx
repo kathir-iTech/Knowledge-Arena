@@ -1,10 +1,10 @@
 
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useDoc, useCollection, useFirestore } from '@/firebase';
 import { doc, collection } from 'firebase/firestore';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { Loader2, ShieldX } from 'lucide-react';
@@ -20,7 +20,7 @@ export default function BattleRoomLoader() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const firestore = useFirestore();
 
-  const roomRef = useMemoFirebase(() => {
+  const roomRef = useMemo(() => {
     if (!firestore || !roomCode) return null;
     return doc(firestore, 'battleRooms', roomCode as string);
   }, [firestore, roomCode]);
@@ -32,15 +32,15 @@ export default function BattleRoomLoader() {
   // This is the key change: This hook now runs for BOTH teacher and student when in the waiting room.
   // The security rules have been updated to allow 'list' for anyone in a 'waiting' or 'finished' room.
   // This simplifies the logic and ensures the participant list is live for everyone in the waiting room.
-  const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !roomCode || (room?.status === 'in-progress' && !isTeacher)) return null;
+  const participantsRef = useMemo(() => {
+    if (!firestore || !roomCode || (room?.status !== 'waiting' && !isTeacher)) return null;
     return collection(firestore, `battleRooms/${roomCode}/participants`);
   }, [firestore, roomCode, room?.status, isTeacher]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
   // This hook is now ONLY for the student's individual data during the 'in-progress' state.
-  const studentParticipationRef = useMemoFirebase(() => {
+  const studentParticipationRef = useMemo(() => {
     if (!firestore || !roomCode || !user || isTeacher || room?.status !== 'in-progress') return null;
     return doc(firestore, 'battleRooms', roomCode as string, 'participants', user.id);
   }, [firestore, roomCode, user, isTeacher, room?.status]);
@@ -64,7 +64,7 @@ export default function BattleRoomLoader() {
   const isLoading = 
     isAuthLoading || 
     isRoomLoading ||
-    (room?.status !== 'in-progress' && areParticipantsLoading) ||
+    (room?.status === 'waiting' && areParticipantsLoading) ||
     (room?.status === 'in-progress' && !isTeacher && isStudentParticipationLoading);
 
 
