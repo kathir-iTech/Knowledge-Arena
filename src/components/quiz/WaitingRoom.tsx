@@ -56,7 +56,7 @@ export default function WaitingRoom({ room, participants, onStartBattle, isTeach
           </CardHeader>
           <CardContent>
                 <div className="flex flex-wrap gap-4">
-                  {isTeacher && areParticipantsLoading ? (
+                  {areParticipantsLoading && studentCount === 0 ? (
                      Array.from({ length: 3 }).map((_, i) => (
                       <div key={i} className="flex flex-col items-center gap-2 text-center">
                         <Skeleton className="h-16 w-16 rounded-full" />
@@ -107,7 +107,7 @@ export default function WaitingRoom({ room, participants, onStartBattle, isTeach
               disabled={studentCount === 0 || areParticipantsLoading}
             >
               <ShieldCheck className="mr-3 h-6 w-6" />
-               {areParticipantsLoading 
+               {areParticipantsLoading && studentCount === 0
                 ? 'Loading participants...'
                 : studentCount === 0 
                 ? 'Waiting for students to join...'

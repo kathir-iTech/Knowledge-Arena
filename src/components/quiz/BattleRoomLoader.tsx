@@ -29,15 +29,17 @@ export default function BattleRoomLoader() {
 
   const isTeacher = room && user ? user.id === room.teacherId : false;
 
-  // Fetch participants for everyone if the room status is 'waiting' or if the user is a teacher.
-  // This allows students to see who else is in the waiting room.
+  // Fetch participants for everyone if the room status is 'waiting'.
+  // This allows students and teachers to see who else is in the waiting room.
   const participantsRef = useMemoFirebase(() => {
     if (!firestore || !roomCode || !room) return null;
-    if (room.status === 'waiting' || isTeacher) {
+    // Only subscribe to the collection if the room is in the 'waiting' state.
+    // After it starts, students don't need the full list, and it saves reads.
+    if (room.status === 'waiting') {
       return collection(firestore, `battleRooms/${roomCode}/participants`);
     }
     return null;
-  }, [firestore, roomCode, room, isTeacher]);
+  }, [firestore, roomCode, room]);
 
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
   
@@ -68,7 +70,7 @@ export default function BattleRoomLoader() {
     isRoomLoading || 
     (!isTeacher && isStudentParticipationLoading) || 
     // Participants are essential for the waiting room, so we wait for them there.
-    (room?.status === 'waiting' && areParticipantsLoading && !participants);
+    (room?.status === 'waiting' && areParticipantsLoading);
 
 
   if (isLoading) {
@@ -102,6 +104,7 @@ export default function BattleRoomLoader() {
     return null;
   }
   
+  // This check prevents students who haven't properly joined from seeing a battle in progress
   if (room.status !== 'waiting' && !isTeacher && !studentParticipation && !isStudentParticipationLoading) {
       router.push('/cheating-detected');
       return null;
