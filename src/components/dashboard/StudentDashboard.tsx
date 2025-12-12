@@ -1,0 +1,118 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useFirestore } from '@/firebase';
+import { doc, getDoc, updateDoc, arrayUnion, collection } from 'firebase/firestore';
+import { Loader2, Swords } from 'lucide-react';
+import type { BattleRoom } from '@/lib/types';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+
+export default function StudentDashboard() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const { toast } = useToast();
+  const firestore = useFirestore();
+
+  const [roomCode, setRoomCode] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleJoinBattle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roomCode.trim() || !firestore || !user) return;
+
+    setIsLoading(true);
+    const roomCodeUpper = roomCode.trim().toUpperCase();
+
+    try {
+      const roomRef = doc(firestore, 'battleRooms', roomCodeUpper);
+      const roomSnap = await getDoc(roomRef);
+
+      if (!roomSnap.exists()) {
+        toast({
+          variant: 'destructive',
+          title: 'Room Not Found',
+          description: `The battle room with code "${roomCodeUpper}" does not exist.`,
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      const roomData = roomSnap.data() as BattleRoom;
+      if (roomData.status !== 'waiting') {
+        toast({
+            variant: 'destructive',
+            title: 'Battle Not Available',
+            description: `This battle is either already in progress or has finished.`,
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      // Non-blocking update to add student to the list
+      updateDocumentNonBlocking(roomRef, {
+        studentIds: arrayUnion(user.id)
+      });
+      
+      // Navigate immediately
+      router.push(`/battle/${roomCodeUpper}`);
+
+    } catch (error: any) {
+       console.error("Failed to join battle:", error);
+       if (error.code === 'permission-denied') {
+            router.push('/cheating-detected');
+       } else {
+            toast({
+                variant: 'destructive',
+                title: 'Error Joining Battle',
+                description: 'An unexpected error occurred. Please try again.',
+            });
+       }
+       setIsLoading(false);
+    }
+  };
+
+  if (!user) {
+    return <Loader2 className="w-16 h-16 animate-spin" />;
+  }
+
+  return (
+    <div className="p-4 md:p-8 space-y-8">
+       <header>
+        <h1 className="text-4xl font-headline tracking-tight text-primary">Student Dashboard</h1>
+        <p className="text-muted-foreground">Welcome, Gladiator {user.name}. Your next challenge awaits.</p>
+      </header>
+
+       <Card className="max-w-md mx-auto border-accent/50 shadow-lg shadow-accent/10">
+        <CardHeader>
+          <CardTitle className="font-headline text-center text-2xl">Enter the Arena</CardTitle>
+          <CardDescription className="text-center">Enter the code provided by your teacher to join the battle.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleJoinBattle} className="space-y-4">
+            <Input
+              value={roomCode}
+              onChange={(e) => setRoomCode(e.target.value)}
+              placeholder="Enter Room Code"
+              className="text-center text-lg h-12 tracking-widest font-mono"
+              maxLength={6}
+            />
+            <Button type="submit" className="w-full text-lg h-12" disabled={isLoading || roomCode.length < 6}>
+              {isLoading ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <Swords className="mr-2 h-5 w-5" />
+              )}
+              Join Battle
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
