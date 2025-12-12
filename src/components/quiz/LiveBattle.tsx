@@ -28,15 +28,12 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  // --- Start of Fix ---
-  // Only fetch all participants if the user is a teacher
   const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !isTeacher) return null; // Return null for students
+    if (!firestore || !isTeacher) return null;
     return collection(firestore, `battleRooms/${room.id}/participants`);
   }, [firestore, room.id, isTeacher]);
 
   const { data: allParticipants } = useCollection<BattleParticipation>(participantsRef);
-  // --- End of Fix ---
 
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
@@ -78,16 +75,6 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
     }
   }, [currentQuestion]);
   
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (timeLeft > 0 && !showResult && !isTeacher) {
-      timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
-    } else if (timeLeft === 0 && !showResult && !isTeacher) {
-        handleAnswer(null);
-    }
-    return () => clearTimeout(timer);
-  }, [timeLeft, showResult, isTeacher]);
-
   const handleAnswer = useCallback((answerIndex: number | null) => {
     if (showResult || isTeacher || !participation || !firestore || !currentQuestion) return;
     
@@ -113,8 +100,27 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
       answers: newAnswers,
       totalScore: newTotalScore,
     });
+    
+    const isLastQuestion = room.currentQuestionIndex >= room.quiz.questions.length - 1;
 
-  }, [showResult, isTeacher, participation, firestore, currentQuestion, timeLeft, room.id, user.id]);
+    setTimeout(() => {
+        if (isLastQuestion) {
+            onFinishBattle();
+        }
+    }, 3000); // Wait 3 seconds before finishing
+
+  }, [showResult, isTeacher, participation, firestore, currentQuestion, timeLeft, room.id, user.id, room.currentQuestionIndex, room.quiz.questions.length, onFinishBattle]);
+  
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (timeLeft > 0 && !showResult && !isTeacher) {
+      timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
+    } else if (timeLeft === 0 && !showResult && !isTeacher) {
+        handleAnswer(null);
+    }
+    return () => clearTimeout(timer);
+  }, [timeLeft, showResult, isTeacher, handleAnswer]);
+
 
   const handleNextQuestion = () => {
     if (!isTeacher || !firestore) return;
@@ -130,7 +136,7 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
   };
 
   const getButtonClass = (index: number) => {
-    if (!showResult && !isTeacher) return 'bg-secondary hover:bg-primary/20';
+    if (!showResult) return 'bg-secondary hover:bg-primary/20';
     
     if (currentQuestion && index === currentQuestion.correctAnswerIndex) return 'bg-green-500/80 ring-2 ring-green-400';
     if (index === selectedAnswer && currentQuestion && index !== currentQuestion.correctAnswerIndex) return 'bg-red-500/80';
@@ -184,19 +190,17 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
             ))}
           </div>
 
-          {(showResult || isTeacher) && (
+          {showResult && (
             <Card className="mt-6 bg-secondary/50 p-4">
                 <div className="flex items-start gap-4">
-                    {isTeacher ? <CheckCircle className="w-8 h-8 text-green-400 shrink-0" /> : (
-                        selectedAnswer === currentQuestion.correctAnswerIndex ? (
-                            <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
-                        ) : (
-                            <XCircle className="w-8 h-8 text-red-400 shrink-0" />
-                        )
+                    {selectedAnswer === currentQuestion.correctAnswerIndex ? (
+                        <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
+                    ) : (
+                        <XCircle className="w-8 h-8 text-red-400 shrink-0" />
                     )}
                     <div>
                         <h3 className="font-bold text-lg">
-                           {isTeacher ? `Correct Answer: ${currentQuestion.options[currentQuestion.correctAnswerIndex]}` : (selectedAnswer === currentQuestion.correctAnswerIndex ? 'Correct!' : 'Incorrect')}
+                           {selectedAnswer === currentQuestion.correctAnswerIndex ? 'Correct!' : 'Incorrect'}
                         </h3>
                     </div>
                 </div>
@@ -204,10 +208,22 @@ export default function LiveBattle({ room, user, participation, onFinishBattle, 
           )}
           
           {isTeacher && (
-            <div className="flex justify-end mt-4">
-              <Button onClick={handleNextQuestion}>
-                {room.currentQuestionIndex < room.quiz.questions.length - 1 ? 'Next Question' : 'Finish Battle'}
-              </Button>
+            <div className='flex flex-col gap-4'>
+                <Card className="mt-6 bg-secondary/50 p-4">
+                     <div className="flex items-start gap-4">
+                        <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
+                        <div>
+                            <h3 className="font-bold text-lg">
+                                Correct Answer: {currentQuestion.options[currentQuestion.correctAnswerIndex]}
+                            </h3>
+                        </div>
+                    </div>
+                </Card>
+                 <div className="flex justify-end mt-4">
+                    <Button onClick={handleNextQuestion}>
+                        {room.currentQuestionIndex < room.quiz.questions.length - 1 ? 'Next Question' : 'Finish Battle'}
+                    </Button>
+                </div>
             </div>
           )}
 
