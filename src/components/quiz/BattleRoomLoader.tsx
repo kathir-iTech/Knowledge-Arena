@@ -27,12 +27,14 @@ export default function BattleRoomLoader() {
 
   const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<BattleRoom>(roomRef);
 
-  const isTeacher = !!user && !!room && user.id === room.teacherId;
+  // Determine if the user is the teacher for this room *after* room data is loaded.
+  const isTeacher = room && user ? user.id === room.teacherId : false;
 
   // This collection listener is now for BOTH teacher and student, to get live updates for the room.
-  // We will conditionally use the participants data only if the user is a teacher.
   const participantsRef = useMemoFirebase(() => {
     if (!firestore || !roomCode) return null;
+    // Only fetch the collection if the user is a teacher OR the room is finished (for results)
+    // The WaitingRoom and LiveBattle components will use this data only if isTeacher is true.
     return collection(firestore, `battleRooms/${roomCode}/participants`);
   }, [firestore, roomCode]);
 
@@ -47,7 +49,7 @@ export default function BattleRoomLoader() {
 
   const handleStartBattle = async () => {
     if (roomRef) {
-      updateDocumentNonBlocking(roomRef, { status: 'in-progress' });
+      updateDocumentNonBlocking(roomRef, { status: 'in-progress', currentQuestionIndex: 0 });
     }
   };
 
@@ -59,7 +61,8 @@ export default function BattleRoomLoader() {
   };
 
   // Consolidate loading states
-  const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading) || (!isTeacher && isStudentParticipationLoading);
+  const isLoading = isAuthLoading || isRoomLoading || (!isTeacher && isStudentParticipationLoading) || (isTeacher && areParticipantsLoading);
+
 
   if (isLoading) {
     return (
@@ -87,15 +90,15 @@ export default function BattleRoomLoader() {
      )
   }
   
-  if (!isTeacher) {
-    if (studentParticipation?.isBlocked) {
-        router.push('/kicked');
-        return null;
-    }
-    if (!studentParticipation && !isStudentParticipationLoading) {
-      router.push('/cheating-detected');
+  if (!isTeacher && studentParticipation?.isBlocked) {
+    router.push('/kicked');
+    return null;
+  }
+  
+  // This check is for students joining a battle that has already started, or if their participation doc failed to create.
+  if (room.status !== 'waiting' && !isTeacher && !studentParticipation && !isStudentParticipationLoading) {
+      router.push('/cheating-detected'); // Or a different page like "Battle in Progress"
       return null;
-    }
   }
   
   switch (room.status) {
@@ -103,7 +106,7 @@ export default function BattleRoomLoader() {
       return (
         <WaitingRoom
           room={room}
-          participants={participants || []} // Always pass the live participants list
+          participants={participants || []}
           onStartBattle={handleStartBattle}
           isTeacher={isTeacher}
         />
@@ -121,6 +124,11 @@ export default function BattleRoomLoader() {
     case 'finished':
        return <QuizResults room={room} isTeacher={isTeacher} />;
     default:
-      return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>;
+      return (
+        <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">
+            <h1 className="text-2xl font-bold">Invalid Room State</h1>
+            <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
+      </div>
+      )
   }
 }
