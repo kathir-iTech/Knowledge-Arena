@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { AvatarEditor } from './AvatarEditor';
 
 const AppSidebar = () => {
@@ -49,6 +48,19 @@ const AppSidebar = () => {
           </div>
         </SidebarHeader>
         <SidebarContent>
+            {user && (
+                 <div className="flex items-center gap-3 rounded-md p-2 text-left w-full bg-sidebar-accent mb-4">
+                   <button onClick={() => setAvatarEditorOpen(true)} className="shrink-0">
+                        <Avatar className="h-10 w-10">
+                            <AvatarFallback className="bg-muted text-2xl">{user.avatar}</AvatarFallback>
+                        </Avatar>
+                   </button>
+                    <div className="flex-col items-start hidden group-data-[collapsed=false]:flex">
+                    <span className="font-semibold text-sm whitespace-nowrap">{user.name}</span>
+                    <span className="text-xs text-muted-foreground">{user.role}</span>
+                    </div>
+                </div>
+            )}
           <SidebarMenu>
             {navItems.map((item) => (
               <SidebarMenuItem key={item.label}>
@@ -63,25 +75,14 @@ const AppSidebar = () => {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
-          {user && (
-            <div className="flex items-center gap-2">
-               <button
-                className="flex items-center gap-3 text-left w-full hover:bg-sidebar-accent rounded-md p-2"
-                onClick={() => setAvatarEditorOpen(true)}
-               >
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-muted text-2xl">{user.avatar}</AvatarFallback>
-                </Avatar>
-                <div className="flex-col items-start hidden group-data-[collapsed=false]:flex">
-                  <span className="font-semibold text-sm whitespace-nowrap">{user.name}</span>
-                  <span className="text-xs text-muted-foreground">{user.role}</span>
-                </div>
-               </button>
-              <Button variant="ghost" size="icon" onClick={logout} className="shrink-0">
-                <LogOut className="w-5 h-5" />
-              </Button>
-            </div>
-          )}
+             <SidebarMenu>
+                <SidebarMenuItem>
+                    <SidebarMenuButton onClick={logout} tooltip="Log Out">
+                        <LogOut />
+                        <span>Log Out</span>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+             </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
       {user && (
