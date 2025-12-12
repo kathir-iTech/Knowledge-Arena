@@ -25,13 +25,26 @@ export default function BattleRoomLoader() {
     return doc(firestore, 'battleRooms', roomCode as string);
   }, [firestore, roomCode]);
 
-  const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !roomCode) return null;
-    return collection(firestore, `battleRooms/${roomCode}/participants`);
-  }, [firestore, roomCode]);
-
   const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<BattleRoom>(roomRef);
+
+  // Determine if the user is the teacher *before* setting up the participants query
+  const isTeacher = !!user && !!room && user.id === room.teacherId;
+
+  // This ref is now conditional. It will be null for students, so useCollection won't run.
+  const participantsRef = useMemoFirebase(() => {
+    if (!firestore || !roomCode || !isTeacher) return null;
+    return collection(firestore, `battleRooms/${roomCode}/participants`);
+  }, [firestore, roomCode, isTeacher]);
+
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsRef);
+  
+  // Specific hook for the student's own participation document
+  const studentParticipationRef = useMemoFirebase(() => {
+    if (!firestore || !roomCode || !user || isTeacher) return null;
+    return doc(firestore, 'battleRooms', roomCode as string, 'participants', user.id);
+  }, [firestore, roomCode, user, isTeacher]);
+  
+  const { data: studentParticipation, isLoading: isStudentParticipationLoading } = useDoc<BattleParticipation>(studentParticipationRef);
 
   const localStatus = room?.status || 'loading';
 
@@ -43,13 +56,16 @@ export default function BattleRoomLoader() {
 
   const handleFinishBattle = async () => {
     if (roomRef) {
+      // For teachers, participants are already loaded. For students, it's not needed here.
       const finalParticipantCount = participants?.length || 0;
       updateDocumentNonBlocking(roomRef, { status: 'finished', participantCount: finalParticipantCount });
     }
   };
 
+  // Consolidate loading states
+  const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading) || (!isTeacher && isStudentParticipationLoading);
 
-  if (isAuthLoading || isRoomLoading || areParticipantsLoading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -74,15 +90,21 @@ export default function BattleRoomLoader() {
       <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
      )
   }
-
-  const isTeacher = user.id === room.teacherId;
-  const studentParticipation = participants?.find(p => p.studentId === user.id);
   
+  // For finished rooms, everyone needs the full participant list to see results.
+  // We fetch it here on demand if the user is a student.
+  if (localStatus === 'finished') {
+    return <QuizResults room={room} isTeacher={isTeacher} />;
+  }
+
   // If a student who is not in the participants list tries to access, they're not allowed.
-  // This can happen if they navigate directly without joining.
   if (!isTeacher && !studentParticipation) {
-    router.push('/cheating-detected');
-    return null;
+    // This can happen if they navigate directly without joining or if their doc is still being created.
+    // The loading state should handle the creation case. If not loading and still no doc, redirect.
+     if (!isStudentParticipationLoading) {
+      router.push('/cheating-detected');
+      return null;
+    }
   }
   
   if (studentParticipation?.isBlocked) {
@@ -95,7 +117,8 @@ export default function BattleRoomLoader() {
       return (
         <WaitingRoom
           room={room}
-          participants={participants || []}
+          // Teachers get the live list, students just see their own avatar until it starts.
+          participants={participants || (studentParticipation ? [studentParticipation] : [])}
           onStartBattle={handleStartBattle}
           isTeacher={isTeacher}
         />
@@ -110,8 +133,6 @@ export default function BattleRoomLoader() {
           isTeacher={isTeacher}
         />
       );
-    case 'finished':
-      return <QuizResults room={room} participants={participants || []} />;
     default:
       return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
   }

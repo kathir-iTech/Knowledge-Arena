@@ -21,6 +21,10 @@ service cloud.firestore {
       // Must be a teacher and the teacherId on the room document must match their UID.
       return isTeacher() && get(/databases/$(database)/documents/battleRooms/$(roomId)).data.teacherId == request.auth.uid;
     }
+    
+    function isRoomFinished(roomId) {
+      return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'finished';
+    }
 
     // USER PROFILES
     // Users can create their own profile upon signup.
@@ -56,9 +60,10 @@ service cloud.firestore {
     // A student CANNOT change their own `isBlocked` or `totalScore` directly. Malpractice updates are an exception.
     // The hosting teacher can read all participant data and can update a student's record to reset a malpractice block.
     // The hosting teacher can delete participant records when cleaning up a battle room.
+    // ANYONE can read the full participant list for a FINISHED battle to see the results.
     match /battleRooms/{roomId}/participants/{participantId} {
       allow get: if isSignedIn() && (isOwner(participantId) || isRoomTeacher(roomId));
-      allow list: if isRoomTeacher(roomId);
+      allow list: if isRoomTeacher(roomId) || isRoomFinished(roomId); // Teachers can always list; anyone can list for finished rooms.
       allow create: if isOwner(participantId);
       
       allow update: if isSignedIn() && (

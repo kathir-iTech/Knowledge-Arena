@@ -1,22 +1,44 @@
+
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Crown, Home } from 'lucide-react';
+import { Crown, Home, Loader2 } from 'lucide-react';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
 
 interface QuizResultsProps {
   room: BattleRoom;
-  participants: BattleParticipation[];
+  isTeacher: boolean;
 }
 
-export default function QuizResults({ room, participants }: QuizResultsProps) {
-  
-  const rankedPlayers = [...participants].sort((a, b) => b.totalScore - a.totalScore);
+export default function QuizResults({ room, isTeacher }: QuizResultsProps) {
+  const firestore = useFirestore();
+
+  // All users (students and teachers) need to see the results.
+  // The security rules should be updated to allow this.
+  const participantsRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, `battleRooms/${room.id}/participants`);
+  }, [firestore, room.id]);
+
+  const { data: participants, isLoading } = useCollection<BattleParticipation>(participantsRef);
+
+  if (isLoading) {
+     return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="text-muted-foreground">Calculating Results...</p>
+      </div>
+    );
+  }
+
+  const rankedPlayers = participants ? [...participants].sort((a, b) => b.totalScore - a.totalScore) : [];
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Crown className="w-6 h-6 text-yellow-400" />;
@@ -90,7 +112,7 @@ export default function QuizResults({ room, participants }: QuizResultsProps) {
               </Table>
             </>
           ) : (
-             <p className="text-center text-muted-foreground py-8">No participants recorded for this battle.</p>
+             <p className="text-center text-muted-foreground py-8">No participants were recorded for this battle.</p>
           )}
 
           <div className="text-center pt-4">
