@@ -34,48 +34,34 @@ export default function BattleRoomLoader() {
   }, [firestore, roomCode, user, isTeacher]);
   const { data: studentParticipation, isLoading: isStudentPartLoading } = useDoc<BattleParticipation>(studentParticipationRef);
 
-  // For Teachers: Reference to the entire participants collection
+  // For Teachers (or anyone viewing results): Reference to the entire participants collection
   const participantsCollectionRef = useMemo(() => {
-    if (!firestore || !roomCode || !isTeacher) return null;
-    return collection(firestore, `battleRooms/${roomCode}/participants`);
-  }, [firestore, roomCode, isTeacher]);
+    if (!firestore || !roomCode) return null;
+    // Allow fetching if teacher, or if the room is finished, or if student has finished
+    if (isTeacher || room?.status === 'finished' || studentParticipation?.status === 'finished') {
+       return collection(firestore, `battleRooms/${roomCode}/participants`);
+    }
+    return null;
+  }, [firestore, roomCode, isTeacher, room?.status, studentParticipation?.status]);
   const { data: allParticipants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsCollectionRef);
   
-   // For finished rooms, everyone can see the participants
-  const finishedParticipantsCollectionRef = useMemo(() => {
-    if (!firestore || !roomCode || room?.status !== 'finished') return null;
-    return collection(firestore, `battleRooms/${roomCode}/participants`);
-  }, [firestore, roomCode, room?.status]);
-  const { data: finishedParticipants, isLoading: areFinishedParticipantsLoading } = useCollection<BattleParticipation>(finishedParticipantsCollectionRef);
-
-
   useEffect(() => {
-    if (isRoomLoading || isAuthLoading || isStudentPartLoading || !room || !user ) return;
-
-    // This handles navigation based on the student's own status
-    if (!isTeacher && studentParticipation) {
-      if (studentParticipation.isBlocked) {
+    // Redirect logic for invalid states, moved to a useEffect
+    if (!isRoomLoading && !isAuthLoading) {
+      if (room?.status === 'waiting') {
+        if (isTeacher) {
+          router.push('/teacher/dashboard');
+        } else {
+          router.push('/student/dashboard');
+        }
+      } else if (!isTeacher && studentParticipation?.isBlocked) {
         router.push('/kicked');
-      } else if (studentParticipation.status === 'finished' && room.status !== 'finished') {
-        // If student is finished but room is still going, they wait on a temporary screen.
-        // Or we can send them to a "waiting for results" screen.
-        // For now, let's keep them in a loading state until room is finished.
       }
     }
-  }, [room, user, isTeacher, studentParticipation, isRoomLoading, isAuthLoading, isStudentPartLoading, router]);
-
-  useEffect(() => {
-     if (room?.status === 'waiting') {
-         if (isTeacher) {
-             router.push('/teacher/dashboard'); // Teachers manage from dashboard now
-         } else {
-             router.push('/student/dashboard'); // Students should not be in a waiting room
-         }
-     }
-  }, [room?.status, isTeacher, router]);
+  }, [room?.status, isTeacher, router, isRoomLoading, isAuthLoading, studentParticipation?.isBlocked]);
 
 
-  const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading) || (!isTeacher && isStudentPartLoading) || (room?.status === 'finished' && areFinishedParticipantsLoading);
+  const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading) || (!isTeacher && isStudentPartLoading);
 
   if (isLoading) {
     return (
@@ -98,29 +84,29 @@ export default function BattleRoomLoader() {
   }
   
   if (!user) {
+    // Should be caught by ClientLayout, but as a fallback
     return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
   }
   
-  // If a student has finished their questions, but the overall battle is still in-progress, show them the results page early.
-  // They will see their own rank, and the leaderboard will update as other players finish.
-  if (studentParticipation?.status === 'finished' && room.status !== 'finished') {
-    return <QuizResults room={room} isTeacher={isTeacher} participants={finishedParticipants || allParticipants || []} isLoading={areFinishedParticipantsLoading || areParticipantsLoading} />;
+  // If the overall battle is finished, show results to everyone.
+  if (room.status === 'finished') {
+    return <QuizResults room={room} isTeacher={isTeacher} participants={allParticipants || []} isLoading={areParticipantsLoading} />;
   }
 
-  switch (room.status) {
-    case 'in-progress':
-      return (
-        <LiveBattle
-          room={room}
-          user={user}
-          participation={studentParticipation}
-          allParticipants={allParticipants}
-          isTeacher={isTeacher}
-        />
-      );
-    case 'finished':
-       return <QuizResults room={room} isTeacher={isTeacher} participants={finishedParticipants || []} isLoading={areFinishedParticipantsLoading} />;
-    default:
-      return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>;
+  // If a student has finished their questions, but the overall battle is still in-progress, show them the results page early.
+  // They will see their own rank, and the leaderboard will update as other players finish.
+  if (studentParticipation?.status === 'finished') {
+    return <QuizResults room={room} isTeacher={isTeacher} participants={allParticipants || []} isLoading={areParticipantsLoading} />;
   }
+
+  // If we reach here, the battle is 'in-progress' and the student is 'playing'.
+  return (
+    <LiveBattle
+      room={room}
+      user={user}
+      participation={studentParticipation}
+      allParticipants={allParticipants} // Teacher gets the live list
+      isTeacher={isTeacher}
+    />
+  );
 }

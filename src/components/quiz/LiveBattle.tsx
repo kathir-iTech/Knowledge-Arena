@@ -57,10 +57,8 @@ export default function LiveBattle({ room, user, participation, allParticipants,
         malpracticeCount: newMalpracticeCount,
         isBlocked: true
     });
-    
-    router.push('/kicked');
-
-  }, [isTeacher, participation, participantRef, router]);
+    // No need to router.push, the effect in BattleRoomLoader will handle it
+  }, [isTeacher, participation, participantRef]);
 
   useVisibilityChange(onMalpractice);
 
@@ -104,7 +102,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
 
     updateDocumentNonBlocking(participantRef, updateData);
 
-  }, [showResult, isTeacher, participation, participantRef, currentQuestion, timeLeft, room.id, user.id]);
+  }, [showResult, isTeacher, participation, participantRef, currentQuestion, timeLeft]);
   
   // Timer countdown effect
   useEffect(() => {
@@ -128,6 +126,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     } else {
       // Last question answered, mark as finished
       updateDocumentNonBlocking(participantRef, { status: 'finished' });
+      // The BattleRoomLoader will detect the status change and render QuizResults
     }
   };
 
@@ -139,13 +138,15 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     return 'bg-secondary opacity-50';
   };
   
+  // BattleRoomLoader handles rendering QuizResults now.
+  // This component will be unmounted when status changes to 'finished'.
   if (participation?.status === 'finished') {
-    return <QuizResults room={room} isTeacher={isTeacher} participants={allParticipants || []} isLoading={false} />;
+    return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
   }
 
   if (!currentQuestion) {
-    // This can happen if the student finishes but the component hasn't redirected yet.
-    // Or if there's a data mismatch. A loading state is safe.
+    // This can happen if the student finishes but the component hasn't swapped out yet.
+    // A loading state is safe.
     return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
   }
 
