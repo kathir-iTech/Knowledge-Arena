@@ -1,12 +1,14 @@
 
 'use client';
 
+import React, 'use client';
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { BattleRoom, User, BattleParticipation } from '@/lib/types';
-import { useVisibilityChange } from '@/hooks/useVisibilityChange';
+import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -57,10 +59,10 @@ export default function LiveBattle({ room, user, participation, allParticipants,
         malpracticeCount: newMalpracticeCount,
         isBlocked: true
     });
-    // No need to router.push, the effect in BattleRoomLoader will handle it
-  }, [isTeacher, participation, participantRef]);
+    router.push('/kicked');
+  }, [isTeacher, participation, participantRef, router]);
 
-  useVisibilityChange(onMalpractice);
+  usePageFocusChange(onMalpractice);
 
   // Effect to reset state when the question changes
   useEffect(() => {
@@ -80,8 +82,11 @@ export default function LiveBattle({ room, user, participation, allParticipants,
     const isCorrect = answerIndex === currentQuestion.correctAnswerIndex;
     let scoreGained = 0;
     if (isCorrect) {
-        scoreGained = Math.floor(100 * (timeLeft / currentQuestion.timer));
-    } else {
+        scoreGained = 100;
+        if(currentQuestion.timer > 0) {
+            scoreGained = Math.floor(100 * (timeLeft / currentQuestion.timer));
+        }
+    } else if (answerIndex !== null) { // Only penalize if an incorrect answer was chosen, not on timeout
         scoreGained = -50;
     }
     
@@ -141,8 +146,15 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   // BattleRoomLoader handles rendering QuizResults now.
   // This component will be unmounted when status changes to 'finished'.
   if (participation?.status === 'finished') {
+     // Wait a moment for the user to see the result of the last question before navigating.
+     setTimeout(() => {
+        // The loader component will handle the redirect to the results page.
+        // We just need to make sure our state is final.
+     }, 2000);
+     // Show a loading spinner during this brief wait.
     return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
   }
+
 
   if (!currentQuestion) {
     // This can happen if the student finishes but the component hasn't swapped out yet.
