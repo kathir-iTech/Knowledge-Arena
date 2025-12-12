@@ -64,6 +64,16 @@ export default function BattleRoomLoader() {
     }
   }, [room, user, isTeacher, studentParticipation, isRoomLoading, isAuthLoading, isStudentPartLoading, router]);
 
+  useEffect(() => {
+     if (room?.status === 'waiting') {
+         if (isTeacher) {
+             router.push('/teacher/dashboard'); // Teachers manage from dashboard now
+         } else {
+             router.push('/student/dashboard'); // Students should not be in a waiting room
+         }
+     }
+  }, [room?.status, isTeacher, router]);
+
 
   const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading) || (!isTeacher && isStudentPartLoading) || (room?.status === 'finished' && areFinishedParticipantsLoading);
 
@@ -111,17 +121,6 @@ export default function BattleRoomLoader() {
     case 'finished':
        return <QuizResults room={room} isTeacher={isTeacher} participants={finishedParticipants || []} isLoading={areFinishedParticipantsLoading} />;
     default:
-       // This now handles the 'waiting' state, which we want to prevent users from seeing directly.
-       useEffect(() => {
-        if (room.status === 'waiting') {
-            if (isTeacher) {
-                router.push('/teacher/dashboard'); // Teachers manage from dashboard now
-            } else {
-                router.push('/student/dashboard'); // Students should not be in a waiting room
-            }
-        }
-      }, [room.status, isTeacher, router]);
-
       return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>;
   }
 }
