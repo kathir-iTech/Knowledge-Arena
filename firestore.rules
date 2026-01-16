@@ -46,13 +46,16 @@ service cloud.firestore {
     // QUESTIONS can be read by any signed-in user in the battle.
     match /battles/{battleId}/questions/{questionId} {
         allow read: if isSignedIn();
-        // Writes are only allowed during battle creation by the teacher.
-        allow write: if isBattleCreator(battleId);
+        // Teachers can create questions. Only the battle creator can modify them later.
+        allow create: if isTeacher();
+        allow update, delete: if isBattleCreator(battleId);
     }
     
-    // ANSWER KEYS are completely locked down. No client can read or write them.
+    // ANSWER KEYS are only creatable by a teacher during battle creation.
+    // They are completely locked down otherwise.
     match /battles/{battleId}/answerKeys/{questionId} {
-        allow read, write: if false;
+        allow read, update, delete: if false;
+        allow create: if isTeacher();
     }
 
     // PARTICIPANTS can be created by any user for themselves.
