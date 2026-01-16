@@ -96,7 +96,7 @@ export function QuizCreatorForm() {
             id: battleRoomId,
             teacherId: user.id,
             quiz: newQuiz, // Embed the full quiz object
-            status: 'in-progress',
+            status: 'waiting',
             currentQuestionIndex: 0,
             createdAt: Date.now(),
             participantCount: 0,
@@ -108,10 +108,10 @@ export function QuizCreatorForm() {
 
         toast({
             title: 'Battle Room Created!',
-            description: `Room code: ${battleRoomId}. Students can now join instantly.`,
+            description: `Room code: ${battleRoomId}. You are being redirected to the waiting room.`,
         });
 
-        router.push(`/teacher/dashboard`);
+        router.push(`/battle/${battleRoomId}`);
 
     } catch (error: any) {
         console.error('Failed to create battle:', error);

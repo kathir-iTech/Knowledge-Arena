@@ -4,12 +4,13 @@
 import React, { useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { useDoc, useCollection, useFirestore } from '@/firebase';
+import { useDoc, useCollection, useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc, collection } from 'firebase/firestore';
 import type { BattleRoom, BattleParticipation } from '@/lib/types';
 import { Loader2, ShieldX } from 'lucide-react';
 import LiveBattle from '@/components/quiz/LiveBattle';
 import QuizResults from '@/components/quiz/QuizResults';
+import WaitingRoom from '@/components/quiz/WaitingRoom';
 import { Button } from '../ui/button';
 
 export default function BattleRoomLoader() {
@@ -37,8 +38,7 @@ export default function BattleRoomLoader() {
   // For Teachers (or anyone viewing results): Reference to the entire participants collection
   const participantsCollectionRef = useMemo(() => {
     if (!firestore || !roomCode) return null;
-    // Allow fetching only if teacher, or if the room is finished.
-    // A student who finishes early cannot see the full leaderboard until the entire room is 'finished'.
+    // Allow fetching if teacher (for waiting room & results), or if the room is finished (for anyone).
     if (isTeacher || room?.status === 'finished') {
        return collection(firestore, `battleRooms/${roomCode}/participants`);
     }
@@ -47,22 +47,19 @@ export default function BattleRoomLoader() {
   const { data: allParticipants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsCollectionRef);
   
   useEffect(() => {
-    // Redirect logic for invalid states, moved to a useEffect
     if (!isRoomLoading && !isAuthLoading) {
-      if (room?.status === 'waiting') {
-        if (isTeacher) {
-          router.push('/teacher/dashboard');
-        } else {
-          router.push('/student/dashboard');
-        }
-      } else if (!isTeacher && studentParticipation?.isBlocked) {
+      if (!isTeacher && studentParticipation?.isBlocked) {
         router.push('/kicked');
       }
     }
-  }, [room?.status, isTeacher, router, isRoomLoading, isAuthLoading, studentParticipation?.isBlocked]);
+  }, [isTeacher, router, isRoomLoading, isAuthLoading, studentParticipation?.isBlocked]);
+  
+  const handleStartBattle = () => {
+    if (!isTeacher || !roomRef) return;
+    updateDocumentNonBlocking(roomRef, { status: 'in-progress' });
+  };
 
-
-  const isLoading = isAuthLoading || isRoomLoading || (isTeacher && areParticipantsLoading) || (!isTeacher && isStudentPartLoading);
+  const isLoading = isAuthLoading || isRoomLoading || (isTeacher ? areParticipantsLoading : isStudentPartLoading);
 
   if (isLoading) {
     return (
@@ -87,6 +84,18 @@ export default function BattleRoomLoader() {
   if (!user) {
     // Should be caught by ClientLayout, but as a fallback
     return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
+  }
+  
+  if (room.status === 'waiting') {
+    return (
+      <WaitingRoom
+        room={room}
+        participants={allParticipants || []}
+        onStartBattle={handleStartBattle}
+        isTeacher={isTeacher}
+        areParticipantsLoading={areParticipantsLoading}
+      />
+    );
   }
   
   // If the overall battle is finished, show results to everyone.
