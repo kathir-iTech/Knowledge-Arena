@@ -1,12 +1,12 @@
 
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { useDoc, useCollection, useFirestore, updateDocumentNonBlocking } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
-import type { BattleRoom, BattleParticipation } from '@/lib/types';
+import { useDoc, useFirestore } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { Battle, BattleParticipant } from '@/lib/types';
 import { Loader2, ShieldX } from 'lucide-react';
 import LiveBattle from '@/components/quiz/LiveBattle';
 import QuizResults from '@/components/quiz/QuizResults';
@@ -19,47 +19,32 @@ export default function BattleRoomLoader() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const firestore = useFirestore();
 
-  const roomRef = useMemo(() => {
-    if (!firestore || !roomCode) return null;
-    return doc(firestore, 'battleRooms', roomCode as string);
-  }, [firestore, roomCode]);
+  const battleId = roomCode as string;
 
-  const { data: room, isLoading: isRoomLoading, error: roomError } = useDoc<BattleRoom>(roomRef);
+  // Reference to the main battle document
+  const battleRef = useMemo(() => {
+    if (!firestore || !battleId) return null;
+    return doc(firestore, 'battles', battleId);
+  }, [firestore, battleId]);
+  const { data: battle, isLoading: isBattleLoading, error: battleError } = useDoc<Battle>(battleRef);
 
-  const isTeacher = useMemo(() => room && user ? user.id === room.teacherId : false, [room, user]);
+  // Reference to the current user's participant document
+  const participantRef = useMemo(() => {
+    if (!firestore || !battleId || !user) return null;
+    return doc(firestore, `battles/${battleId}/participants`, user.id);
+  }, [firestore, battleId, user]);
+  const { data: participant, isLoading: isParticipantLoading } = useDoc<BattleParticipant>(participantRef);
 
-  // For Students: Reference to their own participation document
-  const studentParticipationRef = useMemo(() => {
-    if (!firestore || !roomCode || !user || isTeacher) return null;
-    return doc(firestore, `battleRooms/${roomCode}/participants`, user.id);
-  }, [firestore, roomCode, user, isTeacher]);
-  const { data: studentParticipation, isLoading: isStudentPartLoading } = useDoc<BattleParticipation>(studentParticipationRef);
+  const isTeacher = useMemo(() => participant?.role === 'teacher', [participant]);
 
-  // For Teachers (or anyone viewing results): Reference to the entire participants collection
-  const participantsCollectionRef = useMemo(() => {
-    if (!firestore || !roomCode) return null;
-    // Allow fetching if teacher (for waiting room & results), or if the room is finished (for anyone).
-    if (isTeacher || room?.status === 'finished') {
-       return collection(firestore, `battleRooms/${roomCode}/participants`);
+  // Redirect if blocked
+  React.useEffect(() => {
+    if (participant?.status === 'blocked') {
+      router.push('/kicked');
     }
-    return null;
-  }, [firestore, roomCode, isTeacher, room?.status]);
-  const { data: allParticipants, isLoading: areParticipantsLoading } = useCollection<BattleParticipation>(participantsCollectionRef);
-  
-  useEffect(() => {
-    if (!isRoomLoading && !isAuthLoading) {
-      if (!isTeacher && studentParticipation?.isBlocked) {
-        router.push('/kicked');
-      }
-    }
-  }, [isTeacher, router, isRoomLoading, isAuthLoading, studentParticipation?.isBlocked]);
-  
-  const handleStartBattle = () => {
-    if (!isTeacher || !roomRef) return;
-    updateDocumentNonBlocking(roomRef, { status: 'in-progress' });
-  };
+  }, [participant, router]);
 
-  const isLoading = isAuthLoading || isRoomLoading || (isTeacher ? areParticipantsLoading : isStudentPartLoading);
+  const isLoading = isAuthLoading || isBattleLoading || isParticipantLoading;
 
   if (isLoading) {
     return (
@@ -70,7 +55,7 @@ export default function BattleRoomLoader() {
     );
   }
   
-  if (roomError || !room) {
+  if (battleError || !battle) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">
         <ShieldX className="h-12 w-12 text-destructive" />
@@ -81,44 +66,47 @@ export default function BattleRoomLoader() {
     );
   }
   
-  if (!user) {
-    // Should be caught by ClientLayout, but as a fallback
-    return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin w-12 h-12"/></div>
+  if (!user || !participant) {
+    // This can happen briefly while the participant doc is being created.
+    // A loading state is appropriate.
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="text-muted-foreground">Joining Battle...</p>
+      </div>
+    );
   }
   
-  if (room.status === 'waiting') {
+  // --- Render based on battle state ---
+
+  if (battle.state === 'waiting') {
     return (
       <WaitingRoom
-        room={room}
-        participants={allParticipants || []}
-        onStartBattle={handleStartBattle}
+        battle={battle}
         isTeacher={isTeacher}
-        areParticipantsLoading={areParticipantsLoading}
       />
     );
   }
   
-  // If the overall battle is finished, show results to everyone.
-  if (room.status === 'finished') {
-    return <QuizResults room={room} isTeacher={isTeacher} participants={allParticipants || []} isLoading={areParticipantsLoading} />;
+  if (battle.state === 'finished') {
+    return <QuizResults battle={battle} />;
   }
 
-  // If a student has finished their questions, but the overall battle is still in-progress, show them the results page early.
-  // They will see their own rank, and the leaderboard will update as other players finish.
-  if (studentParticipation?.status === 'finished') {
-    // Pass only their own data if the full leaderboard isn't available yet.
-    const participantsToShow = allParticipants || [studentParticipation];
-    return <QuizResults room={room} isTeacher={isTeacher} participants={participantsToShow} isLoading={areParticipantsLoading} />;
+  if (battle.state === 'live') {
+    return (
+        <LiveBattle
+            battle={battle}
+            participant={participant}
+            isTeacher={isTeacher}
+        />
+    );
   }
 
-  // If we reach here, the battle is 'in-progress' and the student is 'playing'.
+  // Fallback for any unknown state
   return (
-    <LiveBattle
-      room={room}
-      user={user}
-      participation={studentParticipation}
-      allParticipants={allParticipants} // Teacher gets the live list
-      isTeacher={isTeacher}
-    />
-  );
+    <div className="flex h-screen items-center justify-center">
+        <p>An unknown error occurred. Please try returning to the dashboard.</p>
+        <Button onClick={() => router.push('/')} className='mt-4'>Dashboard</Button>
+    </div>
+  )
 }

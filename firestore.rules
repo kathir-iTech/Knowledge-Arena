@@ -3,68 +3,89 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // --- Helper Functions ---
     function isSignedIn() {
       return request.auth != null;
     }
 
+    // isTeacher() relies on custom claims set by a Cloud Function on user creation.
     function isTeacher() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
+      return isSignedIn() && request.auth.token.role == 'teacher';
     }
 
+    // isOwner checks if the requesting user's UID matches the document's ID.
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
     
-    function isRoomTeacher(roomId) {
-      return isTeacher() && get(/databases/$(database)/documents/battleRooms/$(roomId)).data.teacherId == request.auth.uid;
-    }
-    
-    function isRoomFinished(roomId) {
-      return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'finished';
-    }
-    
-     function isRoomInProgress(roomId) {
-      return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'in-progress';
+    // isBattleCreator checks if the user is the teacher who created the battle.
+    function isBattleCreator(battleId) {
+        return isTeacher() && get(/databases/$(database)/documents/battles/$(battleId)).data.createdBy == request.auth.uid;
     }
 
-    // USER PROFILES
+    // --- Path Rules ---
+
+    // USER profiles are readable by any signed-in user, but only writable by the owner.
     match /users/{userId} {
-      allow create: if isOwner(userId);
-      allow get: if isSignedIn();
-      allow update: if isOwner(userId);
-      allow delete: if false;
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
     }
 
-    // BATTLE ROOMS
-    match /battleRooms/{roomId} {
+    // BATTLE root document.
+    match /battles/{battleId} {
+      // Any signed-in user can read the battle's state.
       allow get: if isSignedIn();
-      allow list: if isTeacher();
-      allow create: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
-      allow update, delete: if isRoomTeacher(roomId);
+      // Only teachers can create or list battles.
+      allow list, create: if isTeacher();
+      // Only the teacher who created the battle can update its state (e.g., start, next question, finish).
+      allow update: if isBattleCreator(battleId);
+      // Only the creator can delete it.
+      allow delete: if isBattleCreator(battleId);
+    }
+
+    // QUESTIONS can be read by any signed-in user in the battle.
+    match /battles/{battleId}/questions/{questionId} {
+        allow read: if isSignedIn();
+        // Writes are only allowed during battle creation by the teacher.
+        allow write: if isBattleCreator(battleId);
     }
     
-    // BATTLE PARTICIPANTS
-    match /battleRooms/{roomId}/participants/{participantId} {
-      allow get: if isSignedIn();
-      // Allow listing for anyone if room is waiting/finished, or for the teacher if in-progress.
-      allow list: if isSignedIn() && (isRoomFinished(roomId) || isRoomTeacher(roomId));
-      allow create: if isOwner(participantId);
-      
-      allow update: if isSignedIn() && (
-        // Student can update their own answers, score and status during the game.
-        (isOwner(participantId) && isRoomInProgress(roomId) &&
-         request.resource.data.isBlocked == resource.data.isBlocked &&
-         request.resource.data.malpracticeCount == resource.data.malpracticeCount) ||
-        // Student client reports malpractice.
-        (isOwner(participantId) && isRoomInProgress(roomId) &&
-         request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
-         request.resource.data.isBlocked == true) ||
-        // Teacher can reset a student's malpractice block.
-        (isRoomTeacher(roomId))
-      );
+    // ANSWER KEYS are completely locked down. No client can read or write them.
+    match /battles/{battleId}/answerKeys/{questionId} {
+        allow read, write: if false;
+    }
 
-      allow delete: if isRoomTeacher(roomId);
+    // PARTICIPANTS can be created by any user for themselves.
+    // Updates are locked down to server-side logic (Cloud Functions).
+    match /battles/{battleId}/participants/{userId} {
+        // Any signed-in user can view the participant list (for leaderboards).
+        allow read: if isSignedIn();
+        // A user can join a battle by creating their own participant document.
+        allow create: if isOwner(userId);
+        // NO client-side updates. Scores and status are managed by Cloud Functions.
+        allow update, delete: if isBattleCreator(battleId); // Teacher can kick/delete a user
+    }
+    
+    // ANSWERS can only be created by a student for themselves, for a specific question, and only once.
+    match /battles/{battleId}/answers/{userId}/{questionId} {
+        // Can't read others' answers. Can't update/delete an answer once submitted.
+        allow read, update, delete: if false;
+        // Allow a user to create their own answer document if one doesn't already exist.
+        allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/battles/$(battleId)/answers/$(userId)/$(questionId));
+    }
+    
+    // VIOLATIONS can only be created by a user for themselves.
+    match /battles/{battleId}/violations/{userId} {
+      // Allow a user to report a violation for themselves.
+      allow create: if isOwner(userId);
+      // No one can read, update, or delete violation logs from the client.
+      allow read, update, delete: if false;
+    }
+
+    // LEADERBOARD is a read-only document for clients, written to by a server process.
+    match /battles/{battleId}/leaderboard/{doc} {
+        allow read: if isSignedIn();
+        allow write: if false; // Only Cloud Functions can write here.
     }
   }
 }

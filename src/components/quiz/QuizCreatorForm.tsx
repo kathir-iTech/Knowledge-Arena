@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore }from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
@@ -19,9 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, PlusCircle, Loader2 } from 'lucide-react';
-import type { Quiz, BattleRoom } from '@/lib/types';
-import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-
+import type { Battle, BattleQuestion, QuizFormData as QuizCreatorFormData } from '@/lib/types';
 
 const questionSchema = z.object({
   id: z.string(),
@@ -71,7 +69,7 @@ export function QuizCreatorForm() {
     name: 'questions',
   });
 
-  const onSubmit = async (data: QuizFormData) => {
+  const onSubmit = async (data: QuizCreatorFormData) => {
     if (!firestore || !user || user.role !== 'Teacher') {
         toast({
             variant: 'destructive',
@@ -83,35 +81,56 @@ export function QuizCreatorForm() {
     setIsSubmitting(true);
 
     try {
-        const quizId = uuidv4();
-        const battleRoomId = generateRoomCode();
-        
-        const newQuiz: Quiz = {
-            ...data,
-            id: quizId,
-            teacherId: user.id
-        };
+        const battleId = generateRoomCode();
+        const batch = writeBatch(firestore);
 
-        const newBattleRoom: BattleRoom = {
-            id: battleRoomId,
-            teacherId: user.id,
-            quiz: newQuiz, // Embed the full quiz object
-            status: 'waiting',
-            currentQuestionIndex: 0,
+        // 1. Create the main battle document
+        const battleRef = doc(firestore, 'battles', battleId);
+        const newBattle: Omit<Battle, 'id'> = {
+            title: data.title,
+            state: 'waiting',
+            currentQuestionIndex: -1, // -1 indicates not started
+            questionCount: data.questions.length,
+            createdBy: user.id,
             createdAt: Date.now(),
-            participantCount: 0,
         };
-
-        const roomRef = doc(firestore, 'battleRooms', battleRoomId);
+        batch.set(battleRef, newBattle);
         
-        setDocumentNonBlocking(roomRef, newBattleRoom, { merge: false });
+        // 2. Create the teacher as a participant
+        const teacherParticipantRef = doc(firestore, 'battles', battleId, 'participants', user.id);
+        batch.set(teacherParticipantRef, {
+            name: user.name,
+            avatar: user.avatar,
+            role: 'teacher',
+            score: 0,
+            status: 'playing',
+            violationsCount: 0,
+        });
+
+        // 3. Create question and answer key subcollections
+        data.questions.forEach((q, index) => {
+            const questionRef = doc(firestore, 'battles', battleId, 'questions', q.id);
+            const questionData: Omit<BattleQuestion, 'id'> = {
+                text: q.text,
+                options: q.options,
+                timer: q.timer,
+            };
+            batch.set(questionRef, questionData);
+
+            const answerKeyRef = doc(firestore, 'battles', battleId, 'answerKeys', q.id);
+            batch.set(answerKeyRef, {
+                correctOptionIndex: q.correctAnswerIndex,
+            });
+        });
+
+        await batch.commit();
 
         toast({
             title: 'Battle Room Created!',
-            description: `Room code: ${battleRoomId}. You are being redirected to the waiting room.`,
+            description: `Room code: ${battleId}. Redirecting to the waiting room.`,
         });
 
-        router.push(`/battle/${battleRoomId}`);
+        router.push(`/battle/${battleId}`);
 
     } catch (error: any) {
         console.error('Failed to create battle:', error);
@@ -138,7 +157,6 @@ export function QuizCreatorForm() {
        form.setValue(`questions.${questionIndex}.options`, newOptions);
      }
   }
-
 
   return (
     <Form {...form}>

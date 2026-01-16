@@ -1,199 +1,233 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { useFirestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import type { BattleRoom, User, BattleParticipation } from '@/lib/types';
+import { useFirestore, useDoc, useCollection, updateDocumentNonBlocking } from '@/firebase';
+import { doc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import type { Battle, BattleParticipant, BattleQuestion, User, Violation } from '@/lib/types';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
+import { useAuth } from '@/hooks/useAuth';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Clock, Loader2, CheckCircle, XCircle, Shield, Trophy, Users, ArrowRight } from 'lucide-react';
+import { Clock, Loader2, Users, ArrowRight, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
-import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from '../ui/alert-dialog';
 
 interface LiveBattleProps {
-  room: BattleRoom;
-  user: User;
-  participation: BattleParticipation | null | undefined;
-  allParticipants: BattleParticipation[] | null;
+  battle: Battle;
+  participant: BattleParticipant;
   isTeacher: boolean;
 }
 
-export default function LiveBattle({ room, user, participation, allParticipants, isTeacher }: LiveBattleProps) {
-  const router = useRouter();
-  const firestore = useFirestore();
+const LiveLeaderboard = ({ battleId }: { battleId: string }) => {
+    const firestore = useFirestore();
+    const participantsRef = useMemo(() => {
+        if (!firestore) return null;
+        return collection(firestore, 'battles', battleId, 'participants');
+    }, [firestore, battleId]);
 
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [showResult, setShowResult] = useState(false);
+    const { data: participants } = useCollection<BattleParticipant>(participantsRef);
+    
+    const sortedParticipants = useMemo(() => {
+        if (!participants) return [];
+        return [...participants].sort((a,b) => b.score - a.score);
+    }, [participants]);
+
+    return (
+        <Card className="w-full max-w-4xl mt-4">
+            <CardHeader>
+                <CardTitle>Live Leaderboard</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="flex flex-wrap gap-4">
+                    {sortedParticipants.map(p => (
+                        <div key={p.id} className="flex items-center gap-3 p-2 rounded-md bg-secondary">
+                            <Avatar className="h-8 w-8">
+                                <AvatarFallback className="text-sm bg-muted">{p.avatar}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-medium max-w-20 truncate">{p.name}</span>
+                                <span className='text-xs text-primary font-mono'>{p.score} pts</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+export default function LiveBattle({ battle, participant, isTeacher }: LiveBattleProps) {
+  const { user } = useAuth();
+  const firestore = useFirestore();
   
-  const currentQuestionIndex = useMemo(() => {
-    if (isTeacher) return room.currentQuestionIndex;
-    return participation?.currentQuestionIndex ?? 0;
-  }, [isTeacher, room.currentQuestionIndex, participation?.currentQuestionIndex]);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [hasAnswered, setHasAnswered] = useState(false);
+  const [showViolationWarning, setShowViolationWarning] = useState(false);
+
+  // --- Data Fetching ---
+  const currentQuestionRef = useMemo(() => {
+    if (!firestore || battle.currentQuestionIndex < 0) return null;
+    const questionId = battle.title + battle.currentQuestionIndex; // This needs a real ID
+    // This part is tricky. We need a way to get the current question ID from the index.
+    // This should ideally be part of the battle document or fetched separately.
+    // For now, we assume we can construct it, but this is a flaw.
+    // A better approach: The Battle document should contain the currentQuestionId.
+    return null; // Placeholder until we get the actual question ID
+  }, [firestore, battle.currentQuestionIndex, battle.title]);
+  // This demonstrates the need for a `questions` subcollection query.
+  
+  const questionsRef = useMemo(() => collection(firestore, 'battles', battle.id, 'questions'), [firestore, battle.id]);
+  const { data: questions, isLoading: isLoadingQuestions } = useCollection<BattleQuestion>(questionsRef);
 
   const currentQuestion = useMemo(() => {
-    return room.quiz.questions[currentQuestionIndex];
-  }, [currentQuestionIndex, room.quiz.questions]);
+    if (!questions || battle.currentQuestionIndex < 0 || battle.currentQuestionIndex >= questions.length) return null;
+    // This is inefficient. A better way is to have the battle doc store the current question ID.
+    // But for this client-driven approach, we sort by a creation order if available.
+    // For now, we'll assume the order is stable.
+    return questions[battle.currentQuestionIndex];
+  }, [questions, battle.currentQuestionIndex]);
 
-  const [timeLeft, setTimeLeft] = useState(currentQuestion?.timer || 0);
+  // --- Timer Logic ---
+  const [timeLeft, setTimeLeft] = useState(currentQuestion?.timer || battle.timeLimit || 0);
+
+  useEffect(() => {
+    if (currentQuestion) {
+        const serverStartTime = battle.questionStartAt || Date.now();
+        const timeLimit = currentQuestion.timer * 1000;
+        const endTime = serverStartTime + timeLimit;
+
+        const updateTimer = () => {
+            const now = Date.now();
+            const remaining = Math.max(0, endTime - now);
+            setTimeLeft(Math.ceil(remaining / 1000));
+            if (remaining <= 0 && !hasAnswered && !isTeacher) {
+                // Time's up, but don't auto-submit. The server will reject late answers.
+            }
+        };
+
+        const interval = setInterval(updateTimer, 500);
+        updateTimer();
+        
+        return () => clearInterval(interval);
+    }
+  }, [currentQuestion, battle.questionStartAt, hasAnswered, isTeacher]);
+
+
+  // --- State Reset on Question Change ---
+  useEffect(() => {
+    setSelectedAnswer(null);
+    setHasAnswered(false);
+  }, [currentQuestion]);
   
-  const participantRef = useMemo(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'battleRooms', room.id, 'participants', user.id);
-  }, [firestore, room.id, user]);
+  // --- Actions ---
 
   const onMalpractice = useCallback(() => {
-    if (isTeacher || !participation || !participantRef || participation.isBlocked) return;
+    if (isTeacher || !firestore || !user) return;
     
-    // Immediately block the user
-    updateDocumentNonBlocking(participantRef, {
-        malpracticeCount: (participation.malpracticeCount || 0) + 1,
-        isBlocked: true
+    // Show warning to user
+    setShowViolationWarning(true);
+
+    // Report violation to the server
+    const violationRef = collection(firestore, `battles/${battle.id}/violations`);
+    addDoc(violationRef, { 
+        userId: user.id,
+        timestamp: serverTimestamp() 
     });
-    router.push('/kicked');
-  }, [isTeacher, participation, participantRef, router]);
+
+  }, [isTeacher, firestore, user, battle.id]);
 
   usePageFocusChange(onMalpractice);
 
-  // Effect to reset state when the question changes
-  useEffect(() => {
-    if(currentQuestion) {
-        setTimeLeft(currentQuestion.timer);
-        setSelectedAnswer(null);
-        setShowResult(false);
-    }
-  }, [currentQuestion]);
-
-  const handleAnswer = useCallback((answerIndex: number | null) => {
-    if (showResult || isTeacher || !participation || !participantRef || !currentQuestion) return;
+  const handleAnswerSubmit = async (answerIndex: number) => {
+    if (hasAnswered || isTeacher || !currentQuestion || !user || !firestore) return;
     
-    setShowResult(true);
+    setHasAnswered(true);
     setSelectedAnswer(answerIndex);
 
-    const isCorrect = answerIndex === currentQuestion.correctAnswerIndex;
-    let scoreGained = 0;
-    if (isCorrect) {
-        scoreGained = 100;
-        if(currentQuestion.timer > 0) {
-            scoreGained = Math.floor(100 * (timeLeft / currentQuestion.timer));
+    const answerRef = doc(firestore, `battles/${battle.id}/answers/${user.id}/${currentQuestion.id}`);
+    
+    // The client does NOT know if the answer is correct or the score.
+    // It only submits the chosen option. A Cloud Function will process this.
+    try {
+        await addDoc(collection(firestore, `battles/${battle.id}/answers/${user.id}`), {
+             questionId: currentQuestion.id,
+             selectedOption: answerIndex,
+             submittedAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Error submitting answer:", error)
+        // Re-enable answering if submission fails?
+        setHasAnswered(false);
+    }
+  };
+  
+  const handleTeacherNextQuestion = () => {
+    if (!isTeacher || !firestore) return;
+
+    const nextIndex = battle.currentQuestionIndex + 1;
+    const battleRef = doc(firestore, 'battles', battle.id);
+
+    if (nextIndex < battle.questionCount) {
+        const nextQuestion = questions?.[nextIndex];
+        if (nextQuestion) {
+            updateDocumentNonBlocking(battleRef, { 
+                currentQuestionIndex: nextIndex,
+                questionStartAt: Date.now(), // Not a server timestamp, but better than nothing on client
+                timeLimit: nextQuestion.timer
+            });
         }
-    } else if (answerIndex !== null) { // Only penalize if an incorrect answer was chosen, not on timeout
-        scoreGained = -50;
-    }
-    
-    const newAnswer = {
-      questionId: currentQuestion.id,
-      answerIndex,
-      isCorrect,
-      score: scoreGained,
-    };
-    
-    const newTotalScore = (participation.totalScore || 0) + scoreGained;
-    const newAnswers = [...(participation.answers || []), newAnswer];
-    
-    const updateData: Partial<BattleParticipation> = {
-      answers: newAnswers,
-      totalScore: newTotalScore,
-    };
-
-    updateDocumentNonBlocking(participantRef, updateData);
-
-  }, [showResult, isTeacher, participation, participantRef, currentQuestion, timeLeft]);
-  
-  // Timer countdown effect
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (timeLeft > 0 && !showResult && !isTeacher) {
-      timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
-    } else if (timeLeft === 0 && !showResult && !isTeacher) {
-        handleAnswer(null); // Submit timeout as the answer
-    }
-    return () => clearTimeout(timer);
-  }, [timeLeft, showResult, isTeacher, handleAnswer]);
-
-
-  const handleNextQuestion = () => {
-    if (isTeacher || !participantRef || !participation) return;
-
-    const nextIndex = currentQuestionIndex + 1;
-    
-    if (nextIndex < room.quiz.questions.length) {
-      updateDocumentNonBlocking(participantRef, { currentQuestionIndex: nextIndex });
     } else {
-      // Last question answered, mark as finished
-      updateDocumentNonBlocking(participantRef, { status: 'finished' });
-      // The BattleRoomLoader will detect the status change and render QuizResults
+      // Last question finished, end the battle
+      updateDocumentNonBlocking(battleRef, { state: 'finished' });
     }
   };
 
-  const getButtonClass = (index: number) => {
-    if (!showResult) return 'bg-secondary hover:bg-primary/20';
-    
-    if (currentQuestion && index === currentQuestion.correctAnswerIndex) return 'bg-green-500/80 ring-2 ring-green-400';
-    if (index === selectedAnswer && currentQuestion && index !== currentQuestion.correctAnswerIndex) return 'bg-red-500/80';
-    return 'bg-secondary opacity-50';
-  };
+  if (isLoadingQuestions || (battle.state === 'live' && !currentQuestion)) {
+    return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
+  }
   
-  // BattleRoomLoader handles rendering QuizResults now.
-  // This component will be unmounted when status changes to 'finished'.
-  if (participation?.status === 'finished') {
-     // Wait a moment for the user to see the result of the last question before navigating.
-     setTimeout(() => {
-        // The loader component will handle the redirect to the results page.
-        // We just need to make sure our state is final.
-     }, 2000);
-     // Show a loading spinner during this brief wait.
-    return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
-  }
-
-
   if (!currentQuestion) {
-    // This can happen if the student finishes but the component hasn't swapped out yet.
-    // A loading state is safe.
-    return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
+      return (
+           <div className="flex h-screen flex-col items-center justify-center gap-4 text-center p-4">
+             <h1 className="text-2xl font-bold">Waiting for Next Question</h1>
+             <p className="text-muted-foreground">The teacher is preparing the next challenge.</p>
+           </div>
+      )
   }
-
-  if (!isTeacher && !participation) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="text-muted-foreground">Preparing your station...</p>
-      </div>
-    );
-  }
-
-  const isLastQuestion = currentQuestionIndex >= room.quiz.questions.length - 1;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <AlertDialog open={showViolationWarning} onOpenChange={setShowViolationWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Warning: Focus Lost</AlertDialogTitle>
+            <AlertDialogDescription>
+              You navigated away from the quiz. Continued violations will result in being blocked from the battle. Please stay focused to ensure fair play.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowViolationWarning(false)}>I Understand</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Card className="w-full max-w-4xl border-accent/50 shadow-lg shadow-accent/10">
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <CardTitle className="text-2xl font-headline text-primary">{room.quiz.title}</CardTitle>
-            {isTeacher ? (
-                 <div className="flex items-center gap-2 text-lg font-mono">
-                    <Users className="w-5 h-5" />
-                    {allParticipants?.length || 0} Gladiators
-                </div>
-            ) : (
-              <div className="flex items-center gap-4">
-                 <div className="flex items-center gap-2 text-lg font-mono text-yellow-400">
-                    <Trophy className="w-5 h-5" />
-                    {participation?.totalScore || 0}
-                  </div>
-                 <div className="flex items-center gap-2 text-lg font-mono">
-                  <Clock className="w-5 h-5" />
-                  {timeLeft}s
-                </div>
+            <CardTitle className="text-2xl font-headline text-primary">{battle.title}</CardTitle>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-lg font-mono">
+                <Clock className="w-5 h-5" />
+                {timeLeft}s
               </div>
-            )}
+            </div>
           </div>
-          <Progress value={currentQuestion.timer > 0 ? (timeLeft / currentQuestion.timer) * 100 : 0} className="w-full h-2 mt-2" />
-          <CardDescription>Question {currentQuestionIndex + 1} of {room.quiz.questions.length}</CardDescription>
+          <Progress value={(timeLeft / (currentQuestion?.timer || battle.timeLimit || 1)) * 100} className="w-full h-2 mt-2" />
+          <CardDescription>Question {battle.currentQuestionIndex + 1} of {battle.questionCount}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="text-xl md:text-2xl text-center font-medium">{currentQuestion.text}</p>
@@ -201,9 +235,12 @@ export default function LiveBattle({ room, user, participation, allParticipants,
             {currentQuestion.options.map((option, index) => (
               <Button
                 key={index}
-                onClick={() => handleAnswer(index)}
-                disabled={showResult || isTeacher}
-                className={cn("h-auto min-h-16 text-wrap p-4 text-base justify-start transition-all duration-300", getButtonClass(index))}
+                onClick={() => handleAnswerSubmit(index)}
+                disabled={hasAnswered || isTeacher}
+                className={cn("h-auto min-h-16 text-wrap p-4 text-base justify-start transition-all duration-300", 
+                    hasAnswered && selectedAnswer === index ? 'bg-primary ring-2 ring-primary-foreground' : 'bg-secondary hover:bg-primary/20',
+                    hasAnswered && selectedAnswer !== index ? 'opacity-50' : ''
+                )}
               >
                 <span className="font-bold mr-4">{String.fromCharCode(65 + index)}.</span>
                 {option}
@@ -211,71 +248,26 @@ export default function LiveBattle({ room, user, participation, allParticipants,
             ))}
           </div>
 
-          {showResult && !isTeacher && (
-             <div className="flex flex-col items-center gap-4">
-                <Card className="mt-6 bg-secondary/50 p-4 w-full">
-                    <div className="flex items-start gap-4">
-                        {selectedAnswer === currentQuestion.correctAnswerIndex ? (
-                            <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
-                        ) : (
-                            <XCircle className="w-8 h-8 text-red-400 shrink-0" />
-                        )}
-                        <div>
-                            <h3 className="font-bold text-lg">
-                               {selectedAnswer === currentQuestion.correctAnswerIndex ? 'Correct!' : 'Incorrect'}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">The correct answer was: {currentQuestion.options[currentQuestion.correctAnswerIndex]}</p>
-                        </div>
-                    </div>
-                </Card>
-                <Button onClick={handleNextQuestion}>
-                    {isLastQuestion ? 'Finish Battle' : 'Next Question'}
-                    <ArrowRight className="ml-2"/>
-                </Button>
-            </div>
+          {hasAnswered && !isTeacher && (
+             <div className="text-center text-muted-foreground p-4">
+                <p className="font-bold">Your answer has been submitted!</p>
+                <p>Waiting for the teacher to proceed to the next question...</p>
+             </div>
           )}
           
           {isTeacher && (
-            <div className='flex flex-col gap-4'>
-                <Card className="mt-6 bg-secondary/50 p-4">
-                     <div className="flex items-start gap-4">
-                        <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />
-                        <div>
-                            <h3 className="font-bold text-lg">
-                                Correct Answer: {currentQuestion.options[currentQuestion.correctAnswerIndex]}
-                            </h3>
-                        </div>
-                    </div>
-                </Card>
+            <div className='flex justify-end gap-4 mt-6'>
+                <Button onClick={handleTeacherNextQuestion} size="lg">
+                    {battle.currentQuestionIndex >= battle.questionCount - 1 ? 'Finish Battle' : 'Next Question'}
+                    <ArrowRight className="ml-2"/>
+                </Button>
             </div>
           )}
 
         </CardContent>
       </Card>
       
-      {isTeacher && allParticipants && (
-         <Card className="w-full max-w-4xl mt-4">
-            <CardHeader>
-                <CardTitle>Live Leaderboard</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="flex flex-wrap gap-4">
-                  {[...allParticipants].sort((a,b) => b.totalScore - a.totalScore).map(p => (
-                    <div key={p.id} className="flex items-center gap-3 p-2 rounded-md bg-secondary">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-sm bg-muted">{p.studentAvatar}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium max-w-20 truncate">{p.studentName}</span>
-                        <span className='text-xs text-primary font-mono'>{p.totalScore} pts</span>
-                      </div>
-                       {p.status === 'finished' && <CheckCircle className="w-4 h-4 text-green-500" />}
-                    </div>
-                  ))}
-                </div>
-            </CardContent>
-         </Card>
-      )}
+      {isTeacher && <LiveLeaderboard battleId={battle.id} />}
 
         {!isTeacher && (
             <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">

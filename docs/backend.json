@@ -3,13 +3,9 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "Represents a user in the application, either a Teacher or a Student.",
+      "description": "Represents a user profile stored in Firestore.",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the user, matching the Firebase Auth UID."
-        },
         "name": {
           "type": "string",
           "description": "The user's display name."
@@ -21,182 +17,217 @@
         },
         "role": {
           "type": "string",
-          "description": "The role of the user.",
+          "description": "The role of the user, primarily for UI distinctions. Security is handled by custom claims.",
           "enum": ["Teacher", "Student"]
         },
         "avatar": {
-            "type": "string",
-            "description": "Emoji representing the user's avatar."
+          "type": "string",
+          "description": "Emoji representing the user's avatar."
         }
       },
-      "required": ["id", "name", "email", "role", "avatar"]
+      "required": ["name", "email", "role", "avatar"]
     },
-    "Quiz": {
-      "title": "Quiz",
-      "description": "Represents a set of questions created by a teacher.",
+    "Battle": {
+      "title": "Battle",
+      "description": "The main document for a quiz battle session.",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the quiz."
-        },
-        "teacherId": {
-          "type": "string",
-          "description": "The UID of the teacher who owns this quiz."
-        },
         "title": {
           "type": "string",
-          "description": "The title of the quiz."
+          "description": "Title of the quiz for this battle."
         },
-        "questions": {
-          "type": "array",
-          "description": "An array of question objects.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "text": { "type": "string" },
-              "options": {
-                "type": "array",
-                "items": { "type": "string" }
-              },
-              "correctAnswerIndex": { "type": "number" },
-              "timer": { "type": "number" }
-            },
-            "required": ["id", "text", "options", "correctAnswerIndex", "timer"]
-          }
-        }
-      },
-      "required": ["id", "teacherId", "title", "questions"]
-    },
-    "BattleRoom": {
-      "title": "BattleRoom",
-      "description": "Represents a live quiz session initiated by a teacher.",
-      "type": "object",
-      "properties": {
-        "id": {
+        "state": {
           "type": "string",
-          "description": "Unique identifier for the battle room (the room code)."
-        },
-        "teacherId": {
-          "type": "string",
-          "description": "The UID of the teacher hosting the battle."
-        },
-        "quiz": {
-          "$ref": "#/backend/entities/Quiz",
-          "description": "A denormalized copy of the quiz object for the battle."
-        },
-        "status": {
-          "type": "string",
-          "description": "The current status of the battle.",
-          "enum": ["waiting", "in-progress", "finished"]
+          "description": "The current state of the battle.",
+          "enum": ["waiting", "live", "finished"]
         },
         "currentQuestionIndex": {
           "type": "number",
           "description": "The index of the currently active question."
         },
+        "questionCount": {
+          "type": "number",
+          "description": "Total number of questions in the battle."
+        },
+        "questionStartAt": {
+          "type": "number",
+          "description": "Server timestamp for when the current question was started."
+        },
+        "timeLimit": {
+          "type": "number",
+          "description": "The duration in seconds for the current question."
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "The UID of the teacher who created the battle."
+        },
         "createdAt": {
-            "type": "number",
-            "description": "Timestamp when the room was created."
+          "type": "number",
+          "description": "Timestamp when the room was created."
         }
       },
-      "required": ["id", "teacherId", "quiz", "status", "currentQuestionIndex", "createdAt"]
+      "required": ["title", "state", "currentQuestionIndex", "questionCount", "createdBy", "createdAt"]
     },
-    "BattleParticipation": {
-      "title": "BattleParticipation",
-      "description": "Tracks a student's state within a specific battle room.",
+    "BattleQuestion": {
+      "title": "BattleQuestion",
+      "description": "A single question within a battle. Publicly readable question data.",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the participation record."
+        "text": {
+          "type": "string"
         },
-        "studentId": {
-          "type": "string",
-          "description": "The UID of the participating student."
-        },
-        "studentName": {
-            "type": "string"
-        },
-        "studentAvatar": {
-            "type": "string"
-        },
-        "battleRoomId": {
-          "type": "string",
-          "description": "The ID of the battle room this participation belongs to."
-        },
-        "answers": {
+        "options": {
           "type": "array",
-          "description": "An array of the student's answers.",
+          "items": { "type": "string" }
+        },
+        "timer": {
+          "type": "number",
+          "description": "The time limit for this question in seconds."
+        }
+      },
+      "required": ["text", "options", "timer"]
+    },
+    "BattleAnswerKey": {
+      "title": "BattleAnswerKey",
+      "description": "Server-only document containing the correct answer for a question.",
+      "type": "object",
+      "properties": {
+        "correctOptionIndex": {
+          "type": "number"
+        }
+      },
+      "required": ["correctOptionIndex"]
+    },
+    "BattleParticipant": {
+      "title": "BattleParticipant",
+      "description": "Represents a user's participation and state within a battle.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "avatar": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["teacher", "student"]
+        },
+        "score": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["playing", "finished", "blocked"]
+        },
+        "violationsCount": {
+          "type": "number"
+        }
+      },
+      "required": ["name", "avatar", "role", "score", "status", "violationsCount"]
+    },
+    "BattleAnswer": {
+      "title": "BattleAnswer",
+      "description": "A student's submitted answer for a single question.",
+      "type": "object",
+      "properties": {
+        "selectedOption": {
+          "type": "number"
+        },
+        "submittedAt": {
+          "type": "number"
+        }
+      },
+      "required": ["selectedOption", "submittedAt"]
+    },
+     "Leaderboard": {
+      "title": "Leaderboard",
+      "description": "Aggregated and throttled leaderboard data.",
+      "type": "object",
+      "properties": {
+        "topPlayers": {
+          "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "questionId": { "type": "string" },
-              "answerIndex": { "type": "number" },
-              "isCorrect": { "type": "boolean" },
+              "userId": { "type": "string" },
+              "name": { "type": "string" },
+              "avatar": { "type": "string" },
               "score": { "type": "number" }
-            },
-            "required": ["questionId", "answerIndex", "isCorrect", "score"]
+            }
           }
         },
-        "totalScore": {
+        "updatedAt": {
           "type": "number"
-        },
-        "malpracticeCount": {
-          "type": "number",
-          "description": "Number of times malpractice was detected."
-        },
-        "isBlocked": {
-          "type": "boolean",
-          "description": "If true, the student is blocked from continuing the quiz."
         }
-      },
-      "required": ["id", "studentId", "studentName", "studentAvatar", "battleRoomId", "answers", "totalScore", "malpracticeCount", "isBlocked"]
+      }
     }
   },
   "auth": {
-    "providers": ["password"]
+    "providers": ["password"],
+    "customClaims": {
+      "role": {
+        "type": "string",
+        "enum": ["teacher", "student"]
+      }
+    }
   },
   "firestore": {
     "structure": [
       {
         "path": "/users/{userId}",
         "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores public profile information for all users."
+          "schema": { "$ref": "#/backend/entities/User" },
+          "description": "Stores public user profile information."
         }
       },
       {
-        "path": "/quizzes/{quizId}",
+        "path": "/battles/{battleId}",
         "definition": {
-          "entityName": "Quiz",
-          "schema": {
-            "$ref": "#/backend/entities/Quiz"
-          },
-          "description": "Top-level collection for all quizzes created by teachers."
+          "schema": { "$ref": "#/backend/entities/Battle" },
+          "description": "The root document for a single quiz battle."
         }
       },
       {
-        "path": "/battleRooms/{battleRoomId}",
+        "path": "/battles/{battleId}/questions/{questionId}",
         "definition": {
-          "entityName": "BattleRoom",
-          "schema": {
-            "$ref": "#/backend/entities/BattleRoom"
-          },
-          "description": "Top-level collection for all live battle sessions."
+          "schema": { "$ref": "#/backend/entities/BattleQuestion" },
+          "description": "Publicly visible data for each question in a battle."
         }
       },
       {
-        "path": "/battleRooms/{battleRoomId}/participants/{participantId}",
+        "path": "/battles/{battleId}/answerKeys/{questionId}",
         "definition": {
-          "entityName": "BattleParticipation",
-          "schema": {
-            "$ref": "#/backend/entities/BattleParticipation"
-          },
-          "description": "Sub-collection storing participation records for each student in a battle."
+          "schema": { "$ref": "#/backend/entities/BattleAnswerKey" },
+          "description": "Server-only correct answer data for each question."
+        }
+      },
+      {
+        "path": "/battles/{battleId}/participants/{userId}",
+        "definition": {
+          "schema": { "$ref": "#/backend/entities/BattleParticipant" },
+          "description": "A user's state, score, and status within a battle."
+        }
+      },
+      {
+        "path": "/battles/{battleId}/answers/{userId}/{questionId}",
+        "definition": {
+          "schema": { "$ref": "#/backend/entities/BattleAnswer" },
+          "description": "A student's submitted answer for a specific question."
+        }
+      },
+      {
+        "path": "/battles/{battleId}/violations/{userId}",
+        "definition": {
+          "schema": { "type": "object", "properties": { "timestamp": { "type": "number" }} },
+          "description": "Log of anti-cheating violations reported by the client."
+        }
+      },
+      {
+        "path": "/battles/{battleId}/leaderboard/summary",
+        "definition": {
+            "schema": { "$ref": "#/backend/entities/Leaderboard" },
+            "description": "A single document containing aggregated leaderboard data, updated by a server process."
         }
       }
     ]

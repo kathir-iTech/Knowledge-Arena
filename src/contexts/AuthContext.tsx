@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useState, useEffect, useCallback } from 'react';
@@ -49,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (userDoc.exists()) {
             setUser({ id: userDoc.id, ...userDoc.data() } as User);
         } else {
-            console.warn(`User document not found for uid: ${uid}`);
+            console.warn(`User document not found for uid: ${uid}. This may happen if creation is pending.`);
             if (auth) signOut(auth); 
             setUser(null);
         }
@@ -103,13 +104,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Password is required.");
     }
 
+    // NOTE: The role logic is now server-side. A Cloud Function triggered on user creation
+    // should read the email domain and set a custom claim. This client-side `role` is
+    // for immediate UI feedback only. The true authority is the custom claim.
+    const role = credentials.email.endsWith('@staffs.com') ? 'Teacher' : 'Student';
+
     try {
       setIsLoading(true);
       const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, credentials.password);
-      const role = credentials.email.endsWith('@staffs.com') ? 'Teacher' : 'Student';
       
-      const newUser: User = {
-        id: userCredential.user.uid,
+      const newUser: Omit<User, 'id'> = {
         name: credentials.name,
         email: credentials.email,
         avatar: getRandomAvatar(),
@@ -117,6 +121,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       
       const userRef = doc(firestore, "users", userCredential.user.uid);
+      
+      // This document is for UI data. The custom claim is what security rules will use.
       await setDoc(userRef, newUser).catch(error => {
         const permissionError = new FirestorePermissionError({
           path: userRef.path,
@@ -127,7 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error;
       });
       
-      setUser(newUser);
+      setUser({ ...newUser, id: userCredential.user.uid });
       
     } catch (error: any) {
        if (error.code === 'auth/email-already-in-use') {

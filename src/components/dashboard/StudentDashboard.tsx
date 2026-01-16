@@ -9,10 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFirestore } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Loader2, Swords } from 'lucide-react';
-import type { BattleRoom, BattleParticipation } from '@/lib/types';
-import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import type { BattleParticipant } from '@/lib/types';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -28,24 +27,25 @@ export default function StudentDashboard() {
     if (!roomCode.trim() || !firestore || !user) return;
 
     setIsLoading(true);
-    const roomCodeUpper = roomCode.trim().toUpperCase();
+    const battleId = roomCode.trim().toUpperCase();
 
     try {
-      const roomRef = doc(firestore, 'battleRooms', roomCodeUpper);
-      const roomSnap = await getDoc(roomRef);
+      // 1. Check if the battle exists
+      const battleRef = doc(firestore, 'battles', battleId);
+      const battleSnap = await getDoc(battleRef);
 
-      if (!roomSnap.exists()) {
+      if (!battleSnap.exists()) {
         toast({
           variant: 'destructive',
           title: 'Room Not Found',
-          description: `The battle room with code "${roomCodeUpper}" does not exist.`,
+          description: `The battle room with code "${battleId}" does not exist.`,
         });
         setIsLoading(false);
         return;
       }
       
-      const roomData = roomSnap.data() as BattleRoom;
-      if (roomData.status === 'finished') {
+      const battleData = battleSnap.data();
+      if (battleData.state === 'finished') {
         toast({
             variant: 'destructive',
             title: 'Battle Finished',
@@ -55,60 +55,46 @@ export default function StudentDashboard() {
         return;
       }
       
-      const participantRef = doc(firestore, 'battleRooms', roomCodeUpper, 'participants', user.id);
+      // 2. Check if the student is already a participant and their status
+      const participantRef = doc(firestore, 'battles', battleId, 'participants', user.id);
       const participantSnap = await getDoc(participantRef);
 
       if (participantSnap.exists()) {
-          const participantData = participantSnap.data() as BattleParticipation;
-          if (participantData.isBlocked) {
+          const participantData = participantSnap.data() as BattleParticipant;
+          if (participantData.status === 'blocked') {
               toast({
                   variant: 'destructive',
                   title: 'Action Denied',
-                  description: 'You are blocked from this battle due to malpractice. Please ask your teacher to reset your attempt.',
+                  description: 'You are blocked from this battle. Please ask your teacher to reset your attempt.',
               });
               setIsLoading(false);
               return;
           }
-          if (participantData.status === 'finished') {
-            toast({
-                variant: 'destructive',
-                title: 'Battle Already Completed',
-                description: 'You have already completed this battle. You cannot re-enter.',
-            });
-            setIsLoading(false);
-            return;
-        }
+          // If they already exist and are not blocked, they can just proceed to the battle page
+      } else {
+          // 3. If not a participant, create the participant document to "join"
+          const newParticipant: Omit<BattleParticipant, 'id'> = {
+            name: user.name,
+            avatar: user.avatar,
+            role: 'student',
+            score: 0,
+            status: 'playing',
+            violationsCount: 0,
+          };
+          // This create operation is allowed by security rules
+          await setDoc(participantRef, newParticipant);
       }
       
-      const newParticipant: BattleParticipation = {
-        id: user.id,
-        studentId: user.id,
-        studentName: user.name,
-        studentAvatar: user.avatar,
-        battleRoomId: roomCodeUpper,
-        status: 'playing',
-        answers: [],
-        totalScore: 0,
-        malpracticeCount: 0,
-        isBlocked: false,
-        currentQuestionIndex: 0,
-      };
-
-      setDocumentNonBlocking(participantRef, newParticipant, { merge: true });
-      
-      router.push(`/battle/${roomCodeUpper}`);
+      // 4. Redirect to the battle room
+      router.push(`/battle/${battleId}`);
 
     } catch (error: any) {
        console.error("Failed to join battle:", error);
-       if (error.code === 'permission-denied') {
-            router.push('/cheating-detected');
-       } else {
-            toast({
-                variant: 'destructive',
-                title: 'Error Joining Battle',
-                description: 'An unexpected error occurred. Please try again.',
-            });
-       }
+        toast({
+            variant: 'destructive',
+            title: 'Error Joining Battle',
+            description: error.message || 'An unexpected error occurred. Please try again.',
+        });
        setIsLoading(false);
     }
   };

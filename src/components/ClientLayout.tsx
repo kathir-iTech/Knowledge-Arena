@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -41,6 +42,17 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   }
   
   if (user) {
+    const isBattlePage = pathname.startsWith('/battle');
+    // Allow both teachers and students to access battle pages
+    if (isBattlePage) {
+       return (
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>{children}</SidebarInset>
+        </SidebarProvider>
+      );
+    }
+    
     if (pathname === '/') {
        if (user.role === 'Teacher') {
         redirect('/teacher/dashboard');
@@ -51,7 +63,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
 
     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
-    const isStudentPage = pathname.startsWith('/student') || pathname.startsWith('/battle');
+    const isStudentPage = pathname.startsWith('/student');
 
     if (user.role === 'Teacher' && isStudentPage) {
        redirect('/teacher/dashboard');
