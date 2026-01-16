@@ -8,9 +8,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // isTeacher() relies on custom claims set by a Cloud Function on user creation.
+    // isTeacher() reads the role from the user's document.
+    // This is less secure than custom claims but works without Cloud Functions.
     function isTeacher() {
-      return isSignedIn() && request.auth.token.role == 'teacher';
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
     }
 
     // isOwner checks if the requesting user's UID matches the document's ID.
@@ -25,10 +26,13 @@ service cloud.firestore {
 
     // --- Path Rules ---
 
-    // USER profiles are readable by any signed-in user, but only writable by the owner.
+    // USER profiles are readable by any signed-in user.
+    // They can be created by the owner.
+    // Updates are allowed by the owner, but they cannot change their role.
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow write: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && request.resource.data.role == resource.data.role;
     }
 
     // BATTLE root document.
