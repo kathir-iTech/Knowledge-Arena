@@ -2,8 +2,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useFirestore, useDoc, useCollection, updateDocumentNonBlocking } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useDoc, useCollection, updateDocumentNonBlocking, FirestorePermissionError, errorEmitter } from '@/firebase';
+import { doc, collection, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import type { Battle, BattleParticipant, BattleQuestion, User, Violation } from '@/lib/types';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useAuth } from '@/hooks/useAuth';
@@ -69,25 +69,13 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
   const [showViolationWarning, setShowViolationWarning] = useState(false);
 
   // --- Data Fetching ---
-  const currentQuestionRef = useMemo(() => {
-    if (!firestore || battle.currentQuestionIndex < 0) return null;
-    const questionId = battle.title + battle.currentQuestionIndex; // This needs a real ID
-    // This part is tricky. We need a way to get the current question ID from the index.
-    // This should ideally be part of the battle document or fetched separately.
-    // For now, we assume we can construct it, but this is a flaw.
-    // A better approach: The Battle document should contain the currentQuestionId.
-    return null; // Placeholder until we get the actual question ID
-  }, [firestore, battle.currentQuestionIndex, battle.title]);
-  // This demonstrates the need for a `questions` subcollection query.
-  
   const questionsRef = useMemo(() => collection(firestore, 'battles', battle.id, 'questions'), [firestore, battle.id]);
   const { data: questions, isLoading: isLoadingQuestions } = useCollection<BattleQuestion>(questionsRef);
 
   const currentQuestion = useMemo(() => {
     if (!questions || battle.currentQuestionIndex < 0 || battle.currentQuestionIndex >= questions.length) return null;
-    // This is inefficient. A better way is to have the battle doc store the current question ID.
-    // But for this client-driven approach, we sort by a creation order if available.
-    // For now, we'll assume the order is stable.
+    // NOTE: This assumes questions are returned in a stable order. A more robust
+    // solution would involve sorting them by a predefined order field.
     return questions[battle.currentQuestionIndex];
   }, [questions, battle.currentQuestionIndex]);
 
@@ -105,7 +93,7 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
             const remaining = Math.max(0, endTime - now);
             setTimeLeft(Math.ceil(remaining / 1000));
             if (remaining <= 0 && !hasAnswered && !isTeacher) {
-                // Time's up, but don't auto-submit. The server will reject late answers.
+                // Time's up. The server will reject late answers.
             }
         };
 
@@ -128,14 +116,19 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
   const onMalpractice = useCallback(() => {
     if (isTeacher || !firestore || !user) return;
     
-    // Show warning to user
     setShowViolationWarning(true);
 
-    // Report violation to the server
-    const violationRef = collection(firestore, `battles/${battle.id}/violations`);
-    addDoc(violationRef, { 
+    const violationRef = doc(firestore, `battles/${battle.id}/violations/${user.id}`);
+    const violationData = {
+        timestamp: serverTimestamp(),
         userId: user.id,
-        timestamp: serverTimestamp() 
+    };
+    
+    // Use setDoc to log the violation. The rule only allows 'create', so this
+    // will only succeed once per user, which is a flaw in the current rule design
+    // but this change makes the code correctly adhere to the rule.
+    setDoc(violationRef, violationData).catch(error => {
+        console.warn("Could not log violation. This is expected if one already exists.", error.message);
     });
 
   }, [isTeacher, firestore, user, battle.id]);
@@ -149,19 +142,24 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
     setSelectedAnswer(answerIndex);
 
     const answerRef = doc(firestore, `battles/${battle.id}/answers/${user.id}/${currentQuestion.id}`);
+    const answerData = {
+        selectedOption: answerIndex,
+        submittedAt: serverTimestamp()
+    };
     
-    // The client does NOT know if the answer is correct or the score.
-    // It only submits the chosen option. A Cloud Function will process this.
     try {
-        await addDoc(collection(firestore, `battles/${battle.id}/answers/${user.id}`), {
-             questionId: currentQuestion.id,
-             selectedOption: answerIndex,
-             submittedAt: serverTimestamp()
-        });
+        // Using setDoc to create a document with a specific ID, matching the security rule path.
+        await setDoc(answerRef, answerData);
     } catch (error) {
-        console.error("Error submitting answer:", error)
-        // Re-enable answering if submission fails?
-        setHasAnswered(false);
+        console.error("Error submitting answer:", error);
+        setHasAnswered(false); // Allow user to try again
+        
+        const permissionError = new FirestorePermissionError({
+            path: answerRef.path,
+            operation: 'create',
+            requestResourceData: answerData
+        });
+        errorEmitter.emit('permission-error', permissionError);
     }
   };
   
@@ -176,12 +174,11 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
         if (nextQuestion) {
             updateDocumentNonBlocking(battleRef, { 
                 currentQuestionIndex: nextIndex,
-                questionStartAt: Date.now(), // Not a server timestamp, but better than nothing on client
+                questionStartAt: serverTimestamp(),
                 timeLimit: nextQuestion.timer
             });
         }
     } else {
-      // Last question finished, end the battle
       updateDocumentNonBlocking(battleRef, { state: 'finished' });
     }
   };
@@ -278,3 +275,5 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
     </div>
   );
 }
+
+    
