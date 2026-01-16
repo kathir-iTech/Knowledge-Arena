@@ -51,7 +51,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
 
     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
-    const isStudentPage = pathname.startsWith('/student'); // Removed '/battle' from this check
+    const isStudentPage = pathname.startsWith('/student') || pathname.startsWith('/battle');
 
     if (user.role === 'Teacher' && isStudentPage) {
        redirect('/teacher/dashboard');
