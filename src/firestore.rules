@@ -56,21 +56,26 @@ service cloud.firestore {
       allow create: if isOwner(participantId) && !exists(/databases/$(database)/documents/battleRooms/$(roomId)/participants/$(participantId));
       
       allow update: if isSignedIn() && (
-        // Case 1: Student updating their own progress and score.
-        // They cannot un-block themselves or change their malpractice count here.
+        // Case 1: Student updating their own answers/score/status during normal gameplay.
+        // Malpractice fields cannot change in this transaction.
         (isOwner(participantId) && 
          isRoomInProgress(roomId) &&
          request.resource.data.isBlocked == resource.data.isBlocked &&
          request.resource.data.malpracticeCount == resource.data.malpracticeCount
         ) ||
-        // Case 2: Student's client reports malpractice.
-        // This is the only way a student can change these fields.
-        (isOwner(participantId) && 
-         isRoomInProgress(roomId) &&
-         request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
-         request.resource.data.isBlocked == true
+
+        // Case 2: Student client reports a focus loss (malpractice warning OR block).
+        (isOwner(participantId) && isRoomInProgress(roomId) &&
+          // Malpractice count must increment by exactly 1.
+          request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
+          // During this update, other gameplay fields must not change.
+          request.resource.data.answers.size() == resource.data.answers.size() &&
+          request.resource.data.totalScore == resource.data.totalScore &&
+          // isBlocked can either stay the same (for a warning) or be set to true (for a block). It cannot be set to false by the student.
+          (request.resource.data.isBlocked == resource.data.isBlocked || request.resource.data.isBlocked == true)
         ) ||
-        // Case 3: Teacher resetting a student's malpractice block.
+        
+        // Case 3: Teacher can reset a student's malpractice block.
         (isRoomTeacher(roomId) &&
          request.resource.data.isBlocked == false &&
          request.resource.data.malpracticeCount == 0

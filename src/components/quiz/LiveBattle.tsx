@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -15,7 +14,15 @@ import { Clock, Loader2, CheckCircle, XCircle, Shield, Trophy, Users, ArrowRight
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import QuizResults from './QuizResults';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 
 interface LiveBattleProps {
   room: BattleRoom;
@@ -31,6 +38,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
 
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [showMalpracticeWarning, setShowMalpracticeWarning] = useState(false);
   
   const currentQuestionIndex = useMemo(() => {
     if (isTeacher) return room.currentQuestionIndex;
@@ -49,16 +57,25 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   }, [firestore, room.id, user]);
 
   const onMalpractice = useCallback(() => {
-    if (isTeacher || !participation || !participantRef || participation.isBlocked) return;
+    if (isTeacher || !participation || !participantRef || participation.isBlocked || showMalpracticeWarning) return;
 
     const newMalpracticeCount = (participation.malpracticeCount || 0) + 1;
     
-    updateDocumentNonBlocking(participantRef, {
-        malpracticeCount: newMalpracticeCount,
-        isBlocked: true
-    });
-    router.push('/kicked');
-  }, [isTeacher, participation, participantRef, router]);
+    if (newMalpracticeCount >= 2) {
+        // Second strike, block the user
+        updateDocumentNonBlocking(participantRef, {
+            malpracticeCount: newMalpracticeCount,
+            isBlocked: true
+        });
+        router.push('/kicked');
+    } else {
+        // First strike, issue a warning
+        updateDocumentNonBlocking(participantRef, {
+            malpracticeCount: newMalpracticeCount
+        });
+        setShowMalpracticeWarning(true);
+    }
+  }, [isTeacher, participation, participantRef, router, showMalpracticeWarning]);
 
   usePageFocusChange(onMalpractice);
 
@@ -110,13 +127,13 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   // Timer countdown effect
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (timeLeft > 0 && !showResult && !isTeacher) {
+    if (timeLeft > 0 && !showResult && !isTeacher && !showMalpracticeWarning) {
       timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
     } else if (timeLeft === 0 && !showResult && !isTeacher) {
         handleAnswer(null); // Submit timeout as the answer
     }
     return () => clearTimeout(timer);
-  }, [timeLeft, showResult, isTeacher, handleAnswer]);
+  }, [timeLeft, showResult, isTeacher, handleAnswer, showMalpracticeWarning]);
 
 
   const handleNextQuestion = () => {
@@ -172,6 +189,7 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   const isLastQuestion = currentQuestionIndex >= room.quiz.questions.length - 1;
 
   return (
+    <>
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <Card className="w-full max-w-4xl border-accent/50 shadow-lg shadow-accent/10">
         <CardHeader>
@@ -287,5 +305,20 @@ export default function LiveBattle({ room, user, participation, allParticipants,
             </div>
         )}
     </div>
+    <AlertDialog open={showMalpracticeWarning} onOpenChange={setShowMalpracticeWarning}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive font-headline">Warning: Focus Lost!</AlertDialogTitle>
+            <AlertDialogDescription>
+                You have navigated away from the quiz. The timer has been paused. 
+                Continuing this behavior will result in being blocked from the battle. Fair play is required in the arena.
+            </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogAction onClick={() => setShowMalpracticeWarning(false)}>
+                I Understand
+            </AlertDialogAction>
+        </AlertDialogContent>
+    </AlertDialog>
+   </>
   );
 }
