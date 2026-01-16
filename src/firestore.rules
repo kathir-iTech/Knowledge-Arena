@@ -67,12 +67,8 @@ service cloud.firestore {
         // Case 2: Student client reports a focus loss (malpractice warning OR block).
         (isOwner(participantId) && isRoomInProgress(roomId) &&
           // Malpractice count must increment by exactly 1.
-          request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
-          // During this update, other gameplay fields must not change.
-          request.resource.data.answers.size() == resource.data.answers.size() &&
-          request.resource.data.totalScore == resource.data.totalScore &&
-          // isBlocked can either stay the same (for a warning) or be set to true (for a block). It cannot be set to false by the student.
-          (request.resource.data.isBlocked == resource.data.isBlocked || request.resource.data.isBlocked == true)
+         request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
+         request.resource.data.isBlocked == true
         ) ||
         
         // Case 3: Teacher can reset a student's malpractice block.

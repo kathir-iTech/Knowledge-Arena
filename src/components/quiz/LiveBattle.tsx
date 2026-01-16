@@ -14,15 +14,6 @@ import { Clock, Loader2, CheckCircle, XCircle, Shield, Trophy, Users, ArrowRight
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
 
 interface LiveBattleProps {
   room: BattleRoom;
@@ -38,7 +29,6 @@ export default function LiveBattle({ room, user, participation, allParticipants,
 
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
-  const [showMalpracticeWarning, setShowMalpracticeWarning] = useState(false);
   
   const currentQuestionIndex = useMemo(() => {
     if (isTeacher) return room.currentQuestionIndex;
@@ -57,25 +47,15 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   }, [firestore, room.id, user]);
 
   const onMalpractice = useCallback(() => {
-    if (isTeacher || !participation || !participantRef || participation.isBlocked || showMalpracticeWarning) return;
-
-    const newMalpracticeCount = (participation.malpracticeCount || 0) + 1;
+    if (isTeacher || !participation || !participantRef || participation.isBlocked) return;
     
-    if (newMalpracticeCount >= 2) {
-        // Second strike, block the user
-        updateDocumentNonBlocking(participantRef, {
-            malpracticeCount: newMalpracticeCount,
-            isBlocked: true
-        });
-        router.push('/kicked');
-    } else {
-        // First strike, issue a warning
-        updateDocumentNonBlocking(participantRef, {
-            malpracticeCount: newMalpracticeCount
-        });
-        setShowMalpracticeWarning(true);
-    }
-  }, [isTeacher, participation, participantRef, router, showMalpracticeWarning]);
+    // Immediately block the user
+    updateDocumentNonBlocking(participantRef, {
+        malpracticeCount: (participation.malpracticeCount || 0) + 1,
+        isBlocked: true
+    });
+    router.push('/kicked');
+  }, [isTeacher, participation, participantRef, router]);
 
   usePageFocusChange(onMalpractice);
 
@@ -127,13 +107,13 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   // Timer countdown effect
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (timeLeft > 0 && !showResult && !isTeacher && !showMalpracticeWarning) {
+    if (timeLeft > 0 && !showResult && !isTeacher) {
       timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
     } else if (timeLeft === 0 && !showResult && !isTeacher) {
         handleAnswer(null); // Submit timeout as the answer
     }
     return () => clearTimeout(timer);
-  }, [timeLeft, showResult, isTeacher, handleAnswer, showMalpracticeWarning]);
+  }, [timeLeft, showResult, isTeacher, handleAnswer]);
 
 
   const handleNextQuestion = () => {
@@ -189,7 +169,6 @@ export default function LiveBattle({ room, user, participation, allParticipants,
   const isLastQuestion = currentQuestionIndex >= room.quiz.questions.length - 1;
 
   return (
-    <>
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <Card className="w-full max-w-4xl border-accent/50 shadow-lg shadow-accent/10">
         <CardHeader>
@@ -305,20 +284,5 @@ export default function LiveBattle({ room, user, participation, allParticipants,
             </div>
         )}
     </div>
-    <AlertDialog open={showMalpracticeWarning} onOpenChange={setShowMalpracticeWarning}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-            <AlertDialogTitle className="text-destructive font-headline">Warning: Focus Lost!</AlertDialogTitle>
-            <AlertDialogDescription>
-                You have navigated away from the quiz. The timer has been paused. 
-                Continuing this behavior will result in being blocked from the battle. Fair play is required in the arena.
-            </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogAction onClick={() => setShowMalpracticeWarning(false)}>
-                I Understand
-            </AlertDialogAction>
-        </AlertDialogContent>
-    </AlertDialog>
-   </>
   );
 }
