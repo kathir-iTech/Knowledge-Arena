@@ -70,6 +70,15 @@ export default function StudentDashboard() {
               setIsLoading(false);
               return;
           }
+          if (participantData.status === 'finished') {
+            toast({
+                variant: 'destructive',
+                title: 'Battle Already Completed',
+                description: "You have already finished this battle and can't re-enter.",
+            });
+            setIsLoading(false);
+            return;
+          }
           // If they already exist and are not blocked, they can just proceed to the battle page
       } else {
           // 3. If not a participant, create the participant document to "join"
