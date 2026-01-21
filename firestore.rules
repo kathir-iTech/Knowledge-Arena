@@ -9,7 +9,6 @@ service cloud.firestore {
     }
 
     // isTeacher() reads the role from the user's document.
-    // This is less secure than custom claims but works without Cloud Functions.
     function isTeacher() {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
     }
@@ -37,10 +36,10 @@ service cloud.firestore {
 
     // BATTLE root document.
     match /battles/{battleId} {
-      // Any signed-in user can read the battle's state.
-      allow get: if isSignedIn();
-      // Only teachers can create or list battles.
-      allow list, create: if isTeacher();
+      // Any signed-in user can read a battle's state or list battles.
+      allow get, list: if isSignedIn();
+      // Only teachers can create battles.
+      allow create: if isTeacher();
       // Only the teacher who created the battle can update its state (e.g., start, next question, finish).
       allow update: if isBattleCreator(battleId);
       // Only the creator can delete it.
@@ -69,8 +68,8 @@ service cloud.firestore {
         allow read: if isSignedIn();
         // A user can join a battle by creating their own participant document, but only if one doesn't already exist.
         allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/battles/$(battleId)/participants/$(userId));
-        // NO client-side updates. Scores and status are managed by Cloud Functions.
-        allow update, delete: if isBattleCreator(battleId); // Teacher can kick/delete a user
+        // Teacher can kick/delete a user
+        allow update, delete: if isBattleCreator(battleId);
     }
     
     // ANSWERS can only be created by a student for themselves, for a specific question, and only once.
