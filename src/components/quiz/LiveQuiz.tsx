@@ -3,15 +3,16 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFirestore, useCollection, updateDocumentNonBlocking, FirestorePermissionError, errorEmitter } from '@/firebase';
-import { doc, collection, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import type { Quiz, QuizParticipant, QuizQuestion, QuizSubmission, User } from '@/lib/types';
+import { doc, collection, serverTimestamp, setDoc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
+import type { Quiz, QuizParticipant, QuizQuestion, QuizSubmission } from '@/lib/types';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Clock, Loader2, Users, ArrowRight, Shield } from 'lucide-react';
+import { Clock, Loader2, ArrowRight, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from '../ui/alert-dialog';
@@ -63,10 +64,12 @@ const LiveLeaderboard = ({ quizId }: { quizId: string }) => {
 export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps) {
   const { user } = useAuth();
   const firestore = useFirestore();
+  const { toast } = useToast();
   
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showViolationWarning, setShowViolationWarning] = useState(false);
+  const [isScoring, setIsScoring] = useState(false);
 
   // --- Data Fetching ---
   const questionsRef = useMemo(() => {
@@ -142,7 +145,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
     const submissionRef = doc(firestore, `quizzes/${quiz.id}/submissions/${user.id}/${currentQuestion.id}`);
     const submissionData: Omit<QuizSubmission, 'id'> = {
         selectedOption: answerIndex,
-        submittedAt: Date.now(), // Client time, but server validation should use server time
+        submittedAt: Date.now(),
     };
     
     try {
@@ -158,18 +161,77 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
         errorEmitter.emit('permission-error', permissionError);
     }
   };
+
+  const evaluateCurrentQuestion = async () => {
+    if (!isTeacher || !firestore || !questions || quiz.currentQuestionIndex < 0) return;
+
+    setIsScoring(true);
+    try {
+      const questionIndex = quiz.currentQuestionIndex;
+      const question = questions[questionIndex];
+      const questionId = question.id;
+      const questionStartTime = quiz.questionStartAt || 0;
+      const questionTimeLimit = question.timer * 1000;
+
+      const answerKeyRef = doc(firestore, `quizzes/${quiz.id}/answerKeys/${questionId}`);
+      const answerKeySnap = await getDoc(answerKeyRef);
+      if (!answerKeySnap.exists()) {
+        throw new Error(`Answer key not found for question: ${questionId}`);
+      }
+      const correctAnswerIndex = answerKeySnap.data().correctOptionIndex;
+
+      const participantsRef = collection(firestore, `quizzes/${quiz.id}/participants`);
+      const participantsSnap = await getDocs(participantsRef);
+      const students = participantsSnap.docs
+        .map(d => ({ ...d.data(), id: d.id } as QuizParticipant))
+        .filter(p => p.role === 'student');
+
+      const batch = writeBatch(firestore);
+
+      for (const student of students) {
+        const submissionRef = doc(firestore, `quizzes/${quiz.id}/submissions/${student.id}/${questionId}`);
+        const submissionSnap = await getDoc(submissionRef);
+
+        if (submissionSnap.exists()) {
+          const submissionData = submissionSnap.data() as QuizSubmission;
+          if (submissionData.selectedOption === correctAnswerIndex) {
+            const timeTaken = submissionData.submittedAt - questionStartTime;
+            let points = 0;
+            if (timeTaken <= questionTimeLimit) {
+              const basePoints = 500;
+              const timeBonus = Math.floor((1 - timeTaken / questionTimeLimit) * 500);
+              points = basePoints + timeBonus;
+            }
+            const participantRef = doc(firestore, `quizzes/${quiz.id}/participants/${student.id}`);
+            const newScore = (student.score || 0) + points;
+            batch.update(participantRef, { score: newScore });
+          }
+        }
+      }
+
+      await batch.commit();
+      toast({ title: 'Question Evaluated', description: 'Scores have been updated.' });
+    } catch (error: any) {
+      console.error("Error evaluating question:", error);
+      toast({ variant: 'destructive', title: 'Evaluation Failed', description: error.message });
+    } finally {
+      setIsScoring(false);
+    }
+  };
   
-  const handleTeacherNextQuestion = () => {
-    if (!isTeacher || !firestore || !questions) return;
+  const handleTeacherNextQuestion = async () => {
+    if (!isTeacher || !firestore || !questions || isScoring) return;
+
+    await evaluateCurrentQuestion();
 
     const nextIndex = quiz.currentQuestionIndex + 1;
     const quizRef = doc(firestore, 'quizzes', quiz.id);
 
     if (nextIndex < quiz.questionCount) {
-        updateDocumentNonBlocking(quizRef, { 
-            currentQuestionIndex: nextIndex,
-            questionStartAt: serverTimestamp(),
-        });
+      updateDocumentNonBlocking(quizRef, { 
+        currentQuestionIndex: nextIndex,
+        questionStartAt: serverTimestamp(),
+      });
     } else {
       updateDocumentNonBlocking(quizRef, { status: 'finished' });
     }
@@ -249,9 +311,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
           
           {isTeacher && (
             <div className='flex justify-end gap-4 mt-6'>
-                <Button onClick={handleTeacherNextQuestion} size="lg">
-                    {quiz.currentQuestionIndex >= quiz.questionCount - 1 ? 'Finish Quiz' : 'Next Question'}
-                    <ArrowRight className="ml-2"/>
+                <Button onClick={handleTeacherNextQuestion} size="lg" disabled={isScoring}>
+                    {isScoring && <Loader2 className="mr-2 animate-spin"/>}
+                    {isScoring ? 'Evaluating...' : (quiz.currentQuestionIndex >= quiz.questionCount - 1 ? 'Finish Quiz' : 'Next Question')}
+                    {!isScoring && <ArrowRight className="ml-2"/>}
                 </Button>
             </div>
           )}

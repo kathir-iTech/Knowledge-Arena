@@ -55,9 +55,10 @@ service cloud.firestore {
     }
     
     // ANSWER KEYS are only creatable by a teacher during quiz creation.
-    // They are completely locked down otherwise.
+    // The teacher who created the quiz can read them for evaluation.
     match /quizzes/{quizId}/answerKeys/{questionId} {
-        allow read, write: if false;
+        allow read: if isQuizCreator(quizId);
+        allow write: if false;
         allow create: if isTeacher();
     }
 
@@ -69,12 +70,13 @@ service cloud.firestore {
         // A user can join a quiz by creating their own participant document, but only if one doesn't already exist.
         allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId));
         // Teacher can kick/delete a user or update their status (e.g. unblock)
+        // A student can also update their own document to report a violation
         allow update: if isQuizCreator(quizId) || (
-          // A student can update their own document to report a violation
           isOwner(userId) &&
           get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live' &&
+          // Score can only be updated by the teacher (implicitly via isQuizCreator) or remain unchanged.
+          (request.resource.data.score == resource.data.score || isQuizCreator(quizId)) &&
           request.resource.data.violationsCount == resource.data.violationsCount + 1 &&
-          request.resource.data.score == resource.data.score &&
           request.resource.data.name == resource.data.name &&
           (request.resource.data.status == 'blocked' || request.resource.data.status == resource.data.status) &&
           resource.data.status != 'blocked'
@@ -84,8 +86,9 @@ service cloud.firestore {
     
     // SUBMISSIONS can only be created by a student for themselves, for a specific question, and only once.
     match /quizzes/{quizId}/submissions/{userId}/{questionId} {
-        // Can't read others' answers. Can't update/delete an answer once submitted.
-        allow read, update, delete: if false;
+        // The quiz creator can read submissions for scoring. Students cannot read any.
+        allow read: if isQuizCreator(quizId);
+        allow update, delete: if false;
         // Allow a user to create their own answer document if one doesn't already exist.
         allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/quizzes/$(quizId)/submissions/$(userId)/$(questionId));
     }
