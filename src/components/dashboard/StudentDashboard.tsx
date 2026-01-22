@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Loader2, Swords } from 'lucide-react';
-import type { BattleParticipant } from '@/lib/types';
+import type { QuizParticipant } from '@/lib/types';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -22,50 +22,50 @@ export default function StudentDashboard() {
   const [roomCode, setRoomCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleJoinBattle = async (e: React.FormEvent) => {
+  const handleJoinQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!roomCode.trim() || !firestore || !user) return;
 
     setIsLoading(true);
-    const battleId = roomCode.trim().toUpperCase();
+    const quizId = roomCode.trim().toUpperCase();
 
     try {
-      // 1. Check if the battle exists
-      const battleRef = doc(firestore, 'battles', battleId);
-      const battleSnap = await getDoc(battleRef);
+      // 1. Check if the quiz exists
+      const quizRef = doc(firestore, 'quizzes', quizId);
+      const quizSnap = await getDoc(quizRef);
 
-      if (!battleSnap.exists()) {
+      if (!quizSnap.exists()) {
         toast({
           variant: 'destructive',
           title: 'Room Not Found',
-          description: `The battle room with code "${battleId}" does not exist.`,
+          description: `The quiz room with code "${quizId}" does not exist.`,
         });
         setIsLoading(false);
         return;
       }
       
-      const battleData = battleSnap.data();
-      if (battleData.state === 'finished') {
+      const quizData = quizSnap.data();
+      if (quizData.status === 'finished') {
         toast({
             variant: 'destructive',
-            title: 'Battle Finished',
-            description: `This battle has already ended.`,
+            title: 'Quiz Finished',
+            description: `This quiz has already ended.`,
         });
         setIsLoading(false);
         return;
       }
       
       // 2. Check if the student is already a participant and their status
-      const participantRef = doc(firestore, 'battles', battleId, 'participants', user.id);
+      const participantRef = doc(firestore, 'quizzes', quizId, 'participants', user.id);
       const participantSnap = await getDoc(participantRef);
 
       if (participantSnap.exists()) {
-          const participantData = participantSnap.data() as BattleParticipant;
+          const participantData = participantSnap.data() as QuizParticipant;
           if (participantData.status === 'blocked') {
               toast({
                   variant: 'destructive',
                   title: 'Action Denied',
-                  description: 'You are blocked from this battle. Please ask your teacher to reset your attempt.',
+                  description: 'You are blocked from this quiz. Please ask your teacher to reset your attempt.',
               });
               setIsLoading(false);
               return;
@@ -73,16 +73,16 @@ export default function StudentDashboard() {
           if (participantData.status === 'finished') {
             toast({
                 variant: 'destructive',
-                title: 'Battle Already Completed',
-                description: "You have already finished this battle and can't re-enter.",
+                title: 'Quiz Already Completed',
+                description: "You have already finished this quiz and can't re-enter.",
             });
             setIsLoading(false);
             return;
           }
-          // If they already exist and are not blocked, they can just proceed to the battle page
+          // If they already exist and are not blocked, they can just proceed to the quiz page
       } else {
           // 3. If not a participant, create the participant document to "join"
-          const newParticipant: Omit<BattleParticipant, 'id'> = {
+          const newParticipant: Omit<QuizParticipant, 'id'> = {
             name: user.name,
             avatar: user.avatar,
             role: 'student',
@@ -94,13 +94,13 @@ export default function StudentDashboard() {
           await setDoc(participantRef, newParticipant);
       }
       
-      // 4. Redirect to the battle room
-      router.push(`/battle/${battleId}`);
+      // 4. Redirect to the quiz room
+      router.push(`/battle/${quizId}`);
 
     } catch (error: any) {
         toast({
             variant: 'destructive',
-            title: 'Error Joining Battle',
+            title: 'Error Joining Quiz',
             description: error.message || 'An unexpected error occurred. Please try again.',
         });
        setIsLoading(false);
@@ -125,7 +125,7 @@ export default function StudentDashboard() {
             <CardDescription className="text-center">Enter the code provided by your teacher to join the battle.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleJoinBattle} className="space-y-4">
+            <form onSubmit={handleJoinQuiz} className="space-y-4">
               <Input
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value)}
@@ -140,7 +140,7 @@ export default function StudentDashboard() {
                 ) : (
                   <Swords className="mr-2 h-5 w-5" />
                 )}
-                Join Battle
+                Join Quiz
               </Button>
             </form>
           </CardContent>

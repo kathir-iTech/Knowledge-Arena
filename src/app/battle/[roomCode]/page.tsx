@@ -1,5 +1,5 @@
-import BattleRoomLoader from '@/components/quiz/BattleRoomLoader';
+import QuizRoomLoader from '@/components/quiz/QuizRoomLoader';
 
-export default function BattlePage() {
-  return <BattleRoomLoader />;
+export default function QuizPage() {
+  return <QuizRoomLoader />;
 }

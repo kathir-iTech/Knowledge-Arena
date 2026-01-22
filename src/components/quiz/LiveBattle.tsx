@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFirestore, useDoc, useCollection, updateDocumentNonBlocking, FirestorePermissionError, errorEmitter } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import type { Battle, BattleParticipant, BattleQuestion, User, Violation } from '@/lib/types';
+import type { Quiz, QuizParticipant, QuizQuestion, User, Violation } from '@/lib/types';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -16,20 +16,20 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from '../ui/alert-dialog';
 
-interface LiveBattleProps {
-  battle: Battle;
-  participant: BattleParticipant;
+interface LiveQuizProps {
+  quiz: Quiz;
+  participant: QuizParticipant;
   isTeacher: boolean;
 }
 
-const LiveLeaderboard = ({ battleId }: { battleId: string }) => {
+const LiveLeaderboard = ({ quizId }: { quizId: string }) => {
     const firestore = useFirestore();
     const participantsRef = useMemo(() => {
         if (!firestore) return null;
-        return collection(firestore, 'battles', battleId, 'participants');
-    }, [firestore, battleId]);
+        return collection(firestore, 'quizzes', quizId, 'participants');
+    }, [firestore, quizId]);
 
-    const { data: participants } = useCollection<BattleParticipant>(participantsRef);
+    const { data: participants } = useCollection<QuizParticipant>(participantsRef);
     
     const sortedParticipants = useMemo(() => {
         if (!participants) return [];
@@ -60,7 +60,7 @@ const LiveLeaderboard = ({ battleId }: { battleId: string }) => {
     );
 };
 
-export default function LiveBattle({ battle, participant, isTeacher }: LiveBattleProps) {
+export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps) {
   const { user } = useAuth();
   const firestore = useFirestore();
   
@@ -69,22 +69,20 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
   const [showViolationWarning, setShowViolationWarning] = useState(false);
 
   // --- Data Fetching ---
-  const questionsRef = useMemo(() => collection(firestore, 'battles', battle.id, 'questions'), [firestore, battle.id]);
-  const { data: questions, isLoading: isLoadingQuestions } = useCollection<BattleQuestion>(questionsRef);
+  const questionsRef = useMemo(() => collection(firestore, 'quizzes', quiz.id, 'questions'), [firestore, quiz.id]);
+  const { data: questions, isLoading: isLoadingQuestions } = useCollection<QuizQuestion>(questionsRef);
 
   const currentQuestion = useMemo(() => {
-    if (!questions || battle.currentQuestionIndex < 0 || battle.currentQuestionIndex >= questions.length) return null;
-    // NOTE: This assumes questions are returned in a stable order. A more robust
-    // solution would involve sorting them by a predefined order field.
-    return questions[battle.currentQuestionIndex];
-  }, [questions, battle.currentQuestionIndex]);
+    if (!questions || quiz.currentQuestionIndex < 0 || quiz.currentQuestionIndex >= questions.length) return null;
+    return questions[quiz.currentQuestionIndex];
+  }, [questions, quiz.currentQuestionIndex]);
 
   // --- Timer Logic ---
-  const [timeLeft, setTimeLeft] = useState(currentQuestion?.timer || battle.timeLimit || 0);
+  const [timeLeft, setTimeLeft] = useState(currentQuestion?.timer || quiz.timeLimit || 0);
 
   useEffect(() => {
     if (currentQuestion) {
-        const serverStartTime = battle.questionStartAt || Date.now();
+        const serverStartTime = quiz.questionStartAt || Date.now();
         const timeLimit = currentQuestion.timer * 1000;
         const endTime = serverStartTime + timeLimit;
 
@@ -92,9 +90,6 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
             const now = Date.now();
             const remaining = Math.max(0, endTime - now);
             setTimeLeft(Math.ceil(remaining / 1000));
-            if (remaining <= 0 && !hasAnswered && !isTeacher) {
-                // Time's up. The server will reject late answers.
-            }
         };
 
         const interval = setInterval(updateTimer, 500);
@@ -102,7 +97,7 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
         
         return () => clearInterval(interval);
     }
-  }, [currentQuestion, battle.questionStartAt, hasAnswered, isTeacher]);
+  }, [currentQuestion, quiz.questionStartAt]);
 
 
   // --- State Reset on Question Change ---
@@ -118,20 +113,16 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
     
     setShowViolationWarning(true);
 
-    const violationRef = doc(firestore, `battles/${battle.id}/violations/${user.id}`);
-    const violationData = {
-        timestamp: serverTimestamp(),
-        userId: user.id,
-    };
+    const violationData: Omit<Violation, 'timestamp'> = {
+      userId: user.id
+    }
+    const violationRef = collection(firestore, `quizzes/${quiz.id}/violations`);
     
-    // Use setDoc to log the violation. The rule only allows 'create', so this
-    // will only succeed once per user, which is a flaw in the current rule design
-    // but this change makes the code correctly adhere to the rule.
-    setDoc(violationRef, violationData).catch(error => {
-        console.warn("Could not log violation. This is expected if one already exists.", error.message);
+    addDoc(violationRef, { ...violationData, timestamp: serverTimestamp() }).catch(error => {
+        console.warn("Could not log violation", error.message);
     });
 
-  }, [isTeacher, firestore, user, battle.id]);
+  }, [isTeacher, firestore, user, quiz.id]);
 
   usePageFocusChange(onMalpractice);
 
@@ -141,22 +132,20 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
     setHasAnswered(true);
     setSelectedAnswer(answerIndex);
 
-    const answerRef = doc(firestore, `battles/${battle.id}/answers/${user.id}/${currentQuestion.id}`);
-    const answerData = {
-        selectedOption: answerIndex,
-        submittedAt: serverTimestamp()
+    const submissionRef = doc(firestore, `quizzes/${quiz.id}/submissions/${user.id}/${currentQuestion.id}`);
+    const submissionData: Omit<QuizSubmission, 'submittedAt'> = {
+        selectedOption: answerIndex
     };
     
     try {
-        // Using setDoc to create a document with a specific ID, matching the security rule path.
-        await setDoc(answerRef, answerData);
+        await setDoc(submissionRef, { ...submissionData, submittedAt: serverTimestamp() });
     } catch (error) {
         setHasAnswered(false); // Allow user to try again
         
         const permissionError = new FirestorePermissionError({
-            path: answerRef.path,
+            path: submissionRef.path,
             operation: 'create',
-            requestResourceData: answerData
+            requestResourceData: submissionData
         });
         errorEmitter.emit('permission-error', permissionError);
     }
@@ -165,24 +154,24 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
   const handleTeacherNextQuestion = () => {
     if (!isTeacher || !firestore) return;
 
-    const nextIndex = battle.currentQuestionIndex + 1;
-    const battleRef = doc(firestore, 'battles', battle.id);
+    const nextIndex = quiz.currentQuestionIndex + 1;
+    const quizRef = doc(firestore, 'quizzes', quiz.id);
 
-    if (nextIndex < battle.questionCount) {
+    if (nextIndex < quiz.questionCount) {
         const nextQuestion = questions?.[nextIndex];
         if (nextQuestion) {
-            updateDocumentNonBlocking(battleRef, { 
+            updateDocumentNonBlocking(quizRef, { 
                 currentQuestionIndex: nextIndex,
                 questionStartAt: serverTimestamp(),
                 timeLimit: nextQuestion.timer
             });
         }
     } else {
-      updateDocumentNonBlocking(battleRef, { state: 'finished' });
+      updateDocumentNonBlocking(quizRef, { status: 'finished' });
     }
   };
 
-  if (isLoadingQuestions || (battle.state === 'live' && !currentQuestion)) {
+  if (isLoadingQuestions || (quiz.status === 'live' && !currentQuestion)) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
   }
   
@@ -202,7 +191,7 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
           <AlertDialogHeader>
             <AlertDialogTitle>Warning: Focus Lost</AlertDialogTitle>
             <AlertDialogDescription>
-              You navigated away from the quiz. Continued violations will result in being blocked from the battle. Please stay focused to ensure fair play.
+              You navigated away from the quiz. Continued violations will result in being blocked from the quiz. Please stay focused to ensure fair play.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -214,7 +203,7 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
       <Card className="w-full max-w-4xl border-accent/50 shadow-lg shadow-accent/10">
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <CardTitle className="text-2xl font-headline text-primary">{battle.title}</CardTitle>
+            <CardTitle className="text-2xl font-headline text-primary">{quiz.title}</CardTitle>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-lg font-mono">
                 <Clock className="w-5 h-5" />
@@ -222,8 +211,8 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
               </div>
             </div>
           </div>
-          <Progress value={(timeLeft / (currentQuestion?.timer || battle.timeLimit || 1)) * 100} className="w-full h-2 mt-2" />
-          <CardDescription>Question {battle.currentQuestionIndex + 1} of {battle.questionCount}</CardDescription>
+          <Progress value={(timeLeft / (currentQuestion?.timer || quiz.timeLimit || 1)) * 100} className="w-full h-2 mt-2" />
+          <CardDescription>Question {quiz.currentQuestionIndex + 1} of {quiz.questionCount}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="text-xl md:text-2xl text-center font-medium">{currentQuestion.text}</p>
@@ -254,7 +243,7 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
           {isTeacher && (
             <div className='flex justify-end gap-4 mt-6'>
                 <Button onClick={handleTeacherNextQuestion} size="lg">
-                    {battle.currentQuestionIndex >= battle.questionCount - 1 ? 'Finish Battle' : 'Next Question'}
+                    {quiz.currentQuestionIndex >= quiz.questionCount - 1 ? 'Finish Quiz' : 'Next Question'}
                     <ArrowRight className="ml-2"/>
                 </Button>
             </div>
@@ -263,7 +252,7 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
         </CardContent>
       </Card>
       
-      {isTeacher && <LiveLeaderboard battleId={battle.id} />}
+      {isTeacher && <LiveLeaderboard quizId={quiz.id} />}
 
         {!isTeacher && (
             <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -274,5 +263,3 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
     </div>
   );
 }
-
-    

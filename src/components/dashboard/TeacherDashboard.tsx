@@ -4,12 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
-import type { Battle, BattleParticipant } from '@/lib/types';
+import type { Quiz, QuizParticipant } from '@/lib/types';
 import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw, Copy, CheckCircle } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw, Copy } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -32,7 +32,7 @@ import {
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '@/components/ui/badge';
 
-const BattleCard = ({ battle }: { battle: Battle }) => {
+const QuizCard = ({ quiz }: { quiz: Quiz }) => {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [isDeleting, setIsDeleting] = useState(false);
@@ -41,10 +41,10 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
     
     const participantsCollectionRef = React.useMemo(() => {
         if (!firestore) return null;
-        return collection(firestore, 'battles', battle.id, 'participants');
-    }, [firestore, battle.id]);
+        return collection(firestore, 'quizzes', quiz.id, 'participants');
+    }, [firestore, quiz.id]);
 
-    const { data: participants, isLoading: isLoadingParticipants } = useCollection<BattleParticipant>(participantsCollectionRef);
+    const { data: participants, isLoading: isLoadingParticipants } = useCollection<QuizParticipant>(participantsCollectionRef);
 
     const sortedParticipants = React.useMemo(() => {
         if (!participants) return [];
@@ -54,7 +54,7 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
     const resetStudentAttempt = (studentId: string) => {
         if (!firestore) return;
 
-        const participantRef = doc(firestore, 'battles', battle.id, 'participants', studentId);
+        const participantRef = doc(firestore, 'quizzes', quiz.id, 'participants', studentId);
         updateDocumentNonBlocking(participantRef, {
             status: 'playing',
             violationsCount: 0
@@ -65,82 +65,75 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
     const handleDelete = async () => {
         if (!firestore) return;
         setIsDeleting(true);
-        toast({ title: "Deletion in Progress", description: `Removing battle room ${battle.id} and all its data...` });
+        toast({ title: "Deletion in Progress", description: `Removing quiz room ${quiz.id} and all its data...` });
         try {
-            // This is a complex delete and should ideally be handled by a Cloud Function
-            // for robustness. For the client, we'll do our best.
             const batch = writeBatch(firestore);
-            const battleRef = doc(firestore, 'battles', battle.id);
+            const quizRef = doc(firestore, 'quizzes', quiz.id);
 
-            // Delete all subcollections (participants, questions, etc.)
-            const participantsSnap = await getDocs(collection(firestore, 'battles', battle.id, 'participants'));
+            // This is a simplified deletion for client-side. A Cloud Function is more robust.
+            const participantsSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'participants'));
             participantsSnap.forEach(doc => batch.delete(doc.ref));
 
-            const questionsSnap = await getDocs(collection(firestore, 'battles', battle.id, 'questions'));
+            const questionsSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'questions'));
             questionsSnap.forEach(doc => batch.delete(doc.ref));
             
-            const answerKeysSnap = await getDocs(collection(firestore, 'battles', battle.id, 'answerKeys'));
+            const answerKeysSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'answerKeys'));
             answerKeysSnap.forEach(doc => batch.delete(doc.ref));
 
-            // Finally, delete the battle document itself
-            batch.delete(battleRef);
+            batch.delete(quizRef);
             
             await batch.commit();
 
-            toast({ variant: "default", title: "Battle Deleted", description: `Battle room ${battle.id} was removed.` });
+            toast({ variant: "default", title: "Quiz Deleted", description: `Quiz room ${quiz.id} was removed.` });
         } catch (error) {
-             toast({ variant: "destructive", title: "Deletion Failed", description: "Could not delete the battle room." });
+             toast({ variant: "destructive", title: "Deletion Failed", description: "Could not delete the quiz room." });
              setIsDeleting(false);
         }
     }
     
-    const handleFinishBattle = async () => {
+    const handleFinishQuiz = async () => {
       if (!firestore) return;
       setIsFinishing(true);
-      const battleRef = doc(firestore, 'battles', battle.id);
+      const quizRef = doc(firestore, 'quizzes', quiz.id);
       try {
-        await updateDoc(battleRef, { state: 'finished' });
-        toast({ title: "Battle Finished", description: `Battle room ${battle.id} has been closed.` });
+        await updateDoc(quizRef, { status: 'finished' });
+        toast({ title: "Quiz Finished", description: `Quiz room ${quiz.id} has been closed.` });
       } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not finish the battle.' });
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not finish the quiz.' });
       } finally {
         setIsFinishing(false);
       }
     };
 
-    const handleResetBattle = async () => {
+    const handleResetQuiz = async () => {
         if (!firestore) return;
         setIsResetting(true);
         try {
-            // Delete all participant and answer data
             const batch = writeBatch(firestore);
-            const participantsQuery = collection(firestore, 'battles', battle.id, 'participants');
+            const participantsQuery = collection(firestore, 'quizzes', quiz.id, 'participants');
             const participantsSnapshot = await getDocs(participantsQuery);
             participantsSnapshot.forEach(pDoc => {
-                // Keep the teacher's participant doc, reset others
                 if (pDoc.data().role !== 'teacher') {
                     batch.delete(pDoc.ref);
                 }
             });
-            // A more robust solution would also delete the `answers` subcollection
 
-            // Reset the room state
-            const roomRef = doc(firestore, 'battles', battle.id);
+            const roomRef = doc(firestore, 'quizzes', quiz.id);
             batch.update(roomRef, { 
-                state: 'waiting',
+                status: 'waiting',
                 currentQuestionIndex: -1
             });
             
             await batch.commit();
-            toast({ title: "Battle Reset", description: `Battle room ${battle.id} is now in the waiting room.` });
+            toast({ title: "Quiz Reset", description: `Quiz room ${quiz.id} is now in the waiting room.` });
         } catch (error) {
-            toast({ variant: "destructive", title: "Reset Failed", description: "Could not reset the battle room." });
+            toast({ variant: "destructive", title: "Reset Failed", description: "Could not reset the quiz room." });
         } finally {
             setIsResetting(false);
         }
     };
 
-    const getStatusVariant = (status: Battle['state']) => {
+    const getStatusVariant = (status: Quiz['status']) => {
         switch (status) {
             case 'waiting': return 'secondary';
             case 'live': return 'default';
@@ -159,20 +152,20 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
         <Card className="bg-secondary/50">
             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex-1">
-                    <Link href={`/battle/${battle.id}`}>
+                    <Link href={`/battle/${quiz.id}`}>
                         <CardTitle className="text-xl font-headline hover:underline">
-                            {battle.title || 'Untitled Battle'}
+                            {quiz.title || 'Untitled Quiz'}
                         </CardTitle>
                     </Link>
                     <div className="flex items-center flex-wrap gap-2 mt-1">
                         <div className="flex items-center gap-1 text-muted-foreground">
                             <span>Code:</span>
-                            <span className="font-mono text-primary">{battle.id}</span>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyToClipboard(battle.id)}>
+                            <span className="font-mono text-primary">{quiz.id}</span>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyToClipboard(quiz.id)}>
                                 <Copy className="w-4 h-4"/>
                             </Button>
                         </div>
-                        <Badge variant={getStatusVariant(battle.state)}>{battle.state}</Badge>
+                        <Badge variant={getStatusVariant(quiz.status)}>{quiz.status}</Badge>
                          <div className="flex items-center gap-2 text-muted-foreground">
                             <Users className="w-5 h-5"/>
                             <span>{participants?.filter(p => p.role === 'student').length || 0}</span>
@@ -180,15 +173,15 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2 self-start sm:self-center">
-                    {battle.state === 'live' && (
-                        <Button variant="outline" size="sm" onClick={handleFinishBattle} disabled={isFinishing}>
+                    {quiz.status === 'live' && (
+                        <Button variant="outline" size="sm" onClick={handleFinishQuiz} disabled={isFinishing}>
                            {isFinishing ? <Loader2 className="animate-spin w-4 h-4" /> : 'Finish'}
                         </Button>
                     )}
-                     {battle.state === 'finished' && (
+                     {quiz.status === 'finished' && (
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="secondary" size="sm" disabled={isResetting} tooltip="Reset Battle">
+                                <Button variant="secondary" size="sm" disabled={isResetting}>
                                     {isResetting ? <Loader2 className="animate-spin w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
                                     <span className='ml-2 hidden sm:inline'>Reset</span>
                                 </Button>
@@ -197,13 +190,13 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    This will reset the battle, deleting all student scores and answers. 
+                                    This will reset the quiz, deleting all student scores and submissions. 
                                     The room will return to the 'waiting' state. This action cannot be undone.
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleResetBattle} disabled={isResetting}>
+                                <AlertDialogAction onClick={handleResetQuiz} disabled={isResetting}>
                                     {isResetting ? <Loader2 className="animate-spin" /> : "Confirm Reset"}
                                 </AlertDialogAction>
                                 </AlertDialogFooter>
@@ -220,7 +213,7 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the battle room
+                            This action cannot be undone. This will permanently delete the quiz room
                              and all associated data.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
@@ -249,7 +242,7 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
                                                 <AvatarFallback className="text-lg bg-muted">{p.avatar}</AvatarFallback>
                                             </Avatar>
                                             <div className='flex flex-col'>
-                                                <span className='flex items-center gap-1'>{p.name} {p.status === 'finished' && <CheckCircle className="w-4 h-4 text-green-500" />}</span>
+                                                <span className='flex items-center gap-1'>{p.name}</span>
                                                 {p.status === 'blocked' && <span className="text-xs text-destructive">Blocked ({p.violationsCount} violations)</span>}
                                             </div>
                                         </div>
@@ -266,7 +259,7 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
                                                 </div>
                                         </div>
                                     </div>
-                                    )) : <p className="text-center text-muted-foreground">No participants have joined this battle yet.</p>}
+                                    )) : <p className="text-center text-muted-foreground">No participants have joined this quiz yet.</p>}
                                 </div>
                             )}
                         </AccordionContent>
@@ -280,7 +273,7 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
 export default function TeacherDashboard() {
   const { user } = useAuth();
   const firestore = useFirestore();
-  const [battleRooms, setBattleRooms] = useState<Battle[]>([]);
+  const [quizRooms, setQuizRooms] = useState<Quiz[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -288,7 +281,7 @@ export default function TeacherDashboard() {
 
     setIsLoading(true);
     const roomsQuery = query(
-        collection(firestore, 'battles'),
+        collection(firestore, 'quizzes'),
         where('createdBy', '==', user.id)
     );
 
@@ -296,11 +289,11 @@ export default function TeacherDashboard() {
         const rooms = snapshot.docs.map(doc => ({
             ...doc.data(),
             id: doc.id,
-        } as Battle));
+        } as Quiz));
         
         rooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-        setBattleRooms(rooms);
+        setQuizRooms(rooms);
         setIsLoading(false);
     }, (error) => {
         setIsLoading(false);
@@ -318,14 +311,14 @@ export default function TeacherDashboard() {
     <div className="p-4 md:p-8 space-y-8">
       <header>
         <h1 className="text-4xl font-headline tracking-tight text-primary">Teacher Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back, {user.name}. Manage your battles and create new challenges.</p>
+        <p className="text-muted-foreground">Welcome back, {user.name}. Manage your quizzes and create new challenges.</p>
       </header>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-3">
             <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                    <CardTitle>Your Battles</CardTitle>
+                    <CardTitle>Your Quizzes</CardTitle>
                     <CardDescription>Manage your active sessions or review past results.</CardDescription>
                 </div>
                  <Link href="/create-quiz" passHref>
@@ -336,13 +329,13 @@ export default function TeacherDashboard() {
                 </Link>
             </CardHeader>
             <CardContent>
-                {battleRooms.length > 0 ? (
+                {quizRooms.length > 0 ? (
                     <div className="space-y-4">
-                        {battleRooms.map(room => <BattleCard key={room.id} battle={room} />)}
+                        {quizRooms.map(room => <QuizCard key={room.id} quiz={room} />)}
                     </div>
                 ) : (
                     <div className="text-center py-10 border-2 border-dashed border-border rounded-lg">
-                        <p className="text-muted-foreground">You haven't hosted any battles yet.</p>
+                        <p className="text-muted-foreground">You haven't hosted any quizzes yet.</p>
                         <Link href="/create-quiz" passHref>
                             <Button variant="link" className="mt-2">Create your first quiz to get started</Button>
                         </Link>

@@ -8,7 +8,7 @@ export default function CheatingDetectedPage() {
       <ShieldX className="w-24 h-24 text-destructive mb-6" />
       <h1 className="text-4xl font-headline text-destructive mb-2">Action Blocked by Server</h1>
       <p className="text-xl text-muted-foreground mb-8 max-w-md">
-        Your attempt to join the battle was denied due to a violation of server rules. This can happen if you try to join a room you are not authorized to access. Please contact your teacher if you believe this is an error.
+        Your attempt to join the quiz was denied due to a violation of server rules. This can happen if you try to join a room you are not authorized to access. Please contact your teacher if you believe this is an error.
       </p>
       <Link href="/" passHref>
         <Button variant="outline" size="lg">

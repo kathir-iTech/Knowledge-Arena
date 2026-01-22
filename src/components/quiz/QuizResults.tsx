@@ -3,7 +3,7 @@
 
 import React, { useMemo } from 'react';
 import Link from 'next/link';
-import type { Battle, BattleParticipant } from '@/lib/types';
+import type { Quiz, QuizParticipant } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,19 +15,19 @@ import { collection } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 
 interface QuizResultsProps {
-  battle: Battle;
+  quiz: Quiz;
 }
 
-export default function QuizResults({ battle }: QuizResultsProps) {
+export default function QuizResults({ quiz }: QuizResultsProps) {
   const { user } = useAuth();
   const firestore = useFirestore();
 
   const participantsRef = useMemo(() => 
-    collection(firestore, 'battles', battle.id, 'participants'), 
-    [firestore, battle.id]
+    collection(firestore, 'quizzes', quiz.id, 'participants'), 
+    [firestore, quiz.id]
   );
   
-  const { data: participants, isLoading } = useCollection<BattleParticipant>(participantsRef);
+  const { data: participants, isLoading } = useCollection<QuizParticipant>(participantsRef);
 
   const rankedPlayers = useMemo(() => {
     if (!participants) return [];
@@ -59,10 +59,10 @@ export default function QuizResults({ battle }: QuizResultsProps) {
       <Card className="w-full max-w-4xl border-primary/50 shadow-lg shadow-primary/10">
         <CardHeader className="text-center">
           <CardTitle className="text-4xl font-headline text-primary">
-            Battle Over!
+            Quiz Over!
           </CardTitle>
           <CardDescription>
-            The final results are in for "{battle.title}".
+            The final results are in for "{quiz.title}".
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -131,7 +131,7 @@ export default function QuizResults({ battle }: QuizResultsProps) {
               </Table>
             </>
           ) : (
-             <p className="text-center text-muted-foreground py-8">No students participated in this battle.</p>
+             <p className="text-center text-muted-foreground py-8">No students participated in this quiz.</p>
           )}
 
           <div className="text-center pt-4">

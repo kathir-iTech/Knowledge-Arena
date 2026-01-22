@@ -49,7 +49,6 @@ export interface QuizParticipant {
   avatar: string;
   role: 'teacher' | 'student';
   score: number;
-  timeTaken?: number; // Total time in seconds to answer questions.
   status: 'playing' | 'finished' | 'blocked';
   violationsCount: number;
 }

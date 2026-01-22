@@ -18,9 +18,9 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
     
-    // isBattleCreator checks if the user is the teacher who created the battle.
-    function isBattleCreator(battleId) {
-        return isTeacher() && get(/databases/$(database)/documents/battles/$(battleId)).data.createdBy == request.auth.uid;
+    // isQuizCreator checks if the user is the teacher who created the quiz.
+    function isQuizCreator(quizId) {
+        return isTeacher() && get(/databases/$(database)/documents/quizzes/$(quizId)).data.createdBy == request.auth.uid;
     }
 
     // --- Path Rules ---
@@ -34,64 +34,58 @@ service cloud.firestore {
       allow update: if isOwner(userId) && request.resource.data.role == resource.data.role;
     }
 
-    // BATTLE root document.
-    match /battles/{battleId} {
-      // Any signed-in user can read a battle's state or list battles.
+    // QUIZ root document.
+    match /quizzes/{quizId} {
+      // Any signed-in user can read a quiz's state or list quizzes.
       allow get, list: if isSignedIn();
-      // Only teachers can create battles.
+      // Only teachers can create quizzes.
       allow create: if isTeacher();
-      // Only the teacher who created the battle can update its state (e.g., start, next question, finish).
-      allow update: if isBattleCreator(battleId);
+      // Only the teacher who created the quiz can update its state (e.g., start, next question, finish).
+      allow update: if isQuizCreator(quizId);
       // Only the creator can delete it.
-      allow delete: if isBattleCreator(battleId);
+      allow delete: if isQuizCreator(quizId);
     }
 
-    // QUESTIONS can be read by any signed-in user in the battle.
-    match /battles/{battleId}/questions/{questionId} {
+    // QUESTIONS can be read by any signed-in user in the quiz.
+    match /quizzes/{quizId}/questions/{questionId} {
         allow read: if isSignedIn();
-        // Teachers can create questions. Only the battle creator can modify them later.
+        // Teachers can create questions. Only the quiz creator can modify them later.
         allow create: if isTeacher();
-        allow update, delete: if isBattleCreator(battleId);
+        allow update, delete: if isQuizCreator(quizId);
     }
     
-    // ANSWER KEYS are only creatable by a teacher during battle creation.
+    // ANSWER KEYS are only creatable by a teacher during quiz creation.
     // They are completely locked down otherwise.
-    match /battles/{battleId}/answerKeys/{questionId} {
-        allow read, update, delete: if false;
+    match /quizzes/{quizId}/answerKeys/{questionId} {
+        allow read, write: if false;
         allow create: if isTeacher();
     }
 
     // PARTICIPANTS can be created by any user for themselves.
     // Updates are locked down to server-side logic (Cloud Functions).
-    match /battles/{battleId}/participants/{userId} {
+    match /quizzes/{quizId}/participants/{userId} {
         // Any signed-in user can view the participant list (for leaderboards).
         allow read: if isSignedIn();
-        // A user can join a battle by creating their own participant document, but only if one doesn't already exist.
-        allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/battles/$(battleId)/participants/$(userId));
-        // Teacher can kick/delete a user
-        allow update, delete: if isBattleCreator(battleId);
+        // A user can join a quiz by creating their own participant document, but only if one doesn't already exist.
+        allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId));
+        // Teacher can kick/delete a user or update their status (e.g. unblock)
+        allow update, delete: if isQuizCreator(quizId);
     }
     
-    // ANSWERS can only be created by a student for themselves, for a specific question, and only once.
-    match /battles/{battleId}/answers/{userId}/{questionId} {
+    // SUBMISSIONS can only be created by a student for themselves, for a specific question, and only once.
+    match /quizzes/{quizId}/submissions/{userId}/{questionId} {
         // Can't read others' answers. Can't update/delete an answer once submitted.
         allow read, update, delete: if false;
         // Allow a user to create their own answer document if one doesn't already exist.
-        allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/battles/$(battleId)/answers/$(userId)/$(questionId));
+        allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/quizzes/$(quizId)/submissions/$(userId)/$(questionId));
     }
     
     // VIOLATIONS can only be created by a user for themselves.
-    match /battles/{battleId}/violations/{userId} {
+    match /quizzes/{quizId}/violations/{userId} {
       // Allow a user to report a violation for themselves.
       allow create: if isOwner(userId);
       // No one can read, update, or delete violation logs from the client.
       allow read, update, delete: if false;
-    }
-
-    // LEADERBOARD is a read-only document for clients, written to by a server process.
-    match /battles/{battleId}/leaderboard/{doc} {
-        allow read: if isSignedIn();
-        allow write: if false; // Only Cloud Functions can write here.
     }
   }
 }

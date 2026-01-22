@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Query,
   onSnapshot,
@@ -59,10 +59,14 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       (err: FirestoreError) => {
-        const path: string =
-          targetRefOrQuery.type === 'collection'
-            ? (targetRefOrQuery as CollectionReference).path
-            : (targetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString();
+        let path: string;
+        try {
+          // This internal property access is fragile but often works.
+          path = (targetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString();
+        } catch (e) {
+          // Fallback if the internal structure changes.
+          path = targetRefOrQuery.type === 'collection' ? (targetRefOrQuery as CollectionReference).path : '[unknown query path]';
+        }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',

@@ -116,10 +116,6 @@
         "score": {
           "type": "number"
         },
-        "timeTaken": {
-          "type": "number",
-          "description": "Total time in seconds the student has taken to answer questions."
-        },
         "status": {
           "type": "string",
           "enum": ["playing", "finished", "blocked"]

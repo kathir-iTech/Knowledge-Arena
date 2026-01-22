@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore }from '@/firebase';
-import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { doc, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, PlusCircle, Loader2 } from 'lucide-react';
-import type { Battle, BattleQuestion, QuizFormData as QuizCreatorFormData } from '@/lib/types';
+import type { Quiz, QuizQuestion, QuizFormData as QuizCreatorFormData } from '@/lib/types';
 
 const questionSchema = z.object({
   id: z.string(),
@@ -81,23 +81,23 @@ export function QuizCreatorForm() {
     setIsSubmitting(true);
 
     try {
-        const battleId = generateRoomCode();
+        const quizId = generateRoomCode();
         const batch = writeBatch(firestore);
 
-        // 1. Create the main battle document
-        const battleRef = doc(firestore, 'battles', battleId);
-        const newBattle: Omit<Battle, 'id'> = {
+        // 1. Create the main quiz document
+        const quizRef = doc(firestore, 'quizzes', quizId);
+        const newQuiz: Omit<Quiz, 'id'> = {
             title: data.title,
-            state: 'waiting',
+            status: 'waiting',
             currentQuestionIndex: -1, // -1 indicates not started
             questionCount: data.questions.length,
             createdBy: user.id,
             createdAt: Date.now(),
         };
-        batch.set(battleRef, newBattle);
+        batch.set(quizRef, newQuiz);
         
         // 2. Create the teacher as a participant
-        const teacherParticipantRef = doc(firestore, 'battles', battleId, 'participants', user.id);
+        const teacherParticipantRef = doc(firestore, 'quizzes', quizId, 'participants', user.id);
         batch.set(teacherParticipantRef, {
             name: user.name,
             avatar: user.avatar,
@@ -108,16 +108,16 @@ export function QuizCreatorForm() {
         });
 
         // 3. Create question and answer key subcollections
-        data.questions.forEach((q, index) => {
-            const questionRef = doc(firestore, 'battles', battleId, 'questions', q.id);
-            const questionData: Omit<BattleQuestion, 'id'> = {
+        data.questions.forEach((q) => {
+            const questionRef = doc(firestore, 'quizzes', quizId, 'questions', q.id);
+            const questionData: Omit<QuizQuestion, 'id'> = {
                 text: q.text,
                 options: q.options,
                 timer: q.timer,
             };
             batch.set(questionRef, questionData);
 
-            const answerKeyRef = doc(firestore, 'battles', battleId, 'answerKeys', q.id);
+            const answerKeyRef = doc(firestore, 'quizzes', quizId, 'answerKeys', q.id);
             batch.set(answerKeyRef, {
                 correctOptionIndex: q.correctAnswerIndex,
             });
@@ -126,17 +126,17 @@ export function QuizCreatorForm() {
         await batch.commit();
 
         toast({
-            title: 'Battle Room Created!',
-            description: `Room code: ${battleId}. Redirecting to the waiting room.`,
+            title: 'Quiz Room Created!',
+            description: `Room code: ${quizId}. Redirecting to the waiting room.`,
         });
 
-        router.push(`/battle/${battleId}`);
+        router.push(`/battle/${quizId}`);
 
     } catch (error: any) {
         toast({
             variant: 'destructive',
             title: 'Creation Failed',
-            description: 'Could not create the battle room. Please try again.',
+            description: 'Could not create the quiz room. Please try again.',
         });
         setIsSubmitting(false);
     }
@@ -312,7 +312,7 @@ export function QuizCreatorForm() {
               {isSubmitting ? (
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               ) : (
-                 'Create Battle & Start'
+                 'Create Quiz & Start'
               )}
             </Button>
         </div>
