@@ -2,13 +2,15 @@
 "use client";
 
 import { useAuth } from '@/hooks/useAuth';
-import { redirect } from 'next/navigation';
+import { redirect, useSearchParams } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BrainCircuit } from 'lucide-react';
 import { LoginForm } from '@/components/auth/LoginForm';
+import { Suspense } from 'react';
 
-export default function Home() {
+function PageContent() {
   const { user, isLoading } = useAuth();
+  const searchParams = useSearchParams();
   
   if (isLoading) {
     return (
@@ -23,11 +25,14 @@ export default function Home() {
   }
 
   if (user) {
-    if (user.role === 'Teacher') {
-      redirect('/teacher/dashboard');
-    } else {
-      redirect('/student/dashboard');
+    const roomCode = searchParams.get('roomCode');
+    let destination = user.role === 'Teacher' ? '/teacher/dashboard' : '/student/dashboard';
+    
+    if (user.role === 'Student' && roomCode) {
+      destination = `${destination}?roomCode=${roomCode}`;
     }
+    
+    redirect(destination);
     return null; // Render nothing while redirecting
   }
 
@@ -44,4 +49,13 @@ export default function Home() {
       </div>
     </main>
   );
+}
+
+export default function Home() {
+  // Wrap the component that uses useSearchParams in a Suspense boundary.
+  return (
+    <Suspense>
+      <PageContent />
+    </Suspense>
+  )
 }

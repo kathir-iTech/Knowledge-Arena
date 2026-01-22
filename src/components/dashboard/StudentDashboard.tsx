@@ -13,13 +13,13 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Loader2, Swords } from 'lucide-react';
 import type { QuizParticipant } from '@/lib/types';
 
-export default function StudentDashboard() {
+export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?: string }) {
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const firestore = useFirestore();
 
-  const [roomCode, setRoomCode] = useState('');
+  const [roomCode, setRoomCode] = useState(initialRoomCode || '');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleJoinQuiz = async (e: React.FormEvent) => {

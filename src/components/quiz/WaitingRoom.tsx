@@ -25,9 +25,11 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setShareableLink(window.location.href);
+      const url = new URL(window.location.origin);
+      url.searchParams.set('roomCode', quiz.id);
+      setShareableLink(url.toString());
     }
-  }, []);
+  }, [quiz.id]);
 
   const participantsRef = useMemo(() => {
     if (!firestore) return null;
