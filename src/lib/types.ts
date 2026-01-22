@@ -59,8 +59,9 @@ export interface QuizSubmission {
   submittedAt: number; // Should be a server timestamp
 }
 
-// Represents a violation document at /quizzes/{quizId}/violations/{userId}
+// Represents a violation document at /quizzes/{quizId}/violations/{violationId}
 export interface Violation {
-    timestamp: number; // Server timestamp
+    id: string;
     userId: string;
+    timestamp: number; // Server timestamp
 }

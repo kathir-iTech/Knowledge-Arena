@@ -19,6 +19,8 @@ export const usePageFocusChange = (onFocusLoss: () => void, enabled: boolean = t
   }, [onFocusLoss, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
+    
     document.addEventListener('visibilitychange', handleVisibilityChange);
     // The 'blur' event can be too noisy, especially with devtools.
     // 'visibilitychange' is more reliable for detecting tab switches.
@@ -26,5 +28,5 @@ export const usePageFocusChange = (onFocusLoss: () => void, enabled: boolean = t
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [handleVisibilityChange]);
+  }, [handleVisibilityChange, enabled]);
 };

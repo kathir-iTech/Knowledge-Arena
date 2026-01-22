@@ -81,9 +81,9 @@ service cloud.firestore {
     }
     
     // VIOLATIONS can only be created by a user for themselves.
-    match /quizzes/{quizId}/violations/{userId} {
+    match /quizzes/{quizId}/violations/{violationId} {
       // Allow a user to report a violation for themselves.
-      allow create: if isOwner(userId);
+      allow create: if request.resource.data.userId == request.auth.uid;
       // No one can read, update, or delete violation logs from the client.
       allow read, update, delete: if false;
     }

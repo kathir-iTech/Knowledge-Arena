@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFirestore, useDoc, useCollection, updateDocumentNonBlocking, FirestorePermissionError, errorEmitter } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import type { Quiz, QuizParticipant, QuizQuestion, User, Violation } from '@/lib/types';
+import type { Quiz, QuizParticipant, QuizQuestion, QuizSubmission, User, Violation } from '@/lib/types';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -69,7 +69,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
   const [showViolationWarning, setShowViolationWarning] = useState(false);
 
   // --- Data Fetching ---
-  const questionsRef = useMemo(() => collection(firestore, 'quizzes', quiz.id, 'questions'), [firestore, quiz.id]);
+  const questionsRef = useMemo(() => {
+      if (!firestore) return null;
+      return collection(firestore, 'quizzes', quiz.id, 'questions');
+  }, [firestore, quiz.id]);
   const { data: questions, isLoading: isLoadingQuestions } = useCollection<QuizQuestion>(questionsRef);
 
   const currentQuestion = useMemo(() => {
@@ -81,23 +84,23 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
   const [timeLeft, setTimeLeft] = useState(currentQuestion?.timer || quiz.timeLimit || 0);
 
   useEffect(() => {
-    if (currentQuestion) {
-        const serverStartTime = quiz.questionStartAt || Date.now();
-        const timeLimit = currentQuestion.timer * 1000;
-        const endTime = serverStartTime + timeLimit;
+    if (quiz.status !== 'live' || !currentQuestion || !quiz.questionStartAt) return;
 
-        const updateTimer = () => {
-            const now = Date.now();
-            const remaining = Math.max(0, endTime - now);
-            setTimeLeft(Math.ceil(remaining / 1000));
-        };
+    const serverStartTime = quiz.questionStartAt;
+    const timeLimit = (currentQuestion.timer || 30) * 1000;
+    const endTime = serverStartTime + timeLimit;
 
-        const interval = setInterval(updateTimer, 500);
-        updateTimer();
-        
-        return () => clearInterval(interval);
-    }
-  }, [currentQuestion, quiz.questionStartAt]);
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, endTime - now);
+      setTimeLeft(Math.ceil(remaining / 1000));
+    };
+
+    const timerId = setInterval(updateTimer, 500);
+    updateTimer(); // Initial call
+
+    return () => clearInterval(timerId);
+  }, [currentQuestion, quiz.questionStartAt, quiz.status]);
 
 
   // --- State Reset on Question Change ---
@@ -109,22 +112,23 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
   // --- Actions ---
 
   const onMalpractice = useCallback(() => {
-    if (isTeacher || !firestore || !user) return;
+    if (isTeacher || !firestore || !user || participant.status === 'blocked') return;
     
     setShowViolationWarning(true);
 
-    const violationData: Omit<Violation, 'timestamp'> = {
-      userId: user.id
+    const violationRef = doc(collection(firestore, `quizzes/${quiz.id}/violations`));
+    const violationData: Omit<Violation, 'id'> = {
+      userId: user.id,
+      timestamp: Date.now()
     }
-    const violationRef = collection(firestore, `quizzes/${quiz.id}/violations`);
     
-    addDoc(violationRef, { ...violationData, timestamp: serverTimestamp() }).catch(error => {
+    setDoc(violationRef, violationData).catch(error => {
         console.warn("Could not log violation", error.message);
     });
 
-  }, [isTeacher, firestore, user, quiz.id]);
+  }, [isTeacher, firestore, user, quiz.id, participant.status]);
 
-  usePageFocusChange(onMalpractice);
+  usePageFocusChange(onMalpractice, quiz.status === 'live' && !isTeacher);
 
   const handleAnswerSubmit = async (answerIndex: number) => {
     if (hasAnswered || isTeacher || !currentQuestion || !user || !firestore) return;
@@ -133,12 +137,13 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
     setSelectedAnswer(answerIndex);
 
     const submissionRef = doc(firestore, `quizzes/${quiz.id}/submissions/${user.id}/${currentQuestion.id}`);
-    const submissionData: Omit<QuizSubmission, 'submittedAt'> = {
-        selectedOption: answerIndex
+    const submissionData: Omit<QuizSubmission, 'id'> = {
+        selectedOption: answerIndex,
+        submittedAt: Date.now(), // Client time, but server validation should use server time
     };
     
     try {
-        await setDoc(submissionRef, { ...submissionData, submittedAt: serverTimestamp() });
+        await setDoc(submissionRef, submissionData);
     } catch (error) {
         setHasAnswered(false); // Allow user to try again
         
@@ -152,20 +157,16 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
   };
   
   const handleTeacherNextQuestion = () => {
-    if (!isTeacher || !firestore) return;
+    if (!isTeacher || !firestore || !questions) return;
 
     const nextIndex = quiz.currentQuestionIndex + 1;
     const quizRef = doc(firestore, 'quizzes', quiz.id);
 
     if (nextIndex < quiz.questionCount) {
-        const nextQuestion = questions?.[nextIndex];
-        if (nextQuestion) {
-            updateDocumentNonBlocking(quizRef, { 
-                currentQuestionIndex: nextIndex,
-                questionStartAt: serverTimestamp(),
-                timeLimit: nextQuestion.timer
-            });
-        }
+        updateDocumentNonBlocking(quizRef, { 
+            currentQuestionIndex: nextIndex,
+            questionStartAt: serverTimestamp(),
+        });
     } else {
       updateDocumentNonBlocking(quizRef, { status: 'finished' });
     }
@@ -175,14 +176,17 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
     return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin w-12 h-12" /></div>;
   }
   
-  if (!currentQuestion) {
+  if (!currentQuestion && quiz.status === 'live') {
       return (
            <div className="flex h-screen flex-col items-center justify-center gap-4 text-center p-4">
              <h1 className="text-2xl font-bold">Waiting for Next Question</h1>
              <p className="text-muted-foreground">The teacher is preparing the next challenge.</p>
+             {isTeacher && <LiveLeaderboard quizId={quiz.id} />}
            </div>
       )
   }
+  
+  if (!currentQuestion) return null;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
@@ -211,7 +215,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
               </div>
             </div>
           </div>
-          <Progress value={(timeLeft / (currentQuestion?.timer || quiz.timeLimit || 1)) * 100} className="w-full h-2 mt-2" />
+          <Progress value={(timeLeft / (currentQuestion?.timer || 1)) * 100} className="w-full h-2 mt-2" />
           <CardDescription>Question {quiz.currentQuestionIndex + 1} of {quiz.questionCount}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -221,7 +225,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
               <Button
                 key={index}
                 onClick={() => handleAnswerSubmit(index)}
-                disabled={hasAnswered || isTeacher}
+                disabled={hasAnswered || isTeacher || timeLeft === 0}
                 className={cn("h-auto min-h-16 text-wrap p-4 text-base justify-start transition-all duration-300", 
                     hasAnswered && selectedAnswer === index ? 'bg-primary ring-2 ring-primary-foreground' : 'bg-secondary hover:bg-primary/20',
                     hasAnswered && selectedAnswer !== index ? 'opacity-50' : ''
@@ -233,9 +237,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
             ))}
           </div>
 
-          {hasAnswered && !isTeacher && (
-             <div className="text-center text-muted-foreground p-4">
-                <p className="font-bold">Your answer has been submitted!</p>
+          {(hasAnswered || timeLeft === 0) && !isTeacher && (
+             <div className="text-center text-muted-foreground p-4 rounded-md bg-background/50">
+                <p className="font-bold">{timeLeft === 0 && !hasAnswered ? "Time's up!" : "Your answer has been submitted!"}</p>
                 <p>Waiting for the teacher to proceed to the next question...</p>
              </div>
           )}

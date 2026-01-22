@@ -29,10 +29,10 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     }
   }, []);
 
-  const participantsRef = useMemo(() => 
-    collection(firestore, 'quizzes', quiz.id, 'participants'), 
-    [firestore, quiz.id]
-  );
+  const participantsRef = useMemo(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'quizzes', quiz.id, 'participants');
+  }, [firestore, quiz.id]);
   const { data: participants, isLoading: areParticipantsLoading } = useCollection<QuizParticipant>(participantsRef);
   
   const studentParticipants = useMemo(() => {
