@@ -53,8 +53,9 @@ export interface QuizParticipant {
   violationsCount: number;
 }
 
-// Represents an answer submission document at /quizzes/{quizId}/submissions/{userId}/{questionId}
+// Represents an answer submission document at /quizzes/{quizId}/questions/{questionId}/submissions/{userId}
 export interface QuizSubmission {
+  id?: string; // Optional because the doc ID is the user ID
   selectedOption: number;
   submittedAt: number; // Should be a server timestamp
 }

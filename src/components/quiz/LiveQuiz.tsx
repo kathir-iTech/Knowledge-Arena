@@ -142,7 +142,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
     setHasAnswered(true);
     setSelectedAnswer(answerIndex);
 
-    const submissionRef = doc(firestore, `quizzes/${quiz.id}/submissions/${user.id}/${currentQuestion.id}`);
+    const submissionRef = doc(firestore, `quizzes/${quiz.id}/questions/${currentQuestion.id}/submissions/${user.id}`);
     const submissionData: Omit<QuizSubmission, 'id'> = {
         selectedOption: answerIndex,
         submittedAt: Date.now(),
@@ -189,7 +189,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
       const batch = writeBatch(firestore);
 
       for (const student of students) {
-        const submissionRef = doc(firestore, `quizzes/${quiz.id}/submissions/${student.id}/${questionId}`);
+        const submissionRef = doc(firestore, `quizzes/${quiz.id}/questions/${questionId}/submissions/${student.id}`);
         const submissionSnap = await getDoc(submissionRef);
 
         if (submissionSnap.exists()) {

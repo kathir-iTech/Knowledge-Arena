@@ -188,17 +188,10 @@
         }
       },
       {
-        "path": "/quizzes/{quizId}/submissions/{userId}/{questionId}",
+        "path": "/quizzes/{quizId}/questions/{questionId}/submissions/{userId}",
         "definition": {
           "schema": { "$ref": "#/backend/entities/QuizSubmission" },
-          "description": "A student's submitted answer for a specific question."
-        }
-      },
-      {
-        "path": "/quizzes/{quizId}/violations/{userId}",
-        "definition": {
-          "schema": { "type": "object", "properties": { "timestamp": { "type": "number" }} },
-          "description": "Log of anti-cheating violations reported by the client."
+          "description": "A student's submitted answer for a specific question. The document ID is the student's UID."
         }
       }
     ]
