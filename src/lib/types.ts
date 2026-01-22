@@ -8,11 +8,11 @@ export interface User {
   avatar: string; // Emoji
 }
 
-// Represents the main battle document at /battles/{battleId}
-export interface Battle {
+// Represents the main quiz document at /quizzes/{quizId}
+export interface Quiz {
   id: string;
   title: string;
-  state: 'waiting' | 'live' | 'finished';
+  status: 'waiting' | 'live' | 'finished';
   currentQuestionIndex: number;
   questionCount: number;
   questionStartAt?: number; // Server timestamp (optional)
@@ -21,9 +21,9 @@ export interface Battle {
   createdAt: number;
 }
 
-// Represents a question document at /battles/{battleId}/questions/{questionId}
+// Represents a question document at /quizzes/{quizId}/questions/{questionId}
 // This is the public data visible to students.
-export interface BattleQuestion {
+export interface QuizQuestion {
   id: string;
   text: string;
   options: string[];
@@ -42,36 +42,26 @@ export interface QuizFormData {
   }[];
 }
 
-// Represents a participant document at /battles/{battleId}/participants/{userId}
-export interface BattleParticipant {
+// Represents a participant document at /quizzes/{quizId}/participants/{userId}
+export interface QuizParticipant {
   id: string; // userId
   name: string;
   avatar: string;
   role: 'teacher' | 'student';
   score: number;
+  timeTaken?: number; // Total time in seconds to answer questions.
   status: 'playing' | 'finished' | 'blocked';
   violationsCount: number;
 }
 
-// Represents an answer submission document at /battles/{battleId}/answers/{userId}/{questionId}
-export interface BattleAnswer {
+// Represents an answer submission document at /quizzes/{quizId}/submissions/{userId}/{questionId}
+export interface QuizSubmission {
   selectedOption: number;
   submittedAt: number; // Should be a server timestamp
 }
 
-// Represents a violation document at /battles/{battleId}/violations/{userId}
+// Represents a violation document at /quizzes/{quizId}/violations/{userId}
 export interface Violation {
     timestamp: number; // Server timestamp
     userId: string;
-}
-
-// Represents the aggregated leaderboard document
-export interface Leaderboard {
-    topPlayers: {
-        userId: string;
-        name: string;
-        avatar: string;
-        score: number;
-    }[];
-    updatedAt: number;
 }

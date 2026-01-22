@@ -27,18 +27,18 @@
       },
       "required": ["name", "email", "role", "avatar"]
     },
-    "Battle": {
-      "title": "Battle",
-      "description": "The main document for a quiz battle session.",
+    "Quiz": {
+      "title": "Quiz",
+      "description": "The main document for a quiz session.",
       "type": "object",
       "properties": {
         "title": {
           "type": "string",
-          "description": "Title of the quiz for this battle."
+          "description": "Title of the quiz for this session."
         },
-        "state": {
+        "status": {
           "type": "string",
-          "description": "The current state of the battle.",
+          "description": "The current state of the quiz.",
           "enum": ["waiting", "live", "finished"]
         },
         "currentQuestionIndex": {
@@ -47,7 +47,7 @@
         },
         "questionCount": {
           "type": "number",
-          "description": "Total number of questions in the battle."
+          "description": "Total number of questions in the quiz."
         },
         "questionStartAt": {
           "type": "number",
@@ -59,18 +59,18 @@
         },
         "createdBy": {
           "type": "string",
-          "description": "The UID of the teacher who created the battle."
+          "description": "The UID of the teacher who created the quiz."
         },
         "createdAt": {
           "type": "number",
           "description": "Timestamp when the room was created."
         }
       },
-      "required": ["title", "state", "currentQuestionIndex", "questionCount", "createdBy", "createdAt"]
+      "required": ["title", "status", "currentQuestionIndex", "questionCount", "createdBy", "createdAt"]
     },
-    "BattleQuestion": {
-      "title": "BattleQuestion",
-      "description": "A single question within a battle. Publicly readable question data.",
+    "QuizQuestion": {
+      "title": "QuizQuestion",
+      "description": "A single question within a quiz. Publicly readable question data.",
       "type": "object",
       "properties": {
         "text": {
@@ -87,8 +87,8 @@
       },
       "required": ["text", "options", "timer"]
     },
-    "BattleAnswerKey": {
-      "title": "BattleAnswerKey",
+    "QuizAnswerKey": {
+      "title": "QuizAnswerKey",
       "description": "Server-only document containing the correct answer for a question.",
       "type": "object",
       "properties": {
@@ -98,9 +98,9 @@
       },
       "required": ["correctOptionIndex"]
     },
-    "BattleParticipant": {
-      "title": "BattleParticipant",
-      "description": "Represents a user's participation and state within a battle.",
+    "QuizParticipant": {
+      "title": "QuizParticipant",
+      "description": "Represents a user's participation and state within a quiz.",
       "type": "object",
       "properties": {
         "name": {
@@ -116,6 +116,10 @@
         "score": {
           "type": "number"
         },
+        "timeTaken": {
+          "type": "number",
+          "description": "Total time in seconds the student has taken to answer questions."
+        },
         "status": {
           "type": "string",
           "enum": ["playing", "finished", "blocked"]
@@ -126,8 +130,8 @@
       },
       "required": ["name", "avatar", "role", "score", "status", "violationsCount"]
     },
-    "BattleAnswer": {
-      "title": "BattleAnswer",
+    "QuizSubmission": {
+      "title": "QuizSubmission",
       "description": "A student's submitted answer for a single question.",
       "type": "object",
       "properties": {
@@ -139,28 +143,6 @@
         }
       },
       "required": ["selectedOption", "submittedAt"]
-    },
-     "Leaderboard": {
-      "title": "Leaderboard",
-      "description": "Aggregated and throttled leaderboard data.",
-      "type": "object",
-      "properties": {
-        "topPlayers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "userId": { "type": "string" },
-              "name": { "type": "string" },
-              "avatar": { "type": "string" },
-              "score": { "type": "number" }
-            }
-          }
-        },
-        "updatedAt": {
-          "type": "number"
-        }
-      }
     }
   },
   "auth": {
@@ -182,52 +164,45 @@
         }
       },
       {
-        "path": "/battles/{battleId}",
+        "path": "/quizzes/{quizId}",
         "definition": {
-          "schema": { "$ref": "#/backend/entities/Battle" },
-          "description": "The root document for a single quiz battle."
+          "schema": { "$ref": "#/backend/entities/Quiz" },
+          "description": "The root document for a single quiz session."
         }
       },
       {
-        "path": "/battles/{battleId}/questions/{questionId}",
+        "path": "/quizzes/{quizId}/questions/{questionId}",
         "definition": {
-          "schema": { "$ref": "#/backend/entities/BattleQuestion" },
-          "description": "Publicly visible data for each question in a battle."
+          "schema": { "$ref": "#/backend/entities/QuizQuestion" },
+          "description": "Publicly visible data for each question in a quiz."
         }
       },
       {
-        "path": "/battles/{battleId}/answerKeys/{questionId}",
+        "path": "/quizzes/{quizId}/answerKeys/{questionId}",
         "definition": {
-          "schema": { "$ref": "#/backend/entities/BattleAnswerKey" },
+          "schema": { "$ref": "#/backend/entities/QuizAnswerKey" },
           "description": "Server-only correct answer data for each question."
         }
       },
       {
-        "path": "/battles/{battleId}/participants/{userId}",
+        "path": "/quizzes/{quizId}/participants/{userId}",
         "definition": {
-          "schema": { "$ref": "#/backend/entities/BattleParticipant" },
-          "description": "A user's state, score, and status within a battle."
+          "schema": { "$ref": "#/backend/entities/QuizParticipant" },
+          "description": "A user's state, score, and status within a quiz."
         }
       },
       {
-        "path": "/battles/{battleId}/answers/{userId}/{questionId}",
+        "path": "/quizzes/{quizId}/submissions/{userId}/{questionId}",
         "definition": {
-          "schema": { "$ref": "#/backend/entities/BattleAnswer" },
+          "schema": { "$ref": "#/backend/entities/QuizSubmission" },
           "description": "A student's submitted answer for a specific question."
         }
       },
       {
-        "path": "/battles/{battleId}/violations/{userId}",
+        "path": "/quizzes/{quizId}/violations/{userId}",
         "definition": {
           "schema": { "type": "object", "properties": { "timestamp": { "type": "number" }} },
           "description": "Log of anti-cheating violations reported by the client."
-        }
-      },
-      {
-        "path": "/battles/{battleId}/leaderboard/summary",
-        "definition": {
-            "schema": { "$ref": "#/backend/entities/Leaderboard" },
-            "description": "A single document containing aggregated leaderboard data, updated by a server process."
         }
       }
     ]
