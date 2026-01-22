@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -180,6 +179,13 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2 self-start sm:self-center">
+                    {quiz.status === 'waiting' && (
+                        <Link href={`/battle/${quiz.id}`} passHref>
+                            <Button variant="default" size="sm">
+                                Start Quiz
+                            </Button>
+                        </Link>
+                    )}
                     {quiz.status === 'live' && (
                         <Button variant="outline" size="sm" onClick={handleFinishQuiz} disabled={isFinishing}>
                            {isFinishing ? <Loader2 className="animate-spin w-4 h-4" /> : 'Finish'}
