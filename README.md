@@ -1,4 +1,4 @@
-# Knowledge Arena
+....# Knowledge Arena
 
 This is a Next.js quiz application built in Firebase Studio.
 

@@ -1,0 +1,6 @@
+# Allow all user agents to crawl the entire site
+User-agent: *
+Allow: /
+
+# Disallow crawling of specific private paths if needed in the future
+# Disallow: /private/
