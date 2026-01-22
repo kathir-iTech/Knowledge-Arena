@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, 'useState'
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import type { Quiz, QuizParticipant } from '@/lib/types';
