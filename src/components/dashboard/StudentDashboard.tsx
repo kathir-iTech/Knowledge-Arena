@@ -98,7 +98,6 @@ export default function StudentDashboard() {
       router.push(`/battle/${battleId}`);
 
     } catch (error: any) {
-       console.error("Failed to join battle:", error);
         toast({
             variant: 'destructive',
             title: 'Error Joining Battle',

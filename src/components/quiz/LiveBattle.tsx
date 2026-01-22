@@ -151,7 +151,6 @@ export default function LiveBattle({ battle, participant, isTeacher }: LiveBattl
         // Using setDoc to create a document with a specific ID, matching the security rule path.
         await setDoc(answerRef, answerData);
     } catch (error) {
-        console.error("Error submitting answer:", error);
         setHasAnswered(false); // Allow user to try again
         
         const permissionError = new FirestorePermissionError({

@@ -133,7 +133,6 @@ export function QuizCreatorForm() {
         router.push(`/battle/${battleId}`);
 
     } catch (error: any) {
-        console.error('Failed to create battle:', error);
         toast({
             variant: 'destructive',
             title: 'Creation Failed',

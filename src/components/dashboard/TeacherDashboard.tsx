@@ -89,7 +89,6 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
 
             toast({ variant: "default", title: "Battle Deleted", description: `Battle room ${battle.id} was removed.` });
         } catch (error) {
-             console.error("Error deleting battle room:", error);
              toast({ variant: "destructive", title: "Deletion Failed", description: "Could not delete the battle room." });
              setIsDeleting(false);
         }
@@ -135,7 +134,6 @@ const BattleCard = ({ battle }: { battle: Battle }) => {
             await batch.commit();
             toast({ title: "Battle Reset", description: `Battle room ${battle.id} is now in the waiting room.` });
         } catch (error) {
-            console.error("Error resetting battle room:", error);
             toast({ variant: "destructive", title: "Reset Failed", description: "Could not reset the battle room." });
         } finally {
             setIsResetting(false);
@@ -305,7 +303,6 @@ export default function TeacherDashboard() {
         setBattleRooms(rooms);
         setIsLoading(false);
     }, (error) => {
-        console.error("Error fetching battle rooms: ", error);
         setIsLoading(false);
     });
 
