@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFirestore, useCollection, updateDocumentNonBlocking, FirestorePermissionError, errorEmitter } from '@/firebase';
-import { doc, collection, serverTimestamp, setDoc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, collection, serverTimestamp, setDoc, getDoc, getDocs, writeBatch, query, orderBy } from 'firebase/firestore';
 import type { Quiz, QuizParticipant, QuizQuestion, QuizSubmission } from '@/lib/types';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useAuth } from '@/hooks/useAuth';
@@ -72,11 +72,11 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
   const [isScoring, setIsScoring] = useState(false);
 
   // --- Data Fetching ---
-  const questionsRef = useMemo(() => {
+  const questionsQuery = useMemo(() => {
       if (!firestore) return null;
-      return collection(firestore, 'quizzes', quiz.id, 'questions');
+      return query(collection(firestore, 'quizzes', quiz.id, 'questions'), orderBy('index'));
   }, [firestore, quiz.id]);
-  const { data: questions, isLoading: isLoadingQuestions } = useCollection<QuizQuestion>(questionsRef);
+  const { data: questions, isLoading: isLoadingQuestions } = useCollection<QuizQuestion>(questionsQuery);
 
   const currentQuestion = useMemo(() => {
     if (!questions || quiz.currentQuestionIndex < 0 || quiz.currentQuestionIndex >= questions.length) return null;

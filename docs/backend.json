@@ -83,9 +83,13 @@
         "timer": {
           "type": "number",
           "description": "The time limit for this question in seconds."
+        },
+        "index": {
+          "type": "number",
+          "description": "The order of the question in the quiz."
         }
       },
-      "required": ["text", "options", "timer"]
+      "required": ["text", "options", "timer", "index"]
     },
     "QuizAnswerKey": {
       "title": "QuizAnswerKey",

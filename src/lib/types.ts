@@ -28,6 +28,7 @@ export interface QuizQuestion {
   text: string;
   options: string[];
   timer: number; // Stored here for client-side display
+  index: number;
 }
 
 // Represents the full quiz structure used during creation

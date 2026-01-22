@@ -108,12 +108,13 @@ export function QuizCreatorForm() {
         });
 
         // 3. Create question and answer key subcollections
-        data.questions.forEach((q) => {
+        data.questions.forEach((q, index) => {
             const questionRef = doc(firestore, 'quizzes', quizId, 'questions', q.id);
             const questionData: Omit<QuizQuestion, 'id'> = {
                 text: q.text,
                 options: q.options,
                 timer: q.timer,
+                index: index,
             };
             batch.set(questionRef, questionData);
 
