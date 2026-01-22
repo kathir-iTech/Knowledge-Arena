@@ -155,49 +155,29 @@
     }
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/User" },
-          "description": "Stores public user profile information."
-        }
-      },
-      {
-        "path": "/quizzes/{quizId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/Quiz" },
-          "description": "The root document for a single quiz session."
-        }
-      },
-      {
-        "path": "/quizzes/{quizId}/questions/{questionId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/QuizQuestion" },
-          "description": "Publicly visible data for each question in a quiz."
-        }
-      },
-      {
-        "path": "/quizzes/{quizId}/answerKeys/{questionId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/QuizAnswerKey" },
-          "description": "Server-only correct answer data for each question."
-        }
-      },
-      {
-        "path": "/quizzes/{quizId}/participants/{userId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/QuizParticipant" },
-          "description": "A user's state, score, and status within a quiz."
-        }
-      },
-      {
-        "path": "/quizzes/{quizId}/questions/{questionId}/submissions/{userId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/QuizSubmission" },
-          "description": "A student's submitted answer for a specific question. The document ID is the student's UID."
-        }
-      }
-    ]
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores public user profile information."
+    },
+    "/quizzes/{quizId}": {
+      "schema": { "$ref": "#/entities/Quiz" },
+      "description": "The root document for a single quiz session."
+    },
+    "/quizzes/{quizId}/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/QuizQuestion" },
+      "description": "Publicly visible data for each question in a quiz."
+    },
+    "/quizzes/{quizId}/answerKeys/{questionId}": {
+      "schema": { "$ref": "#/entities/QuizAnswerKey" },
+      "description": "Server-only correct answer data for each question."
+    },
+    "/quizzes/{quizId}/participants/{userId}": {
+      "schema": { "$ref": "#/entities/QuizParticipant" },
+      "description": "A user's state, score, and status within a quiz."
+    },
+    "/quizzes/{quizId}/questions/{questionId}/submissions/{userId}": {
+      "schema": { "$ref": "#/entities/QuizSubmission" },
+      "description": "A student's submitted answer for a specific question. The document ID is the student's UID."
+    }
   }
 }
