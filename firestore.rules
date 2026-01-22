@@ -49,16 +49,20 @@ service cloud.firestore {
     // QUESTIONS can be read by any signed-in user in the quiz.
     match /quizzes/{quizId}/questions/{questionId} {
         allow read: if isSignedIn();
-        // Only the quiz creator can write/delete questions.
-        allow write, delete: if isQuizCreator(quizId);
+        // Only teachers can create questions (as part of quiz creation).
+        allow create: if isTeacher();
+        // Only the quiz creator can update or delete questions after creation.
+        allow update, delete: if isQuizCreator(quizId);
     }
     
     // ANSWER KEYS are only creatable by a teacher during quiz creation.
     // The teacher who created the quiz can read them for evaluation. No one can update/delete directly.
     match /quizzes/{quizId}/answerKeys/{questionId} {
         allow read: if isQuizCreator(quizId);
+        // Only teachers can create answer keys (as part of quiz creation).
         allow create: if isTeacher();
-        allow write, delete: if isQuizCreator(quizId); // Allow creator to manage these as well
+        // Only the quiz creator can update or delete them after creation.
+        allow update, delete: if isQuizCreator(quizId);
     }
 
     // PARTICIPANTS can be created by any user for themselves.
