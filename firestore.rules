@@ -69,7 +69,17 @@ service cloud.firestore {
         // A user can join a quiz by creating their own participant document, but only if one doesn't already exist.
         allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId));
         // Teacher can kick/delete a user or update their status (e.g. unblock)
-        allow update, delete: if isQuizCreator(quizId);
+        allow update: if isQuizCreator(quizId) || (
+          // A student can update their own document to report a violation
+          isOwner(userId) &&
+          get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live' &&
+          request.resource.data.violationsCount == resource.data.violationsCount + 1 &&
+          request.resource.data.score == resource.data.score &&
+          request.resource.data.name == resource.data.name &&
+          (request.resource.data.status == 'blocked' || request.resource.data.status == resource.data.status) &&
+          resource.data.status != 'blocked'
+        );
+        allow delete: if isQuizCreator(quizId);
     }
     
     // SUBMISSIONS can only be created by a student for themselves, for a specific question, and only once.
@@ -82,10 +92,9 @@ service cloud.firestore {
     
     // VIOLATIONS can only be created by a user for themselves.
     match /quizzes/{quizId}/violations/{violationId} {
-      // Allow a user to report a violation for themselves.
-      allow create: if request.resource.data.userId == request.auth.uid;
-      // No one can read, update, or delete violation logs from the client.
-      allow read, update, delete: if false;
+      // This path is deprecated in favor of updating the participant document directly.
+      // Keeping it locked down.
+      allow read, write: if false;
     }
   }
 }

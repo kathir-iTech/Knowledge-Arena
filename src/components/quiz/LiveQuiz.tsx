@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFirestore, useCollection, updateDocumentNonBlocking, FirestorePermissionError, errorEmitter } from '@/firebase';
 import { doc, collection, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import type { Quiz, QuizParticipant, QuizQuestion, QuizSubmission, User, Violation } from '@/lib/types';
+import type { Quiz, QuizParticipant, QuizQuestion, QuizSubmission, User } from '@/lib/types';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -116,17 +116,20 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
     
     setShowViolationWarning(true);
 
-    const violationRef = doc(collection(firestore, `quizzes/${quiz.id}/violations`));
-    const violationData: Omit<Violation, 'id'> = {
-      userId: user.id,
-      timestamp: Date.now()
+    const participantRef = doc(firestore, 'quizzes', quiz.id, 'participants', user.id);
+    const newViolationsCount = (participant.violationsCount || 0) + 1;
+    
+    const updateData: { violationsCount: number; status?: 'blocked' } = {
+        violationsCount: newViolationsCount
+    };
+
+    if (newViolationsCount >= 2) {
+        updateData.status = 'blocked';
     }
     
-    setDoc(violationRef, violationData).catch(error => {
-        console.warn("Could not log violation", error.message);
-    });
+    updateDocumentNonBlocking(participantRef, updateData);
 
-  }, [isTeacher, firestore, user, quiz.id, participant.status]);
+  }, [isTeacher, firestore, user, quiz.id, participant]);
 
   usePageFocusChange(onMalpractice, quiz.status === 'live' && !isTeacher);
 
