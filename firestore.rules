@@ -49,38 +49,37 @@ service cloud.firestore {
     // QUESTIONS can be read by any signed-in user in the quiz.
     match /quizzes/{quizId}/questions/{questionId} {
         allow read: if isSignedIn();
-        // Teachers can create questions. Only the quiz creator can modify them later.
-        allow create: if isTeacher();
-        allow update, delete: if isQuizCreator(quizId);
+        // Only the quiz creator can write/delete questions.
+        allow write, delete: if isQuizCreator(quizId);
     }
     
     // ANSWER KEYS are only creatable by a teacher during quiz creation.
-    // The teacher who created the quiz can read them for evaluation.
+    // The teacher who created the quiz can read them for evaluation. No one can update/delete directly.
     match /quizzes/{quizId}/answerKeys/{questionId} {
         allow read: if isQuizCreator(quizId);
-        allow write: if false;
         allow create: if isTeacher();
+        allow write, delete: if isQuizCreator(quizId); // Allow creator to manage these as well
     }
 
     // PARTICIPANTS can be created by any user for themselves.
-    // Updates are locked down to server-side logic (Cloud Functions).
+    // Updates are locked down to server-side logic (Cloud Functions) or specific actions.
     match /quizzes/{quizId}/participants/{userId} {
         // Any signed-in user can view the participant list (for leaderboards).
         allow read: if isSignedIn();
         // A user can join a quiz by creating their own participant document, but only if one doesn't already exist.
         allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId));
-        // Teacher can kick/delete a user or update their status (e.g. unblock)
-        // A student can also update their own document to report a violation
+        
+        // A teacher can update any participant (reset attempts, etc.).
+        // A student can only update their own violation count.
         allow update: if isQuizCreator(quizId) || (
           isOwner(userId) &&
           get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live' &&
-          // Score can only be updated by the teacher (implicitly via isQuizCreator) or remain unchanged.
-          (request.resource.data.score == resource.data.score || isQuizCreator(quizId)) &&
-          request.resource.data.violationsCount == resource.data.violationsCount + 1 &&
-          request.resource.data.name == resource.data.name &&
-          (request.resource.data.status == 'blocked' || request.resource.data.status == resource.data.status) &&
-          resource.data.status != 'blocked'
+          resource.data.status != 'blocked' && // Student cannot update if already blocked
+          request.resource.data.violationsCount == resource.data.violationsCount + 1 && // Must be an increment
+          request.resource.data.score == resource.data.score && // Cannot change own score
+          request.resource.data.name == resource.data.name // Cannot change own name
         );
+
         allow delete: if isQuizCreator(quizId);
     }
     
@@ -88,15 +87,15 @@ service cloud.firestore {
     match /quizzes/{quizId}/submissions/{userId}/{questionId} {
         // The quiz creator can read submissions for scoring. Students cannot read any.
         allow read: if isQuizCreator(quizId);
-        allow update, delete: if false;
-        // Allow a user to create their own answer document if one doesn't already exist.
-        allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/quizzes/$(quizId)/submissions/$(userId)/$(questionId));
+        allow update, delete: if false; // Submissions are final.
+        // Allow a user to create their own answer document if one doesn't already exist and quiz is live.
+        allow create: if isOwner(userId) 
+                    && !exists(/databases/$(database)/documents/quizzes/$(quizId)/submissions/$(userId)/$(questionId))
+                    && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live';
     }
     
-    // VIOLATIONS can only be created by a user for themselves.
+    // VIOLATIONS collection is deprecated. Logic is handled on the participant doc.
     match /quizzes/{quizId}/violations/{violationId} {
-      // This path is deprecated in favor of updating the participant document directly.
-      // Keeping it locked down.
       allow read, write: if false;
     }
   }

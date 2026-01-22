@@ -1,15 +1,15 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, 'useState'
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import type { Quiz, QuizParticipant } from '@/lib/types';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, updateDocumentNonBlocking } from '@/firebase';
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw, Copy } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, Trophy, RefreshCw, Copy, ShieldAlert } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -29,7 +29,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '@/components/ui/badge';
 
 const QuizCard = ({ quiz }: { quiz: Quiz }) => {
@@ -79,6 +78,9 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
             
             const answerKeysSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'answerKeys'));
             answerKeysSnap.forEach(doc => batch.delete(doc.ref));
+            
+            // It's not feasible to delete all submission subcollections from the client.
+            // This is a known limitation of client-side operations. A Cloud Function would be needed for full cleanup.
 
             batch.delete(quizRef);
             
@@ -113,10 +115,15 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
             const participantsQuery = collection(firestore, 'quizzes', quiz.id, 'participants');
             const participantsSnapshot = await getDocs(participantsQuery);
             participantsSnapshot.forEach(pDoc => {
+                // Keep the teacher, reset everyone else
                 if (pDoc.data().role !== 'teacher') {
                     batch.delete(pDoc.ref);
+                } else {
+                    batch.update(pDoc.ref, { score: 0 });
                 }
             });
+
+            // Note: This doesn't delete student submission subcollections. That requires a Cloud Function.
 
             const roomRef = doc(firestore, 'quizzes', quiz.id);
             batch.update(roomRef, { 
@@ -178,7 +185,7 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
                            {isFinishing ? <Loader2 className="animate-spin w-4 h-4" /> : 'Finish'}
                         </Button>
                     )}
-                     {quiz.status === 'finished' && (
+                     {quiz.status !== 'waiting' && (
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button variant="secondary" size="sm" disabled={isResetting}>
@@ -243,14 +250,19 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
                                             </Avatar>
                                             <div className='flex flex-col'>
                                                 <span className='flex items-center gap-1'>{p.name}</span>
-                                                {p.status === 'blocked' && <span className="text-xs text-destructive">Blocked ({p.violationsCount} violations)</span>}
+                                                {p.status === 'blocked' && 
+                                                  <Badge variant="destructive" className="w-fit">
+                                                    <ShieldAlert className="w-3 h-3 mr-1" />
+                                                    Blocked ({p.violationsCount} violations)
+                                                  </Badge>
+                                                }
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-4">
                                                 {p.status === 'blocked' && (
                                                     <Button variant="outline" size="sm" onClick={() => resetStudentAttempt(p.id)}>
                                                         <RefreshCw className="w-3 h-3 mr-1" />
-                                                        Reset
+                                                        Reset Attempt
                                                     </Button>
                                                 )}
                                                 <div className="flex items-center gap-2 font-mono text-primary text-sm">
@@ -314,8 +326,8 @@ export default function TeacherDashboard() {
         <p className="text-muted-foreground">Welcome back, {user.name}. Manage your quizzes and create new challenges.</p>
       </header>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-3">
+      <div className="grid grid-cols-1">
+        <Card>
             <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                     <CardTitle>Your Quizzes</CardTitle>

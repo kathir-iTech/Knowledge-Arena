@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo } from 'react';
@@ -22,7 +23,7 @@ export default function QuizResults({ quiz }: QuizResultsProps) {
   const firestore = useFirestore();
 
   const participantsRef = useMemo(() => 
-    collection(firestore, 'quizzes', quiz.id, 'participants'), 
+    firestore ? collection(firestore, 'quizzes', quiz.id, 'participants') : null,
     [firestore, quiz.id]
   );
   
@@ -54,7 +55,7 @@ export default function QuizResults({ quiz }: QuizResultsProps) {
   const dashboardLink = user?.role === 'Teacher' ? "/teacher/dashboard" : "/student/dashboard";
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 bg-background">
       <Card className="w-full max-w-4xl border-primary/50 shadow-lg shadow-primary/10">
         <CardHeader className="text-center">
           <CardTitle className="text-4xl font-headline text-primary">
@@ -69,35 +70,35 @@ export default function QuizResults({ quiz }: QuizResultsProps) {
             <>
             <div className="flex justify-center items-end gap-2 md:gap-4 p-4">
                 {/* 2nd Place */}
-                {rankedPlayers.slice(1, 2).map((player) => (
-                  <div key={player.id} className="flex flex-col items-center gap-2 p-2 md:p-4 rounded-lg bg-secondary order-2 md:order-1">
+                {rankedPlayers.length > 1 && rankedPlayers.slice(1, 2).map((player) => (
+                  <div key={player.id} className="flex flex-col items-center gap-2 p-2 md:p-4 rounded-lg bg-secondary order-2">
                     {getRankIcon(2)}
                     <Avatar className="h-16 w-16 md:h-20 md:w-20 border-4 border-slate-400">
                       <AvatarFallback className="text-3xl md:text-4xl bg-muted">{player.avatar}</AvatarFallback>
                     </Avatar>
-                    <span className="font-bold text-sm md:text-lg text-center max-w-20 truncate">{player.name}</span>
+                    <span className="font-bold text-sm md:text-lg text-center max-w-[80px] truncate">{player.name}</span>
                     <span className="font-mono text-primary text-xs md:text-base">{player.score} pts</span>
                   </div>
                 ))}
                 {/* 1st Place */}
                 {rankedPlayers.slice(0, 1).map((player) => (
-                    <div key={player.id} className="flex flex-col items-center gap-2 p-3 md:p-6 rounded-lg bg-secondary order-1 md:order-2 scale-110">
+                    <div key={player.id} className="flex flex-col items-center gap-2 p-3 md:p-6 rounded-lg bg-secondary order-1 scale-110 shadow-lg shadow-primary/20">
                         {getRankIcon(1)}
                         <Avatar className="h-20 w-20 md:h-24 md:w-24 border-4 border-yellow-400">
                             <AvatarFallback className="text-4xl md:text-5xl bg-muted">{player.avatar}</AvatarFallback>
                         </Avatar>
-                        <span className="font-bold text-base md:text-xl text-center max-w-24 truncate">{player.name}</span>
+                        <span className="font-bold text-base md:text-xl text-center max-w-[100px] truncate">{player.name}</span>
                         <span className="font-mono text-primary text-sm md:text-lg">{player.score} pts</span>
                     </div>
                 ))}
                 {/* 3rd Place */}
-                {rankedPlayers.slice(2, 3).map((player) => (
+                {rankedPlayers.length > 2 && rankedPlayers.slice(2, 3).map((player) => (
                     <div key={player.id} className="flex flex-col items-center gap-2 p-2 md:p-4 rounded-lg bg-secondary order-3">
                         {getRankIcon(3)}
                         <Avatar className="h-16 w-16 md:h-20 md:w-20 border-4 border-yellow-600">
                             <AvatarFallback className="text-3xl md:text-4xl bg-muted">{player.avatar}</AvatarFallback>
                         </Avatar>
-                        <span className="font-bold text-sm md:text-lg text-center max-w-20 truncate">{player.name}</span>
+                        <span className="font-bold text-sm md:text-lg text-center max-w-[80px] truncate">{player.name}</span>
                         <span className="font-mono text-primary text-xs md:text-base">{player.score} pts</span>
                     </div>
                 ))}
@@ -113,17 +114,22 @@ export default function QuizResults({ quiz }: QuizResultsProps) {
                 </TableHeader>
                 <TableBody>
                   {rankedPlayers.map((player, index) => (
-                    <TableRow key={player.id} className={cn(user && player.id === user.id ? 'bg-primary/10' : '', index < 3 && 'bg-secondary/50')}>
-                      <TableCell className="text-center font-bold">{index + 1}</TableCell>
+                    <TableRow key={player.id} className={cn(
+                        user && player.id === user.id && 'bg-primary/10',
+                        index === 0 && 'bg-yellow-400/10',
+                        index === 1 && 'bg-slate-400/10',
+                        index === 2 && 'bg-yellow-600/10'
+                    )}>
+                      <TableCell className="text-center font-bold text-lg">{index + 1}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
                             <AvatarFallback className="text-lg bg-muted">{player.avatar}</AvatarFallback>
                           </Avatar>
-                          {player.name}
+                          <span className='font-medium'>{player.name}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-mono text-primary">{player.score}</TableCell>
+                      <TableCell className="text-right font-mono text-primary text-base">{player.score}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
