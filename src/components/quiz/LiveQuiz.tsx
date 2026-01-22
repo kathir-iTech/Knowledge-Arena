@@ -71,6 +71,22 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
   const [showViolationWarning, setShowViolationWarning] = useState(false);
   const [isScoring, setIsScoring] = useState(false);
 
+  const questionStartTimeMs = useMemo(() => {
+    if (!quiz.questionStartAt) return 0;
+    // The object from Firestore might not have the toMillis method if it's already a number
+    // This handles both server Timestamps and client-side numbers (from older data)
+    const startAt = quiz.questionStartAt as any;
+    if (startAt && typeof startAt.toMillis === 'function') {
+        return startAt.toMillis();
+    }
+    // Fallback for unexpected data types, like a simple number.
+    if (typeof startAt === 'number') {
+        return startAt;
+    }
+    return Date.now(); // Should not be reached in normal flow
+  }, [quiz.questionStartAt]);
+
+
   // --- Data Fetching ---
   const questionsQuery = useMemo(() => {
       if (!firestore) return null;
@@ -89,7 +105,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
   useEffect(() => {
     if (quiz.status !== 'live' || !currentQuestion || !quiz.questionStartAt) return;
 
-    const serverStartTime = quiz.questionStartAt;
+    const serverStartTime = questionStartTimeMs;
     const timeLimit = (currentQuestion.timer || 30) * 1000;
     const endTime = serverStartTime + timeLimit;
 
@@ -103,7 +119,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
     updateTimer(); // Initial call
 
     return () => clearInterval(timerId);
-  }, [currentQuestion, quiz.questionStartAt, quiz.status]);
+  }, [currentQuestion, quiz.questionStartAt, quiz.status, questionStartTimeMs]);
 
 
   // --- State Reset on Question Change ---
@@ -170,7 +186,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
       const questionIndex = quiz.currentQuestionIndex;
       const question = questions[questionIndex];
       const questionId = question.id;
-      const questionStartTime = quiz.questionStartAt || 0;
+      const questionStartTime = questionStartTimeMs;
       const questionTimeLimit = question.timer * 1000;
 
       const answerKeyRef = doc(firestore, `quizzes/${quiz.id}/answerKeys/${questionId}`);

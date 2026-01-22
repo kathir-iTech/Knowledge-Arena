@@ -77,23 +77,28 @@ service cloud.firestore {
     }
 
     // PARTICIPANTS can be created by any user for themselves.
-    // Updates are locked down to server-side logic (Cloud Functions) or specific actions.
+    // Updates are locked down to specific actions.
     match /quizzes/{quizId}/participants/{userId} {
         // Any signed-in user can view the participant list (for leaderboards).
         allow read: if isSignedIn();
-        // A user can join a quiz by creating their own participant document, but only if one doesn't already exist.
+        // A user can join a quiz by creating their own participant document.
         allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId));
         
-        // A teacher can update any participant (reset attempts, etc.).
-        // A student can only update their own violation count.
-        allow update: if isQuizCreator(quizId) || (
+        // The teacher who created the quiz can update any participant field (e.g., for scoring, resetting attempts).
+        allow update: if isQuizCreator(quizId);
+
+        // A student can update their OWN participant document, but ONLY to report a malpractice violation.
+        allow update: if 
           isOwner(userId) &&
           get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live' &&
-          resource.data.status != 'blocked' && // Student cannot update if already blocked
+          resource.data.status != 'blocked' && // Cannot update if already blocked
           request.resource.data.violationsCount == resource.data.violationsCount + 1 && // Must be an increment
-          request.resource.data.score == resource.data.score && // Cannot change own score
-          request.resource.data.name == resource.data.name // Cannot change own name
-        );
+          (
+            // Either updating just violationsCount
+            request.resource.data.keys().hasOnly(['violationsCount']) ||
+            // Or updating violationsCount and status to blocked
+            (request.resource.data.keys().hasOnly(['violationsCount', 'status']) && request.resource.data.status == 'blocked')
+          );
 
         allow delete: if isQuizCreator(quizId);
     }
