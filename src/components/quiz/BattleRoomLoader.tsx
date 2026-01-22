@@ -13,7 +13,7 @@ import QuizResults from '@/components/quiz/QuizResults';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import { Button } from '../ui/button';
 
-export default function QuizRoomLoader() {
+export default function BattleRoomLoader() {
   const { roomCode } = useParams();
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
