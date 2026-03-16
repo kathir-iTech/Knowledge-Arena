@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -8,7 +9,7 @@ import { useFirestore, useCollection, updateDocumentNonBlocking } from '@/fireba
 import { collection, query, where, onSnapshot, doc, getDocs, writeBatch } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Loader2, Trash2, Users, RefreshCw } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
@@ -38,10 +39,11 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
         try {
             const batch = writeBatch(firestore);
             
-            // Delete subcollections
+            // 1. Delete participants
             const pSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'participants'));
             pSnap.forEach(d => batch.delete(d.ref));
             
+            // 2. Delete questions and their submissions
             const qSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'questions'));
             for (const qDoc of qSnap.docs) {
               const subSnap = await getDocs(collection(qDoc.ref, 'submissions'));
@@ -49,15 +51,17 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
               batch.delete(qDoc.ref);
             }
             
+            // 3. Delete answer keys
             const aSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'answerKeys'));
             aSnap.forEach(d => batch.delete(d.ref));
             
-            // Delete main quiz
+            // 4. Delete the main quiz document
             batch.delete(doc(firestore, 'quizzes', quiz.id));
             
             await batch.commit();
-            toast({ title: 'Quiz Deleted', description: 'Room and all data purged.' });
+            toast({ title: 'Arena Purged', description: 'Quiz room and all data destroyed.' });
         } catch (e) {
+            console.error("Delete error:", e);
             toast({ variant: 'destructive', title: 'Error', description: 'Could not delete quiz.' });
         } finally {
             setIsProcessing(false);
@@ -70,22 +74,24 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
         try {
             const batch = writeBatch(firestore);
             
+            // 1. Reset participant scores and remove students
             const pSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'participants'));
             pSnap.forEach(d => {
               if (d.data().role === 'student') {
-                batch.delete(d.ref); // Students must re-join
+                batch.delete(d.ref); // Students must re-join for a fresh start
               } else {
-                batch.update(d.ref, { score: 0 }); // Teacher score reset
+                batch.update(d.ref, { score: 0 }); // Reset teacher score
               }
             });
 
-            // Reset quiz metadata
+            // 2. Reset quiz metadata
             batch.update(doc(firestore, 'quizzes', quiz.id), { 
                 status: 'waiting', 
-                currentQuestionIndex: -1 
+                currentQuestionIndex: -1,
+                questionStartAt: null 
             });
 
-            // Clean submissions
+            // 3. Purge all submissions
             const qSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'questions'));
             for (const qDoc of qSnap.docs) {
               const subSnap = await getDocs(collection(qDoc.ref, 'submissions'));
@@ -95,6 +101,7 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
             await batch.commit();
             toast({ title: 'Quiz Reset', description: 'Room returned to waiting state.' });
         } catch (e) {
+            console.error("Reset error:", e);
             toast({ variant: 'destructive', title: 'Error', description: 'Could not reset quiz.' });
         } finally {
             setIsProcessing(false);
@@ -125,28 +132,34 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
                 <div className="flex gap-2">
                     <Button asChild size="sm" variant={quiz.status === 'waiting' ? 'default' : 'outline'}>
                         <Link href={`/battle/${quiz.id}`}>
-                            {quiz.status === 'waiting' ? 'Launch' : 'Enter'}
+                            {quiz.status === 'waiting' ? (
+                                <><PlayCircle className="mr-2 h-4 w-4" /> Start Battle</>
+                            ) : 'Enter Arena'}
                         </Link>
                     </Button>
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-9 w-9" disabled={isProcessing}>
-                                <RefreshCw className="w-4 h-4" />
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Reset Quiz?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This will purge all scores and student entries. The room will return to the 'Waiting' state.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Keep it</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleResetQuiz}>Reset Now</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+                    
+                    {quiz.status === 'finished' && (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-9 w-9" disabled={isProcessing}>
+                                    <RefreshCw className="w-4 h-4" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Reset Quiz?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will purge all scores and student entries. The room will return to the 'Waiting' state.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Keep results</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleResetQuiz}>Reset Room</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    )}
+
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="icon" className="h-9 w-9" disabled={isProcessing}>
@@ -157,12 +170,12 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Delete Arena?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Permanent action. This quiz room and all its history will be destroyed forever.
+                                    This action is permanent. The quiz room and all gladiator history will be destroyed forever.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleDelete} className="bg-destructive">Destroy</AlertDialogAction>
+                                <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Destroy Forever</AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
@@ -171,7 +184,7 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
             {participants && participants.some(p => p.status === 'blocked') && (
               <CardContent className="pt-2">
                 <div className="space-y-2 p-3 bg-destructive/5 rounded-lg border border-destructive/10">
-                  <p className="text-[10px] font-black text-destructive uppercase tracking-widest">Awaiting Amnesty (Blocked Students):</p>
+                  <p className="text-[10px] font-black text-destructive uppercase tracking-widest">Awaiting Amnesty (Blocked):</p>
                   {participants.filter(p => p.status === 'blocked').map(p => (
                     <div key={p.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">

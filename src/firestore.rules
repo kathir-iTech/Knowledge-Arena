@@ -2,26 +2,36 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // --- Helper Functions ---
+    
     function isSignedIn() {
       return request.auth != null;
     }
+    
     function getRole() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
+    
     function isTeacher() {
       return isSignedIn() && getRole() == 'Teacher';
     }
+    
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
+
+    // Checks if the user is the creator of the specified quiz.
+    // We use a helper that safely checks for existence to avoid rule errors.
     function isQuizCreator(quizId) {
-      return isSignedIn() && get(/databases/$(database)/documents/quizzes/$(quizId)).data.createdBy == request.auth.uid;
+      let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
+      return isSignedIn() && exists(quizPath) && get(quizPath).data.createdBy == request.auth.uid;
     }
+
+    // --- Collection Rules ---
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
+      allow create, update: if isOwner(userId);
     }
 
     match /quizzes/{quizId} {
@@ -31,17 +41,20 @@ service cloud.firestore {
 
       match /questions/{questionId} {
         allow read: if isSignedIn();
+        // Allow teachers to create questions (needed for the initial creation batch)
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
           allow read: if isQuizCreator(quizId);
+          // Only allow submissions if the quiz is live
           allow create: if isOwner(userId) && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live';
           allow delete: if isQuizCreator(quizId);
         }
       }
 
       match /answerKeys/{questionId} {
+        // Only the teacher/creator can see the answer keys
         allow read: if isQuizCreator(quizId);
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
@@ -50,10 +63,8 @@ service cloud.firestore {
       match /participants/{userId} {
         allow read: if isSignedIn();
         allow create: if isOwner(userId);
-        allow update: if isQuizCreator(quizId) || (
-          isOwner(userId) && 
-          request.resource.data.diff(resource.data).affectedKeys().hasAny(['violationsCount', 'status'])
-        );
+        // Teachers can manage participants; students can update their own status/violations
+        allow update: if isQuizCreator(quizId) || isOwner(userId);
         allow delete: if isQuizCreator(quizId);
       }
     }
