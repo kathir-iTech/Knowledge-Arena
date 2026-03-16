@@ -11,6 +11,7 @@ import { Suspense } from 'react';
 function PageContent() {
   const { user, isLoading } = useAuth();
   const searchParams = useSearchParams();
+  const roomCode = searchParams.get('roomCode');
   
   if (isLoading) {
     return (
@@ -25,18 +26,11 @@ function PageContent() {
   }
 
   if (user) {
-    const roomCode = searchParams.get('roomCode');
-    let destination = user.role === 'Teacher' ? '/teacher/dashboard' : '/student/dashboard';
-    
-    if (user.role === 'Student' && roomCode) {
-      destination = `${destination}?roomCode=${roomCode}`;
-    }
-    
-    redirect(destination);
-    return null; // Render nothing while redirecting
+    const dest = user.role === 'Teacher' ? '/teacher/dashboard' : (roomCode ? `/student/dashboard?roomCode=${roomCode}` : '/student/dashboard');
+    redirect(dest);
+    return null;
   }
 
-  // If no user and not loading, always show the LoginForm.
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
       <div className="w-full max-w-md space-y-6">
@@ -52,7 +46,6 @@ function PageContent() {
 }
 
 export default function Home() {
-  // Wrap the component that uses useSearchParams in a Suspense boundary.
   return (
     <Suspense>
       <PageContent />

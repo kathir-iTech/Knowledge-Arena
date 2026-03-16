@@ -2,105 +2,57 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // --- Helper Functions ---
     function isSignedIn() {
       return request.auth != null;
     }
-
-    // isTeacher() reads the role from the user's document.
-    function isTeacher() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
-
-    // isOwner checks if the requesting user's UID matches the document's ID.
+    function isTeacher() {
+      return isSignedIn() && getRole() == 'Teacher';
+    }
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-    
-    // isQuizCreator checks if the user is the teacher who created the quiz.
     function isQuizCreator(quizId) {
-        return isTeacher() && get(/databases/$(database)/documents/quizzes/$(quizId)).data.createdBy == request.auth.uid;
+      return isSignedIn() && get(/databases/$(database)/documents/quizzes/$(quizId)).data.createdBy == request.auth.uid;
     }
 
-    // --- Path Rules ---
-
-    // USER profiles are readable by any signed-in user.
-    // They can be created by the owner.
-    // Updates are allowed by the owner, but they cannot change their role.
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isOwner(userId);
       allow update: if isOwner(userId) && request.resource.data.role == resource.data.role;
     }
 
-    // QUIZ root document.
     match /quizzes/{quizId} {
-      // Any signed-in user can read a quiz's state or list quizzes.
-      allow get, list: if isSignedIn();
-      // Only teachers can create quizzes.
+      allow read: if isSignedIn();
       allow create: if isTeacher();
-      // Only the teacher who created the quiz can update its state (e.g., start, next question, finish).
-      allow update: if isQuizCreator(quizId);
-      // Only the creator can delete it.
-      allow delete: if isQuizCreator(quizId);
-    }
+      allow update, delete: if isQuizCreator(quizId);
 
-    // QUESTIONS can be read by any signed-in user in the quiz.
-    match /quizzes/{quizId}/questions/{questionId} {
+      match /questions/{questionId} {
         allow read: if isSignedIn();
-        // Only teachers can create questions (as part of quiz creation).
-        allow create: if isTeacher();
-        // Only the quiz creator can update or delete questions after creation.
-        allow update, delete: if isQuizCreator(quizId);
+        allow create, update, delete: if isTeacher();
 
-        // SUBMISSIONS can only be created by a student for themselves, for a specific question, and only once.
         match /submissions/{userId} {
-            // The quiz creator can read submissions for scoring. Students cannot read any.
-            allow read: if isQuizCreator(quizId);
-            allow update, delete: if false; // Submissions are final.
-            // Allow a user to create their own answer document if one doesn't already exist and quiz is live.
-            allow create: if isOwner(userId) 
-                        && !exists(/databases/$(database)/documents/quizzes/$(quizId)/questions/$(questionId)/submissions/$(userId))
-                        && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live';
+          allow read: if isQuizCreator(quizId);
+          allow create: if isOwner(userId) && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live';
         }
-    }
-    
-    // ANSWER KEYS are only creatable by a teacher during quiz creation.
-    // The teacher who created the quiz can read them for evaluation. No one can update/delete directly.
-    match /quizzes/{quizId}/answerKeys/{questionId} {
+      }
+
+      match /answerKeys/{questionId} {
         allow read: if isQuizCreator(quizId);
-        // Only teachers can create answer keys (as part of quiz creation).
-        allow create: if isTeacher();
-        // Only the quiz creator can update or delete them after creation.
-        allow update, delete: if isQuizCreator(quizId);
-    }
+        allow create, update, delete: if isTeacher();
+      }
 
-    // PARTICIPANTS can be created by any user for themselves.
-    // Updates are locked down to specific actions.
-    match /quizzes/{quizId}/participants/{userId} {
-        // Any signed-in user can view the participant list (for leaderboards).
+      match /participants/{userId} {
         allow read: if isSignedIn();
-        // A user can join a quiz by creating their own participant document.
-        allow create: if isOwner(userId) && !exists(/databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId));
-        
-        // The teacher who created the quiz can update any participant field (e.g., for scoring, resetting attempts).
-        allow update: if isQuizCreator(quizId);
-
-        // A student can update their OWN participant document, but ONLY to report a malpractice violation.
-        allow update: if 
-          isOwner(userId) &&
-          get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live' &&
-          resource.data.status != 'blocked' && // Cannot update if already blocked
-          request.resource.data.violationsCount == resource.data.violationsCount + 1 && // Must be an increment
-          (
-            // Either updating just violationsCount
-            request.resource.data.keys().hasOnly(['violationsCount']) ||
-            // Or updating violationsCount and status to blocked
-            (request.resource.data.keys().hasOnly(['violationsCount', 'status']) && request.resource.data.status == 'blocked')
-          );
-
+        allow create: if isOwner(userId);
+        allow update: if isQuizCreator(quizId) || (
+          isOwner(userId) && 
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['violationsCount', 'status'])
+        );
         allow delete: if isQuizCreator(quizId);
+      }
     }
   }
 }

@@ -11,141 +11,67 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Loader2, Swords } from 'lucide-react';
-import type { QuizParticipant } from '@/lib/types';
 
 export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?: string }) {
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const firestore = useFirestore();
-
   const [roomCode, setRoomCode] = useState(initialRoomCode || '');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleJoinQuiz = async (e: React.FormEvent) => {
+  const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!roomCode.trim() || !firestore || !user) return;
-
+    const code = roomCode.trim().toUpperCase();
+    if (!code || !firestore || !user) return;
     setIsLoading(true);
-    const quizId = roomCode.trim().toUpperCase();
 
     try {
-      // 1. Check if the quiz exists
-      const quizRef = doc(firestore, 'quizzes', quizId);
-      const quizSnap = await getDoc(quizRef);
+      const qSnap = await getDoc(doc(firestore, 'quizzes', code));
+      if (!qSnap.exists()) throw new Error('Room not found');
+      if (qSnap.data().status === 'finished') throw new Error('Quiz has ended');
 
-      if (!quizSnap.exists()) {
-        toast({
-          variant: 'destructive',
-          title: 'Room Not Found',
-          description: `The quiz room with code "${quizId}" does not exist.`,
-        });
-        setIsLoading(false);
-        return;
+      const pRef = doc(firestore, 'quizzes', code, 'participants', user.id);
+      const pSnap = await getDoc(pRef);
+      if (!pSnap.exists()) {
+        await setDoc(pRef, { name: user.name, avatar: user.avatar, role: 'student', score: 0, status: 'playing', violationsCount: 0 });
+      } else if (pSnap.data().status === 'blocked') {
+        throw new Error('You are blocked from this room');
       }
-      
-      const quizData = quizSnap.data();
-      if (quizData.status === 'finished') {
-        toast({
-            variant: 'destructive',
-            title: 'Quiz Finished',
-            description: `This quiz has already ended.`,
-        });
-        setIsLoading(false);
-        return;
-      }
-      
-      // 2. Check if the student is already a participant and their status
-      const participantRef = doc(firestore, 'quizzes', quizId, 'participants', user.id);
-      const participantSnap = await getDoc(participantRef);
 
-      if (participantSnap.exists()) {
-          const participantData = participantSnap.data() as QuizParticipant;
-          if (participantData.status === 'blocked') {
-              toast({
-                  variant: 'destructive',
-                  title: 'Action Denied',
-                  description: 'You are blocked from this quiz. Please ask your teacher to reset your attempt.',
-              });
-              setIsLoading(false);
-              return;
-          }
-          if (participantData.status === 'finished') {
-            toast({
-                variant: 'destructive',
-                title: 'Quiz Already Completed',
-                description: "You have already finished this quiz and can't re-enter.",
-            });
-            setIsLoading(false);
-            return;
-          }
-          // If they already exist and are not blocked, they can just proceed to the quiz page
-      } else {
-          // 3. If not a participant, create the participant document to "join"
-          const newParticipant: Omit<QuizParticipant, 'id'> = {
-            name: user.name,
-            avatar: user.avatar,
-            role: 'student',
-            score: 0,
-            status: 'playing',
-            violationsCount: 0,
-          };
-          // This create operation is allowed by security rules
-          await setDoc(participantRef, newParticipant);
-      }
-      
-      // 4. Redirect to the quiz room
-      router.push(`/battle/${quizId}`);
-
-    } catch (error: any) {
-        toast({
-            variant: 'destructive',
-            title: 'Error Joining Quiz',
-            description: error.message || 'An unexpected error occurred. Please try again.',
-        });
-       setIsLoading(false);
+      router.push(`/battle/${code}`);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Join Failed', description: err.message });
+      setIsLoading(false);
     }
   };
 
-  if (!user) {
-    return <div className="flex justify-center items-center h-full"><Loader2 className="w-16 h-16 animate-spin" /></div>;
-  }
-
   return (
     <div className="p-4 md:p-8 space-y-8">
-       <header>
-        <h1 className="text-4xl font-headline tracking-tight text-primary">Student Dashboard</h1>
-        <p className="text-muted-foreground">Welcome, Gladiator {user.name}. Your next challenge awaits.</p>
-      </header>
-
-       <div className="flex justify-center px-4">
-         <Card className="w-full max-w-md border-accent/50 shadow-lg shadow-accent/10">
+      <h1 className="text-4xl font-headline text-primary text-center">Gladiator Dashboard</h1>
+      <div className="flex justify-center">
+        <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle className="font-headline text-center text-2xl">Enter the Arena</CardTitle>
-            <CardDescription className="text-center">Enter the code provided by your teacher to join the battle.</CardDescription>
+            <CardTitle className="text-center">Enter the Arena</CardTitle>
+            <CardDescription className="text-center">Enter the 6-digit code to join the battle.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleJoinQuiz} className="space-y-4">
+            <form onSubmit={handleJoin} className="space-y-4">
               <Input
                 value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value)}
-                placeholder="ROOM CODE"
-                className="text-center text-2xl h-14 tracking-widest font-mono uppercase"
+                onChange={e => setRoomCode(e.target.value)}
+                className="text-center text-3xl h-16 font-mono tracking-widest uppercase"
                 maxLength={6}
-                autoCapitalize="characters"
+                placeholder="000000"
               />
-              <Button type="submit" className="w-full text-lg h-12" disabled={isLoading || roomCode.length < 6}>
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <Swords className="mr-2 h-5 w-5" />
-                )}
-                Join Quiz
+              <Button type="submit" className="w-full h-12 text-lg" disabled={isLoading || roomCode.length < 6}>
+                {isLoading ? <Loader2 className="animate-spin" /> : <Swords className="mr-2" />}
+                Join Battle
               </Button>
             </form>
           </CardContent>
         </Card>
-       </div>
+      </div>
     </div>
   );
 }

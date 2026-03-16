@@ -17,7 +17,7 @@
         },
         "role": {
           "type": "string",
-          "description": "The role of the user, primarily for UI distinctions. Security is handled by custom claims.",
+          "description": "The role of the user.",
           "enum": ["Teacher", "Student"]
         },
         "avatar": {
@@ -33,44 +33,33 @@
       "type": "object",
       "properties": {
         "title": {
-          "type": "string",
-          "description": "Title of the quiz for this session."
+          "type": "string"
         },
         "status": {
           "type": "string",
-          "description": "The current state of the quiz.",
           "enum": ["waiting", "live", "finished"]
         },
         "currentQuestionIndex": {
-          "type": "number",
-          "description": "The index of the currently active question."
+          "type": "number"
         },
         "questionCount": {
-          "type": "number",
-          "description": "Total number of questions in the quiz."
+          "type": "number"
         },
         "questionStartAt": {
-          "type": "number",
-          "description": "Server timestamp for when the current question was started."
-        },
-        "timeLimit": {
-          "type": "number",
-          "description": "The duration in seconds for the current question."
+          "type": "number"
         },
         "createdBy": {
-          "type": "string",
-          "description": "The UID of the teacher who created the quiz."
+          "type": "string"
         },
         "createdAt": {
-          "type": "number",
-          "description": "Timestamp when the room was created."
+          "type": "number"
         }
       },
       "required": ["title", "status", "currentQuestionIndex", "questionCount", "createdBy", "createdAt"]
     },
     "QuizQuestion": {
       "title": "QuizQuestion",
-      "description": "A single question within a quiz. Publicly readable question data.",
+      "description": "A single question within a quiz.",
       "type": "object",
       "properties": {
         "text": {
@@ -81,103 +70,62 @@
           "items": { "type": "string" }
         },
         "timer": {
-          "type": "number",
-          "description": "The time limit for this question in seconds."
+          "type": "number"
         },
         "index": {
-          "type": "number",
-          "description": "The order of the question in the quiz."
+          "type": "number"
         }
       },
       "required": ["text", "options", "timer", "index"]
     },
-    "QuizAnswerKey": {
-      "title": "QuizAnswerKey",
-      "description": "Server-only document containing the correct answer for a question.",
-      "type": "object",
-      "properties": {
-        "correctOptionIndex": {
-          "type": "number"
-        }
-      },
-      "required": ["correctOptionIndex"]
-    },
     "QuizParticipant": {
       "title": "QuizParticipant",
-      "description": "Represents a user's participation and state within a quiz.",
+      "description": "A user's state within a quiz.",
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "avatar": {
-          "type": "string"
-        },
-        "role": {
-          "type": "string",
-          "enum": ["teacher", "student"]
-        },
-        "score": {
-          "type": "number"
-        },
-        "status": {
-          "type": "string",
-          "enum": ["playing", "finished", "blocked"]
-        },
-        "violationsCount": {
-          "type": "number"
-        }
+        "name": { "type": "string" },
+        "avatar": { "type": "string" },
+        "role": { "type": "string", "enum": ["teacher", "student"] },
+        "score": { "type": "number" },
+        "status": { "type": "string", "enum": ["playing", "finished", "blocked"] },
+        "violationsCount": { "type": "number" }
       },
       "required": ["name", "avatar", "role", "score", "status", "violationsCount"]
     },
     "QuizSubmission": {
       "title": "QuizSubmission",
-      "description": "A student's submitted answer for a single question.",
+      "description": "A student's answer for a question.",
       "type": "object",
       "properties": {
-        "selectedOption": {
-          "type": "number"
-        },
-        "submittedAt": {
-          "type": "number"
-        }
+        "selectedOption": { "type": "number" },
+        "submittedAt": { "type": "number" }
       },
       "required": ["selectedOption", "submittedAt"]
     }
   },
   "auth": {
-    "providers": ["password"],
-    "customClaims": {
-      "role": {
-        "type": "string",
-        "enum": ["teacher", "student"]
-      }
-    }
+    "providers": ["password"]
   },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
-      "description": "Stores public user profile information."
+      "description": "User profiles."
     },
     "/quizzes/{quizId}": {
       "schema": { "$ref": "#/entities/Quiz" },
-      "description": "The root document for a single quiz session."
+      "description": "Quiz rooms."
     },
     "/quizzes/{quizId}/questions/{questionId}": {
       "schema": { "$ref": "#/entities/QuizQuestion" },
-      "description": "Publicly visible data for each question in a quiz."
-    },
-    "/quizzes/{quizId}/answerKeys/{questionId}": {
-      "schema": { "$ref": "#/entities/QuizAnswerKey" },
-      "description": "Server-only correct answer data for each question."
+      "description": "Questions in a quiz."
     },
     "/quizzes/{quizId}/participants/{userId}": {
       "schema": { "$ref": "#/entities/QuizParticipant" },
-      "description": "A user's state, score, and status within a quiz."
+      "description": "Participant state."
     },
     "/quizzes/{quizId}/questions/{questionId}/submissions/{userId}": {
       "schema": { "$ref": "#/entities/QuizSubmission" },
-      "description": "A student's submitted answer for a specific question. The document ID is the student's UID."
+      "description": "Student answers."
     }
   }
 }
