@@ -101,6 +101,15 @@
         "submittedAt": { "type": "number" }
       },
       "required": ["selectedOption", "submittedAt"]
+    },
+    "AnswerKey": {
+      "title": "AnswerKey",
+      "description": "The correct answer for a question, hidden from students.",
+      "type": "object",
+      "properties": {
+        "correctOptionIndex": { "type": "number" }
+      },
+      "required": ["correctOptionIndex"]
     }
   },
   "auth": {
@@ -108,24 +117,28 @@
   },
   "firestore": {
     "/users/{userId}": {
-      "schema": { "$ref": "#/entities/User" },
+      "schema": { "$ref": "#/backend/entities/User" },
       "description": "User profiles."
     },
     "/quizzes/{quizId}": {
-      "schema": { "$ref": "#/entities/Quiz" },
+      "schema": { "$ref": "#/backend/entities/Quiz" },
       "description": "Quiz rooms."
     },
     "/quizzes/{quizId}/questions/{questionId}": {
-      "schema": { "$ref": "#/entities/QuizQuestion" },
+      "schema": { "$ref": "#/backend/entities/QuizQuestion" },
       "description": "Questions in a quiz."
     },
     "/quizzes/{quizId}/participants/{userId}": {
-      "schema": { "$ref": "#/entities/QuizParticipant" },
+      "schema": { "$ref": "#/backend/entities/QuizParticipant" },
       "description": "Participant state."
     },
     "/quizzes/{quizId}/questions/{questionId}/submissions/{userId}": {
-      "schema": { "$ref": "#/entities/QuizSubmission" },
+      "schema": { "$ref": "#/backend/entities/QuizSubmission" },
       "description": "Student answers."
+    },
+    "/quizzes/{quizId}/answerKeys/{questionId}": {
+      "schema": { "$ref": "#/backend/entities/AnswerKey" },
+      "description": "Correct answers."
     }
   }
 }

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useDoc, useFirestore } from '@/firebase';
@@ -21,24 +21,19 @@ export default function BattleRoomLoader() {
 
   const quizId = roomCode as string;
 
-  // Reference to the main quiz document
   const quizRef = useMemo(() => {
     if (!firestore || !quizId) return null;
     return doc(firestore, 'quizzes', quizId);
   }, [firestore, quizId]);
   const { data: quiz, isLoading: isQuizLoading, error: quizError } = useDoc<Quiz>(quizRef);
 
-  // Reference to the current user's participant document
   const participantRef = useMemo(() => {
     if (!firestore || !quizId || !user) return null;
     return doc(firestore, `quizzes/${quizId}/participants`, user.id);
   }, [firestore, quizId, user]);
   const { data: participant, isLoading: isParticipantLoading } = useDoc<QuizParticipant>(participantRef);
 
-  const isTeacher = useMemo(() => participant?.role === 'teacher', [participant]);
-
-  // Redirect if blocked
-  React.useEffect(() => {
+  useEffect(() => {
     if (participant?.status === 'blocked') {
       router.push('/kicked');
     }
@@ -67,7 +62,6 @@ export default function BattleRoomLoader() {
   }
   
   if (!user || !participant) {
-    // This can happen briefly while the participant doc is being created.
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -76,13 +70,11 @@ export default function BattleRoomLoader() {
     );
   }
   
-  // --- Render based on quiz state ---
-
   if (quiz.status === 'waiting') {
     return (
       <WaitingRoom
         quiz={quiz}
-        isTeacher={isTeacher}
+        isTeacher={participant.role === 'teacher'}
       />
     );
   }
@@ -96,16 +88,15 @@ export default function BattleRoomLoader() {
         <LiveQuiz
             quiz={quiz}
             participant={participant}
-            isTeacher={isTeacher}
+            isTeacher={participant.role === 'teacher'}
         />
     );
   }
 
-  // Fallback for any unknown state
   return (
-    <div className="flex h-screen items-center justify-center">
-        <p>An unknown error occurred. Please try returning to the dashboard.</p>
-        <Button onClick={() => router.push('/')} className='mt-4'>Dashboard</Button>
+    <div className="flex flex-col h-screen items-center justify-center gap-4">
+        <p>An unknown error occurred.</p>
+        <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
     </div>
-  )
+  );
 }
