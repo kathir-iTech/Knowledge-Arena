@@ -2,83 +2,60 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
-
-    function isTeacher() {
-      // Check role from the user's own document, which they have read access to.
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
-
+    function isTeacher() {
+      return isSignedIn() && getRole() == 'Teacher';
+    }
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-    
-    function isRoomTeacher(roomId) {
-      // Must be a teacher and the teacherId on the room document must match their UID.
-      return isTeacher() && get(/databases/$(database)/documents/battleRooms/$(roomId)).data.teacherId == request.auth.uid;
-    }
-    
-    function isRoomFinished(roomId) {
-      return get(/databases/$(database)/documents/battleRooms/$(roomId)).data.status == 'finished';
-    }
-    
-    function isRoomInProgress(roomId) {
-      let roomData = get(/databases/$(database)/documents/battleRooms/$(roomId)).data;
-      return roomData.status == 'in-progress';
+    function isQuizCreator(quizId) {
+      return isSignedIn() && get(/databases/$(database)/documents/quizzes/$(quizId)).data.createdBy == request.auth.uid;
     }
 
-    // USER PROFILES
     match /users/{userId} {
+      allow read: if isSignedIn();
       allow create: if isOwner(userId);
-      allow get: if isSignedIn();
       allow update: if isOwner(userId);
-      allow delete: if false;
     }
 
-    // BATTLE ROOMS
-    match /battleRooms/{roomId} {
-      allow get: if isSignedIn();
-      allow list: if isTeacher(); 
-      allow create: if isTeacher() && request.resource.data.teacherId == request.auth.uid;
-      allow update, delete: if isRoomTeacher(roomId);
-    }
-    
-    // BATTLE PARTICIPANTS
-    match /battleRooms/{roomId}/participants/{participantId} {
-      allow get: if isSignedIn();
-      allow list: if isRoomTeacher(roomId) || isRoomFinished(roomId);
-      
-      // Allow create only if the document doesn't exist yet and the student owns it.
-      allow create: if isOwner(participantId) && !exists(/databases/$(database)/documents/battleRooms/$(roomId)/participants/$(participantId));
-      
-      allow update: if isSignedIn() && (
-        // Case 1: Student updating their own answers/score/status during normal gameplay.
-        // Malpractice fields cannot change in this transaction.
-        (isOwner(participantId) && 
-         isRoomInProgress(roomId) &&
-         request.resource.data.isBlocked == resource.data.isBlocked &&
-         request.resource.data.malpracticeCount == resource.data.malpracticeCount
-        ) ||
+    match /quizzes/{quizId} {
+      allow read: if isSignedIn();
+      allow create: if isTeacher();
+      allow update, delete: if isQuizCreator(quizId);
 
-        // Case 2: Student client reports a focus loss (malpractice warning OR block).
-        (isOwner(participantId) && isRoomInProgress(roomId) &&
-          // Malpractice count must increment by exactly 1.
-         request.resource.data.malpracticeCount == resource.data.malpracticeCount + 1 &&
-         request.resource.data.isBlocked == true
-        ) ||
-        
-        // Case 3: Teacher can reset a student's malpractice block.
-        (isRoomTeacher(roomId) &&
-         request.resource.data.isBlocked == false &&
-         request.resource.data.malpracticeCount == 0
-        )
-      );
+      match /questions/{questionId} {
+        allow read: if isSignedIn();
+        allow create: if isTeacher();
+        allow update, delete: if isQuizCreator(quizId);
 
-      allow delete: if isRoomTeacher(roomId);
+        match /submissions/{userId} {
+          allow read: if isQuizCreator(quizId);
+          allow create: if isOwner(userId) && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live';
+          allow delete: if isQuizCreator(quizId);
+        }
+      }
+
+      match /answerKeys/{questionId} {
+        allow read: if isQuizCreator(quizId);
+        allow create: if isTeacher();
+        allow update, delete: if isQuizCreator(quizId);
+      }
+
+      match /participants/{userId} {
+        allow read: if isSignedIn();
+        allow create: if isOwner(userId);
+        allow update: if isQuizCreator(quizId) || (
+          isOwner(userId) && 
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['violationsCount', 'status'])
+        );
+        allow delete: if isQuizCreator(quizId);
+      }
     }
   }
 }
