@@ -1,49 +1,44 @@
-....# Knowledge Arena
+# 🏆 Knowledge Arena
 
-This is a Next.js quiz application built in Firebase Studio.
+Knowledge Arena is a high-octane, real-time quiz platform designed for the ultimate classroom battle. Built with Next.js 15, Tailwind CSS, and Firebase, it transforms learning into a competitive gladiator experience.
 
-## Running Locally
+## ⚔️ Key Features
 
-To run the development server:
+- **Live Battle Rooms**: Teachers create "Arenas" and lead students through timed rounds of questions.
+- **Fair Play Engine**: Integrated malpractice detection automatically warns or blocks students who switch tabs or lose focus during a battle.
+- **Gladiator Scoring**: Points are awarded based on accuracy and speed. The faster you answer correctly, the more points you earn.
+- **The Podium**: A cinematic results screen that celebrates the top 3 finishers with Gold, Silver, and Bronze honors.
+- **Seamless Entry**: Students join instantly using 6-digit room codes or by scanning teacher-generated QR codes.
+- **Avatar Selection**: Players choose from a library of emojis to represent their gladiator in the arena.
 
-```bash
-npm run dev
-```
+## 🛡️ For Teachers (Commanders)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. **Construct Arena**: Use the "Create Quiz" tool to set questions, options, and timers.
+2. **The Waiting Room**: Open the room to students. Monitor the "Gladiators in the Arena" list as they join.
+3. **Control the Battle**: You control the flow. Advance questions only when you're ready.
+4. **Enforce Amnesty**: If a student is blocked for malpractice, you can grant them "Amnesty" (unblock) from your dashboard.
 
-## How to Deploy Your App
+## 🏹 For Students (Gladiators)
 
-Your application is ready to be deployed to the world using **Firebase App Hosting**. Once deployed, anyone will be able to access it from a public URL.
+1. **Enter the Arena**: Log in and enter the room code provided by your teacher.
+2. **Stay Focused**: Do NOT switch tabs or minimize the browser during a live quiz. The Fair Play engine is watching.
+3. **Be Fast, Be Right**: Read carefully, but answer quickly to maximize your score.
 
-Follow these steps on your local machine:
+## 🛠️ Tech Stack
 
-### Step 1: Install the Firebase CLI
+- **Framework**: Next.js 15 (App Router)
+- **Styling**: Tailwind CSS & ShadCN UI
+- **Backend**: Firebase Auth & Firestore
+- **Icons**: Lucide React
+- **Fonts**: Space Grotesk & Inter
 
-If you don't already have it, install the Firebase Command Line Interface (CLI). This is a powerful tool that lets you manage your Firebase projects. Open your terminal and run this command:
+## 🚀 Deployment
 
-```bash
-npm install -g firebase-tools
-```
+This app is optimized for **Firebase App Hosting**. 
 
-### Step 2: Log in to Firebase
+1. Install Firebase CLI: `npm install -g firebase-tools`
+2. Login: `firebase login`
+3. Deploy: `firebase deploy`
 
-Next, log in to your Firebase account in the terminal. This will open a browser window for you to authenticate.
-
-```bash
-firebase login
-```
-
-### Step 3: Deploy the App
-
-Navigate to your project's root directory in the terminal (the folder containing this `README.md` file).
-
-Run the following command to start the deployment:
-
-```bash
-firebase deploy
-```
-
-The Firebase CLI will automatically read your `apphosting.yaml` configuration, build your Next.js application for production, and deploy it to Firebase App Hosting.
-
-Once the deployment is complete, the terminal will show you the **Hosting URL**. This is the live, public link to your application! You can share it with anyone.
+---
+*Built for glory. Built for Knowledge Arena.*
