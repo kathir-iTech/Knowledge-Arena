@@ -8,7 +8,7 @@ import type { Quiz, QuizParticipant, QuizQuestion } from '@/lib/types';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Clock, Loader2, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -68,8 +68,11 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
   useEffect(() => {
     if (!currentQuestion || !quiz.questionStartAt) return;
     
-    // questionStartAt can be a number or a Firebase Timestamp
-    const start = typeof quiz.questionStartAt === 'number' ? quiz.questionStartAt : (quiz.questionStartAt as any).toMillis?.() || Date.now();
+    // Robustly handle number or Firebase Timestamp
+    const start = typeof quiz.questionStartAt === 'number' 
+        ? quiz.questionStartAt 
+        : (quiz.questionStartAt as any).toMillis?.() || Date.now();
+    
     const limit = currentQuestion.timer * 1000;
     const end = start + limit;
 
@@ -131,7 +134,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
       if (!keySnap.exists()) throw new Error('No answer key found');
       
       const correctIdx = keySnap.data().correctOptionIndex;
-      const start = typeof quiz.questionStartAt === 'number' ? quiz.questionStartAt : (quiz.questionStartAt as any).toMillis?.() || Date.now();
+      const start = typeof quiz.questionStartAt === 'number' 
+        ? quiz.questionStartAt 
+        : (quiz.questionStartAt as any).toMillis?.() || Date.now();
       
       const partsSnap = await getDocs(collection(firestore, `quizzes/${quiz.id}/participants`));
       const batch = writeBatch(firestore);

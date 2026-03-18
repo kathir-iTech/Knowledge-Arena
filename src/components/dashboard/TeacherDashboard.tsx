@@ -91,7 +91,7 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
                 questionStartAt: null 
             });
 
-            // 3. Purge all submissions
+            // 3. Purge all submissions from all questions
             const qSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'questions'));
             for (const qDoc of qSnap.docs) {
               const subSnap = await getDocs(collection(qDoc.ref, 'submissions'));
