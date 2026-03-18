@@ -13,7 +13,7 @@ export interface Quiz {
   status: 'waiting' | 'live' | 'finished';
   currentQuestionIndex: number;
   questionCount: number;
-  questionStartAt?: number;
+  questionStartAt?: any; // Can be number or Timestamp
   createdBy: string;
   createdAt: number;
 }

@@ -68,10 +68,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
   useEffect(() => {
     if (!currentQuestion || !quiz.questionStartAt) return;
     
-    // Robustly handle number or Firebase Timestamp
     const start = typeof quiz.questionStartAt === 'number' 
         ? quiz.questionStartAt 
-        : (quiz.questionStartAt as any).toMillis?.() || Date.now();
+        : (quiz.questionStartAt as any)?.toMillis?.() || Date.now();
     
     const limit = currentQuestion.timer * 1000;
     const end = start + limit;
@@ -136,7 +135,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
       const correctIdx = keySnap.data().correctOptionIndex;
       const start = typeof quiz.questionStartAt === 'number' 
         ? quiz.questionStartAt 
-        : (quiz.questionStartAt as any).toMillis?.() || Date.now();
+        : (quiz.questionStartAt as any)?.toMillis?.() || Date.now();
       
       const partsSnap = await getDocs(collection(firestore, `quizzes/${quiz.id}/participants`));
       const batch = writeBatch(firestore);

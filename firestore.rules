@@ -2,21 +2,30 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // --- Helper Functions ---
+    
     function isSignedIn() {
       return request.auth != null;
     }
+    
     function getRole() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
+    
     function isTeacher() {
       return isSignedIn() && getRole() == 'Teacher';
     }
+    
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
+
     function isQuizCreator(quizId) {
-      return isSignedIn() && get(/databases/$(database)/documents/quizzes/$(quizId)).data.createdBy == request.auth.uid;
+      let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
+      return isSignedIn() && exists(quizPath) && get(quizPath).data.createdBy == request.auth.uid;
     }
+
+    // --- Rules ---
 
     match /users/{userId} {
       allow read: if isSignedIn();
@@ -31,26 +40,28 @@ service cloud.firestore {
 
       match /questions/{questionId} {
         allow read: if isSignedIn();
-        allow create, update, delete: if isTeacher();
+        // Allow creation if the user is a teacher (needed for initial batch)
+        allow create: if isTeacher();
+        allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
           allow read: if isQuizCreator(quizId);
-          allow create: if isOwner(userId) && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live';
+          allow create: if isOwner(userId);
+          allow delete: if isQuizCreator(quizId);
         }
       }
 
       match /answerKeys/{questionId} {
         allow read: if isQuizCreator(quizId);
-        allow create, update, delete: if isTeacher();
+        allow create: if isTeacher();
+        allow update, delete: if isQuizCreator(quizId);
       }
 
       match /participants/{userId} {
         allow read: if isSignedIn();
         allow create: if isOwner(userId);
-        allow update: if isQuizCreator(quizId) || (
-          isOwner(userId) && 
-          request.resource.data.diff(resource.data).affectedKeys().hasAny(['violationsCount', 'status'])
-        );
+        // Teacher can update everyone (block/reset), students can update themselves (violations)
+        allow update: if isQuizCreator(quizId) || isOwner(userId);
         allow delete: if isQuizCreator(quizId);
       }
     }

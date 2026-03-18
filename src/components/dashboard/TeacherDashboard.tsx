@@ -39,11 +39,9 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
         try {
             const batch = writeBatch(firestore);
             
-            // 1. Delete participants
             const pSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'participants'));
             pSnap.forEach(d => batch.delete(d.ref));
             
-            // 2. Delete questions and their submissions
             const qSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'questions'));
             for (const qDoc of qSnap.docs) {
               const subSnap = await getDocs(collection(qDoc.ref, 'submissions'));
@@ -51,11 +49,9 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
               batch.delete(qDoc.ref);
             }
             
-            // 3. Delete answer keys
             const aSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'answerKeys'));
             aSnap.forEach(d => batch.delete(d.ref));
             
-            // 4. Delete the main quiz document
             batch.delete(doc(firestore, 'quizzes', quiz.id));
             
             await batch.commit();
@@ -74,24 +70,21 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
         try {
             const batch = writeBatch(firestore);
             
-            // 1. Reset participant scores and remove students
             const pSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'participants'));
             pSnap.forEach(d => {
               if (d.data().role === 'student') {
-                batch.delete(d.ref); // Students must re-join for a fresh start
+                batch.delete(d.ref); 
               } else {
-                batch.update(d.ref, { score: 0 }); // Reset teacher score
+                batch.update(d.ref, { score: 0 });
               }
             });
 
-            // 2. Reset quiz metadata
             batch.update(doc(firestore, 'quizzes', quiz.id), { 
                 status: 'waiting', 
                 currentQuestionIndex: -1,
                 questionStartAt: null 
             });
 
-            // 3. Purge all submissions from all questions
             const qSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'questions'));
             for (const qDoc of qSnap.docs) {
               const subSnap = await getDocs(collection(qDoc.ref, 'submissions'));
