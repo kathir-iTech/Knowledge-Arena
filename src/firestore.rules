@@ -21,7 +21,6 @@ service cloud.firestore {
     }
 
     // Checks if the user is the creator of the specified quiz.
-    // We use a helper that safely checks for existence to avoid rule errors.
     function isQuizCreator(quizId) {
       let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
       return isSignedIn() && exists(quizPath) && get(quizPath).data.createdBy == request.auth.uid;
@@ -36,34 +35,40 @@ service cloud.firestore {
 
     match /quizzes/{quizId} {
       allow read: if isSignedIn();
+      // Allow any teacher to create a quiz.
       allow create: if isTeacher();
+      // Only the creator can update or delete the main quiz doc.
       allow update, delete: if isQuizCreator(quizId);
 
       match /questions/{questionId} {
         allow read: if isSignedIn();
-        // Allow teachers to create questions (needed for the initial creation batch)
+        // Teachers can create questions (essential for the initial batch).
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
+          // Quiz creator can see all submissions.
           allow read: if isQuizCreator(quizId);
-          // Only allow submissions if the quiz is live
-          allow create: if isOwner(userId) && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live';
+          // Students can create their own submissions.
+          allow create: if isOwner(userId);
+          // Quiz creator can purge submissions (resetting room).
           allow delete: if isQuizCreator(quizId);
         }
       }
 
       match /answerKeys/{questionId} {
-        // Only the teacher/creator can see the answer keys
+        // Only the teacher/creator can see the answer keys.
         allow read: if isQuizCreator(quizId);
+        // Teachers can create keys.
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
       }
 
       match /participants/{userId} {
         allow read: if isSignedIn();
+        // Students can join themselves.
         allow create: if isOwner(userId);
-        // Teachers can manage participants; students can update their own status/violations
+        // Teacher can update everyone (reset/block); students can update themselves (malpractice tracking).
         allow update: if isQuizCreator(quizId) || isOwner(userId);
         allow delete: if isQuizCreator(quizId);
       }
