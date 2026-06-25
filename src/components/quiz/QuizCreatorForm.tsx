@@ -69,7 +69,6 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
     },
   });
 
-  // Re-initialize form when initialQuestions change (e.g., after AI generation)
   useEffect(() => {
     if (initialQuestions) {
       form.reset({
@@ -217,7 +216,6 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
                                 const current = form.getValues(`questions.${index}.options`);
                                 if (current.length > 2) {
                                     form.setValue(`questions.${index}.options`, current.filter((_, i) => i !== optIdx));
-                                    // Adjust correct answer index if removed option was correct or after correct
                                     const currentCorrect = form.getValues(`questions.${index}.correctAnswerIndex`);
                                     if (currentCorrect === optIdx) form.setValue(`questions.${index}.correctAnswerIndex`, -1);
                                     else if (currentCorrect > optIdx) form.setValue(`questions.${index}.correctAnswerIndex`, currentCorrect - 1);

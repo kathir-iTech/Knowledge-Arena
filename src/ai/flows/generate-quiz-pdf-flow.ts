@@ -1,7 +1,8 @@
+
 'use server';
 /**
  * @fileOverview AI flow for generating multiple-choice questions from a PDF.
- * Implements strict validation, retry logic, and difficulty-based prompting using Gemini 1.5 Flash.
+ * Implements strict validation and uses the central Genkit AI instance.
  */
 
 import { ai } from '@/ai/genkit';
@@ -15,7 +16,6 @@ const GenerateQuizFromPDFInputSchema = z.object({
 });
 export type GenerateQuizFromPDFInput = z.infer<typeof GenerateQuizFromPDFInputSchema>;
 
-// Internal AI Schema (matching the user's preferred A/B/C/D format)
 const QuizQuestionInternalSchema = z.object({
   question: z.string().describe('The question text.'),
   options: z.object({
@@ -32,7 +32,6 @@ const GenerateQuizFromPDFInternalOutputSchema = z.object({
   questions: z.array(QuizQuestionInternalSchema),
 });
 
-// Final Output Schema for UI consumption
 const QuizQuestionOutputSchema = z.object({
   text: z.string(),
   options: z.array(z.string()),
@@ -81,7 +80,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     outputSchema: GenerateQuizFromPDFOutputSchema,
   },
   async input => {
-    // 1. Extract text
     const base64Data = input.pdfDataUri.split(',')[1];
     if (!base64Data) throw new Error("INVALID_INPUT");
     
@@ -96,7 +94,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     let text = extracted.text.replace(/\s+/g, ' ').trim();
     if (text.length < 200) throw new Error("PDF_TOO_SHORT");
 
-    // Truncate to stay within safety limits (approx 12k chars)
     text = text.substring(0, 12000);
 
     const difficultyMap = {
@@ -105,14 +102,12 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: "Hard (Analysis, evaluation, distractors)"
     };
 
-    // 2. Initial Generation (Uses default model from ai instance)
     let { output } = await prompt({
       text,
       difficulty: difficultyMap[input.difficulty],
       count: input.questionCount
     });
 
-    // 3. One-shot Retry if count is wrong
     if (!output || output.questions.length !== input.questionCount) {
         const retry = await prompt({
           text,
@@ -126,7 +121,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       throw new Error("AI_FAILED");
     }
 
-    // 4. Validation & Mapping
     const validInternal = output.questions.filter(q => {
         return (
             q.question && 
@@ -137,7 +131,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
         );
     });
 
-    // Map to UI Format
     const mappedQuestions = validInternal.map(q => ({
         text: q.question,
         options: [q.options.A, q.options.B, q.options.C, q.options.D],
