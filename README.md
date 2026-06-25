@@ -1,4 +1,3 @@
-
 # 🏆 Knowledge Arena: Technical Manifesto
 
 Knowledge Arena is a high-octane, real-time quiz platform designed for the ultimate classroom battle. Built with Next.js 15, Tailwind CSS, and Firebase, it transforms learning into a competitive gladiator experience.
@@ -29,7 +28,7 @@ At the end of the battle, the top 3 gladiators are featured on a cinematic 3D-st
 ## 🛠️ Technical Stack
 - **Framework**: Next.js 15 (App Router / Turbopack)
 - **Database**: Google Firestore (Real-time NoSQL)
-- **Auth**: Firebase Authentication (Role-based email assignment)
+- **Auth**: Firebase Authentication (Role-based assignment)
 - **Styling**: Tailwind CSS & ShadCN UI
 - **Icons**: Lucide React
 - **Theme**: Cyberpunk High-Contrast (Electric Blue / Neon Purple)
