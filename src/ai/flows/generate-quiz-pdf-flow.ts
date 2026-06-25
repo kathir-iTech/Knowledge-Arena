@@ -53,7 +53,6 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'generateQuizFromPDFPrompt',
-  model: 'googleai/gemini-1.5-flash',
   input: { schema: z.object({ text: z.string(), difficulty: z.string(), count: z.number() }) },
   output: { schema: GenerateQuizFromPDFInternalOutputSchema },
   prompt: `You are an expert educational assessment designer. 
@@ -106,31 +105,21 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: "Hard (Analysis, evaluation, distractors)"
     };
 
-    // 2. Initial Generation with runtime model configuration override
-    let { output } = await prompt(
-      {
-        text,
-        difficulty: difficultyMap[input.difficulty],
-        count: input.questionCount
-      },
-      {
-        model: 'googleai/gemini-1.5-flash'
-      }
-    );
+    // 2. Initial Generation (Uses default model from ai instance)
+    let { output } = await prompt({
+      text,
+      difficulty: difficultyMap[input.difficulty],
+      count: input.questionCount
+    });
 
     // 3. One-shot Retry if count is wrong
     if (!output || output.questions.length !== input.questionCount) {
         console.warn(`Retry triggered: Expected ${input.questionCount}, got ${output?.questions.length || 0}`);
-        const retry = await prompt(
-          {
-            text,
-            difficulty: difficultyMap[input.difficulty],
-            count: input.questionCount
-          },
-          {
-            model: 'googleai/gemini-1.5-flash'
-          }
-        );
+        const retry = await prompt({
+          text,
+          difficulty: difficultyMap[input.difficulty],
+          count: input.questionCount
+        });
         output = retry.output;
     }
 
@@ -147,18 +136,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
             ['A', 'B', 'C', 'D'].includes(q.correctAnswer) &&
             q.explanation
         );
-    });
-
-    // Distribution Check (Logging)
-    const dist = validInternal.reduce((acc: any, q) => {
-        acc[q.correctAnswer] = (acc[q.correctAnswer] || 0) + 1;
-        return acc;
-    }, {});
-    
-    Object.keys(dist).forEach(key => {
-        if (dist[key] / validInternal.length > 0.6) {
-            console.warn(`Skewed distribution detected for ${key}: ${dist[key]}/${validInternal.length}`);
-        }
     });
 
     // Map to UI Format
