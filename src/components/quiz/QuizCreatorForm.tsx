@@ -17,7 +17,7 @@ import { Textarea } from '../ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, PlusCircle, Loader2, Sparkles, Info } from 'lucide-react';
+import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler } from 'lucide-react';
 import type { Quiz, QuizQuestion } from '@/lib/types';
 
 const questionSchema = z.object({
