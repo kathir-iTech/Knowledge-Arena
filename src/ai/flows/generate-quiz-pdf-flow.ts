@@ -1,8 +1,7 @@
-
 'use server';
 /**
  * @fileOverview AI flow for generating multiple-choice questions from a PDF.
- * Implements strict validation and uses the central Genkit AI instance.
+ * Uses Genkit 1.x syntax and robust PDF text extraction.
  */
 
 import { ai } from '@/ai/genkit';
@@ -52,9 +51,16 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'generateQuizFromPDFPrompt',
-  model: 'googleai/gemini-1.5-flash',
-  input: { schema: z.object({ text: z.string(), difficulty: z.string(), count: z.number() }) },
-  output: { schema: GenerateQuizFromPDFInternalOutputSchema },
+  input: { 
+    schema: z.object({ 
+      text: z.string(), 
+      difficulty: z.string(), 
+      count: z.number() 
+    }) 
+  },
+  output: { 
+    schema: GenerateQuizFromPDFInternalOutputSchema 
+  },
   prompt: `You are an expert educational assessment designer. 
 Generate exactly {{{count}}} multiple-choice questions based on the following context.
 
@@ -80,7 +86,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     inputSchema: GenerateQuizFromPDFInputSchema,
     outputSchema: GenerateQuizFromPDFOutputSchema,
   },
-  async input => {
+  async (input) => {
     const base64Data = input.pdfDataUri.split(',')[1];
     if (!base64Data) throw new Error("INVALID_INPUT");
     
@@ -95,7 +101,8 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     let text = extracted.text.replace(/\s+/g, ' ').trim();
     if (text.length < 200) throw new Error("PDF_TOO_SHORT");
 
-    text = text.substring(0, 12000);
+    // Limit context window for 1.5 Flash
+    text = text.substring(0, 20000);
 
     const difficultyMap = {
       easy: "Easy (Factual recall, definitions)",
@@ -103,37 +110,20 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: "Hard (Analysis, evaluation, distractors)"
     };
 
-    // Initial Generation
-    let { output } = await prompt({
+    // Use the default model configured in the genkit instance
+    const { output } = await prompt({
       text,
       difficulty: difficultyMap[input.difficulty],
       count: input.questionCount
     });
 
-    if (!output || output.questions.length !== input.questionCount) {
-        const retry = await prompt({
-          text,
-          difficulty: difficultyMap[input.difficulty],
-          count: input.questionCount
-        });
-        output = retry.output;
-    }
-
     if (!output || !output.questions || output.questions.length === 0) {
       throw new Error("AI_FAILED");
     }
 
-    const validInternal = output.questions.filter(q => {
-        return (
-            q.question && 
-            q.options && 
-            ['A', 'B', 'C', 'D'].every(k => (q.options as any)[k]?.trim().length > 0) &&
-            ['A', 'B', 'C', 'D'].includes(q.correctAnswer) &&
-            q.explanation
-        );
-    });
-
-    const mappedQuestions = validInternal.map(q => ({
+    const mappedQuestions = output.questions
+      .filter(q => q && q.question && q.options && q.correctAnswer)
+      .map(q => ({
         text: q.question,
         options: [q.options.A, q.options.B, q.options.C, q.options.D],
         correctAnswerIndex: ['A', 'B', 'C', 'D'].indexOf(q.correctAnswer),

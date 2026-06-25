@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -73,7 +72,14 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
     if (initialQuestions) {
       form.reset({
         title: form.getValues('title') || '',
-        questions: initialQuestions
+        questions: initialQuestions.map(q => ({
+          id: uuidv4(),
+          text: q.text,
+          options: q.options,
+          correctAnswerIndex: q.correctAnswerIndex,
+          timer: 30,
+          explanation: q.explanation
+        }))
       });
     }
   }, [initialQuestions, form]);
@@ -176,7 +182,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
                 <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 group-hover:bg-primary/50 transition-colors" />
                 <div className="absolute top-3 left-4 flex items-center gap-2">
                     <span className="text-[10px] font-black uppercase tracking-widest bg-primary/20 text-primary px-3 py-1 rounded-full">ROUND {index + 1}</span>
-                    {initialQuestions && initialQuestions[index]?.explanation && (
+                    {field.explanation && (
                         <div className="flex items-center gap-1 text-[9px] text-primary bg-primary/5 px-2 py-1 rounded-full border border-primary/20">
                             <Sparkles className="w-2 h-2" /> AI GENERATED
                         </div>
@@ -256,12 +262,12 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
                     )} />
                 </div>
 
-                {initialQuestions && initialQuestions[index]?.explanation && (
+                {form.watch(`questions.${index}.explanation`) && (
                     <div className="flex gap-3 p-4 bg-primary/5 rounded-xl border border-primary/10">
                         <Info className="w-5 h-5 text-primary shrink-0" />
                         <div className="space-y-1">
                             <p className="text-xs font-black uppercase text-primary/70 tracking-widest">AI Intelligence Note:</p>
-                            <p className="text-sm text-muted-foreground italic leading-relaxed">{initialQuestions[index].explanation}</p>
+                            <p className="text-sm text-muted-foreground italic leading-relaxed">{form.watch(`questions.${index}.explanation`)}</p>
                         </div>
                     </div>
                 )}
