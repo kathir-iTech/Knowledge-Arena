@@ -25,6 +25,11 @@ service cloud.firestore {
       return isSignedIn() && exists(quizPath) && get(quizPath).data.createdBy == request.auth.uid;
     }
 
+    function isNotBlocked(quizId, userId) {
+      let partPath = /databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId);
+      return !exists(partPath) || get(partPath).data.status != 'blocked';
+    }
+
     // --- Rules ---
 
     match /users/{userId} {
@@ -35,25 +40,24 @@ service cloud.firestore {
 
     match /quizzes/{quizId} {
       allow read: if isSignedIn();
-      // Allow any teacher to create a quiz.
       allow create: if isTeacher();
-      // Only the creator can update or delete the main quiz doc.
       allow update, delete: if isQuizCreator(quizId);
 
       match /questions/{questionId} {
         allow read: if isSignedIn();
-        // Allow creation if the user is a teacher (needed for initial batch)
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
           allow read: if isQuizCreator(quizId);
-          allow create: if isOwner(userId);
+          // Only allow submission if student is not blocked
+          allow create: if isOwner(userId) && isNotBlocked(quizId, userId);
           allow delete: if isQuizCreator(quizId);
         }
       }
 
       match /answerKeys/{questionId} {
+        // Absolute Security: Only the Commander can ever read answer keys
         allow read: if isQuizCreator(quizId);
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
@@ -62,8 +66,8 @@ service cloud.firestore {
       match /participants/{userId} {
         allow read: if isSignedIn();
         allow create: if isOwner(userId);
-        // Teacher can update everyone (block/reset), students can update themselves (violations)
-        allow update: if isQuizCreator(quizId) || isOwner(userId);
+        // Students can only update their own violations, status is teacher-controlled or auto-blocked
+        allow update: if isQuizCreator(quizId) || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['violationsCount', 'status']));
         allow delete: if isQuizCreator(quizId);
       }
     }
