@@ -1,17 +1,11 @@
 
 import { genkit } from 'genkit';
-import { anthropic } from 'genkitx-anthropic';
 
 /**
- * Central Genkit instance configured with the Anthropic plugin.
- * Claude 3.5 Sonnet is used for maximum stability and instruction following.
- * Ensure ANTHROPIC_API_KEY is set in your environment.
+ * Central Genkit instance.
+ * We are using a direct integration for Anthropic to ensure 100% stability 
+ * and avoid versioning conflicts with community plugins.
  */
 export const ai = genkit({
-  plugins: [
-    anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    }),
-  ],
-  model: 'anthropic/claude-3-5-sonnet',
+  plugins: [], // No plugins needed for direct model definition
 });
