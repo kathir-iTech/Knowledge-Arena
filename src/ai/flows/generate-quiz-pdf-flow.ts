@@ -1,8 +1,7 @@
 'use server';
 /**
- * @fileOverview AI flow for generating high-quality multiple-choice questions from a PDF.
- * 
- * - generateQuizFromPDF - Entry point for the AI quiz generation.
+ * @fileOverview AI flow for generating multiple-choice questions from a PDF.
+ * Powered by Anthropic Claude 3.5 Sonnet for high-quality assessment generation.
  */
 
 import { ai } from '@/ai/genkit';
@@ -23,9 +22,9 @@ const QuizQuestionInternalSchema = z.object({
     B: z.string(),
     C: z.string(),
     D: z.string(),
-  }).describe('Exactly 4 options keyed A, B, C, D.'),
+  }).describe('Exactly 4 options.'),
   correctAnswer: z.enum(['A', 'B', 'C', 'D']).describe('The key of the correct answer.'),
-  explanation: z.string().describe('Explanation for why this is correct.'),
+  explanation: z.string().describe('Explanation for the correct answer.'),
 });
 
 const GenerateQuizFromPDFInternalOutputSchema = z.object({
@@ -41,7 +40,6 @@ const QuizQuestionOutputSchema = z.object({
 
 const GenerateQuizFromPDFOutputSchema = z.object({
   questions: z.array(QuizQuestionOutputSchema),
-  partial: z.boolean().optional(),
   difficulty: z.string(),
 });
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
@@ -62,21 +60,22 @@ const prompt = ai.definePrompt({
   output: { 
     schema: GenerateQuizFromPDFInternalOutputSchema 
   },
-  prompt: `You are a professional academic assessment expert. 
-Generate exactly {{{count}}} multiple-choice questions based strictly on the provided context.
+  prompt: `You are a professional educational assessment designer.
+Generate exactly {{{count}}} high-quality multiple-choice questions based on the following content.
 
-Difficulty Level: {{{difficulty}}}
-- Easy: Basic factual recall and terminology.
-- Moderate: Application of concepts and analytical reasoning.
-- Hard: Complex synthesis, critical evaluation, and subtle distractors.
+Difficulty: {{{difficulty}}}
+- Easy: Focus on direct facts and simple recall.
+- Moderate: Focus on application of concepts and understanding.
+- Hard: Focus on synthesis, critical analysis, and nuanced distinctions.
 
-Rules:
-1. Each question must have exactly 4 options.
-2. Provide a clear, educational explanation for the correct answer.
-3. Return the results in the requested structured format.
+Content:
+{{{text}}}
 
-Context:
-{{{text}}}`,
+Guidelines:
+1. Questions must be derived ONLY from the provided content.
+2. Provide 4 distinct options (A, B, C, D) for each question.
+3. Ensure distractors (incorrect answers) are plausible but clearly incorrect.
+4. Include a clear explanation for the correct answer.`,
 });
 
 const generateQuizFromPDFFlow = ai.defineFlow(
@@ -88,38 +87,33 @@ const generateQuizFromPDFFlow = ai.defineFlow(
   async (input) => {
     // 1. Extract Text from PDF
     const base64Data = input.pdfDataUri.split(',')[1];
-    if (!base64Data) throw new Error("INVALID_INPUT");
+    if (!base64Data) throw new Error("INVALID_PDF_DATA");
     
     const buffer = Buffer.from(base64Data, 'base64');
     let extracted;
     try {
         extracted = await pdf(buffer);
     } catch (e) {
-        throw new Error("PDF_PARSE_FAILED");
+        throw new Error("PDF_EXTRACTION_FAILED");
     }
 
-    let text = extracted.text.replace(/\s+/g, ' ').trim();
-    if (text.length < 100) throw new Error("PDF_TOO_SHORT");
+    const text = extracted.text.replace(/\s+/g, ' ').trim();
+    if (text.length < 50) throw new Error("PDF_CONTENT_TOO_SHORT");
 
-    // Conservative context window for stability
-    text = text.substring(0, 15000);
-
-    const difficultyLabels = {
-      easy: "Easy (Factual Recall)",
-      moderate: "Moderate (Concept Application)",
-      hard: "Hard (Critical Analysis)"
+    const difficultyMap = {
+      easy: "Beginner (Factual Recall)",
+      moderate: "Intermediate (Concept Application)",
+      hard: "Advanced (Critical Synthesis)"
     };
 
-    // 2. Generate with stable Gemini 1.5 Pro
+    // 2. Generate with Claude
     const { output } = await prompt({
-      text,
-      difficulty: difficultyLabels[input.difficulty],
+      text: text.substring(0, 30000), // Safety limit for context
+      difficulty: difficultyMap[input.difficulty],
       count: input.questionCount
     });
 
-    if (!output || !output.questions || output.questions.length === 0) {
-      throw new Error("AI_FAILED");
-    }
+    if (!output?.questions) throw new Error("AI_GENERATION_EMPTY");
 
     const mappedQuestions = output.questions.map(q => ({
       text: q.question,
@@ -130,7 +124,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
 
     return {
       questions: mappedQuestions,
-      partial: mappedQuestions.length < input.questionCount,
       difficulty: input.difficulty
     };
   }
