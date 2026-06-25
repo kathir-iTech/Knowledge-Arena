@@ -18,9 +18,9 @@ const STATUS_MESSAGES = [
   "Uploading your PDF...",
   "Reading the document...",
   "AI is crafting your questions...",
-  "Almost there...",
   "Analyzing key concepts...",
-  "Designing tricky distractors..."
+  "Designing tricky distractors...",
+  "Almost there..."
 ];
 
 export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps) {
@@ -87,11 +87,11 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
 
       if (result.questions && result.questions.length > 0) {
         if (result.partial) {
-            toast({ title: "Partial Generation", description: `Could only generate ${result.questions.length} valid questions.` });
+            toast({ title: "Partial Generation", description: `Only ${result.questions.length} valid questions could be forged.` });
         } else {
-            toast({ title: "Questions Generated!", description: `Successfully created ${result.questions.length} questions.` });
+            toast({ title: "Questions Generated!", description: `Successfully forged ${result.questions.length} questions.` });
         }
-        onQuestionsGenerated(result.questions, difficulty);
+        onQuestionsGenerated(result.questions, result.difficulty);
       } else {
         throw new Error("AI_FAILED");
       }
@@ -126,7 +126,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           <Label className="text-lg font-medium">1. Select Strategic Intelligence (PDF)</Label>
           {!file ? (
             <div className={cn(
-              "border-2 border-dashed border-primary/20 rounded-2xl p-12 transition-all hover:bg-primary/5 hover:border-primary/40 cursor-pointer flex flex-col items-center justify-center gap-4 text-center",
+              "border-2 border-dashed border-primary/20 rounded-2xl p-12 transition-all hover:bg-primary/5 hover:border-primary/40 cursor-pointer flex flex-col items-center justify-center gap-4 text-center relative",
               error && "border-destructive/40 bg-destructive/5"
             )}>
               <input 
@@ -218,12 +218,12 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
             onClick={handleGenerate}
             disabled={isGenerating || !file || !difficulty}
             size="lg"
-            className="w-full h-16 text-xl font-headline shadow-2xl shadow-primary/30 relative"
+            className="w-full h-20 text-xl font-headline shadow-2xl shadow-primary/30 relative"
           >
             {isGenerating ? (
               <div className="flex flex-col items-center">
                 <Loader2 className="animate-spin mb-1" />
-                <span className="text-xs animate-pulse tracking-wide font-body">
+                <span className="text-xs animate-pulse tracking-widest font-body uppercase">
                   {STATUS_MESSAGES[statusIndex]}
                 </span>
               </div>

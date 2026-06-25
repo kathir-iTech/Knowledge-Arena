@@ -1,6 +1,7 @@
 'use server';
 /**
  * @fileOverview AI flow for generating multiple-choice questions from a PDF.
+ * Implements strict validation, retry logic, and difficulty-based prompting.
  */
 
 import { ai } from '@/ai/genkit';
@@ -14,16 +15,35 @@ const GenerateQuizFromPDFInputSchema = z.object({
 });
 export type GenerateQuizFromPDFInput = z.infer<typeof GenerateQuizFromPDFInputSchema>;
 
+// Internal AI Schema (matching the user's preferred A/B/C/D format)
+const QuizQuestionInternalSchema = z.object({
+  question: z.string().describe('The question text.'),
+  options: z.object({
+    A: z.string(),
+    B: z.string(),
+    C: z.string(),
+    D: z.string(),
+  }).describe('Exactly 4 options keyed A, B, C, D.'),
+  correctAnswer: z.enum(['A', 'B', 'C', 'D']).describe('The key of the correct answer.'),
+  explanation: z.string().describe('Explanation for the correct answer.'),
+});
+
+const GenerateQuizFromPDFInternalOutputSchema = z.object({
+  questions: z.array(QuizQuestionInternalSchema),
+});
+
+// Final Output Schema for UI consumption
 const QuizQuestionOutputSchema = z.object({
-  text: z.string().describe('The question text.'),
-  options: z.array(z.string()).length(4).describe('Exactly 4 multiple-choice options.'),
-  correctAnswerIndex: z.number().min(0).max(3).describe('Index of the correct option (0-3).'),
-  explanation: z.string().describe('A brief explanation of why this answer is correct.'),
+  text: z.string(),
+  options: z.array(z.string()),
+  correctAnswerIndex: z.number(),
+  explanation: z.string(),
 });
 
 const GenerateQuizFromPDFOutputSchema = z.object({
   questions: z.array(QuizQuestionOutputSchema),
-  partial: z.boolean().optional().describe('True if not all requested questions could be generated.'),
+  partial: z.boolean().optional(),
+  difficulty: z.string(),
 });
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
@@ -34,21 +54,20 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 const prompt = ai.definePrompt({
   name: 'generateQuizFromPDFPrompt',
   input: { schema: z.object({ text: z.string(), difficulty: z.string(), count: z.number() }) },
-  output: { schema: GenerateQuizFromPDFOutputSchema },
-  prompt: `You are an expert educational assessment designer.
-Generate exactly {{{count}}} multiple-choice questions based on the following text extracted from a PDF.
+  output: { schema: GenerateQuizFromPDFInternalOutputSchema },
+  prompt: `You are an expert educational assessment designer. 
+Generate exactly {{{count}}} multiple-choice questions based on the following context.
 
 Difficulty Level: {{{difficulty}}}
-Criteria for difficulty:
 - Easy: Factual recall, definitions, basic concepts.
 - Moderate: Application, inference, cause and effect.
 - Hard: Analysis, evaluation, edge cases, tricky distractors.
 
 Requirements:
-- Each question must have exactly 4 options.
-- Identify the correct option with a 0-based index.
-- Provide a brief, helpful explanation for each answer.
-- Ensure questions are derived strictly from the provided context.
+- Each question must have exactly 4 options (A, B, C, D).
+- Identify the correct option key.
+- Provide a brief explanation.
+- Ensure questions are derived strictly from the context.
 - IMPORTANT: You MUST return exactly {{{count}}} questions.
 
 Context:
@@ -62,7 +81,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     outputSchema: GenerateQuizFromPDFOutputSchema,
   },
   async input => {
-    // 1. Extract text from PDF
+    // 1. Extract text
     const base64Data = input.pdfDataUri.split(',')[1];
     if (!base64Data) throw new Error("INVALID_INPUT");
     
@@ -75,29 +94,27 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     }
 
     let text = extracted.text.replace(/\s+/g, ' ').trim();
-    if (text.length < 200) {
-      throw new Error("PDF_TOO_SHORT");
-    }
+    if (text.length < 200) throw new Error("PDF_TOO_SHORT");
 
-    // Truncate to stay within context limits
+    // Truncate to stay within safety limits (approx 12k chars)
     text = text.substring(0, 12000);
 
-    // 2. Map difficulty description
     const difficultyMap = {
-      easy: "Easy (Factual recall, definitions, basic concepts)",
-      moderate: "Moderate (Application, inference, cause and effect)",
-      hard: "Hard (Analysis, evaluation, edge cases, tricky distractors)"
+      easy: "Easy (Factual recall, definitions)",
+      moderate: "Moderate (Application, inference)",
+      hard: "Hard (Analysis, evaluation, distractors)"
     };
 
-    // 3. Generate Questions with validation
+    // 2. Initial Generation
     let { output } = await prompt({
       text,
       difficulty: difficultyMap[input.difficulty],
       count: input.questionCount
     });
 
-    // Retry once if count is wrong
-    if (output && output.questions.length !== input.questionCount) {
+    // 3. One-shot Retry if count is wrong
+    if (!output || output.questions.length !== input.questionCount) {
+        console.warn(`Retry triggered: Expected ${input.questionCount}, got ${output?.questions.length || 0}`);
         const retry = await prompt({
             text,
             difficulty: difficultyMap[input.difficulty],
@@ -110,36 +127,41 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       throw new Error("AI_FAILED");
     }
 
-    // Validation & Cleaning
-    const validatedQuestions = output.questions.filter(q => {
+    // 4. Validation & Mapping
+    const validInternal = output.questions.filter(q => {
         return (
-            q.text && 
+            q.question && 
             q.options && 
-            q.options.length === 4 && 
-            q.options.every(opt => opt.trim().length > 0) &&
-            q.correctAnswerIndex >= 0 && 
-            q.correctAnswerIndex <= 3 &&
+            ['A', 'B', 'C', 'D'].every(k => (q.options as any)[k]?.trim().length > 0) &&
+            ['A', 'B', 'C', 'D'].includes(q.correctAnswer) &&
             q.explanation
         );
     });
 
-    // Check distribution
-    const distribution = validatedQuestions.reduce((acc: any, q) => {
-        const letter = String.fromCharCode(65 + q.correctAnswerIndex);
-        acc[letter] = (acc[letter] || 0) + 1;
+    // Distribution Check (Logging)
+    const dist = validInternal.reduce((acc: any, q) => {
+        acc[q.correctAnswer] = (acc[q.correctAnswer] || 0) + 1;
         return acc;
     }, {});
     
-    const total = validatedQuestions.length;
-    Object.keys(distribution).forEach(key => {
-        if (distribution[key] / total > 0.6) {
-            console.warn(`Skewed answer distribution detected for ${key}: ${distribution[key]}/${total}`);
+    Object.keys(dist).forEach(key => {
+        if (dist[key] / validInternal.length > 0.6) {
+            console.warn(`Skewed distribution detected for ${key}: ${dist[key]}/${validInternal.length}`);
         }
     });
 
+    // Map to UI Format
+    const mappedQuestions = validInternal.map(q => ({
+        text: q.question,
+        options: [q.options.A, q.options.B, q.options.C, q.options.D],
+        correctAnswerIndex: ['A', 'B', 'C', 'D'].indexOf(q.correctAnswer),
+        explanation: q.explanation
+    }));
+
     return {
-      questions: validatedQuestions,
-      partial: validatedQuestions.length !== input.questionCount
+      questions: mappedQuestions,
+      partial: mappedQuestions.length < input.questionCount,
+      difficulty: input.difficulty
     };
   }
 );
