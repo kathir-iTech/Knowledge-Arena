@@ -114,7 +114,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
 
     // 3. One-shot Retry if count is wrong
     if (!output || output.questions.length !== input.questionCount) {
-        console.warn(`Retry triggered: Expected ${input.questionCount}, got ${output?.questions.length || 0}`);
         const retry = await prompt({
           text,
           difficulty: difficultyMap[input.difficulty],
