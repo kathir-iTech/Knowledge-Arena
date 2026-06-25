@@ -150,13 +150,14 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: LiveQuizProps
       const batch = writeBatch(firestore);
 
       for (const pDoc of partsSnap.docs) {
-        if (pDoc.data().role === 'teacher' || pDoc.data().status === 'blocked') continue;
+        const pData = pDoc.data() as QuizParticipant;
+        if (pData.role === 'teacher' || pData.status === 'blocked') continue;
         
         const subSnap = await getDoc(doc(firestore, `quizzes/${quiz.id}/questions/${currentQuestion.id}/submissions`, pDoc.id));
         if (subSnap.exists() && subSnap.data().selectedOption === correctIdx) {
           const timeUsed = subSnap.data().submittedAt - start;
           const score = 500 + Math.max(0, Math.floor((1 - timeUsed / (currentQuestion.timer * 1000)) * 500));
-          batch.update(pDoc.ref, { score: (pDoc.data().score || 0) + score });
+          batch.update(pDoc.ref, { score: (pData.score || 0) + score });
         }
       }
       await batch.commit();

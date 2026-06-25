@@ -69,7 +69,7 @@ export function QuizCreatorForm() {
     name: 'questions',
   });
 
-  const onSubmit = async (data: QuizCreatorFormData) => {
+  const onSubmit = async (data: QuizFormData) => {
     if (!firestore || !user || user.role !== 'Teacher') {
         toast({
             variant: 'destructive',
@@ -89,7 +89,7 @@ export function QuizCreatorForm() {
         const newQuiz: Omit<Quiz, 'id'> = {
             title: data.title,
             status: 'waiting',
-            currentQuestionIndex: -1, // -1 indicates not started
+            currentQuestionIndex: -1, 
             questionCount: data.questions.length,
             createdBy: user.id,
             createdAt: Date.now(),

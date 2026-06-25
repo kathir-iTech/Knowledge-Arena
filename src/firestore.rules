@@ -20,17 +20,17 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Checks if the user is the creator of the specified quiz.
     function isQuizCreator(quizId) {
       let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
       return isSignedIn() && exists(quizPath) && get(quizPath).data.createdBy == request.auth.uid;
     }
 
-    // --- Collection Rules ---
+    // --- Rules ---
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create, update: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
     }
 
     match /quizzes/{quizId} {
@@ -42,33 +42,27 @@ service cloud.firestore {
 
       match /questions/{questionId} {
         allow read: if isSignedIn();
-        // Teachers can create questions (essential for the initial batch).
+        // Allow creation if the user is a teacher (needed for initial batch)
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
-          // Quiz creator can see all submissions.
           allow read: if isQuizCreator(quizId);
-          // Students can create their own submissions.
           allow create: if isOwner(userId);
-          // Quiz creator can purge submissions (resetting room).
           allow delete: if isQuizCreator(quizId);
         }
       }
 
       match /answerKeys/{questionId} {
-        // Only the teacher/creator can see the answer keys.
         allow read: if isQuizCreator(quizId);
-        // Teachers can create keys.
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
       }
 
       match /participants/{userId} {
         allow read: if isSignedIn();
-        // Students can join themselves.
         allow create: if isOwner(userId);
-        // Teacher can update everyone (reset/block); students can update themselves (malpractice tracking).
+        // Teacher can update everyone (block/reset), students can update themselves (violations)
         allow update: if isQuizCreator(quizId) || isOwner(userId);
         allow delete: if isQuizCreator(quizId);
       }
