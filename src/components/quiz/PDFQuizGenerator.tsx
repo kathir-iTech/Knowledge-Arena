@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -16,12 +15,12 @@ interface PDFQuizGeneratorProps {
 }
 
 const STATUS_MESSAGES = [
-  "Uploading your PDF...",
-  "Reading the document...",
-  "AI is crafting your questions...",
-  "Analyzing key concepts...",
-  "Designing tricky distractors...",
-  "Almost there..."
+  "Uploading intelligence report...",
+  "Parsing strategic data...",
+  "Forging elite challenges...",
+  "Analyzing tactical depth...",
+  "Optimizing combat rounds...",
+  "Finalizing arena parameters..."
 ];
 
 export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps) {
@@ -87,25 +86,19 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
       });
 
       if (result.questions && result.questions.length > 0) {
-        if (result.partial) {
-            toast({ title: "Partial Generation", description: `Only ${result.questions.length} valid questions could be forged.` });
-        } else {
-            toast({ title: "Questions Generated!", description: `Successfully forged ${result.questions.length} questions.` });
-        }
+        toast({ title: "Forge Successful", description: `Successfully generated ${result.questions.length} tactical rounds.` });
         onQuestionsGenerated(result.questions, result.difficulty);
       } else {
         throw new Error("AI_FAILED");
       }
     } catch (err: any) {
       console.error(err);
-      let msg = "AI generation failed. Please try again.";
-      if (err.message === "PDF_TOO_SHORT") msg = "PDF content is too short to generate these many questions. Try a longer document.";
-      if (err.message === "PDF_PARSE_FAILED") msg = "No text could be extracted from this PDF. Try a text-based PDF.";
-      if (err.message === "AI_FAILED") msg = "AI generation failed. The content might be too complex or restricted.";
-      if (err.message === "INVALID_INPUT") msg = "Invalid request parameters.";
+      let msg = "The AI Forge was interrupted.";
+      if (err.message === "PDF_TOO_SHORT") msg = "Insufficient data in PDF to generate the requested questions.";
+      if (err.message === "PDF_PARSE_FAILED") msg = "Could not extract text from this PDF. Ensure it's not a scanned image.";
       
       setError(msg);
-      toast({ variant: 'destructive', title: "Generation Error", description: msg });
+      toast({ variant: 'destructive', title: "Forge Error", description: msg });
     } finally {
       setIsGenerating(false);
     }
@@ -117,14 +110,14 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         <div className="flex items-center gap-3">
           <Sparkles className="w-6 h-6 text-primary animate-pulse" />
           <div>
-            <CardTitle className="text-2xl font-headline text-primary">AI PDF Forge</CardTitle>
-            <CardDescription>Upload strategic documentation to automate challenge creation.</CardDescription>
+            <CardTitle className="text-2xl font-headline text-primary uppercase">AI PDF Forge</CardTitle>
+            <CardDescription>Upload training manuals or research to automate arena construction.</CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-8 pt-8">
         <div className="space-y-4">
-          <Label className="text-lg font-medium">1. Select Strategic Intelligence (PDF)</Label>
+          <Label className="text-lg font-medium">1. Tactical Intelligence (PDF)</Label>
           {!file ? (
             <div className={cn(
               "border-2 border-dashed border-primary/20 rounded-2xl p-12 transition-all hover:bg-primary/5 hover:border-primary/40 cursor-pointer flex flex-col items-center justify-center gap-4 text-center relative",
@@ -141,7 +134,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
                 <Upload className="w-8 h-8 text-primary" />
               </div>
               <div>
-                <p className="font-bold text-lg">Drop your PDF here</p>
+                <p className="font-bold text-lg">Drop your intelligence report here</p>
                 <p className="text-sm text-muted-foreground">Max size 10MB. Text-based PDFs only.</p>
               </div>
             </div>
@@ -170,12 +163,12 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         </div>
 
         <div className="space-y-4">
-          <Label className="text-lg font-medium">2. Difficulty Level</Label>
+          <Label className="text-lg font-medium">2. Combat Intensity</Label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { id: 'easy', label: 'Easy', emoji: '🟢', desc: 'Factual recall, definitions' },
-              { id: 'moderate', label: 'Moderate', emoji: '🟡', desc: 'Application & inference' },
-              { id: 'hard', label: 'Hard', emoji: '🔴', desc: 'Analysis & distractors' }
+              { id: 'easy', label: 'Easy', emoji: '🟢', desc: 'Recall & Terminology' },
+              { id: 'moderate', label: 'Moderate', emoji: '🟡', desc: 'Application & Inference' },
+              { id: 'hard', label: 'Hard', emoji: '🔴', desc: 'Analysis & critical logic' }
             ].map((d) => (
               <button
                 key={d.id}
@@ -198,16 +191,16 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
 
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <Label className="text-lg font-medium">3. Challenge Magnitude</Label>
+            <Label className="text-lg font-medium">3. Mission Scope</Label>
             <span className="bg-primary/20 text-primary font-black px-3 py-1 rounded-lg text-sm">
-              {questionCount} QUESTIONS
+              {questionCount} ROUNDS
             </span>
           </div>
           <Slider
             value={[questionCount]}
             onValueChange={(val) => setQuestionCount(val[0])}
             min={5}
-            max={30}
+            max={25}
             step={1}
             disabled={isGenerating}
             className="py-4"
@@ -231,7 +224,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
             ) : (
               <div className="flex items-center gap-2">
                 <Sparkles className="w-6 h-6" />
-                <span>INITIATE AI FORGE</span>
+                <span>INITIATE FORGE</span>
               </div>
             )}
           </Button>

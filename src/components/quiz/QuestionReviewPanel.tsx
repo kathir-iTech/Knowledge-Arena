@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from 'react';
@@ -63,7 +62,6 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   const [quizTitle, setQuizTitle] = useState('');
   const [globalTimer, setGlobalTimer] = useState(30);
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
-  const [shuffleOptions, setShuffleOptions] = useState(true);
 
   const handleDelete = (id: string) => {
     setQuestions(questions.filter(q => q.id !== id));
@@ -102,11 +100,9 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             questionCount: questions.length,
             createdBy: user.id,
             createdAt: Date.now(),
-            generatedByAI: true,
-            settings: { shuffleQuestions, shuffleOptions }
         });
 
-        // Add Commander as participant
+        // Add Teacher as participant
         const partRef = doc(firestore, 'quizzes', roomCode, 'participants', user.id);
         batch.set(partRef, {
             name: user.name,
@@ -131,10 +127,10 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         });
 
         await batch.commit();
-        toast({ title: "Arena Deployed!", description: `Room Code: ${roomCode}` });
+        toast({ title: "Arena Constructed", description: `Mission Code: ${roomCode}` });
         router.push(`/battle/${roomCode}`);
     } catch (e: any) {
-        toast({ variant: 'destructive', title: "Deployment Failed", description: e.message });
+        toast({ variant: 'destructive', title: "Deployment Error", description: e.message });
         setIsSubmitting(false);
     }
   };
@@ -147,13 +143,13 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             <Sparkles className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="font-headline font-bold text-lg">{questions.length} Intelligence Units Forged</h2>
-            <Badge variant="outline" className="uppercase tracking-widest text-[10px] bg-background">Difficulty: {difficulty}</Badge>
+            <h2 className="font-headline font-bold text-lg">{questions.length} Rounds Prepared</h2>
+            <Badge variant="outline" className="uppercase tracking-widest text-[10px] bg-background">Level: {difficulty}</Badge>
           </div>
         </div>
         <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={onEditSettings}>Edit Settings</Button>
-            <Button variant="outline" size="sm" onClick={onRegenerate} className="border-primary/20 text-primary">Regenerate</Button>
+            <Button variant="ghost" size="sm" onClick={onEditSettings}>Edit Parameters</Button>
+            <Button variant="outline" size="sm" onClick={onRegenerate} className="border-primary/20 text-primary">Regenerate Intel</Button>
         </div>
       </div>
 
@@ -165,7 +161,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             {editingId === q.id && editForm ? (
               <CardContent className="pt-6 space-y-4">
                 <div className="space-y-2">
-                  <Label>Question Text</Label>
+                  <Label>Tactical Objective (Question)</Label>
                   <Textarea 
                     value={editForm.text} 
                     onChange={e => setEditForm({...editForm, text: e.target.value})} 
@@ -188,7 +184,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                 </div>
                 <div className="flex flex-col md:flex-row gap-6 p-4 bg-secondary/20 rounded-xl">
                   <div className="space-y-2 flex-1">
-                    <Label>Correct Answer</Label>
+                    <Label>Valid Solution</Label>
                     <RadioGroup 
                       value={String(editForm.correctAnswerIndex)} 
                       onValueChange={val => setEditForm({...editForm, correctAnswerIndex: parseInt(val)})}
@@ -203,23 +199,16 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                     </RadioGroup>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Explanation</Label>
-                  <Textarea 
-                    value={editForm.explanation} 
-                    onChange={e => setEditForm({...editForm, explanation: e.target.value})} 
-                  />
-                </div>
                 <div className="flex justify-end gap-2 pt-4">
                   <Button variant="ghost" onClick={cancelEditing}><X className="mr-2 h-4 w-4" /> Cancel</Button>
-                  <Button onClick={saveEditing} className="bg-primary text-primary-foreground"><Save className="mr-2 h-4 w-4" /> Save Intel</Button>
+                  <Button onClick={saveEditing} className="bg-primary text-primary-foreground"><Save className="mr-2 h-4 w-4" /> Commit Changes</Button>
                 </div>
               </CardContent>
             ) : (
               <>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-primary font-bold">Q{index + 1}</span>
+                    <span className="font-mono text-primary font-bold">R{index + 1}</span>
                     <CardTitle className="text-lg font-medium">{q.text}</CardTitle>
                   </div>
                   <div className="flex gap-1">
@@ -245,7 +234,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                     className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors"
                   >
                     {expandedId === q.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                    {expandedId === q.id ? "Hide intelligence note" : "Show intelligence note"}
+                    {expandedId === q.id ? "Hide tactical notes" : "Show tactical notes"}
                   </button>
                   {expandedId === q.id && (
                     <div className="p-3 bg-primary/5 rounded-lg border border-primary/10 text-xs text-muted-foreground italic leading-relaxed">
@@ -265,10 +254,10 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                "w-3 h-3 rounded-full animate-pulse",
                questions.length < 3 ? "bg-destructive" : "bg-primary"
            )} />
-           <span className="font-bold">{questions.length} Questions Ready</span>
+           <span className="font-bold">{questions.length} Rounds Ready</span>
            {questions.length < 3 && (
                <div className="flex items-center gap-2 text-destructive font-bold text-xs">
-                   <AlertTriangle className="w-4 h-4" /> Add at least 3 questions to proceed.
+                   <AlertTriangle className="w-4 h-4" /> Insufficient rounds. (Min 3)
                </div>
            )}
         </div>
@@ -278,29 +267,29 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             onClick={() => setIsModalOpen(true)}
             className="h-16 px-12 text-xl font-headline shadow-2xl shadow-primary/30 rounded-full"
         >
-          PREPARE DEPLOYMENT <ChevronUp className="ml-2" />
+          DEPLOY ARENA <ChevronUp className="ml-2" />
         </Button>
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-md bg-card border-primary/20">
             <DialogHeader>
-                <DialogTitle className="text-2xl font-headline text-primary uppercase">Mission Profile</DialogTitle>
-                <DialogDescription>Configure the final parameters for this arena deployment.</DialogDescription>
+                <DialogTitle className="text-2xl font-headline text-primary uppercase">Arena Mission Profile</DialogTitle>
+                <DialogDescription>Finalize the parameters for this combat deployment.</DialogDescription>
             </DialogHeader>
             <div className="space-y-6 py-4">
                 <div className="space-y-2">
                     <Label htmlFor="quiz-title">Arena Designation (Title)</Label>
                     <Input 
                         id="quiz-title" 
-                        placeholder="e.g., Tactical Systems Audit" 
-                        maxLength={80}
+                        placeholder="Tactical Operations Audit" 
+                        maxLength={60}
                         value={quizTitle}
                         onChange={e => setQuizTitle(e.target.value)}
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="global-timer">Engagement Window (Seconds per Round)</Label>
+                    <Label htmlFor="global-timer">Round Engagement Window (Seconds)</Label>
                     <Input 
                         id="global-timer" 
                         type="number" 
@@ -309,16 +298,12 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                         value={globalTimer}
                         onChange={e => setGlobalTimer(parseInt(e.target.value))}
                     />
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Recommended: 30s</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Standard window: 30s</p>
                 </div>
                 <div className="space-y-4 pt-2">
                     <div className="flex items-center space-x-3">
                         <Checkbox id="shuffle-q" checked={shuffleQuestions} onCheckedChange={(val) => setShuffleQuestions(!!val)} />
-                        <label htmlFor="shuffle-q" className="text-sm font-medium leading-none cursor-pointer">Randomize Combat Rounds</label>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                        <Checkbox id="shuffle-o" checked={shuffleOptions} onCheckedChange={(val) => setShuffleOptions(!!val)} />
-                        <label htmlFor="shuffle-o" className="text-sm font-medium leading-none cursor-pointer">Randomize Tactical Options</label>
+                        <label htmlFor="shuffle-q" className="text-sm font-medium leading-none cursor-pointer">Randomize Round Sequence</label>
                     </div>
                 </div>
             </div>
@@ -329,7 +314,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                     onClick={handleCreateRoom}
                 >
                     {isSubmitting ? <Loader2 className="animate-spin" /> : <Sparkles className="mr-2" />}
-                    INITIATE ROOM CREATION
+                    INITIATE DEPLOYMENT
                 </Button>
             </DialogFooter>
         </DialogContent>
