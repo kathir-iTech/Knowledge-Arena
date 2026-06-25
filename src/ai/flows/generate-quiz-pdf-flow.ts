@@ -52,6 +52,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'generateQuizFromPDFPrompt',
+  model: 'googleai/gemini-1.5-flash',
   input: { schema: z.object({ text: z.string(), difficulty: z.string(), count: z.number() }) },
   output: { schema: GenerateQuizFromPDFInternalOutputSchema },
   prompt: `You are an expert educational assessment designer. 
@@ -102,6 +103,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: "Hard (Analysis, evaluation, distractors)"
     };
 
+    // Initial Generation
     let { output } = await prompt({
       text,
       difficulty: difficultyMap[input.difficulty],
