@@ -13,5 +13,5 @@ export const ai = genkit({
       apiKey: process.env.ANTHROPIC_API_KEY,
     }),
   ],
-  model: 'anthropic/claude-3-5-sonnet-latest',
+  model: 'anthropic/claude-3-5-sonnet',
 });
