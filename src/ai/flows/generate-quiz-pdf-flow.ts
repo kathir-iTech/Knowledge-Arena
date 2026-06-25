@@ -1,7 +1,7 @@
 'use server';
 /**
  * @fileOverview AI flow for generating multiple-choice questions from a PDF.
- * Implements strict validation, retry logic, and difficulty-based prompting using Gemini 2.0 Flash.
+ * Implements strict validation, retry logic, and difficulty-based prompting using Gemini 1.5 Flash.
  */
 
 import { ai } from '@/ai/genkit';
@@ -53,7 +53,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'generateQuizFromPDFPrompt',
-  model: 'googleai/gemini-2.0-flash',
+  model: 'googleai/gemini-1.5-flash',
   input: { schema: z.object({ text: z.string(), difficulty: z.string(), count: z.number() }) },
   output: { schema: GenerateQuizFromPDFInternalOutputSchema },
   prompt: `You are an expert educational assessment designer. 
@@ -114,7 +114,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
         count: input.questionCount
       },
       {
-        model: 'googleai/gemini-2.0-flash'
+        model: 'googleai/gemini-1.5-flash'
       }
     );
 
@@ -128,7 +128,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
             count: input.questionCount
           },
           {
-            model: 'googleai/gemini-2.0-flash'
+            model: 'googleai/gemini-1.5-flash'
           }
         );
         output = retry.output;
