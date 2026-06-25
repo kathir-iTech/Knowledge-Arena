@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { useFirestore } from '@/firebase';
@@ -101,6 +102,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             questionCount: questions.length,
             createdBy: user.id,
             createdAt: Date.now(),
+            generatedByAI: true,
             settings: { shuffleQuestions, shuffleOptions }
         });
 
@@ -139,7 +141,6 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
 
   return (
     <div className="space-y-6 pb-32">
-      {/* Header Bar */}
       <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-secondary/20 border border-primary/20 rounded-2xl gap-4 sticky top-0 z-40 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="bg-primary/20 p-2 rounded-lg">
@@ -156,7 +157,6 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         </div>
       </div>
 
-      {/* Question List */}
       <div className="space-y-4">
         {questions.map((q, index) => (
           <Card key={q.id} className="border-border/50 bg-background/50 backdrop-blur-sm relative overflow-hidden group">
@@ -259,7 +259,6 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         ))}
       </div>
 
-      {/* Sticky Footer */}
       <div className="fixed bottom-0 left-0 md:left-64 right-0 p-6 bg-background/80 backdrop-blur-xl border-t border-border/50 z-50 flex flex-col md:flex-row items-center justify-center gap-6">
         <div className="flex items-center gap-3 text-sm">
            <div className={cn(
@@ -283,7 +282,6 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         </Button>
       </div>
 
-      {/* Deployment Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-md bg-card border-primary/20">
             <DialogHeader>
