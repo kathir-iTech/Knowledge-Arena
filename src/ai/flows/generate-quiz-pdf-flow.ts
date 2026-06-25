@@ -1,7 +1,7 @@
 'use server';
 /**
  * @fileOverview AI flow for generating multiple-choice questions from a PDF.
- * Implements strict validation, retry logic, and difficulty-based prompting.
+ * Implements strict validation, retry logic, and difficulty-based prompting using Gemini 2.5 Pro.
  */
 
 import { ai } from '@/ai/genkit';
@@ -53,7 +53,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'generateQuizFromPDFPrompt',
-  model: 'googleai/gemini-1.5-pro',
+  model: 'googleai/gemini-2.5-pro',
   input: { schema: z.object({ text: z.string(), difficulty: z.string(), count: z.number() }) },
   output: { schema: GenerateQuizFromPDFInternalOutputSchema },
   prompt: `You are an expert educational assessment designer. 
