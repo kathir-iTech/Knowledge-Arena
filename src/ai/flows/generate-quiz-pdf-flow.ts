@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI flow for generating multiple-choice questions from a PDF.
@@ -54,6 +53,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'generateQuizFromPDFPrompt',
+  model: 'googleai/gemini-1.5-flash',
   input: { schema: z.object({ text: z.string(), difficulty: z.string(), count: z.number() }) },
   output: { schema: GenerateQuizFromPDFInternalOutputSchema },
   prompt: `You are an expert educational assessment designer. 
