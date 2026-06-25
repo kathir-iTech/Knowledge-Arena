@@ -226,7 +226,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
                                     if (currentCorrect === optIdx) form.setValue(`questions.${index}.correctAnswerIndex`, -1);
                                     else if (currentCorrect > optIdx) form.setValue(`questions.${index}.correctAnswerIndex`, currentCorrect - 1);
                                 }
-                            }} className="absolute right-2 top-2 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                            }} className="absolute right-2 top-2 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 v-3" /></button>
                             )}
                             <FormMessage />
                         </FormItem>

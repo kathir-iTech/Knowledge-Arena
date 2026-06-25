@@ -1,7 +1,6 @@
 'use server';
 /**
- * @fileOverview AI flow for generating multiple-choice questions from a PDF.
- * Uses Genkit 1.x syntax and robust PDF text extraction.
+ * @fileOverview AI flow for generating high-quality multiple-choice questions from a PDF.
  */
 
 import { ai } from '@/ai/genkit';
@@ -11,7 +10,7 @@ import pdf from 'pdf-parse';
 const GenerateQuizFromPDFInputSchema = z.object({
   pdfDataUri: z.string().describe("A PDF as a data URI (base64)."),
   difficulty: z.enum(['easy', 'moderate', 'hard']).describe('Difficulty of the questions.'),
-  questionCount: z.number().min(5).max(30).describe('Number of questions to generate.'),
+  questionCount: z.number().min(3).max(30).describe('Number of questions to generate.'),
 });
 export type GenerateQuizFromPDFInput = z.infer<typeof GenerateQuizFromPDFInputSchema>;
 
@@ -24,7 +23,7 @@ const QuizQuestionInternalSchema = z.object({
     D: z.string(),
   }).describe('Exactly 4 options keyed A, B, C, D.'),
   correctAnswer: z.enum(['A', 'B', 'C', 'D']).describe('The key of the correct answer.'),
-  explanation: z.string().describe('Explanation for the correct answer.'),
+  explanation: z.string().describe('Explanation for why this is correct.'),
 });
 
 const GenerateQuizFromPDFInternalOutputSchema = z.object({
@@ -61,20 +60,18 @@ const prompt = ai.definePrompt({
   output: { 
     schema: GenerateQuizFromPDFInternalOutputSchema 
   },
-  prompt: `You are an expert educational assessment designer. 
-Generate exactly {{{count}}} multiple-choice questions based on the following context.
+  prompt: `You are a professional academic assessment expert. 
+Generate exactly {{{count}}} multiple-choice questions based strictly on the provided context.
 
 Difficulty Level: {{{difficulty}}}
-- Easy: Factual recall, definitions, basic concepts.
-- Moderate: Application, inference, cause and effect.
-- Hard: Analysis, evaluation, edge cases, tricky distractors.
+- Easy: Basic factual recall.
+- Moderate: Application of concepts.
+- Hard: Critical analysis and synthesis.
 
-Requirements:
-- Each question must have exactly 4 options (A, B, C, D).
-- Identify the correct option key.
-- Provide a brief explanation.
-- Ensure questions are derived strictly from the context.
-- IMPORTANT: You MUST return exactly {{{count}}} questions.
+Rules:
+1. Each question must have exactly 4 options.
+2. Provide a clear, educational explanation for the correct answer.
+3. Return the results in a structured format.
 
 Context:
 {{{text}}}`,
@@ -87,6 +84,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     outputSchema: GenerateQuizFromPDFOutputSchema,
   },
   async (input) => {
+    // 1. Extract Text from PDF
     const base64Data = input.pdfDataUri.split(',')[1];
     if (!base64Data) throw new Error("INVALID_INPUT");
     
@@ -99,21 +97,21 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     }
 
     let text = extracted.text.replace(/\s+/g, ' ').trim();
-    if (text.length < 200) throw new Error("PDF_TOO_SHORT");
+    if (text.length < 100) throw new Error("PDF_TOO_SHORT");
 
-    // Limit context window for 1.5 Flash
-    text = text.substring(0, 20000);
+    // Conservative context window for stability
+    text = text.substring(0, 15000);
 
-    const difficultyMap = {
-      easy: "Easy (Factual recall, definitions)",
-      moderate: "Moderate (Application, inference)",
-      hard: "Hard (Analysis, evaluation, distractors)"
+    const difficultyLabels = {
+      easy: "Easy (Factual Recall)",
+      moderate: "Moderate (Concept Application)",
+      hard: "Hard (Critical Analysis)"
     };
 
-    // Use the default model configured in the genkit instance
+    // 2. Generate with Gemini 1.5 Pro
     const { output } = await prompt({
       text,
-      difficulty: difficultyMap[input.difficulty],
+      difficulty: difficultyLabels[input.difficulty],
       count: input.questionCount
     });
 
@@ -121,13 +119,11 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       throw new Error("AI_FAILED");
     }
 
-    const mappedQuestions = output.questions
-      .filter(q => q && q.question && q.options && q.correctAnswer)
-      .map(q => ({
-        text: q.question,
-        options: [q.options.A, q.options.B, q.options.C, q.options.D],
-        correctAnswerIndex: ['A', 'B', 'C', 'D'].indexOf(q.correctAnswer),
-        explanation: q.explanation
+    const mappedQuestions = output.questions.map(q => ({
+      text: q.question,
+      options: [q.options.A, q.options.B, q.options.C, q.options.D],
+      correctAnswerIndex: ['A', 'B', 'C', 'D'].indexOf(q.correctAnswer),
+      explanation: q.explanation
     }));
 
     return {
