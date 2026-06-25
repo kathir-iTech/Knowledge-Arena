@@ -1,6 +1,8 @@
 'use server';
 /**
  * @fileOverview AI flow for generating high-quality multiple-choice questions from a PDF.
+ * 
+ * - generateQuizFromPDF - Entry point for the AI quiz generation.
  */
 
 import { ai } from '@/ai/genkit';
@@ -64,14 +66,14 @@ const prompt = ai.definePrompt({
 Generate exactly {{{count}}} multiple-choice questions based strictly on the provided context.
 
 Difficulty Level: {{{difficulty}}}
-- Easy: Basic factual recall.
-- Moderate: Application of concepts.
-- Hard: Critical analysis and synthesis.
+- Easy: Basic factual recall and terminology.
+- Moderate: Application of concepts and analytical reasoning.
+- Hard: Complex synthesis, critical evaluation, and subtle distractors.
 
 Rules:
 1. Each question must have exactly 4 options.
 2. Provide a clear, educational explanation for the correct answer.
-3. Return the results in a structured format.
+3. Return the results in the requested structured format.
 
 Context:
 {{{text}}}`,
@@ -108,7 +110,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: "Hard (Critical Analysis)"
     };
 
-    // 2. Generate with Gemini 1.5 Pro
+    // 2. Generate with stable Gemini 1.5 Flash
     const { output } = await prompt({
       text,
       difficulty: difficultyLabels[input.difficulty],
