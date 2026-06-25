@@ -1,7 +1,7 @@
 'use server';
 /**
  * @fileOverview AI flow for generating multiple-choice questions from a PDF.
- * Implements strict validation, retry logic, and difficulty-based prompting using Gemini 1.5 Pro.
+ * Implements strict validation, retry logic, and difficulty-based prompting using Gemini 2.0 Flash.
  */
 
 import { ai } from '@/ai/genkit';
@@ -53,7 +53,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'generateQuizFromPDFPrompt',
-  model: 'googleai/gemini-1.5-pro',
+  model: 'googleai/gemini-2.0-flash',
   input: { schema: z.object({ text: z.string(), difficulty: z.string(), count: z.number() }) },
   output: { schema: GenerateQuizFromPDFInternalOutputSchema },
   prompt: `You are an expert educational assessment designer. 
@@ -106,21 +106,31 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: "Hard (Analysis, evaluation, distractors)"
     };
 
-    // 2. Initial Generation
-    let { output } = await prompt({
-      text,
-      difficulty: difficultyMap[input.difficulty],
-      count: input.questionCount
-    });
+    // 2. Initial Generation with runtime model configuration override
+    let { output } = await prompt(
+      {
+        text,
+        difficulty: difficultyMap[input.difficulty],
+        count: input.questionCount
+      },
+      {
+        model: 'googleai/gemini-2.0-flash'
+      }
+    );
 
     // 3. One-shot Retry if count is wrong
     if (!output || output.questions.length !== input.questionCount) {
         console.warn(`Retry triggered: Expected ${input.questionCount}, got ${output?.questions.length || 0}`);
-        const retry = await prompt({
+        const retry = await prompt(
+          {
             text,
             difficulty: difficultyMap[input.difficulty],
             count: input.questionCount
-        });
+          },
+          {
+            model: 'googleai/gemini-2.0-flash'
+          }
+        );
         output = retry.output;
     }
 
