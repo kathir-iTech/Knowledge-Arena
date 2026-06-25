@@ -110,7 +110,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: "Hard (Critical Analysis)"
     };
 
-    // 2. Generate with stable Gemini 1.5 Flash
+    // 2. Generate with stable Gemini 1.5 Pro
     const { output } = await prompt({
       text,
       difficulty: difficultyLabels[input.difficulty],
