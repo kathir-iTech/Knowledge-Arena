@@ -23,6 +23,7 @@ const QuizQuestionOutputSchema = z.object({
 
 const GenerateQuizFromPDFOutputSchema = z.object({
   questions: z.array(QuizQuestionOutputSchema),
+  partial: z.boolean().optional().describe('True if not all requested questions could be generated.'),
 });
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
@@ -35,7 +36,7 @@ const prompt = ai.definePrompt({
   input: { schema: z.object({ text: z.string(), difficulty: z.string(), count: z.number() }) },
   output: { schema: GenerateQuizFromPDFOutputSchema },
   prompt: `You are an expert educational assessment designer.
-Generate {{{count}}} multiple-choice questions based on the following text extracted from a PDF.
+Generate exactly {{{count}}} multiple-choice questions based on the following text extracted from a PDF.
 
 Difficulty Level: {{{difficulty}}}
 Criteria for difficulty:
@@ -48,6 +49,7 @@ Requirements:
 - Identify the correct option with a 0-based index.
 - Provide a brief, helpful explanation for each answer.
 - Ensure questions are derived strictly from the provided context.
+- IMPORTANT: You MUST return exactly {{{count}}} questions.
 
 Context:
 {{{text}}}`,
@@ -62,14 +64,14 @@ const generateQuizFromPDFFlow = ai.defineFlow(
   async input => {
     // 1. Extract text from PDF
     const base64Data = input.pdfDataUri.split(',')[1];
-    if (!base64Data) throw new Error("Invalid PDF data URI format.");
+    if (!base64Data) throw new Error("INVALID_INPUT");
     
     const buffer = Buffer.from(base64Data, 'base64');
     let extracted;
     try {
         extracted = await pdf(buffer);
     } catch (e) {
-        throw new Error("PDF_PARSING_FAILED");
+        throw new Error("PDF_PARSE_FAILED");
     }
 
     let text = extracted.text.replace(/\s+/g, ' ').trim();
@@ -87,17 +89,57 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: "Hard (Analysis, evaluation, edge cases, tricky distractors)"
     };
 
-    // 3. Generate Questions
-    const { output } = await prompt({
+    // 3. Generate Questions with validation
+    let { output } = await prompt({
       text,
       difficulty: difficultyMap[input.difficulty],
       count: input.questionCount
     });
 
-    if (!output || !output.questions || output.questions.length === 0) {
-      throw new Error("AI_GENERATION_FAILED");
+    // Retry once if count is wrong
+    if (output && output.questions.length !== input.questionCount) {
+        const retry = await prompt({
+            text,
+            difficulty: difficultyMap[input.difficulty],
+            count: input.questionCount
+        });
+        output = retry.output;
     }
 
-    return output;
+    if (!output || !output.questions || output.questions.length === 0) {
+      throw new Error("AI_FAILED");
+    }
+
+    // Validation & Cleaning
+    const validatedQuestions = output.questions.filter(q => {
+        return (
+            q.text && 
+            q.options && 
+            q.options.length === 4 && 
+            q.options.every(opt => opt.trim().length > 0) &&
+            q.correctAnswerIndex >= 0 && 
+            q.correctAnswerIndex <= 3 &&
+            q.explanation
+        );
+    });
+
+    // Check distribution
+    const distribution = validatedQuestions.reduce((acc: any, q) => {
+        const letter = String.fromCharCode(65 + q.correctAnswerIndex);
+        acc[letter] = (acc[letter] || 0) + 1;
+        return acc;
+    }, {});
+    
+    const total = validatedQuestions.length;
+    Object.keys(distribution).forEach(key => {
+        if (distribution[key] / total > 0.6) {
+            console.warn(`Skewed answer distribution detected for ${key}: ${distribution[key]}/${total}`);
+        }
+    });
+
+    return {
+      questions: validatedQuestions,
+      partial: validatedQuestions.length !== input.questionCount
+    };
   }
 );

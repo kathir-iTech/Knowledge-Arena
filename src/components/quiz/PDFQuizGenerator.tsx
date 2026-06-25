@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { FileText, Loader2, Upload, X, ShieldAlert, Sparkles, AlertCircle } from 'lucide-react';
+import { FileText, Loader2, Upload, X, Sparkles, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateQuizFromPDF, GenerateQuizFromPDFOutput } from '@/ai/flows/generate-quiz-pdf-flow';
+import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
 import { useToast } from '@/hooks/use-toast';
 
 interface PDFQuizGeneratorProps {
-  onQuestionsGenerated: (questions: any[]) => void;
+  onQuestionsGenerated: (questions: any[], difficulty: string) => void;
 }
 
 const STATUS_MESSAGES = [
@@ -86,16 +86,23 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
       });
 
       if (result.questions && result.questions.length > 0) {
-        toast({ title: "Questions Generated!", description: `Successfully created ${result.questions.length} questions.` });
-        onQuestionsGenerated(result.questions);
+        if (result.partial) {
+            toast({ title: "Partial Generation", description: `Could only generate ${result.questions.length} valid questions.` });
+        } else {
+            toast({ title: "Questions Generated!", description: `Successfully created ${result.questions.length} questions.` });
+        }
+        onQuestionsGenerated(result.questions, difficulty);
       } else {
-        throw new Error("No questions were returned from the AI.");
+        throw new Error("AI_FAILED");
       }
     } catch (err: any) {
       console.error(err);
       let msg = "AI generation failed. Please try again.";
-      if (err.message === "PDF_TOO_SHORT") msg = "No text could be extracted or PDF is too short. Try a text-based PDF.";
-      if (err.message === "PDF_PARSING_FAILED") msg = "Failed to read the PDF. It might be corrupt or protected.";
+      if (err.message === "PDF_TOO_SHORT") msg = "PDF content is too short to generate these many questions. Try a longer document.";
+      if (err.message === "PDF_PARSE_FAILED") msg = "No text could be extracted from this PDF. Try a text-based PDF.";
+      if (err.message === "AI_FAILED") msg = "AI generation failed. The content might be too complex or restricted.";
+      if (err.message === "INVALID_INPUT") msg = "Invalid request parameters.";
+      
       setError(msg);
       toast({ variant: 'destructive', title: "Generation Error", description: msg });
     } finally {
@@ -110,12 +117,11 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           <Sparkles className="w-6 h-6 text-primary animate-pulse" />
           <div>
             <CardTitle className="text-2xl font-headline text-primary">AI PDF Forge</CardTitle>
-            <CardDescription>Upload a document and let the AI construct your arena challenge.</CardDescription>
+            <CardDescription>Upload strategic documentation to automate challenge creation.</CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-8 pt-8">
-        {/* PDF Upload */}
         <div className="space-y-4">
           <Label className="text-lg font-medium">1. Select Strategic Intelligence (PDF)</Label>
           {!file ? (
@@ -135,7 +141,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
               </div>
               <div>
                 <p className="font-bold text-lg">Drop your PDF here</p>
-                <p className="text-sm text-muted-foreground">Max size 10MB. Text-based PDFs work best.</p>
+                <p className="text-sm text-muted-foreground">Max size 10MB. Text-based PDFs only.</p>
               </div>
             </div>
           ) : (
@@ -162,14 +168,13 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           )}
         </div>
 
-        {/* Difficulty */}
         <div className="space-y-4">
-          <Label className="text-lg font-medium">2. Select Combat Difficulty</Label>
+          <Label className="text-lg font-medium">2. Difficulty Level</Label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               { id: 'easy', label: 'Easy', emoji: '🟢', desc: 'Factual recall, definitions' },
               { id: 'moderate', label: 'Moderate', emoji: '🟡', desc: 'Application & inference' },
-              { id: 'hard', label: 'Hard', emoji: '🔴', desc: 'Analysis & edge cases' }
+              { id: 'hard', label: 'Hard', emoji: '🔴', desc: 'Analysis & distractors' }
             ].map((d) => (
               <button
                 key={d.id}
@@ -190,7 +195,6 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           </div>
         </div>
 
-        {/* Count */}
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <Label className="text-lg font-medium">3. Challenge Magnitude</Label>
@@ -209,7 +213,6 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           />
         </div>
 
-        {/* Generate Button */}
         <div className="pt-4">
           <Button
             onClick={handleGenerate}
@@ -233,7 +236,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           </Button>
           
           {error && (
-            <div className="mt-4 flex items-center gap-2 text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20 text-sm animate-in fade-in slide-in-from-top-1">
+            <div className="mt-4 flex items-center gap-2 text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20 text-sm animate-in fade-in">
               <AlertCircle className="w-4 h-4 shrink-0" />
               {error}
             </div>
