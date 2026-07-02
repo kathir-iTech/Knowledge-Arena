@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -30,11 +31,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // In some Next.js 15 environments, serverActions must be within experimental
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '20mb',
-    },
+  // Moving serverActions to top-level for Next.js 15 compatibility
+  serverActions: {
+    bodySizeLimit: '20mb',
   },
 };
 

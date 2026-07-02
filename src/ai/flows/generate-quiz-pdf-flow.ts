@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI flow for generating multiple-choice questions from a PDF.
@@ -35,7 +36,7 @@ export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutput
 async function callAnthropicClaude(prompt: string) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   
-  if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
+  if (!apiKey || apiKey === 'YOUR_API_KEY_HERE' || apiKey === '') {
     throw new Error("MISSING_ANTHROPIC_API_KEY. Please set a valid ANTHROPIC_API_KEY in your .env file to enable the Arena Architect.");
   }
 
