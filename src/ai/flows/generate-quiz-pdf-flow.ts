@@ -34,7 +34,7 @@ export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutput
  */
 async function callAnthropicClaude(prompt: string) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("MISSING_ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("MISSING_ANTHROPIC_API_KEY. Please ensure the ANTHROPIC_API_KEY environment variable is set.");
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -47,12 +47,12 @@ async function callAnthropicClaude(prompt: string) {
       model: "claude-3-5-sonnet-20240620",
       max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
-      system: "You are a professional educational assessment designer. You output ONLY valid JSON."
+      system: "You are a professional educational assessment designer. You output ONLY valid JSON. The output must strictly follow the requested JSON schema."
     })
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({}));
     throw new Error(`ANTHROPIC_API_ERROR: ${errorData.error?.message || response.statusText}`);
   }
 
@@ -61,7 +61,7 @@ async function callAnthropicClaude(prompt: string) {
   
   // Extract JSON from potential markdown wrapping
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("AI_JSON_PARSE_FAILED");
+  if (!jsonMatch) throw new Error("AI_JSON_PARSE_FAILED. The AI response did not contain a valid JSON object.");
   
   return JSON.parse(jsonMatch[0]);
 }
@@ -78,8 +78,9 @@ const generateQuizFromPDFFlow = ai.defineFlow(
   },
   async (input) => {
     // 1. Extract Text from PDF
-    const base64Data = input.pdfDataUri.split(',')[1];
-    if (!base64Data) throw new Error("INVALID_PDF_DATA");
+    const parts = input.pdfDataUri.split(',');
+    const base64Data = parts[parts.length - 1];
+    if (!base64Data) throw new Error("INVALID_PDF_DATA. The data URI is malformed.");
     
     const buffer = Buffer.from(base64Data, 'base64');
     let extracted;
@@ -87,11 +88,11 @@ const generateQuizFromPDFFlow = ai.defineFlow(
         extracted = await pdf(buffer);
     } catch (e) {
         console.error("PDF Parsing Error:", e);
-        throw new Error("PDF_EXTRACTION_FAILED");
+        throw new Error("PDF_EXTRACTION_FAILED. Could not read the PDF content. Ensure the file is not a scanned image without OCR.");
     }
 
     const text = extracted.text.replace(/\s+/g, ' ').trim();
-    if (text.length < 100) throw new Error("PDF_CONTENT_TOO_SHORT");
+    if (text.length < 50) throw new Error("PDF_CONTENT_TOO_SHORT. The provided PDF does not contain enough extractable text.");
 
     const difficultyMap = {
       easy: "Beginner (Factual Recall)",
@@ -127,7 +128,7 @@ ${text.substring(0, 50000)}`;
     const data = await callAnthropicClaude(prompt);
 
     if (!data.questions || !Array.isArray(data.questions)) {
-      throw new Error("AI_INVALID_RESPONSE_FORMAT");
+      throw new Error("AI_INVALID_RESPONSE_FORMAT. The AI response was not in the expected format.");
     }
 
     return {

@@ -32,8 +32,11 @@ const nextConfig: NextConfig = {
     ],
   },
   // Increase body size limit for Server Actions to allow PDF uploads (base64)
-  serverActions: {
-    bodySizeLimit: '20mb',
+  // In this Next.js environment, the body size limit is managed within the experimental block.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
   },
 };
 
