@@ -86,6 +86,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     try {
         extracted = await pdf(buffer);
     } catch (e) {
+        console.error("PDF Parsing Error:", e);
         throw new Error("PDF_EXTRACTION_FAILED");
     }
 
