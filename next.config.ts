@@ -2,7 +2,6 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
-  // Configuration for TypeScript and ESLint to ignore errors during build/dev for faster iteration.
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -31,10 +30,11 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Increase body size limit for Server Actions to allow PDF uploads (base64)
-  // In Next.js 15, serverActions configuration is a top-level property.
-  serverActions: {
-    bodySizeLimit: '20mb',
+  // In some Next.js 15 environments, serverActions must be within experimental
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
   },
 };
 

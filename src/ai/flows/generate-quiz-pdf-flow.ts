@@ -34,7 +34,10 @@ export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutput
  */
 async function callAnthropicClaude(prompt: string) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("MISSING_ANTHROPIC_API_KEY. Please set the ANTHROPIC_API_KEY env variable.");
+  
+  if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
+    throw new Error("MISSING_ANTHROPIC_API_KEY. Please set a valid ANTHROPIC_API_KEY in your .env file to enable the Arena Architect.");
+  }
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -92,7 +95,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
 
     const text = extracted.text.replace(/\s+/g, ' ').trim();
     
-    // Lower threshold and improved error message for scanned documents
+    // Lowered threshold to 20 characters for high-density documents
     if (text.length < 20) {
       throw new Error("PDF_CONTENT_TOO_SHORT. The PDF appears to be empty or contains only images (scanned). The Arena Architect requires a text-based PDF for intelligence extraction.");
     }
