@@ -93,12 +93,17 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
       }
     } catch (err: any) {
       console.error(err);
-      let msg = "The AI Forge was interrupted.";
-      if (err.message === "PDF_TOO_SHORT") msg = "Insufficient data in PDF to generate the requested questions.";
-      if (err.message === "PDF_PARSE_FAILED") msg = "Could not extract text from this PDF. Ensure it's not a scanned image.";
+      let msg = err.message || "The AI Forge was interrupted.";
+      
+      // Map specific backend errors to user-friendly messages
+      if (msg.includes("PDF_CONTENT_TOO_SHORT")) {
+        msg = "The PDF Forge failed because no extractable text was found. This usually happens with scanned image-based PDFs. Please upload a text-based document.";
+      } else if (msg.includes("ANTHROPIC_API_ERROR")) {
+        msg = "The Intelligence Forge is temporarily overloaded. Please try again in a moment.";
+      }
       
       setError(msg);
-      toast({ variant: 'destructive', title: "Forge Error", description: msg });
+      toast({ variant: 'destructive', title: "Forge Error", description: "Tactical data extraction failed." });
     } finally {
       setIsGenerating(false);
     }
@@ -230,9 +235,12 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           </Button>
           
           {error && (
-            <div className="mt-4 flex items-center gap-2 text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20 text-sm animate-in fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {error}
+            <div className="mt-4 flex flex-col gap-2 bg-destructive/10 p-4 rounded-xl border border-destructive/20 animate-in fade-in">
+              <div className="flex items-center gap-2 text-destructive font-bold text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                Extraction Violation
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{error}</p>
             </div>
           )}
         </div>

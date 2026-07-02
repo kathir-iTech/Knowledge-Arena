@@ -91,7 +91,11 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     }
 
     const text = extracted.text.replace(/\s+/g, ' ').trim();
-    if (text.length < 50) throw new Error("PDF_CONTENT_TOO_SHORT. PDF does not contain enough extractable text.");
+    
+    // Lower threshold and improved error message for scanned documents
+    if (text.length < 20) {
+      throw new Error("PDF_CONTENT_TOO_SHORT. The PDF appears to be empty or contains only images (scanned). The Arena Architect requires a text-based PDF for intelligence extraction.");
+    }
 
     const difficultyMap = {
       easy: "Beginner (Factual Recall)",
