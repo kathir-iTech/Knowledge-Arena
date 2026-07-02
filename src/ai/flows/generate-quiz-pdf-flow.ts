@@ -29,12 +29,12 @@ const GenerateQuizFromPDFOutputSchema = z.object({
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
 /**
- * Direct call to Anthropic API to bypass broken Genkit plugins.
- * Ensures Claude 3.5 Sonnet is used without model-not-found or plugin errors.
+ * Direct call to Anthropic API to bypass broken Genkit plugins and Gemini quota issues.
+ * Ensures Claude 3.5 Sonnet is used for superior pedagogical reasoning.
  */
 async function callAnthropicClaude(prompt: string) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("MISSING_ANTHROPIC_API_KEY. Please ensure the ANTHROPIC_API_KEY environment variable is set.");
+  if (!apiKey) throw new Error("MISSING_ANTHROPIC_API_KEY. Please set the ANTHROPIC_API_KEY env variable.");
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -59,9 +59,8 @@ async function callAnthropicClaude(prompt: string) {
   const result = await response.json();
   const text = result.content[0].text;
   
-  // Extract JSON from potential markdown wrapping
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("AI_JSON_PARSE_FAILED. The AI response did not contain a valid JSON object.");
+  if (!jsonMatch) throw new Error("AI_JSON_PARSE_FAILED. AI response was not valid JSON.");
   
   return JSON.parse(jsonMatch[0]);
 }
@@ -80,7 +79,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     // 1. Extract Text from PDF
     const parts = input.pdfDataUri.split(',');
     const base64Data = parts[parts.length - 1];
-    if (!base64Data) throw new Error("INVALID_PDF_DATA. The data URI is malformed.");
+    if (!base64Data) throw new Error("INVALID_PDF_DATA. Data URI is malformed.");
     
     const buffer = Buffer.from(base64Data, 'base64');
     let extracted;
@@ -88,11 +87,11 @@ const generateQuizFromPDFFlow = ai.defineFlow(
         extracted = await pdf(buffer);
     } catch (e) {
         console.error("PDF Parsing Error:", e);
-        throw new Error("PDF_EXTRACTION_FAILED. Could not read the PDF content. Ensure the file is not a scanned image without OCR.");
+        throw new Error("PDF_EXTRACTION_FAILED. Could not read PDF content.");
     }
 
     const text = extracted.text.replace(/\s+/g, ' ').trim();
-    if (text.length < 50) throw new Error("PDF_CONTENT_TOO_SHORT. The provided PDF does not contain enough extractable text.");
+    if (text.length < 50) throw new Error("PDF_CONTENT_TOO_SHORT. PDF does not contain enough extractable text.");
 
     const difficultyMap = {
       easy: "Beginner (Factual Recall)",
@@ -124,11 +123,11 @@ Output format MUST be a JSON object with a "questions" array:
 Content:
 ${text.substring(0, 50000)}`;
 
-    // 3. Call Claude directly
+    // 3. Call Claude
     const data = await callAnthropicClaude(prompt);
 
     if (!data.questions || !Array.isArray(data.questions)) {
-      throw new Error("AI_INVALID_RESPONSE_FORMAT. The AI response was not in the expected format.");
+      throw new Error("AI_INVALID_RESPONSE_FORMAT. AI response was not in the expected format.");
     }
 
     return {
