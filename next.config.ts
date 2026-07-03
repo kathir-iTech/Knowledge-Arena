@@ -1,13 +1,14 @@
-
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  serverActions: {
+    bodySizeLimit: '20mb',
   },
   images: {
     remotePatterns: [
@@ -24,16 +25,12 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
       {
-        protocol: 'https' ,
+        protocol: 'https',
         hostname: 'picsum.photos',
         port: '',
         pathname: '/**',
       },
     ],
-  },
-  // Moving serverActions to top-level for Next.js 15 compatibility
-  serverActions: {
-    bodySizeLimit: '20mb',
   },
 };
 

@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -49,7 +48,7 @@ const LiveLeaderboard = ({ quizId }: { quizId: string }) => {
 export default function LiveQuiz({ quiz, participant, isTeacher }: { quiz: Quiz, participant: QuizParticipant, isTeacher: boolean }) {
   const { user } = useAuth();
   const firestore = useFirestore();
-  
+
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showViolationWarning, setShowViolationWarning] = useState(false);
@@ -87,8 +86,6 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: { quiz: Quiz,
     if (isTeacher || !firestore || !user || participant.status === 'blocked' || quiz.status !== 'live') return;
     const newCount = (participant.violationsCount || 0) + 1;
     const pRef = doc(firestore, 'quizzes', quiz.id, 'participants', user.id);
-    
-    // Persist malpractice to Firestore immediately
     updateDocumentNonBlocking(pRef, { violationsCount: newCount, status: newCount >= 2 ? 'blocked' : 'playing' });
     if (newCount < 2) setShowViolationWarning(true);
   }, [isTeacher, firestore, user, quiz.id, quiz.status, participant]);
@@ -148,7 +145,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: { quiz: Quiz,
   if (!currentQuestion) return null;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
+    <div className="flex flex-col items-center justify-center min-h-screen p-3 sm:p-4 bg-background">
       <AlertDialog open={showViolationWarning} onOpenChange={setShowViolationWarning}>
         <AlertDialogContent className="bg-destructive/10 border-destructive">
           <AlertDialogHeader>
@@ -161,38 +158,44 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: { quiz: Quiz,
 
       <Card className="w-full max-w-4xl border-primary/20 bg-card/50 backdrop-blur-sm relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-primary/20"><Progress value={(timeLeft / currentQuestion.timer) * 100} className="h-full rounded-none" /></div>
-        <CardHeader className="pt-12 text-center">
-            <div className="flex justify-between items-center mb-4">
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60">Phase {quiz.currentQuestionIndex + 1} / {quiz.questionCount}</span>
-                <span className={cn("font-mono text-3xl", timeLeft <= 5 ? "text-destructive animate-pulse" : "text-primary")}>{timeLeft}s</span>
+        <CardHeader className="pt-8 sm:pt-12 text-center px-3 sm:px-6">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-primary/60">Phase {quiz.currentQuestionIndex + 1} / {quiz.questionCount}</span>
+                <span className={cn("font-mono text-xl sm:text-3xl", timeLeft <= 5 ? "text-destructive animate-pulse" : "text-primary")}>{timeLeft}s</span>
             </div>
-            <CardTitle className="text-3xl md:text-5xl font-headline py-6 leading-tight">{currentQuestion.text}</CardTitle>
+            <CardTitle className="text-lg sm:text-2xl md:text-4xl font-headline py-3 sm:py-6 leading-snug break-words">{currentQuestion.text}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-8 pb-12 px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardContent className="space-y-6 sm:space-y-8 pb-8 sm:pb-12 px-3 sm:px-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {currentQuestion.options.map((opt, i) => (
-              <Button key={i} onClick={() => handleAnswerSubmit(i)} disabled={hasAnswered || isTeacher || timeLeft === 0 || participant.status === 'blocked'} variant={selectedAnswer === i ? 'default' : 'outline'} className={cn(
-                  "h-24 text-xl font-medium relative group border-2",
+              <Button
+                key={i}
+                onClick={() => handleAnswerSubmit(i)}
+                disabled={hasAnswered || isTeacher || timeLeft === 0 || participant.status === 'blocked'}
+                variant={selectedAnswer === i ? 'default' : 'outline'}
+                className={cn(
+                  "min-h-[4.5rem] h-auto py-3 px-4 sm:px-5 text-sm sm:text-base md:text-lg font-medium relative border-2 whitespace-normal break-words text-left justify-start leading-snug",
                   selectedAnswer === i ? "border-primary shadow-lg shadow-primary/20" : "border-border/50",
                   hasAnswered && selectedAnswer !== i && "opacity-40"
-                )}>
-                <span className="absolute left-4 opacity-50 font-mono text-xs">{String.fromCharCode(65 + i)}</span>
-                {opt}
+                )}
+              >
+                <span className="shrink-0 mr-3 opacity-50 font-mono text-xs">{String.fromCharCode(65 + i)}</span>
+                <span className="flex-1">{opt}</span>
               </Button>
             ))}
           </div>
           {isTeacher && (
-            <div className="flex justify-center pt-8">
-              <Button onClick={handleNext} disabled={isScoring} size="lg" className="h-16 px-12 text-xl font-headline rounded-full shadow-2xl shadow-primary/30">
+            <div className="flex justify-center pt-6 sm:pt-8">
+              <Button onClick={handleNext} disabled={isScoring} size="lg" className="h-14 sm:h-16 px-8 sm:px-12 text-base sm:text-xl font-headline rounded-full shadow-2xl shadow-primary/30">
                 {isScoring ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2" />}
                 {quiz.currentQuestionIndex === quiz.questionCount - 1 ? 'REVEAL PODIUM' : 'EVALUATE & NEXT'}
               </Button>
             </div>
           )}
           {participant.status === 'blocked' && !isTeacher && (
-             <div className="bg-destructive/10 border border-destructive/20 p-8 rounded-2xl text-center">
-                <ShieldAlert className="w-12 h-12 text-destructive mx-auto mb-4" />
-                <h3 className="text-2xl font-black text-destructive uppercase">Disqualified</h3>
+             <div className="bg-destructive/10 border border-destructive/20 p-6 sm:p-8 rounded-2xl text-center">
+                <ShieldAlert className="w-10 h-10 sm:w-12 sm:h-12 text-destructive mx-auto mb-4" />
+                <h3 className="text-xl sm:text-2xl font-black text-destructive uppercase">Disqualified</h3>
                 <p className="text-muted-foreground mt-2">Malpractice detected. Await Commander Amnesty.</p>
              </div>
           )}

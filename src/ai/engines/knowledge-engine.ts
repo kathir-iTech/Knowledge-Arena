@@ -2,7 +2,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { initializeFirebase } from '@/firebase';
-import { collection, getDocs, limit } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 
 /**
  * Knowledge Engine: Synthesizes tactical intelligence from the arena library.
