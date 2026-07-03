@@ -32,13 +32,9 @@ const GenerateQuizFromPDFOutputSchema = z.object({
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
 // Ordered fallback chain — tries each model in order until one succeeds.
-// Ordered roughly by quality first, then by daily quota size.
 const MODEL_FALLBACK_CHAIN = [
-  'gemini-2.5-flash',
-  'gemini-3-flash-preview',
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash-lite',
   'gemini-2.0-flash',
+  'gemini-flash-latest',
 ];
 
 function isRateLimitError(err: unknown): boolean {
@@ -48,7 +44,7 @@ function isRateLimitError(err: unknown): boolean {
     msg.includes('RESOURCE_EXHAUSTED') ||
     msg.includes('rate limit') ||
     msg.includes('quota') ||
-    msg.includes('403') // some quota-denied cases surface as 403 too
+    msg.includes('403')
   );
 }
 
@@ -77,13 +73,8 @@ async function callGeminiWithFallback(promptText: string) {
       errors.push(`${modelName}: ${msg}`);
 
       if (isRateLimitError(err)) {
-        // Try next model in the chain
         continue;
       }
-
-      // Non-rate-limit error (bad prompt, invalid schema, etc.) — no point
-      // retrying other models with the same broken input, but try once more
-      // in case it's model-specific, then give up if the chain is exhausted.
       continue;
     }
   }
