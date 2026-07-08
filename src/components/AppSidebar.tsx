@@ -27,7 +27,7 @@ const AppSidebar = () => {
     return null; 
   }
 
-  const isTeacher = user.role === 'Teacher';
+  const isTeacher = user.role === 'teacher';
 
   const navItems = isTeacher
     ? [

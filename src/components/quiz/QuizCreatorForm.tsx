@@ -8,10 +8,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
-import { useFirestore } from '@/firebase';
-import { doc, writeBatch } from 'firebase/firestore';
+import { quizService } from '@/services/quiz.service';
+import { participantService } from '@/services/participant.service';
+import { questionService } from '@/services/game.service';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, generateRoomCode } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,10 +39,6 @@ const quizSchema = z.object({
 
 type QuizFormData = z.infer<typeof quizSchema>;
 
-function generateRoomCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
 interface QuizCreatorFormProps {
   initialQuestions?: any[];
 }
@@ -49,7 +46,6 @@ interface QuizCreatorFormProps {
 export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const firestore = useFirestore();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -91,52 +87,69 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
   });
 
   const onSubmit = async (data: QuizFormData) => {
-    if (!firestore || !user || user.role !== 'Teacher') {
+    if (!user || user.role !== 'teacher') {
         toast({ variant: 'destructive', title: 'Error', description: 'Unauthorized.' });
         return;
     }
     setIsSubmitting(true);
 
     try {
-        const quizId = generateRoomCode();
-        const batch = writeBatch(firestore);
+        let quizId = generateRoomCode();
+        let existing: any = null;
+        try {
+            existing = await quizService.getQuizById(quizId);
+        } catch (e) {
+            // NotFound is expected
+        }
 
-        const quizRef = doc(firestore, 'quizzes', quizId);
-        const newQuiz: Omit<Quiz, 'id'> = {
+        let attempts = 0;
+        while (existing && attempts < 5) {
+            quizId = generateRoomCode();
+            try {
+                existing = await quizService.getQuizById(quizId);
+            } catch (e) {
+                existing = null;
+            }
+            attempts++;
+        }
+        
+        if (existing) {
+            throw new Error('Collision detected in the arena. Tactical retry required.');
+        }
+
+        // 1. Create the Quiz using Service
+        await quizService.createQuiz({
+            id: quizId,
             title: data.title,
             status: 'waiting',
-            currentQuestionIndex: -1, 
-            questionCount: data.questions.length,
-            createdBy: user.id,
-            createdAt: Date.now(),
-        };
-        batch.set(quizRef, newQuiz);
-        
-        const teacherParticipantRef = doc(firestore, 'quizzes', quizId, 'participants', user.id);
-        batch.set(teacherParticipantRef, {
-            name: user.name,
-            avatar: user.avatar,
-            role: 'teacher',
-            score: 0,
-            status: 'playing',
-            violationsCount: 0,
+            current_question_index: -1,
+            question_count: data.questions.length,
+            created_by: user.id
         });
 
-        data.questions.forEach((q, index) => {
-            const questionRef = doc(firestore, 'quizzes', quizId, 'questions', q.id);
-            const questionData: Omit<QuizQuestion, 'id'> = {
-                text: q.text,
-                options: q.options,
-                timer: q.timer,
-                index: index,
-            };
-            batch.set(questionRef, questionData);
+        // 2. Register the Teacher as a Participant
+        await participantService.joinQuiz(quizId, user.id);
 
-            const answerKeyRef = doc(firestore, 'quizzes', quizId, 'answerKeys', q.id);
-            batch.set(answerKeyRef, { correctOptionIndex: q.correctAnswerIndex });
-        });
+        // 3. Prepare and Create Questions
+        const questionPayload = data.questions.map((q, idx) => ({
+            quiz_id: quizId,
+            text: q.text,
+            options: q.options,
+            timer: q.timer,
+            sort_index: idx
+        }));
 
-        await batch.commit();
+        const savedQuestions = await questionService.createQuestions(questionPayload);
+
+        // 4. Link Answer Keys
+        const answerKeys = savedQuestions.map((sq, idx) => ({
+            question_id: sq.id,
+            quiz_id: quizId,
+            correct_option_index: data.questions[idx].correctAnswerIndex
+        }));
+
+        await questionService.createAnswerKeys(answerKeys);
+
         toast({ title: 'Arena Created', description: `Room Code: ${quizId}` });
         router.push(`/battle/${quizId}`);
     } catch (error: any) {

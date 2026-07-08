@@ -107,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // NOTE: The role logic is now server-side. A Cloud Function triggered on user creation
     // should read the email domain and set a custom claim. This client-side `role` is
     // for immediate UI feedback only. The true authority is the custom claim.
-    const role = credentials.email.endsWith('@staffs.com') ? 'Teacher' : 'Student';
+    const role = credentials.email.endsWith('@staffs.com') ? 'teacher' : 'student';
 
     try {
       setIsLoading(true);

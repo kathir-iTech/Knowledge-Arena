@@ -54,23 +54,23 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
     
     if (pathname === '/') {
-       if (user.role === 'Teacher') {
-        redirect('/teacher/dashboard');
-      } else {
-        redirect('/student/dashboard');
-      }
-      return null;
-    }
-
-    const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
-    const isStudentPage = pathname.startsWith('/student');
-
-    if (user.role === 'Teacher' && isStudentPage) {
-       redirect('/teacher/dashboard');
+        if (user.role === 'teacher') {
+         redirect('/teacher/dashboard');
+       } else {
+         redirect('/student/dashboard');
+       }
        return null;
-    }
-    
-    if (user.role === 'Student' && isTeacherPage) {
+     }
+
+     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
+     const isStudentPage = pathname.startsWith('/student');
+
+     if (user.role === 'teacher' && isStudentPage) {
+        redirect('/teacher/dashboard');
+        return null;
+     }
+     
+     if (user.role === 'student' && isTeacherPage) {
        redirect('/student/dashboard');
        return null;
     }

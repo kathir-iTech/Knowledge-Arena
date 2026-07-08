@@ -8,34 +8,33 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { quizService } from '@/services/quiz.service';
+import { participantService } from '@/services/participant.service';
 import { Loader2, Swords } from 'lucide-react';
 
 export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?: string }) {
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const firestore = useFirestore();
   const [roomCode, setRoomCode] = useState(initialRoomCode || '');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = roomCode.trim().toUpperCase();
-    if (!code || !firestore || !user) return;
+    if (!code || !user) return;
     setIsLoading(true);
 
     try {
-      const qSnap = await getDoc(doc(firestore, 'quizzes', code));
-      if (!qSnap.exists()) throw new Error('Room not found');
-      if (qSnap.data().status === 'finished') throw new Error('Quiz has ended');
+      const quiz = await quizService.getQuizById(code);
+      if (quiz.status === 'finished') throw new Error('Quiz has ended');
 
-      const pRef = doc(firestore, 'quizzes', code, 'participants', user.id);
-      const pSnap = await getDoc(pRef);
-      if (!pSnap.exists()) {
-        await setDoc(pRef, { name: user.name, avatar: user.avatar, role: 'student', score: 0, status: 'playing', violationsCount: 0 });
-      } else if (pSnap.data().status === 'blocked') {
+      const participants = await participantService.getAllParticipants(code);
+      const existing = participants.find(p => p.user_id === user.id);
+
+      if (!existing) {
+        await participantService.joinQuiz(code, user.id);
+      } else if (existing.status === 'blocked') {
         throw new Error('You are blocked from this room');
       }
 

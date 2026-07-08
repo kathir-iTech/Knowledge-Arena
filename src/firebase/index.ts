@@ -2,8 +2,9 @@
 
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore'
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore'
+import { useFirebaseAuth } from './provider';
 
 // Initializes and returns the Firebase services.
 export function initializeFirebase() {
@@ -22,6 +23,7 @@ export function getSdks(firebaseApp: FirebaseApp) {
   };
 }
 
+export { useFirebaseAuth } from './provider';
 export * from './provider';
 export * from './client-provider';
 export * from './firestore/use-collection';

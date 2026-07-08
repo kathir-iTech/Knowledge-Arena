@@ -9,15 +9,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, generateRoomCode } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
-import { useFirestore } from '@/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { doc, writeBatch } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { quizService } from '@/services/quiz.service';
+import { participantService } from '@/services/participant.service';
+import { questionService } from '@/services/game.service';
 
 interface Question {
   id: string;
@@ -38,7 +39,6 @@ interface QuestionReviewPanelProps {
 export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate, onEditSettings }: QuestionReviewPanelProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const firestore = useFirestore();
   const { toast } = useToast();
   
   const [questions, setQuestions] = useState<Question[]>(
@@ -85,52 +85,47 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   };
 
   const handleCreateRoom = async () => {
-    if (!firestore || !user || !quizTitle) return;
+    if (!user || !quizTitle) return;
     setIsSubmitting(true);
     
     try {
-        const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const batch = writeBatch(firestore);
-        const quizRef = doc(firestore, 'quizzes', roomCode);
+        const roomCode = generateRoomCode();
 
-        batch.set(quizRef, {
+        await quizService.createQuiz({
+            id: roomCode,
             title: quizTitle,
             status: 'waiting',
-            currentQuestionIndex: -1,
-            questionCount: questions.length,
-            createdBy: user.id,
-            createdAt: Date.now(),
+            current_question_index: -1,
+            question_count: questions.length,
+            created_by: user.id,
+            question_start_at: null
         });
 
-        // Add Teacher as participant
-        const partRef = doc(firestore, 'quizzes', roomCode, 'participants', user.id);
-        batch.set(partRef, {
-            name: user.name,
-            avatar: user.avatar,
-            role: 'teacher',
-            score: 0,
-            status: 'playing',
-            violationsCount: 0
-        });
+        await participantService.joinQuiz(roomCode, user.id);
 
-        questions.forEach((q, i) => {
-            const qRef = doc(firestore, 'quizzes', roomCode, 'questions', q.id);
-            batch.set(qRef, {
-                text: q.text,
-                options: q.options,
-                timer: globalTimer,
-                index: i
-            });
+        const questionPayload = questions.map((q, idx) => ({
+            quiz_id: roomCode,
+            text: q.text,
+            options: q.options,
+            timer: globalTimer,
+            sort_index: idx
+        }));
 
-            const aRef = doc(firestore, 'quizzes', roomCode, 'answerKeys', q.id);
-            batch.set(aRef, { correctOptionIndex: q.correctAnswerIndex });
-        });
+        const savedQuestions = await questionService.createQuestions(questionPayload);
 
-        await batch.commit();
+        const answerKeys = savedQuestions.map((sq, idx) => ({
+            question_id: sq.id,
+            quiz_id: roomCode,
+            correct_option_index: questions[idx].correctAnswerIndex
+        }));
+
+        await questionService.createAnswerKeys(answerKeys);
+
         toast({ title: "Arena Constructed", description: `Mission Code: ${roomCode}` });
         router.push(`/battle/${roomCode}`);
     } catch (e: any) {
         toast({ variant: 'destructive', title: "Deployment Error", description: e.message });
+    } finally {
         setIsSubmitting(false);
     }
   };

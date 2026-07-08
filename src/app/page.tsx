@@ -26,7 +26,7 @@ function PageContent() {
   }
 
   if (user) {
-    const dest = user.role === 'Teacher' ? '/teacher/dashboard' : (roomCode ? `/student/dashboard?roomCode=${roomCode}` : '/student/dashboard');
+    const dest = user.role === 'teacher' ? '/teacher/dashboard' : (roomCode ? `/student/dashboard?roomCode=${roomCode}` : '/student/dashboard');
     redirect(dest);
     return null;
   }

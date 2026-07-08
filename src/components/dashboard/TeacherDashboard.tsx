@@ -4,9 +4,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
-import type { Quiz, QuizParticipant } from '@/lib/types';
-import { useFirestore, useCollection, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, onSnapshot, doc, getDocs, writeBatch } from 'firebase/firestore';
+import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
+import { quizService } from '@/services/quiz.service';
+import { participantService } from '@/services/participant.service';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle } from 'lucide-react';
@@ -16,48 +16,31 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { cn } from '@/lib/utils';
 
-const QuizCard = ({ quiz }: { quiz: Quiz }) => {
-    const firestore = useFirestore();
+const QuizCard = ({ quiz }: { quiz: ValidatedQuiz }) => {
     const { toast } = useToast();
     const [isProcessing, setIsProcessing] = useState(false);
+    const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
 
-    const partsRef = useMemo(() => firestore ? collection(firestore, 'quizzes', quiz.id, 'participants') : null, [firestore, quiz.id]);
-    const { data: participants } = useCollection<QuizParticipant>(partsRef);
+    useEffect(() => {
+        const sub = participantService.subscribeToParticipants(quiz.id, setParticipants);
+        return () => { sub.unsubscribe(); };
+    }, [quiz.id]);
 
-    const handleResetStudent = (sid: string) => {
-        if (!firestore) return;
-        updateDocumentNonBlocking(doc(firestore, 'quizzes', quiz.id, 'participants', sid), { 
-            status: 'playing', 
-            violationsCount: 0 
-        });
-        toast({ title: 'Student Reset', description: 'Malpractice block has been cleared.' });
+    const handleResetStudent = async (sid: string) => {
+        try {
+            await participantService.unblockParticipant(quiz.id, sid);
+            toast({ title: 'Student Reset', description: 'Malpractice block has been cleared.' });
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to reset student.' });
+        }
     };
 
     const handleDelete = async () => {
-        if (!firestore) return;
         setIsProcessing(true);
         try {
-            const batch = writeBatch(firestore);
-            
-            const pSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'participants'));
-            pSnap.forEach(d => batch.delete(d.ref));
-            
-            const qSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'questions'));
-            for (const qDoc of qSnap.docs) {
-              const subSnap = await getDocs(collection(qDoc.ref, 'submissions'));
-              subSnap.forEach(s => batch.delete(s.ref));
-              batch.delete(qDoc.ref);
-            }
-            
-            const aSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'answerKeys'));
-            aSnap.forEach(d => batch.delete(d.ref));
-            
-            batch.delete(doc(firestore, 'quizzes', quiz.id));
-            
-            await batch.commit();
+            await quizService.deleteQuiz(quiz.id);
             toast({ title: 'Arena Purged', description: 'Quiz room and all data destroyed.' });
         } catch (e) {
-            console.error("Delete error:", e);
             toast({ variant: 'destructive', title: 'Error', description: 'Could not delete quiz.' });
         } finally {
             setIsProcessing(false);
@@ -65,36 +48,12 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
     };
 
     const handleResetQuiz = async () => {
-        if (!firestore) return;
         setIsProcessing(true);
         try {
-            const batch = writeBatch(firestore);
-            
-            const pSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'participants'));
-            pSnap.forEach(d => {
-              if (d.data().role === 'student') {
-                batch.delete(d.ref); 
-              } else {
-                batch.update(d.ref, { score: 0 });
-              }
-            });
-
-            batch.update(doc(firestore, 'quizzes', quiz.id), { 
-                status: 'waiting', 
-                currentQuestionIndex: -1,
-                questionStartAt: null 
-            });
-
-            const qSnap = await getDocs(collection(firestore, 'quizzes', quiz.id, 'questions'));
-            for (const qDoc of qSnap.docs) {
-              const subSnap = await getDocs(collection(qDoc.ref, 'submissions'));
-              subSnap.forEach(s => batch.delete(s.ref));
-            }
-
-            await batch.commit();
+            await quizService.resetQuiz(quiz.id);
+            await participantService.clearAllStudents(quiz.id);
             toast({ title: 'Quiz Reset', description: 'Room returned to waiting state.' });
         } catch (e) {
-            console.error("Reset error:", e);
             toast({ variant: 'destructive', title: 'Error', description: 'Could not reset quiz.' });
         } finally {
             setIsProcessing(false);
@@ -118,7 +77,7 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
                         </Badge>
                         <span className="text-sm text-muted-foreground flex items-center gap-1">
                             <Users className="w-4 h-4" />
-                            {participants?.filter(p => p.role === 'student').length || 0}
+                            {participants?.length || 0}
                         </span>
                     </div>
                 </div>
@@ -179,12 +138,12 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
                 <div className="space-y-2 p-3 bg-destructive/5 rounded-lg border border-destructive/10">
                   <p className="text-[10px] font-black text-destructive uppercase tracking-widest">Awaiting Amnesty (Blocked):</p>
                   {participants.filter(p => p.status === 'blocked').map(p => (
-                    <div key={p.id} className="flex items-center justify-between">
+                    <div key={p.user_id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6"><AvatarFallback className="text-[10px]">{p.avatar}</AvatarFallback></Avatar>
-                        <span className="text-sm font-medium">{p.name}</span>
+                        <Avatar className="h-6 w-6"><AvatarFallback className="text-[10px]">🎮</AvatarFallback></Avatar>
+                        <span className="text-sm font-medium">{p.user_id.slice(0, 12)}</span>
                       </div>
-                      <Button size="sm" variant="ghost" className="h-7 px-3 text-xs text-destructive hover:bg-destructive/10" onClick={() => handleResetStudent(p.id)}>Unblock</Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-3 text-xs text-destructive hover:bg-destructive/10" onClick={() => handleResetStudent(p.user_id)}>Unblock</Button>
                     </div>
                   ))}
                 </div>
@@ -196,18 +155,18 @@ const QuizCard = ({ quiz }: { quiz: Quiz }) => {
 
 export default function TeacherDashboard() {
   const { user } = useAuth();
-  const firestore = useFirestore();
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [quizzes, setQuizzes] = useState<ValidatedQuiz[]>([]);
   const [loading, setLoading] = useState(true);
 
+
   useEffect(() => {
-    if (!firestore || !user) return;
-    const q = query(collection(firestore, 'quizzes'), where('createdBy', '==', user.id));
-    return onSnapshot(q, (snap) => {
-      setQuizzes(snap.docs.map(d => ({ ...d.data(), id: d.id } as Quiz)).sort((a,b) => b.createdAt - a.createdAt));
-      setLoading(false);
-    });
-  }, [firestore, user]);
+    if (!user) return;
+    quizService.getQuizzesByCreator(user.id)
+      .then(setQuizzes)
+      .catch(e => console.error(e))
+      .finally(() => setLoading(false));
+  }, [user]);
+
 
   if (loading) return <div className="p-8 flex justify-center h-[50vh] items-center"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
 

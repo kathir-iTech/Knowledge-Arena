@@ -1,12 +1,7 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useFirestore, useCollection, updateDocumentNonBlocking, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { doc, collection, setDoc, getDoc, getDocs, writeBatch, query, orderBy } from 'firebase/firestore';
-import type { Quiz, QuizParticipant, QuizQuestion } from '@/lib/types';
-import { usePageFocusChange } from '@/hooks/usePageFocusChange';
-import { useAuth } from '@/hooks/useAuth';
+import type { Quiz, QuizParticipant } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -14,26 +9,32 @@ import { Clock, Loader2, ArrowRight, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from '../ui/alert-dialog';
+import { useAuth } from '@/hooks/useAuth';
+import { quizService } from '@/services/quiz.service';
+import { questionService } from '@/services/game.service';
+import { participantService } from '@/services/participant.service';
+import { submissionService } from '@/services/game.service';
+import { usePageFocusChange } from '@/hooks/usePageFocusChange';
+import type { ValidatedParticipant } from '@/lib/schemas';
 
-const LiveLeaderboard = ({ quizId }: { quizId: string }) => {
-    const firestore = useFirestore();
-    const participantsRef = useMemo(() => firestore ? collection(firestore, 'quizzes', quizId, 'participants') : null, [firestore, quizId]);
-    const { data: participants } = useCollection<QuizParticipant>(participantsRef);
-    const sortedParticipants = useMemo(() => participants ? [...participants].sort((a,b) => b.score - a.score) : [], [participants]);
+const LiveLeaderboard = ({ quizId, participants, teacherId }: { quizId: string, participants: ValidatedParticipant[], teacherId: string }) => {
+    const sortedParticipants = useMemo(() => [...participants].sort((a,b) => b.score - a.score), [participants]);
 
     return (
         <Card className="w-full max-w-4xl mt-6 border-primary/20 bg-secondary/10">
             <CardHeader className="py-3"><CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-primary/70">Live Standings</CardTitle></CardHeader>
             <CardContent>
                 <div className="flex flex-wrap gap-4">
-                    {sortedParticipants.filter(p => p.role === 'student').map(p => (
-                        <div key={p.id} className={cn(
+                    {sortedParticipants.filter(p => p.user_id !== teacherId).map(p => (
+                        <div key={p.user_id} className={cn(
                           "flex items-center gap-3 p-2 rounded-lg border transition-all",
                           p.status === 'blocked' ? "bg-destructive/10 border-destructive/20 opacity-60" : "bg-secondary/40 border-border/50"
                         )}>
-                            <Avatar className="h-8 w-8 border border-primary/20"><AvatarFallback className="text-sm bg-background">{p.avatar}</AvatarFallback></Avatar>
+                            <Avatar className="h-8 w-8 border border-primary/20">
+                                <AvatarFallback className="text-sm bg-background">🎮</AvatarFallback>
+                            </Avatar>
                             <div className="flex flex-col">
-                                <span className="text-sm font-bold max-w-[100px] truncate">{p.name}</span>
+                                <span className="text-sm font-bold max-w-[100px] truncate">{p.user_id.slice(0, 8)}</span>
                                 <span className={cn('text-xs font-mono font-bold', p.status === 'blocked' ? 'text-destructive' : 'text-primary')}>
                                   {p.status === 'blocked' ? 'BLOCKED' : `${p.score} PTS`}
                                 </span>
@@ -46,27 +47,53 @@ const LiveLeaderboard = ({ quizId }: { quizId: string }) => {
     );
 };
 
-export default function LiveQuiz({ quiz, participant, isTeacher }: { quiz: Quiz, participant: QuizParticipant, isTeacher: boolean }) {
+export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants }: { quiz: Quiz, participant: QuizParticipant, isTeacher: boolean, allParticipants: ValidatedParticipant[] }) {
   const { user } = useAuth();
-  const firestore = useFirestore();
-  
+
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
+  const [participants, setParticipants] = useState<ValidatedParticipant[]>(allParticipants || []);
+
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showViolationWarning, setShowViolationWarning] = useState(false);
   const [isScoring, setIsScoring] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
 
-  const questionsQuery = useMemo(() => firestore ? query(collection(firestore, 'quizzes', quiz.id, 'questions'), orderBy('index')) : null, [firestore, quiz.id]);
-  const { data: questions, isLoading: isLoadingQuestions } = useCollection<QuizQuestion>(questionsQuery);
+  useEffect(() => {
+    let sub: any;
+    const init = async () => {
+      try {
+        const qs = await questionService.getQuestionsByQuizId(quiz.id);
+        setQuestions(qs);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsLoadingQuestions(false);
+      }
+      sub = questionService.subscribeToQuestions(quiz.id, setQuestions);
+    };
+    init();
+    return () => { sub?.unsubscribe?.(); };
+  }, [quiz.id]);
+
+  useEffect(() => {
+    let sub: any;
+    participantService.getAllParticipants(quiz.id)
+      .then(setParticipants)
+      .catch(console.error);
+    sub = participantService.subscribeToParticipants(quiz.id, setParticipants);
+    return () => { sub?.unsubscribe?.(); };
+  }, [quiz.id]);
 
   const currentQuestion = useMemo(() => {
-    if (!questions || quiz.currentQuestionIndex < 0) return null;
+    if (!questions.length || quiz.currentQuestionIndex < 0) return null;
     return questions[quiz.currentQuestionIndex];
   }, [questions, quiz.currentQuestionIndex]);
 
   useEffect(() => {
     if (!currentQuestion || !quiz.questionStartAt) return;
-    const start = typeof quiz.questionStartAt === 'number' ? quiz.questionStartAt : quiz.questionStartAt?.toMillis?.() || Date.now();
+    const start = typeof quiz.questionStartAt === 'number' ? quiz.questionStartAt : new Date(quiz.questionStartAt).getTime();
     const limit = currentQuestion.timer * 1000;
     const end = start + limit;
 
@@ -83,64 +110,56 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: { quiz: Quiz,
     setHasAnswered(false);
   }, [quiz.currentQuestionIndex]);
 
-  const onMalpractice = useCallback(() => {
-    if (isTeacher || !firestore || !user || participant.status === 'blocked' || quiz.status !== 'live') return;
+  const onMalpractice = useCallback(async () => {
+    if (isTeacher || !user || participant.status === 'blocked' || quiz.status !== 'live') return;
     const newCount = (participant.violationsCount || 0) + 1;
-    const pRef = doc(firestore, 'quizzes', quiz.id, 'participants', user.id);
-    
-    // Persist malpractice to Firestore immediately
-    updateDocumentNonBlocking(pRef, { violationsCount: newCount, status: newCount >= 2 ? 'blocked' : 'playing' });
-    if (newCount < 2) setShowViolationWarning(true);
-  }, [isTeacher, firestore, user, quiz.id, quiz.status, participant]);
+    try {
+      await participantService.updateParticipant(quiz.id, user.id, {
+        violations_count: newCount,
+        status: newCount >= 2 ? 'blocked' : 'playing'
+      });
+      if (newCount < 2) setShowViolationWarning(true);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [isTeacher, user, quiz.id, quiz.status, participant]);
 
   usePageFocusChange(onMalpractice, quiz.status === 'live' && !isTeacher);
 
-  const handleAnswerSubmit = (idx: number) => {
-    if (hasAnswered || isTeacher || !currentQuestion || !user || !firestore || timeLeft === 0 || participant.status === 'blocked') return;
+  const handleAnswerSubmit = async (idx: number) => {
+    if (hasAnswered || isTeacher || !currentQuestion || !user || timeLeft === 0 || participant.status === 'blocked') return;
     setHasAnswered(true);
     setSelectedAnswer(idx);
-    const subRef = doc(firestore, `quizzes/${quiz.id}/questions/${currentQuestion.id}/submissions`, user.id);
-    const subData = { selectedOption: idx, submittedAt: Date.now() };
-    setDoc(subRef, subData).catch(err => {
+    try {
+      await submissionService.submitAnswer({
+        quiz_id: quiz.id,
+        question_id: currentQuestion.id,
+        user_id: user.id,
+        selected_option: idx
+      });
+    } catch (e) {
       setHasAnswered(false);
-      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: subRef.path, operation: 'create', requestResourceData: subData }));
-    });
+      console.error(e);
+    }
   };
 
   const evaluateQuestion = async () => {
-    if (!isTeacher || !firestore || !currentQuestion) return;
+    if (!isTeacher || !currentQuestion) return;
     setIsScoring(true);
     try {
-      const keySnap = await getDoc(doc(firestore, `quizzes/${quiz.id}/answerKeys`, currentQuestion.id));
-      if (!keySnap.exists()) throw new Error('No answer key');
-      const correctIdx = keySnap.data().correctOptionIndex;
-      const start = typeof quiz.questionStartAt === 'number' ? quiz.questionStartAt : quiz.questionStartAt?.toMillis?.() || Date.now();
-      const partsSnap = await getDocs(collection(firestore, `quizzes/${quiz.id}/participants`));
-      const batch = writeBatch(firestore);
-
-      for (const pDoc of partsSnap.docs) {
-        const pData = pDoc.data() as QuizParticipant;
-        if (pData.role === 'teacher' || pData.status === 'blocked') continue;
-        const subSnap = await getDoc(doc(firestore, `quizzes/${quiz.id}/questions/${currentQuestion.id}/submissions`, pDoc.id));
-        if (subSnap.exists() && subSnap.data().selectedOption === correctIdx) {
-          const timeUsed = subSnap.data().submittedAt - start;
-          const bonus = Math.max(0, Math.floor((1 - timeUsed / (currentQuestion.timer * 1000)) * 500));
-          batch.update(pDoc.ref, { score: (pData.score || 0) + 500 + bonus });
-        }
-      }
-      await batch.commit();
+      const startTime = typeof quiz.questionStartAt === 'number' ? quiz.questionStartAt : new Date(quiz.questionStartAt).getTime();
+      await questionService.evaluateQuestion(quiz.id, currentQuestion.id, startTime);
     } catch (e) { console.error(e); } finally { setIsScoring(false); }
   };
 
   const handleNext = async () => {
-    if (!isTeacher || !firestore || isScoring) return;
+    if (!isTeacher || isScoring) return;
     await evaluateQuestion();
     const nextIdx = quiz.currentQuestionIndex + 1;
-    const qRef = doc(firestore, 'quizzes', quiz.id);
     if (nextIdx < quiz.questionCount) {
-      updateDocumentNonBlocking(qRef, { currentQuestionIndex: nextIdx, questionStartAt: Date.now() });
+      await quizService.advanceToQuestion(quiz.id, nextIdx);
     } else {
-      updateDocumentNonBlocking(qRef, { status: 'finished' });
+      await quizService.updateQuizStatus(quiz.id, 'finished');
     }
   };
 
@@ -170,7 +189,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: { quiz: Quiz,
         </CardHeader>
         <CardContent className="space-y-8 pb-12 px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {currentQuestion.options.map((opt, i) => (
+            {currentQuestion.options.map((opt: string, i: number) => (
               <Button key={i} onClick={() => handleAnswerSubmit(i)} disabled={hasAnswered || isTeacher || timeLeft === 0 || participant.status === 'blocked'} variant={selectedAnswer === i ? 'default' : 'outline'} className={cn(
                   "h-24 text-xl font-medium relative group border-2",
                   selectedAnswer === i ? "border-primary shadow-lg shadow-primary/20" : "border-border/50",
@@ -198,7 +217,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher }: { quiz: Quiz,
           )}
         </CardContent>
       </Card>
-      <LiveLeaderboard quizId={quiz.id} />
+      <LiveLeaderboard quizId={quiz.id} participants={participants} teacherId={quiz.createdBy} />
     </div>
   );
 }

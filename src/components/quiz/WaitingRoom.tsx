@@ -10,18 +10,20 @@ import { Button } from '@/components/ui/button';
 import { ShieldCheck, Copy, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
-import { useFirestore, useCollection, updateDocumentNonBlocking } from '@/firebase';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
+import { quizService } from '@/services/quiz.service';
+import { participantService } from '@/services/participant.service';
 
 interface WaitingRoomProps {
-  quiz: Quiz;
+  quiz: ValidatedQuiz;
   isTeacher: boolean;
 }
 
 export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const [shareableLink, setShareableLink] = useState('');
   const { toast } = useToast();
-  const firestore = useFirestore();
+  const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -31,15 +33,17 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     }
   }, [quiz.id]);
 
-  const participantsRef = useMemo(() => {
-    if (!firestore) return null;
-    return collection(firestore, 'quizzes', quiz.id, 'participants');
-  }, [firestore, quiz.id]);
-  const { data: participants, isLoading: areParticipantsLoading } = useCollection<QuizParticipant>(participantsRef);
+  useEffect(() => {
+    const sub = participantService.subscribeToParticipants(quiz.id, (parts) => {
+      setParticipants(parts);
+      setIsLoading(false);
+    });
+    return () => { sub.unsubscribe(); };
+  }, [quiz.id]);
   
   const studentParticipants = useMemo(() => {
-      return participants?.filter(p => p.role === 'student') || [];
-  }, [participants]);
+      return participants.filter(p => (p as any).user_id !== quiz.created_by) || [];
+  }, [participants, quiz.created_by]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -47,17 +51,18 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     });
   };
 
-  const handleStartQuiz = () => {
-    if (!isTeacher || !firestore) return;
-    const quizRef = doc(firestore, 'quizzes', quiz.id);
-    updateDocumentNonBlocking(quizRef, { 
-        status: 'live',
-        currentQuestionIndex: 0,
-        questionStartAt: serverTimestamp(),
-    });
+  const handleStartQuiz = async () => {
+    if (!isTeacher) return;
+    try {
+        await quizService.updateQuizStatus(quiz.id, 'live');
+        await quizService.advanceToQuestion(quiz.id, 0);
+    } catch (e) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to start quiz.' });
+    }
   };
 
   const studentCount = studentParticipants.length;
+  const areParticipantsLoading = isLoading;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 space-y-6">
@@ -85,11 +90,11 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                       </div>
                     ))
                   ) : studentParticipants.length > 0 ? studentParticipants.map(p => (
-                    <div key={p.id} className="flex flex-col items-center gap-2 text-center">
+                    <div key={p.user_id} className="flex flex-col items-center gap-2 text-center">
                       <Avatar className="h-16 w-16">
-                        <AvatarFallback className="text-3xl bg-secondary">{p.avatar}</AvatarFallback>
+                        <AvatarFallback className="text-3xl bg-secondary">🎮</AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium max-w-20 truncate">{p.name}</span>
+                      <span className="text-sm font-medium max-w-20 truncate">{p.user_id.slice(0, 8)}</span>
                     </div>
                   )) : (
                     <p className="text-muted-foreground">Waiting for gladiators to arrive...</p>

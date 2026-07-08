@@ -13,7 +13,7 @@ service cloud.firestore {
     }
     
     function isTeacher() {
-      return isSignedIn() && getRole() == 'Teacher';
+      return isSignedIn() && getRole() == 'teacher';
     }
     
     function isOwner(userId) {
