@@ -1,11 +1,13 @@
-
 import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
 
 /**
  * Central Genkit instance.
- * We are using a direct integration for Anthropic to ensure 100% stability 
- * and avoid versioning conflicts with community plugins.
+ * Configured with the Google AI plugin for tactical intelligence workflows.
  */
 export const ai = genkit({
-  plugins: [], // No plugins needed for direct model definition
+  plugins: [
+    googleAI()
+  ],
+  model: googleAI.model('gemini-flash-latest'),
 });
