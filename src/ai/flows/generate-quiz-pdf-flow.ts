@@ -1,13 +1,21 @@
-
 'use server';
 /**
  * @fileOverview AI flow for generating multiple-choice questions from a PDF.
- * Powered by Anthropic Claude 3.5 Sonnet via direct API integration for maximum stability.
+ * Engine: Google Gemini (Genkit Plugin) — free tier, with multi-model fallback.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
+
 import pdf from 'pdf-parse';
+
+const QuizQuestionOutputSchema = z.object({
+  text: z.string().describe('The question text.'),
+  options: z.array(z.string()).describe('Exactly 4 options.'),
+  correctAnswerIndex: z.number().describe('0-based index of the correct option.'),
+  explanation: z.string().describe('Short explanation of why the answer is correct.'),
+});
 
 const GenerateQuizFromPDFInputSchema = z.object({
   pdfDataUri: z.string().describe("A PDF as a data URI (base64)."),
@@ -16,55 +24,62 @@ const GenerateQuizFromPDFInputSchema = z.object({
 });
 export type GenerateQuizFromPDFInput = z.infer<typeof GenerateQuizFromPDFInputSchema>;
 
-const QuizQuestionOutputSchema = z.object({
-  text: z.string(),
-  options: z.array(z.string()),
-  correctAnswerIndex: z.number(),
-  explanation: z.string(),
-});
-
 const GenerateQuizFromPDFOutputSchema = z.object({
   questions: z.array(QuizQuestionOutputSchema),
   difficulty: z.string(),
+  engine: z.string().optional(),
 });
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
-/**
- * Direct call to Anthropic API to bypass broken Genkit plugins.
- * Ensures Claude 3.5 Sonnet is used without model-not-found or plugin errors.
- */
-async function callAnthropicClaude(prompt: string) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("MISSING_ANTHROPIC_API_KEY");
+// Ordered fallback chain — tries each model in order until one succeeds.
+const MODEL_FALLBACK_CHAIN = [
+  'gemini-2.0-flash',
+  'gemini-flash-latest',
+];
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: "claude-3-5-sonnet-20240620",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
-      system: "You are a professional educational assessment designer. You output ONLY valid JSON."
-    })
-  });
+function isRateLimitError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes('429') ||
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('rate limit') ||
+    msg.includes('quota') ||
+    msg.includes('403')
+  );
+}
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`ANTHROPIC_API_ERROR: ${errorData.error?.message || response.statusText}`);
+async function callGeminiWithFallback(promptText: string) {
+  const errors: string[] = [];
+
+  for (const modelName of MODEL_FALLBACK_CHAIN) {
+    try {
+      const response = await ai.generate({
+        model: googleAI.model(modelName),
+        prompt: promptText,
+        output: {
+          schema: z.object({
+            questions: z.array(QuizQuestionOutputSchema)
+          })
+        }
+      });
+
+      if (!response.output) {
+        throw new Error(`EMPTY_OUTPUT_${modelName}`);
+      }
+
+      return { output: response.output, engine: modelName };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${modelName}: ${msg}`);
+
+      if (isRateLimitError(err)) {
+        continue;
+      }
+      continue;
+    }
   }
 
-  const result = await response.json();
-  const text = result.content[0].text;
-  
-  // Extract JSON from potential markdown wrapping
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("AI_JSON_PARSE_FAILED");
-  
-  return JSON.parse(jsonMatch[0]);
+  throw new Error(`ALL_MODELS_EXHAUSTED: ${errors.join(' | ')}`);
 }
 
 export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Promise<GenerateQuizFromPDFOutput> {
@@ -78,20 +93,22 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     outputSchema: GenerateQuizFromPDFOutputSchema,
   },
   async (input) => {
-    // 1. Extract Text from PDF
-    const base64Data = input.pdfDataUri.split(',')[1];
+    const parts = input.pdfDataUri.split(',');
+    const base64Data = parts[parts.length - 1];
     if (!base64Data) throw new Error("INVALID_PDF_DATA");
-    
+
     const buffer = Buffer.from(base64Data, 'base64');
     let extracted;
     try {
-        extracted = await pdf(buffer);
+      extracted = await pdf(buffer);
     } catch (e) {
-        throw new Error("PDF_EXTRACTION_FAILED");
+      throw new Error("PDF_EXTRACTION_FAILED");
     }
 
     const text = extracted.text.replace(/\s+/g, ' ').trim();
-    if (text.length < 100) throw new Error("PDF_CONTENT_TOO_SHORT");
+    if (text.length < 20) {
+      throw new Error("PDF_CONTENT_TOO_SHORT");
+    }
 
     const difficultyMap = {
       easy: "Beginner (Factual Recall)",
@@ -99,8 +116,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: "Advanced (Critical Synthesis)"
     };
 
-    // 2. Build the prompt for Claude
-    const prompt = `Generate exactly ${input.questionCount} high-quality multiple-choice questions based on the following content.
+    const promptText = `Generate exactly ${input.questionCount} high-quality multiple-choice questions based on the following content.
 
 Difficulty: ${difficultyMap[input.difficulty]}
 - Questions must be derived ONLY from the provided content.
@@ -121,18 +137,13 @@ Output format MUST be a JSON object with a "questions" array:
 }
 
 Content:
-${text.substring(0, 50000)}`;
+${text.substring(0, 40000)}`;
 
-    // 3. Call Claude directly
-    const data = await callAnthropicClaude(prompt);
-
-    if (!data.questions || !Array.isArray(data.questions)) {
-      throw new Error("AI_INVALID_RESPONSE_FORMAT");
-    }
-
+    const { output, engine } = await callGeminiWithFallback(promptText);
     return {
-      questions: data.questions,
-      difficulty: input.difficulty
+      questions: output.questions,
+      difficulty: input.difficulty,
+      engine
     };
   }
 );

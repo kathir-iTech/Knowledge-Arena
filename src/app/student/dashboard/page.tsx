@@ -1,10 +1,11 @@
 import StudentDashboard from '@/components/dashboard/StudentDashboard';
 
-export default function StudentDashboardPage({
+export default async function StudentDashboardPage({
   searchParams,
 }: {
-  searchParams?: { [key: string]: string | string[] | undefined };
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-    const roomCode = searchParams?.roomCode;
-    return <StudentDashboard initialRoomCode={typeof roomCode === 'string' ? roomCode.toUpperCase() : undefined} />;
+  const params = await searchParams;
+  const roomCode = params?.roomCode;
+  return <StudentDashboard initialRoomCode={typeof roomCode === 'string' ? roomCode.toUpperCase() : undefined} />;
 }

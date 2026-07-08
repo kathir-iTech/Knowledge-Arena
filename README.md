@@ -1,3 +1,4 @@
+
 # 🏆 Knowledge Arena: Technical Manifesto
 
 Knowledge Arena is a high-octane, real-time quiz platform designed for the ultimate classroom battle. Built with Next.js 15, Tailwind CSS, and Firebase, it transforms learning into a competitive gladiator experience.

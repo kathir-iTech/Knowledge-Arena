@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { FileText, Loader2, Upload, X, Sparkles, AlertCircle } from 'lucide-react';
+import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
 import { useToast } from '@/hooks/use-toast';
@@ -93,12 +93,19 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
       }
     } catch (err: any) {
       console.error(err);
-      let msg = "The AI Forge was interrupted.";
-      if (err.message === "PDF_TOO_SHORT") msg = "Insufficient data in PDF to generate the requested questions.";
-      if (err.message === "PDF_PARSE_FAILED") msg = "Could not extract text from this PDF. Ensure it's not a scanned image.";
+      let msg = err.message || "The AI Forge was interrupted.";
+      
+      // Map specific backend errors to user-friendly messages
+      if (msg.includes("MISSING_ANTHROPIC_API_KEY")) {
+        msg = "The Arena Architect requires an Anthropic API Key. Please set 'ANTHROPIC_API_KEY' in your .env file and restart the server.";
+      } else if (msg.includes("PDF_CONTENT_TOO_SHORT")) {
+        msg = "The PDF Forge failed because no extractable text was found. This usually happens with scanned image-based PDFs. Please upload a text-based document.";
+      } else if (msg.includes("ANTHROPIC_API_ERROR")) {
+        msg = "The Intelligence Forge is temporarily overloaded or the key is invalid. Please verify your Anthropic credits.";
+      }
       
       setError(msg);
-      toast({ variant: 'destructive', title: "Forge Error", description: msg });
+      toast({ variant: 'destructive', title: "Forge Error", description: "Tactical data extraction failed." });
     } finally {
       setIsGenerating(false);
     }
@@ -116,12 +123,30 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         </div>
       </CardHeader>
       <CardContent className="space-y-8 pt-8">
+        {error && error.includes("ANTHROPIC_API_KEY") && (
+            <div className="flex flex-col gap-4 bg-destructive/10 p-6 rounded-xl border border-destructive/20 animate-in fade-in zoom-in">
+                <div className="flex items-center gap-3 text-destructive">
+                    <Key className="w-8 h-8" />
+                    <h3 className="text-lg font-black uppercase tracking-tighter">API Key Missing</h3>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                    To use the AI Forge, you must add your <strong>Anthropic API Key</strong> to the <code>.env</code> file in your project root.
+                </p>
+                <div className="bg-background/50 p-3 rounded font-mono text-xs border border-destructive/20 select-all">
+                    ANTHROPIC_API_KEY=your_key_here
+                </div>
+                <Button variant="outline" size="sm" className="w-fit" onClick={() => window.open('https://console.anthropic.com/', '_blank')}>
+                    Get API Key
+                </Button>
+            </div>
+        )}
+
         <div className="space-y-4">
           <Label className="text-lg font-medium">1. Tactical Intelligence (PDF)</Label>
           {!file ? (
             <div className={cn(
               "border-2 border-dashed border-primary/20 rounded-2xl p-12 transition-all hover:bg-primary/5 hover:border-primary/40 cursor-pointer flex flex-col items-center justify-center gap-4 text-center relative",
-              error && "border-destructive/40 bg-destructive/5"
+              error && !error.includes("KEY") && "border-destructive/40 bg-destructive/5"
             )}>
               <input 
                 type="file" 
@@ -229,10 +254,13 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
             )}
           </Button>
           
-          {error && (
-            <div className="mt-4 flex items-center gap-2 text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20 text-sm animate-in fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {error}
+          {error && !error.includes("KEY") && (
+            <div className="mt-4 flex flex-col gap-2 bg-destructive/10 p-4 rounded-xl border border-destructive/20 animate-in fade-in">
+              <div className="flex items-center gap-2 text-destructive font-bold text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                Extraction Violation
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{error}</p>
             </div>
           )}
         </div>
