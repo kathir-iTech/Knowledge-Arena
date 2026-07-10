@@ -52,19 +52,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userRef = doc(firestore, 'users', uid);
         const userDoc = await getDoc(userRef);
         if (userDoc.exists()) {
-            const data = userDoc.data() as Partial<User>;
-            const role = data?.role;
-            if (!role || (role !== 'teacher' && role !== 'student')) {
-                console.error(`Invalid or missing role for uid: ${uid}. Role was: ${role}`);
-                if (auth) signOut(auth);
-                setUser(null);
-                toast({
-                    variant: "destructive",
-                    title: "Account Error",
-                    description: "Your account has an invalid role. Please contact support.",
-                });
-                return;
-            }
             setUser({ id: userDoc.id, ...userDoc.data() } as User);
         } else {
             console.warn(`User document not found for uid: ${uid}. This may happen if creation is pending.`);

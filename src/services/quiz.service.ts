@@ -114,6 +114,22 @@ export const quizService = {
 
   async resetQuiz(id: string): Promise<void> {
     const db = getFirestore();
+
+    // Delete all submissions under each question
+    const questionsSnap = await getDocs(collection(db, 'quizzes', id, 'questions'));
+    const submissionDeletions = questionsSnap.docs.map(qDoc =>
+      getDocs(collection(db, 'quizzes', id, 'questions', qDoc.id, 'submissions'))
+        .then(subSnap =>
+          Promise.all(subSnap.docs.map(subDoc => deleteDoc(subDoc.ref)))
+        )
+    );
+    await Promise.all(submissionDeletions);
+
+    // Delete all participants (fresh start for new round)
+    const participantsSnap = await getDocs(collection(db, 'quizzes', id, 'participants'));
+    await Promise.all(participantsSnap.docs.map(pDoc => deleteDoc(pDoc.ref)));
+
+    // Reset quiz metadata
     await updateDoc(doc(db, 'quizzes', id), {
       status: 'waiting',
       current_question_index: -1,

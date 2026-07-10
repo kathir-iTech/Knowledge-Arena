@@ -139,28 +139,21 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   }, [participant.status]);
 
   useEffect(() => {
-    let sub: Unsubscribe | undefined;
-    const init = async () => {
-      try {
-        const qs = await questionService.getQuestionsByQuizId(quiz.id);
-        setQuestions(qs);
-      } catch {
-        toast({ variant: 'destructive', title: 'Error', description: 'Failed to load questions. Please refresh.' });
-      } finally {
-        setIsLoadingQuestions(false);
-      }
-      sub = questionService.subscribeToQuestions(quiz.id, setQuestions);
-    };
-    init();
-    return () => { sub?.(); };
+    let mounted = true;
+    const qSub = questionService.subscribeToQuestions(quiz.id, (qs) => {
+      if (mounted) { setQuestions(qs); setIsLoadingQuestions(false); }
+    });
+    questionService.getQuestionsByQuizId(quiz.id)
+      .then(qs => { if (mounted) setQuestions(qs); })
+      .catch(() => { if (mounted) toast({ variant: 'destructive', title: 'Error', description: 'Failed to load questions. Please refresh.' }); })
+      .finally(() => { if (mounted) setIsLoadingQuestions(false); });
+    return () => { mounted = false; qSub(); };
   }, [quiz.id, toast]);
 
   useEffect(() => {
-    let sub: Unsubscribe | undefined;
-    participantService.getAllParticipants(quiz.id)
-      .then(setParticipants)
-      .catch(() => toast({ variant: 'destructive', title: 'Error', description: 'Failed to load participants.' }));
-    sub = participantService.subscribeToParticipants(quiz.id, (parts) => {
+    let mounted = true;
+    const pSub = participantService.subscribeToParticipants(quiz.id, (parts) => {
+      if (!mounted) return;
       setParticipants(parts);
       if (isTeacher) {
         parts.forEach(p => {
@@ -182,7 +175,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         });
       }
     });
-    return () => { sub?.(); };
+    participantService.getAllParticipants(quiz.id)
+      .then(parts => { if (mounted) setParticipants(parts); })
+      .catch(() => { if (mounted) toast({ variant: 'destructive', title: 'Error', description: 'Failed to load participants.' }); });
+    return () => { mounted = false; pSub(); };
   }, [quiz.id, toast, isTeacher, quiz.created_by]);
 
   const currentQuestion = useMemo(() => {
@@ -271,12 +267,16 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
   const handleNext = async () => {
     if (!isTeacher || isScoring) return;
-    await evaluateQuestion();
-    const nextIdx = (quiz.current_question_index ?? 0) + 1;
-    if (nextIdx < (quiz.question_count ?? 0)) {
-      await quizService.advanceToQuestion(quiz.id, nextIdx);
-    } else {
-      await quizService.updateQuizStatus(quiz.id, 'finished');
+    try {
+      await evaluateQuestion();
+      const nextIdx = (quiz.current_question_index ?? 0) + 1;
+      if (nextIdx < (quiz.question_count ?? 0)) {
+        await quizService.advanceToQuestion(quiz.id, nextIdx);
+      } else {
+        await quizService.updateQuizStatus(quiz.id, 'finished');
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to advance. Please try again.' });
     }
   };
 
