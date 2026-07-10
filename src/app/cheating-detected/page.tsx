@@ -1,14 +1,23 @@
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ShieldX } from "lucide-react";
+import { ShieldX, HelpCircle } from "lucide-react";
 
 export default function CheatingDetectedPage() {
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background text-center">
       <ShieldX className="w-24 h-24 text-destructive mb-6" />
-      <h1 className="text-4xl font-headline text-destructive mb-2">Action Blocked by Server</h1>
-      <p className="text-xl text-muted-foreground mb-8 max-w-md">
-        Your attempt to join the quiz was denied due to a violation of server rules. This can happen if you try to join a room you are not authorized to access. Please contact your teacher if you believe this is an error.
+      <h1 className="text-4xl font-headline text-destructive mb-2">Access Denied</h1>
+      <p className="text-xl text-muted-foreground mb-2 max-w-md">
+        Your attempt to join was denied.
+      </p>
+      <div className="flex items-center gap-2 bg-destructive/10 px-4 py-2 rounded-full text-sm mb-8">
+        <HelpCircle className="w-4 h-4 text-destructive" />
+        <span>This can happen if you try to join a room you are not authorized to access.</span>
+      </div>
+      <p className="text-muted-foreground mb-8 max-w-md">
+        Please contact your teacher if you believe this is an error. You can return to the dashboard and try again.
       </p>
       <Link href="/" passHref>
         <Button variant="outline" size="lg">

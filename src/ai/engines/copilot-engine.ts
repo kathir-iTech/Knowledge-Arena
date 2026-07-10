@@ -14,5 +14,6 @@ export async function handleCopilotChat(message: string) {
   });
 
   const { output } = await prompt(message);
-  return output!;
+  if (!output) throw new Error('Copilot engine returned empty output');
+  return output;
 }

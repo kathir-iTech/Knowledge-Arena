@@ -9,9 +9,17 @@ import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key } from 'lucide
 import { cn } from '@/lib/utils';
 import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/firebase';
+
+interface GeneratedQuestion {
+  text: string;
+  options: string[];
+  correctAnswerIndex: number;
+  explanation: string;
+}
 
 interface PDFQuizGeneratorProps {
-  onQuestionsGenerated: (questions: any[], difficulty: string) => void;
+  onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string) => void;
 }
 
 const STATUS_MESSAGES = [
@@ -25,6 +33,7 @@ const STATUS_MESSAGES = [
 
 export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps) {
   const { toast } = useToast();
+  const { auth } = useFirebase();
   const [file, setFile] = useState<File | null>(null);
   const [difficulty, setDifficulty] = useState<'easy' | 'moderate' | 'hard' | null>(null);
   const [questionCount, setQuestionCount] = useState(10);
@@ -79,10 +88,14 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         reader.readAsDataURL(file);
       });
 
+      const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!idToken) throw new Error("UNAUTHORIZED");
+
       const result = await generateQuizFromPDF({
         pdfDataUri: dataUri,
         difficulty,
-        questionCount
+        questionCount,
+        idToken,
       });
 
       if (result.questions && result.questions.length > 0) {
@@ -91,9 +104,9 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
       } else {
         throw new Error("AI_FAILED");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      let msg = err.message || "The AI Forge was interrupted.";
+      let msg = err instanceof Error ? err.message : "The AI Forge was interrupted.";
       
       // Map specific backend errors to user-friendly messages
       if (msg.includes("MISSING_ANTHROPIC_API_KEY")) {
@@ -102,6 +115,10 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         msg = "The PDF Forge failed because no extractable text was found. This usually happens with scanned image-based PDFs. Please upload a text-based document.";
       } else if (msg.includes("ANTHROPIC_API_ERROR")) {
         msg = "The Intelligence Forge is temporarily overloaded or the key is invalid. Please verify your Anthropic credits.";
+      } else if (msg.includes("UNAUTHORIZED")) {
+        msg = "Your session has expired. Please log out and log back in.";
+      } else if (msg.includes("PDF_TOO_LARGE")) {
+        msg = "The uploaded PDF exceeds the maximum size limit on the server.";
       }
       
       setError(msg);
@@ -197,7 +214,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
             ].map((d) => (
               <button
                 key={d.id}
-                onClick={() => setDifficulty(d.id as any)}
+                onClick={() => setDifficulty(d.id as 'easy' | 'moderate' | 'hard')}
                 disabled={isGenerating}
                 className={cn(
                   "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center group",

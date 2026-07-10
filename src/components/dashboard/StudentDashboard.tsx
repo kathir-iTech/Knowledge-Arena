@@ -1,16 +1,19 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { Loader2, Swords } from 'lucide-react';
+import { Loader2, Swords, History, UserCircle, ExternalLink } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?: string }) {
   const { user } = useAuth();
@@ -18,6 +21,16 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
   const { toast } = useToast();
   const [roomCode, setRoomCode] = useState(initialRoomCode || '');
   const [isLoading, setIsLoading] = useState(false);
+  const [history, setHistory] = useState<Array<{ quizId: string; title: string; score: number; status: string; created_at: number }>>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    participantService.getStudentHistory(user.id)
+      .then(setHistory)
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }, [user]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,21 +46,30 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
       const existing = participants.find(p => p.user_id === user.id);
 
       if (!existing) {
-        await participantService.joinQuiz(code, user.id);
+        await participantService.joinQuiz(code, user.id, user.name);
       } else if (existing.status === 'blocked') {
         throw new Error('You are blocked from this room');
       }
 
       router.push(`/battle/${code}`);
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Join Failed', description: err.message });
+    } catch (err: unknown) {
+      toast({ variant: 'destructive', title: 'Join Failed', description: err instanceof Error ? err.message : "Unknown error" });
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-8">
-      <h1 className="text-4xl font-headline text-primary text-center">Gladiator Dashboard</h1>
+    <div className="p-4 md:p-8 space-y-8 max-w-4xl mx-auto safe-bottom">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-headline text-primary">Gladiator Dashboard</h1>
+          <p className="text-muted-foreground">Welcome, {user?.name || 'Gladiator'}.</p>
+        </div>
+        <Button variant="outline" size="sm" asChild>
+          <Link href="/student/profile"><UserCircle className="mr-2 h-4 w-4" /> Profile</Link>
+        </Button>
+      </div>
+
       <div className="flex justify-center">
         <Card className="w-full max-w-md">
           <CardHeader>
@@ -70,6 +92,50 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
             </form>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <History className="w-5 h-5 text-primary" />
+          <h2 className="text-2xl font-headline text-primary">Battle History</h2>
+        </div>
+
+        {historyLoading ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-3"><Loader2 className="animate-spin h-8 w-8 text-primary" /><p className="text-sm text-muted-foreground animate-pulse">Loading battle history...</p></div>
+        ) : history.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">No battles fought yet. Join an arena above!</p>
+        ) : (
+          <div className="space-y-3">
+            {history.map(h => (
+              <Card key={h.quizId} className="hover:bg-secondary/20 transition-colors">
+                <CardContent className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <p className="font-bold">{h.title}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant={h.status === 'finished' ? 'outline' : h.status === 'live' ? 'default' : 'secondary'} className="text-[10px]">
+                          {h.status.toUpperCase()}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">{new Date(h.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="font-mono text-xl font-bold text-primary">{h.score}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">pts</p>
+                    </div>
+                    {h.status === 'finished' && (
+                      <Button variant="ghost" size="icon" asChild>
+                        <Link href={`/battle/${h.quizId}`}><ExternalLink className="w-4 h-4" /></Link>
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

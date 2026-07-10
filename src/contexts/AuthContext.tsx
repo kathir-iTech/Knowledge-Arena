@@ -22,6 +22,7 @@ interface AuthContextType {
   signup: (credentials: { name: string; email: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   updateAvatar: (avatar: string) => Promise<void>;
+  updateProfile: (data: { name?: string; avatar?: string }) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -87,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Login Failed",
@@ -135,8 +136,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setUser({ ...newUser, id: userCredential.user.uid });
       
-    } catch (error: any) {
-       if (error.code === 'auth/email-already-in-use') {
+    } catch (error: unknown) {
+       const authError = error as { code?: string };
+       if (authError.code === 'auth/email-already-in-use') {
          toast({ variant: "destructive", title: "Signup Failed", description: "An account with this email already exists." });
        } else {
          toast({ variant: "destructive", title: "Signup Failed", description: "An unexpected error occurred." });
@@ -169,6 +171,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (data: { name?: string; avatar?: string }) => {
+    if (user && firestore) {
+      const userRef = doc(firestore, 'users', user.id);
+      const updateData: Record<string, unknown> = {};
+      if (data.name !== undefined) updateData.name = data.name;
+      if (data.avatar !== undefined) updateData.avatar = data.avatar;
+      await updateDoc(userRef, updateData);
+      setUser(prev => prev ? { ...prev, ...data } : null);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -179,6 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signup,
         logout,
         updateAvatar,
+        updateProfile,
       }}
     >
       {children}

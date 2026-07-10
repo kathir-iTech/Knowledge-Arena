@@ -1,51 +1,59 @@
 
 'use client';
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { Loader2, ShieldX } from 'lucide-react';
+import { Loader2, ShieldX, RefreshCw } from 'lucide-react';
 import LiveQuiz from '@/components/quiz/LiveQuiz';
 import QuizResults from '@/components/quiz/QuizResults';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import { Button } from '../ui/button';
-import type { Quiz, QuizParticipant } from '@/lib/types';
+import type { Unsubscribe } from 'firebase/firestore';
 
 export default function BattleRoomLoader() {
   const { roomCode } = useParams();
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
-  
+
   const [quiz, setQuiz] = useState<ValidatedQuiz | null>(null);
   const [participant, setParticipant] = useState<ValidatedParticipant | null>(null);
   const [allParticipants, setAllParticipants] = useState<ValidatedParticipant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   const quizId = roomCode as string;
 
   useEffect(() => {
     if (!quizId || !user) return;
 
-    let quizSub: any;
-    let partSub: any;
+    let quizSub: Unsubscribe | undefined;
+    let partSub: Unsubscribe | undefined;
 
     const init = async () => {
       try {
         const q = await quizService.getQuizById(quizId);
         setQuiz(q);
-        
+
         quizSub = quizService.subscribeToQuiz(quizId, setQuiz);
         partSub = participantService.subscribeToParticipants(quizId, (parts) => {
           setAllParticipants(parts);
           const self = parts.find(p => p.user_id === user.id);
           if (self) setParticipant(self);
         });
+
+        // Reconnect: if user is not in participants, auto-join
+        const initialParts = await participantService.getAllParticipants(quizId);
+        const self = initialParts.find(p => p.user_id === user.id);
+        if (!self && q.status !== 'finished') {
+          await participantService.joinQuiz(quizId, user.id, user.name);
+        }
       } catch (e) {
-        setError(true);
+        setError(e instanceof Error ? e.message : 'Failed to load quiz');
       } finally {
         setIsLoading(false);
       }
@@ -54,10 +62,10 @@ export default function BattleRoomLoader() {
     init();
 
     return () => {
-      quizSub?.unsubscribe();
-      partSub?.unsubscribe();
+      quizSub?.();
+      partSub?.();
     };
-  }, [quizId, user]);
+  }, [quizId, user, retryCount]);
 
   useEffect(() => {
     if (participant?.status === 'blocked') {
@@ -65,7 +73,7 @@ export default function BattleRoomLoader() {
     }
   }, [participant, router]);
 
-  if (isLoading) {
+  if (isLoading || isAuthLoading) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -73,19 +81,24 @@ export default function BattleRoomLoader() {
       </div>
     );
   }
-  
+
   if (error || !quiz) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">
         <ShieldX className="h-12 w-12 text-destructive" />
         <h1 className="text-2xl font-bold">Room Not Found</h1>
-        <p className="text-muted-foreground">This quiz room does not exist or has been closed.</p>
-        <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
+        <p className="text-muted-foreground">{error || 'This quiz room does not exist or has been closed.'}</p>
+        <div className="flex gap-4">
+          <Button variant="outline" onClick={() => setRetryCount(c => c + 1)}>
+            <RefreshCw className="mr-2 h-4 w-4" /> Retry
+          </Button>
+          <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
+        </div>
       </div>
     );
   }
-  
-  if (!user || !participant) {
+
+  if (!user) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -93,26 +106,26 @@ export default function BattleRoomLoader() {
       </div>
     );
   }
-  
+
   if (quiz.status === 'waiting') {
     return (
       <WaitingRoom
         quiz={quiz}
-        isTeacher={quiz.created_by === participant.user_id}
+        isTeacher={quiz.created_by === participant?.user_id}
       />
     );
   }
-  
+
   if (quiz.status === 'finished') {
-    return <QuizResults quiz={quiz as unknown as Quiz} />;
+    return <QuizResults quiz={quiz} currentUserId={user.id} />;
   }
 
   if (quiz.status === 'live') {
     return (
         <LiveQuiz
-            quiz={quiz as unknown as Quiz}
-            participant={participant as unknown as QuizParticipant}
-            isTeacher={quiz.created_by === participant.user_id}
+            quiz={quiz}
+            participant={participant!}
+            isTeacher={quiz.created_by === participant?.user_id}
             allParticipants={allParticipants}
         />
     );
@@ -120,7 +133,8 @@ export default function BattleRoomLoader() {
 
   return (
     <div className="flex flex-col h-screen items-center justify-center gap-4">
-        <p>An unknown error occurred.</p>
+        <ShieldX className="h-12 w-12 text-destructive" />
+        <p className="text-muted-foreground">This room is in an unexpected state. Please try again later.</p>
         <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
     </div>
   );

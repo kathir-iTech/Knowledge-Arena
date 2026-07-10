@@ -78,10 +78,10 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 
     const unsubscribe = onAuthStateChanged(
       auth,
-      (firebaseUser: any) => { // Auth state determined
+      (firebaseUser: User | null) => { // Auth state determined
         setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
       },
-      (error: any) => { // Auth listener error
+      (error: Error) => { // Auth listener error
         console.error("FirebaseProvider: onAuthStateChanged error:", error);
         setUserAuthState({ user: null, isUserLoading: false, userError: error });
       }
@@ -134,24 +134,6 @@ export const useFirebase = (): FirebaseServicesAndUser => {
     isUserLoading: context.isUserLoading,
     userError: context.userError,
   };
-};
-
-/** Hook to access Firebase Auth instance. */
-export const useFirebaseAuth = (): Auth => {
-  const { auth } = useFirebase();
-  return auth;
-};
-
-/** Hook to access Firestore instance. */
-export const useFirestore = (): Firestore => {
-  const { firestore } = useFirebase();
-  return firestore;
-};
-
-/** Hook to access Firebase App instance. */
-export const useFirebaseApp = (): FirebaseApp => {
-  const { firebaseApp } = useFirebase();
-  return firebaseApp;
 };
 
 /**

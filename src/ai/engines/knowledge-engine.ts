@@ -1,14 +1,13 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { initializeFirebase } from '@/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { firebaseConfig } from '@/firebase/config';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
 
-/**
- * Knowledge Engine: Synthesizes tactical intelligence from the arena library.
- */
 export async function getKnowledgeSummary() {
-  const { firestore } = initializeFirebase();
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  const firestore = getFirestore(app);
   const quizzesSnap = await getDocs(collection(firestore, 'quizzes'));
   
   const summary = {
@@ -18,7 +17,7 @@ export async function getKnowledgeSummary() {
 
   const prompt = ai.definePrompt({
     name: 'knowledgeSummary',
-    input: { schema: z.object({ summary: z.any() }) },
+    input: { schema: z.object({ summary: z.object({ totalArenas: z.number(), lastUpdated: z.number() }) }) },
     output: { schema: z.object({
       insight: z.string(),
       topicCoverage: z.array(z.string()),
@@ -28,5 +27,6 @@ export async function getKnowledgeSummary() {
   });
 
   const { output } = await prompt({ summary });
-  return output!;
+  if (!output) throw new Error('Knowledge engine returned empty output');
+  return output;
 }

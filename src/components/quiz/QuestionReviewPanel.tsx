@@ -29,8 +29,15 @@ interface Question {
   timer: number;
 }
 
+interface GeneratedQuestion {
+  text: string;
+  options: string[];
+  correctAnswerIndex: number;
+  explanation: string;
+}
+
 interface QuestionReviewPanelProps {
-  initialQuestions: any[];
+  initialQuestions: GeneratedQuestion[];
   difficulty: string;
   onRegenerate: () => void;
   onEditSettings: () => void;
@@ -98,7 +105,6 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             current_question_index: -1,
             question_count: questions.length,
             created_by: user.id,
-            question_start_at: null
         });
 
         await participantService.joinQuiz(roomCode, user.id);
@@ -123,8 +129,8 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
 
         toast({ title: "Arena Constructed", description: `Mission Code: ${roomCode}` });
         router.push(`/battle/${roomCode}`);
-    } catch (e: any) {
-        toast({ variant: 'destructive', title: "Deployment Error", description: e.message });
+    } catch (e: unknown) {
+        toast({ variant: 'destructive', title: "Deployment Error", description: e instanceof Error ? e.message : "Unknown error" });
     } finally {
         setIsSubmitting(false);
     }
@@ -243,7 +249,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         ))}
       </div>
 
-      <div className="fixed bottom-0 left-0 md:left-64 right-0 p-6 bg-background/80 backdrop-blur-xl border-t border-border/50 z-50 flex flex-col md:flex-row items-center justify-center gap-6">
+      <div className="question-review-fixed-bar fixed bottom-0 left-0 right-0 p-4 md:p-6 bg-background/80 backdrop-blur-xl border-t border-border/50 z-50 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6">
         <div className="flex items-center gap-3 text-sm">
            <div className={cn(
                "w-3 h-3 rounded-full animate-pulse",

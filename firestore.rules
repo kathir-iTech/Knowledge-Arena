@@ -13,7 +13,7 @@ service cloud.firestore {
     }
     
     function isTeacher() {
-      return isSignedIn() && getRole() == 'Teacher';
+      return isSignedIn() && getRole() == 'teacher';
     }
     
     function isOwner(userId) {
@@ -22,7 +22,12 @@ service cloud.firestore {
 
     function isQuizCreator(quizId) {
       let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
-      return isSignedIn() && exists(quizPath) && get(quizPath).data.createdBy == request.auth.uid;
+      return isSignedIn() && exists(quizPath) && get(quizPath).data.created_by == request.auth.uid;
+    }
+
+    function isNotBlocked(quizId, userId) {
+      let partPath = /databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId);
+      return !exists(partPath) || get(partPath).data.status != 'blocked';
     }
 
     // --- Rules ---
@@ -46,7 +51,7 @@ service cloud.firestore {
 
         match /submissions/{userId} {
           allow read: if isQuizCreator(quizId);
-          allow create: if isOwner(userId);
+          allow create: if isOwner(userId) && isNotBlocked(quizId, userId);
           allow delete: if isQuizCreator(quizId);
         }
       }
@@ -61,9 +66,14 @@ service cloud.firestore {
         allow read: if isSignedIn();
         allow create: if isOwner(userId);
         // Teacher can update everyone (block/reset), students can update themselves (violations)
-        allow update: if isQuizCreator(quizId) || isOwner(userId);
+        allow update: if isQuizCreator(quizId) || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['violations_count', 'status']));
         allow delete: if isQuizCreator(quizId);
       }
     }
+  }
+
+  // Collection group queries for student history
+  match /{path=**}/participants/{userId} {
+    allow read: if isSignedIn();
   }
 }

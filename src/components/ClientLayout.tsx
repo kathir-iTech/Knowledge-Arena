@@ -5,6 +5,7 @@ import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePathname, redirect } from 'next/navigation';
 import AppSidebar from '@/components/AppSidebar';
+import { CopilotChat } from '@/components/copilot/CopilotChat';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { Skeleton } from './ui/skeleton';
 import { BrainCircuit } from 'lucide-react';
@@ -48,7 +49,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
        return (
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset>{children}</SidebarInset>
+          <SidebarInset className="safe-bottom">{children}</SidebarInset>
+          <CopilotChat />
         </SidebarProvider>
       );
     }
@@ -79,6 +81,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>{children}</SidebarInset>
+        <CopilotChat />
       </SidebarProvider>
     );
   }
