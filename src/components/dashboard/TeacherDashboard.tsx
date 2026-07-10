@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import { useFirebase } from '@/firebase';
 
 type SortKey = 'newest' | 'oldest' | 'title' | 'status';
-type FilterKey = 'all' | 'active' | 'completed' | 'draft';
+type FilterKey = 'all' | 'active' | 'completed' | 'draft' | 'archived';
 
 function exportQuizCSV(quiz: ValidatedQuiz, participants: ValidatedParticipant[]) {
   const sorted = [...participants].sort((a, b) => b.score - a.score);
@@ -272,7 +272,9 @@ export default function TeacherDashboard() {
   const filteredAndSorted = useMemo(() => {
     let result = [...quizzes];
 
-    if (filterKey === 'active') {
+    if (filterKey === 'archived') {
+      result = result.filter(q => q.archived);
+    } else if (filterKey === 'active') {
       result = result.filter(q => !q.archived && (q.status === 'waiting' || q.status === 'live'));
     } else if (filterKey === 'completed') {
       result = result.filter(q => !q.archived && q.status === 'finished');
@@ -338,7 +340,7 @@ export default function TeacherDashboard() {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {(['all', 'active', 'completed', 'draft'] as FilterKey[]).map(key => (
+        {(['all', 'active', 'completed', 'draft', 'archived'] as FilterKey[]).map(key => (
           <button
             key={key}
             onClick={() => setFilterKey(key)}
@@ -357,7 +359,7 @@ export default function TeacherDashboard() {
         {filteredAndSorted.length === 0 && (
             <div className="md:col-span-2 py-20 text-center border-2 border-dashed border-muted rounded-3xl">
                 <p className="text-muted-foreground text-lg mb-4">
-                  {searchQuery ? 'No arenas match your search.' : filterKey === 'draft' ? 'No draft quizzes.' : filterKey === 'completed' ? 'No completed quizzes.' : filterKey === 'active' ? 'No active quizzes.' : 'No arenas have been constructed yet.'}
+                  {searchQuery ? 'No arenas match your search.' : filterKey === 'archived' ? 'No archived arenas.' : filterKey === 'draft' ? 'No draft quizzes.' : filterKey === 'completed' ? 'No completed quizzes.' : filterKey === 'active' ? 'No active quizzes.' : 'No arenas have been constructed yet.'}
                 </p>
                 {!searchQuery && (
                   <Button asChild variant="outline"><Link href="/create-quiz">Create Your First Quiz</Link></Button>
