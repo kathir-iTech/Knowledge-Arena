@@ -2,7 +2,7 @@
 "use client";
 
 import { useAuth } from '@/hooks/useAuth';
-import { redirect, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BrainCircuit } from 'lucide-react';
 import { LoginForm } from '@/components/auth/LoginForm';
@@ -13,7 +13,7 @@ function PageContent() {
   const searchParams = useSearchParams();
   const roomCode = searchParams.get('roomCode');
   
-  if (isLoading) {
+  if (isLoading || user) {
     return (
       <div className="flex items-center justify-center h-screen bg-background p-4">
         <div className="flex flex-col items-center gap-4">
@@ -23,12 +23,6 @@ function PageContent() {
         </div>
       </div>
     );
-  }
-
-  if (user) {
-    const dest = user.role === 'teacher' ? '/teacher/dashboard' : (roomCode ? `/student/dashboard?roomCode=${roomCode}` : '/student/dashboard');
-    redirect(dest);
-    return null;
   }
 
   return (
