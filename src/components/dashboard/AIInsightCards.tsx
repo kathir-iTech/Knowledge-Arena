@@ -101,7 +101,8 @@ function PredictionCard() {
           </div>
         ) : error ? (
           <div className="text-xs text-destructive space-y-2">
-            <p>Failed to load prediction.</p>
+            <p>Prediction unavailable.</p>
+            <p className="text-[10px] opacity-70 break-words">{error}</p>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={refetch}>Retry</Button>
           </div>
         ) : data ? (
@@ -145,7 +146,8 @@ function KnowledgeCard() {
           </div>
         ) : error ? (
           <div className="text-xs text-destructive space-y-2">
-            <p>Failed to load knowledge.</p>
+            <p>Knowledge unavailable.</p>
+            <p className="text-[10px] opacity-70 break-words">{error}</p>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={refetch}>Retry</Button>
           </div>
         ) : data ? (
@@ -189,7 +191,8 @@ function DecisionSupportCard() {
           </div>
         ) : error ? (
           <div className="text-xs text-destructive space-y-2">
-            <p>Failed to load decision support.</p>
+            <p>Decision support unavailable.</p>
+            <p className="text-[10px] opacity-70 break-words">{error}</p>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={refetch}>Retry</Button>
           </div>
         ) : data ? (
