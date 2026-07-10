@@ -121,7 +121,7 @@ export function LoginForm() {
           <Form {...signupForm}>
             <form onSubmit={signupForm.handleSubmit(onSignupSubmit)}>
               <CardContent className="space-y-4 pt-6">
-                <p className="text-xs text-muted-foreground text-center -mt-2">Use an email ending in <code className="bg-muted px-1 py-0.5 rounded">@staffs.com</code> to create a Teacher account.</p>
+                <p className="text-xs text-muted-foreground text-center -mt-2">Use an email ending in <code className="bg-muted px-1 py-0.5 rounded">{process.env.NEXT_PUBLIC_TEACHER_DOMAIN || '@staffs.com'}</code> to create a Teacher account.</p>
                 <FormField
                   control={signupForm.control}
                   name="name"

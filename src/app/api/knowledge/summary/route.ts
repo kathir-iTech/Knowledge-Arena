@@ -1,11 +1,11 @@
 
 import { NextResponse } from 'next/server';
 import { getKnowledgeSummary } from '@/ai/engines/knowledge-engine';
-import { verifyFirebaseToken } from '@/lib/verify-auth';
+import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 
 export async function GET(req: Request) {
   try {
-    const auth = await verifyFirebaseToken(req);
+    const auth = await verifyFirebaseTokenWithRole(req, 'teacher');
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const data = await getKnowledgeSummary();
     return NextResponse.json(data);

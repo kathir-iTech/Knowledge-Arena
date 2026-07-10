@@ -1,9 +1,9 @@
 
 "use client";
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { usePathname, redirect } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import AppSidebar from '@/components/AppSidebar';
 import { CopilotChat } from '@/components/copilot/CopilotChat';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
@@ -13,9 +13,48 @@ import { BrainCircuit } from 'lucide-react';
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   
   const isPublicPage = pathname === '/';
   const specialPages = ['/kicked', '/cheating-detected'];
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const currentPath = pathname;
+    if (currentPath === '/kicked' || currentPath === '/cheating-detected') return;
+
+    if (!user && currentPath !== '/') {
+      router.replace('/');
+      return;
+    }
+
+    if (!user) return;
+
+    if (!user.role) return;
+
+    if (user.role !== 'teacher' && user.role !== 'student') return;
+
+    if (currentPath.startsWith('/battle')) return;
+
+    if (currentPath === '/') {
+      router.replace(user.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+      return;
+    }
+
+    const isTeacherPage = currentPath.startsWith('/teacher') || currentPath.startsWith('/create-quiz');
+    const isStudentPage = currentPath.startsWith('/student');
+
+    if (user.role === 'teacher' && isStudentPage) {
+      router.replace('/teacher/dashboard');
+      return;
+    }
+
+    if (user.role === 'student' && isTeacherPage) {
+      router.replace('/student/dashboard');
+      return;
+    }
+  }, [user, isLoading, pathname, router]);
 
   if (isLoading) {
     return (
@@ -33,50 +72,21 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  if (!user && !isPublicPage) {
-    redirect('/');
-    return null;
-  }
-  
   if (!user && isPublicPage) {
     return <>{children}</>;
   }
-  
+
+  if (user && pathname.startsWith('/battle')) {
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="safe-bottom">{children}</SidebarInset>
+        <CopilotChat />
+      </SidebarProvider>
+    );
+  }
+
   if (user) {
-    const isBattlePage = pathname.startsWith('/battle');
-    // Allow both teachers and students to access battle pages
-    if (isBattlePage) {
-       return (
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset className="safe-bottom">{children}</SidebarInset>
-          <CopilotChat />
-        </SidebarProvider>
-      );
-    }
-    
-    if (pathname === '/') {
-        if (user.role === 'teacher') {
-         redirect('/teacher/dashboard');
-       } else {
-         redirect('/student/dashboard');
-       }
-       return null;
-     }
-
-     const isTeacherPage = pathname.startsWith('/teacher') || pathname.startsWith('/create-quiz');
-     const isStudentPage = pathname.startsWith('/student');
-
-     if (user.role === 'teacher' && isStudentPage) {
-        redirect('/teacher/dashboard');
-        return null;
-     }
-     
-     if (user.role === 'student' && isTeacherPage) {
-       redirect('/student/dashboard');
-       return null;
-    }
-    
     return (
       <SidebarProvider>
         <AppSidebar />

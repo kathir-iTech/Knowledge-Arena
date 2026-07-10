@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -39,6 +39,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const signupInProgress = useRef(false);
+  const signupUserId = useRef<string | null>(null);
+
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
   }, []);
@@ -49,6 +52,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userRef = doc(firestore, 'users', uid);
         const userDoc = await getDoc(userRef);
         if (userDoc.exists()) {
+            const data = userDoc.data() as Partial<User>;
+            const role = data?.role;
+            if (!role || (role !== 'teacher' && role !== 'student')) {
+                console.error(`Invalid or missing role for uid: ${uid}. Role was: ${role}`);
+                if (auth) signOut(auth);
+                setUser(null);
+                toast({
+                    variant: "destructive",
+                    title: "Account Error",
+                    description: "Your account has an invalid role. Please contact support.",
+                });
+                return;
+            }
             setUser({ id: userDoc.id, ...userDoc.data() } as User);
         } else {
             console.warn(`User document not found for uid: ${uid}. This may happen if creation is pending.`);
@@ -61,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
         setIsLoading(false);
     }
-  }, [firestore, auth]);
+  }, [firestore, auth, toast]);
 
   useEffect(() => {
     if (isUserLoading) {
@@ -69,6 +85,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     if (firebaseUser) {
+      if (signupInProgress.current && signupUserId.current === firebaseUser.uid) {
+        return;
+      }
       fetchUserDocument(firebaseUser.uid);
     } else {
       setUser(null);
@@ -105,14 +124,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Password is required.");
     }
 
-    // NOTE: The role logic is now server-side. A Cloud Function triggered on user creation
-    // should read the email domain and set a custom claim. This client-side `role` is
-    // for immediate UI feedback only. The true authority is the custom claim.
-    const role = credentials.email.endsWith('@staffs.com') ? 'teacher' : 'student';
+    // Teacher role is determined by email domain. Set NEXT_PUBLIC_TEACHER_DOMAIN env var
+    // to configure (default: @staffs.com). The check is case-insensitive.
+    const teacherDomain = (process.env.NEXT_PUBLIC_TEACHER_DOMAIN || '@staffs.com').toLowerCase();
+    const normalizedEmail = credentials.email.toLowerCase();
+    const role = normalizedEmail.endsWith(teacherDomain) ? 'teacher' : 'student';
 
     try {
       setIsLoading(true);
+      signupInProgress.current = true;
       const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, credentials.password);
+      signupUserId.current = userCredential.user.uid;
       
       const newUser: Omit<User, 'id'> = {
         name: credentials.name,
@@ -123,7 +145,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const userRef = doc(firestore, "users", userCredential.user.uid);
       
-      // This document is for UI data. The custom claim is what security rules will use.
       await setDoc(userRef, newUser).catch(error => {
         const permissionError = new FirestorePermissionError({
           path: userRef.path,
@@ -135,8 +156,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       setUser({ ...newUser, id: userCredential.user.uid });
+      signupInProgress.current = false;
+      signupUserId.current = null;
       
     } catch (error: unknown) {
+       signupInProgress.current = false;
+       signupUserId.current = null;
        const authError = error as { code?: string };
        if (authError.code === 'auth/email-already-in-use') {
          toast({ variant: "destructive", title: "Signup Failed", description: "An account with this email already exists." });
