@@ -93,6 +93,10 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
 
   const handleCreateRoom = async () => {
     if (!user || !quizTitle) return;
+    if (user.role !== 'teacher') {
+        toast({ variant: 'destructive', title: "Deployment Error", description: "Only teachers can deploy arenas. Sign up with an email ending in @staffs.com to create a teacher account." });
+        return;
+    }
     setIsSubmitting(true);
     
     try {
