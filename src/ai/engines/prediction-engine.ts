@@ -1,24 +1,23 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { initializeFirebase } from '@/firebase';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { firebaseConfig } from '@/firebase/config';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
-/**
- * Prediction Engine: Analyzes recent gladiator performance to predict battle outcomes.
- */
 export async function getPredictionSummary() {
-  const { firestore } = initializeFirebase();
-  const quizzesSnap = await getDocs(query(collection(firestore, 'quizzes'), orderBy('createdAt', 'desc'), limit(5)));
-  
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  const firestore = getFirestore(app);
+  const quizzesSnap = await getDocs(query(collection(firestore, 'quizzes'), orderBy('created_at', 'desc'), limit(5)));
+
   const stats = quizzesSnap.docs.map(doc => ({
     title: doc.data().title,
-    count: doc.data().questionCount
+    count: doc.data().question_count
   }));
 
   const prompt = ai.definePrompt({
     name: 'predictionSummary',
-    input: { schema: z.object({ stats: z.array(z.any()) }) },
+    input: { schema: z.object({ stats: z.array(z.object({ title: z.string(), count: z.number() })) }) },
     output: { schema: z.object({
       trend: z.string(),
       predictedEngagement: z.number(),
@@ -31,5 +30,6 @@ export async function getPredictionSummary() {
   });
 
   const { output } = await prompt({ stats });
-  return output!;
+  if (!output) throw new Error('Prediction engine returned empty output');
+  return output;
 }

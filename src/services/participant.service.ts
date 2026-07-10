@@ -1,95 +1,109 @@
+'use client';
 
-import { supabase } from '@/lib/supabase';
-import { ParticipantSchema, type ValidatedParticipant } from '@/lib/schemas';
-import { DatabaseError, ValidationError } from '@/lib/errors';
+import { initializeFirebase } from '@/firebase';
+import {
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  collectionGroup,
+  onSnapshot,
+  query,
+  where,
+} from 'firebase/firestore';
+import type { ValidatedParticipant } from '@/lib/schemas';
+
+function getFirestore() {
+  return initializeFirebase().firestore;
+}
+
+function participantPath(quizId: string, userId: string) {
+  return `quizzes/${quizId}/participants/${userId}`;
+}
 
 export const participantService = {
-  /**
-   * Registers a new gladiator in the participant list.
-   */
-  async joinQuiz(quizId: string, userId: string): Promise<void> {
-    const input = {
-      quiz_id: quizId,
-      user_id: userId,
+  async getAllParticipants(quizId: string): Promise<ValidatedParticipant[]> {
+    const db = getFirestore();
+    const snap = await getDocs(collection(db, 'quizzes', quizId, 'participants'));
+    return snap.docs.map(d => ({ user_id: d.id, ...d.data() } as ValidatedParticipant));
+  },
+
+  async joinQuiz(quizId: string, userId: string, name?: string): Promise<void> {
+    if (!quizId || quizId.length !== 6) throw new Error('Invalid quiz code');
+    if (!userId) throw new Error('User ID required');
+    const db = getFirestore();
+    const data: Record<string, unknown> = {
       score: 0,
       status: 'playing',
-      violations_count: 0
+      violations_count: 0,
     };
-    
-    const result = ParticipantSchema.safeParse(input);
-    if (!result.success) throw new ValidationError('Invalid Participant data', result.error.format());
-
-    const { error } = await supabase.from('participants').insert(result.data);
-
-    if (error) throw new DatabaseError(error.message, error);
+    if (name) data.name = name;
+    await setDoc(doc(db, participantPath(quizId, userId)), data);
   },
 
-  /**
-   * Updates a participant's score or status.
-   */
-  async updateParticipant(quizId: string, userId: string, updates: any): Promise<void> {
-    const { error } = await supabase
-      .from('participants')
-      .update(updates)
-      .eq('quiz_id', quizId)
-      .eq('user_id', userId);
-
-    if (error) throw new DatabaseError(error.message, error);
+  async updateParticipant(
+    quizId: string,
+    userId: string,
+    data: { violations_count?: number; status?: 'playing' | 'blocked' | 'finished' }
+  ): Promise<void> {
+    const db = getFirestore();
+    await updateDoc(doc(db, participantPath(quizId, userId)), data);
   },
 
-  /**
-   * Subscribes to the real-time leaderboard/gladiator list for an arena.
-   */
-  subscribeToParticipants(quizId: string, onUpdate: (participants: ValidatedParticipant[]) => void) {
-    this.getAllParticipants(quizId).then(onUpdate);
-
-    return supabase
-      .channel(`participants-sync-${quizId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'participants', filter: `quiz_id=eq.${quizId}` },
-        async () => {
-          const data = await this.getAllParticipants(quizId);
-          onUpdate(data);
-        }
-      )
-      .subscribe();
-  },
-
-  /**
-   * Resets a student's malpractice status.
-   */
   async unblockParticipant(quizId: string, userId: string): Promise<void> {
-    await this.updateParticipant(quizId, userId, { 
-      status: 'playing', 
-      violations_count: 0 
+    const db = getFirestore();
+    await updateDoc(doc(db, participantPath(quizId, userId)), {
+      status: 'playing',
+      violations_count: 0,
     });
   },
 
-  /**
-   * Clears all student participants (used during quiz reset).
-   */
   async clearAllStudents(quizId: string): Promise<void> {
-    const { error } = await supabase
-      .from('participants')
-      .delete()
-      .eq('quiz_id', quizId);
-
-    if (error) throw new DatabaseError(error.message, error);
+    const db = getFirestore();
+    const snap = await getDocs(collection(db, 'quizzes', quizId, 'participants'));
+    const deletes = snap.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(deletes);
   },
 
-  async getAllParticipants(quizId: string): Promise<ValidatedParticipant[]> {
-    const { data, error } = await supabase
-      .from('participants')
-      .select('*')
-      .eq('quiz_id', quizId)
-      .order('score', { ascending: false });
+  subscribeToParticipants(
+    quizId: string,
+    callback: (participants: ValidatedParticipant[]) => void
+  ) {
+    const db = getFirestore();
+    return onSnapshot(collection(db, 'quizzes', quizId, 'participants'), (snap) => {
+      const participants = snap.docs.map(
+        d => ({ user_id: d.id, ...d.data() } as ValidatedParticipant)
+      );
+      callback(participants);
+    });
+  },
 
-    if (error) throw new DatabaseError(error.message, error);
-    
-    return (data || []).map((p: any) => {
-      const result = ParticipantSchema.safeParse(p);
-      return result.success ? result.data : p;
-    }) as ValidatedParticipant[];
-  }
+  async getStudentHistory(userId: string): Promise<Array<{ quizId: string; title: string; score: number; status: string; created_at: number }>> {
+    const db = getFirestore();
+    const q = query(collectionGroup(db, 'participants'), where('__name__', '==', userId));
+    const snap = await getDocs(q);
+    const quizIds = snap.docs.map(d => d.ref.parent.parent?.id).filter(Boolean) as string[];
+    if (!quizIds.length) return [];
+
+    const quizDocs = await Promise.all(quizIds.map(id => getDoc(doc(db, 'quizzes', id))));
+    const results: Array<{ quizId: string; title: string; score: number; status: string; created_at: number }> = [];
+    for (const docSnap of quizDocs) {
+      if (!docSnap.exists()) continue;
+      const data = docSnap.data();
+      const part = snap.docs.find(d => docSnap.id === d.ref.parent.parent?.id);
+      if (!part) continue;
+      results.push({
+        quizId: docSnap.id,
+        title: data.title || 'Untitled',
+        score: part.data().score ?? 0,
+        status: data.status || 'unknown',
+        created_at: data.created_at || data.createdAt || 0,
+      });
+    }
+    results.sort((a, b) => b.created_at - a.created_at);
+    return results;
+  },
 };

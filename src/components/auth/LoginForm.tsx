@@ -50,8 +50,8 @@ export function LoginForm() {
     setError(null);
     try {
       await login(values);
-    } catch (err: any) {
-      setError(err.message || "Failed to login.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to login.");
     } finally {
       setIsLoading(false);
     }
@@ -62,8 +62,8 @@ export function LoginForm() {
     setError(null);
     try {
       await signup(values);
-    } catch (err: any) {
-       setError(err.message || "Failed to sign up.");
+    } catch (err: unknown) {
+       setError(err instanceof Error ? err.message : "Failed to sign up.");
     } finally {
       setIsLoading(false);
     }

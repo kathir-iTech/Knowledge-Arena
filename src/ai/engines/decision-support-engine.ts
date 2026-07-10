@@ -17,5 +17,6 @@ export async function getDecisionSupportSummary() {
   });
 
   const { output } = await prompt({});
-  return output!;
+  if (!output) throw new Error('Decision support engine returned empty output');
+  return output;
 }

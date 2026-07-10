@@ -9,6 +9,9 @@ import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 
 import pdf from 'pdf-parse';
+import { verifyFirebaseToken } from '@/lib/verify-auth';
+
+const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
 
 const QuizQuestionOutputSchema = z.object({
   text: z.string().describe('The question text.'),
@@ -21,6 +24,7 @@ const GenerateQuizFromPDFInputSchema = z.object({
   pdfDataUri: z.string().describe("A PDF as a data URI (base64)."),
   difficulty: z.enum(['easy', 'moderate', 'hard']).describe('Difficulty of the questions.'),
   questionCount: z.number().min(3).max(30).describe('Number of questions to generate.'),
+  idToken: z.string().describe('Firebase ID token for authentication.'),
 });
 export type GenerateQuizFromPDFInput = z.infer<typeof GenerateQuizFromPDFInputSchema>;
 
@@ -37,6 +41,16 @@ const MODEL_FALLBACK_CHAIN = [
   'gemini-flash-latest',
 ];
 
+function isAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes('403') ||
+    msg.includes('PERMISSION_DENIED') ||
+    msg.includes('API key') ||
+    msg.includes('not authorized')
+  );
+}
+
 function isRateLimitError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return (
@@ -44,7 +58,9 @@ function isRateLimitError(err: unknown): boolean {
     msg.includes('RESOURCE_EXHAUSTED') ||
     msg.includes('rate limit') ||
     msg.includes('quota') ||
-    msg.includes('403')
+    msg.includes('500') ||
+    msg.includes('503') ||
+    msg.includes('temporarily')
   );
 }
 
@@ -72,8 +88,8 @@ async function callGeminiWithFallback(promptText: string) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${modelName}: ${msg}`);
 
-      if (isRateLimitError(err)) {
-        continue;
+      if (isAuthError(err)) {
+        throw err;
       }
       continue;
     }
@@ -83,6 +99,14 @@ async function callGeminiWithFallback(promptText: string) {
 }
 
 export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Promise<GenerateQuizFromPDFOutput> {
+  const auth = await verifyFirebaseToken(input.idToken);
+  if (!auth) throw new Error("UNAUTHORIZED");
+
+  // Validate PDF size server-side
+  const rawBase64 = input.pdfDataUri.split(',')[1] || input.pdfDataUri;
+  const decodedBytes = Buffer.from(rawBase64, 'base64').length;
+  if (decodedBytes > MAX_PDF_SIZE_BYTES) throw new Error("PDF_TOO_LARGE");
+
   return generateQuizFromPDFFlow(input);
 }
 

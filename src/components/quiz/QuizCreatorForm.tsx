@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler } from 'lucide-react';
-import type { Quiz, QuizQuestion } from '@/lib/types';
+import type { ValidatedQuiz } from '@/lib/schemas';
 
 const questionSchema = z.object({
   id: z.string(),
@@ -95,7 +95,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
 
     try {
         let quizId = generateRoomCode();
-        let existing: any = null;
+        let existing: ValidatedQuiz | null = null;
         try {
             existing = await quizService.getQuizById(quizId);
         } catch (e) {
@@ -152,8 +152,8 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
 
         toast({ title: 'Arena Created', description: `Room Code: ${quizId}` });
         router.push(`/battle/${quizId}`);
-    } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Creation Failed', description: error.message });
+    } catch (error: unknown) {
+        toast({ variant: 'destructive', title: 'Creation Failed', description: error instanceof Error ? error.message : "Unknown error" });
         setIsSubmitting(false);
     }
   };

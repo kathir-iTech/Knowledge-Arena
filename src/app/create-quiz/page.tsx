@@ -4,27 +4,42 @@ import React, { useState } from 'react';
 import { QuizCreatorForm } from "@/components/quiz/QuizCreatorForm";
 import { PDFQuizGenerator } from "@/components/quiz/PDFQuizGenerator";
 import { QuestionReviewPanel } from "@/components/quiz/QuestionReviewPanel";
+
+interface GeneratedQuestion {
+  text: string;
+  options: string[];
+  correctAnswerIndex: number;
+  explanation: string;
+}
+import type { GenerateQuizFromPDFOutput } from '@/ai/flows/generate-quiz-pdf-flow';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PencilRuler, Sparkles, ChevronLeft } from "lucide-react";
 import { Button } from '@/components/ui/button';
 
 export default function CreateQuizPage() {
   const [activeTab, setActiveTab] = useState('manual');
-  const [generatedQuestions, setGeneratedQuestions] = useState<any[] | null>(null);
+  const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestion[] | null>(null);
   const [difficulty, setDifficulty] = useState('');
+  const [showForgeWithPreserved, setShowForgeWithPreserved] = useState(false);
 
-  const handleQuestionsGenerated = (questions: any[], diff: string) => {
+  const handleQuestionsGenerated = (questions: GeneratedQuestion[], diff: string) => {
     setGeneratedQuestions(questions);
     setDifficulty(diff);
+    setShowForgeWithPreserved(false);
   };
 
   const handleResetForge = () => {
     setGeneratedQuestions(null);
+    setShowForgeWithPreserved(false);
   };
 
-  if (generatedQuestions) {
+  const handleEditSettings = () => {
+    setShowForgeWithPreserved(true);
+  };
+
+  if (generatedQuestions && !showForgeWithPreserved) {
     return (
-      <div className="p-4 md:p-8 max-w-5xl mx-auto min-h-screen">
+      <div className="p-4 md:p-8 max-w-5xl mx-auto min-h-screen safe-bottom">
         <header className="mb-8 flex items-center justify-between">
            <Button variant="ghost" onClick={handleResetForge}>
              <ChevronLeft className="mr-2 h-4 w-4" /> Back to Architect
@@ -35,14 +50,14 @@ export default function CreateQuizPage() {
             initialQuestions={generatedQuestions} 
             difficulty={difficulty}
             onRegenerate={handleResetForge}
-            onEditSettings={handleResetForge}
+            onEditSettings={handleEditSettings}
         />
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto min-h-screen">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto min-h-screen safe-bottom">
       <header className="mb-12">
         <h1 className="text-5xl font-headline tracking-tighter text-primary uppercase">Arena Architect</h1>
         <p className="text-muted-foreground text-lg">Design a new battleground. Construct challenges manually or forge them from data.</p>
