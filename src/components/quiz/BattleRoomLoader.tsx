@@ -31,39 +31,44 @@ export default function BattleRoomLoader() {
   useEffect(() => {
     if (!quizId || !user) return;
 
-    let quizSub: Unsubscribe | undefined;
-    let partSub: Unsubscribe | undefined;
+    let mounted = true;
+
+    const quizSub = quizService.subscribeToQuiz(quizId, (q) => {
+      if (mounted) setQuiz(q);
+    });
+    const partSub = participantService.subscribeToParticipants(quizId, (parts) => {
+      if (!mounted) return;
+      setAllParticipants(parts);
+      const self = parts.find(p => p.user_id === user.id);
+      if (self) setParticipant(self);
+    });
 
     const init = async () => {
       try {
         const q = await quizService.getQuizById(quizId);
+        if (!mounted) return;
         setQuiz(q);
-
-        quizSub = quizService.subscribeToQuiz(quizId, setQuiz);
-        partSub = participantService.subscribeToParticipants(quizId, (parts) => {
-          setAllParticipants(parts);
-          const self = parts.find(p => p.user_id === user.id);
-          if (self) setParticipant(self);
-        });
 
         // Reconnect: if user is not in participants, auto-join
         const initialParts = await participantService.getAllParticipants(quizId);
+        if (!mounted) return;
         const self = initialParts.find(p => p.user_id === user.id);
         if (!self && q.status !== 'finished') {
           await participantService.joinQuiz(quizId, user.id, user.name);
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load quiz');
+        if (mounted) setError(e instanceof Error ? e.message : 'Failed to load quiz');
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     init();
 
     return () => {
-      quizSub?.();
-      partSub?.();
+      mounted = false;
+      quizSub();
+      partSub();
     };
   }, [quizId, user, retryCount]);
 
@@ -121,11 +126,19 @@ export default function BattleRoomLoader() {
   }
 
   if (quiz.status === 'live') {
+    if (!participant) {
+      return (
+        <div className="flex h-screen flex-col items-center justify-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="text-muted-foreground">Joining the arena...</p>
+        </div>
+      );
+    }
     return (
         <LiveQuiz
             quiz={quiz}
-            participant={participant!}
-            isTeacher={quiz.created_by === participant?.user_id}
+            participant={participant}
+            isTeacher={quiz.created_by === participant.user_id}
             allParticipants={allParticipants}
         />
     );

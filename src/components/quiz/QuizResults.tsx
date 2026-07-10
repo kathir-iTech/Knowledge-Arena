@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Crown, Home, Loader2, Trophy, Medal, User, Eye } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { participantService } from '@/services/participant.service';
 import { cn } from '@/lib/utils';
 import type { ValidatedParticipant } from '@/lib/schemas';
@@ -19,13 +20,15 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
   const [isLoading, setIsLoading] = useState(true);
   const [showReview, setShowReview] = useState(false);
 
+  const { toast } = useToast();
+
   useEffect(() => {
     setIsLoading(true);
     participantService.getAllParticipants(quiz.id)
       .then(setParticipants)
-      .catch(() => {})
+      .catch(() => toast({ variant: 'destructive', title: 'Error', description: 'Failed to load results.' }))
       .finally(() => setIsLoading(false));
-  }, [quiz.id]);
+  }, [quiz.id, toast]);
 
   const uid = currentUserId || user?.id || '';
 
