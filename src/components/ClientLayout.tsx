@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePathname, useRouter } from 'next/navigation';
 import AppSidebar from '@/components/AppSidebar';
@@ -14,6 +14,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const redirecting = useRef<string | null>(null);
   
   const isPublicPage = pathname === '/';
   const specialPages = ['/kicked', '/cheating-detected'];
@@ -22,38 +23,51 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
 
     const currentPath = pathname;
-    if (currentPath === '/kicked' || currentPath === '/cheating-detected') return;
-
-    if (!user && currentPath !== '/') {
-      router.replace('/');
+    const skipPages = ['/kicked', '/cheating-detected'];
+    if (skipPages.includes(currentPath)) {
+      redirecting.current = null;
       return;
     }
 
-    if (!user) return;
+    if (!user) {
+      if (currentPath !== '/') {
+        router.replace('/');
+      }
+      redirecting.current = null;
+      return;
+    }
 
-    if (!user.role) return;
+    if (!user.role || (user.role !== 'teacher' && user.role !== 'student')) {
+      redirecting.current = null;
+      return;
+    }
 
-    if (user.role !== 'teacher' && user.role !== 'student') return;
+    if (currentPath.startsWith('/battle')) {
+      redirecting.current = null;
+      return;
+    }
 
-    if (currentPath.startsWith('/battle')) return;
+    let target: string | null = null;
 
     if (currentPath === '/') {
-      router.replace(user.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+      target = user.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
+    } else {
+      const isTeacherPage = currentPath.startsWith('/teacher') || currentPath.startsWith('/create-quiz');
+      const isStudentPage = currentPath.startsWith('/student');
+
+      if (user.role === 'teacher' && isStudentPage) target = '/teacher/dashboard';
+      else if (user.role === 'student' && isTeacherPage) target = '/student/dashboard';
+    }
+
+    if (target) {
+      if (redirecting.current !== target) {
+        redirecting.current = target;
+        router.replace(target);
+      }
       return;
     }
 
-    const isTeacherPage = currentPath.startsWith('/teacher') || currentPath.startsWith('/create-quiz');
-    const isStudentPage = currentPath.startsWith('/student');
-
-    if (user.role === 'teacher' && isStudentPage) {
-      router.replace('/teacher/dashboard');
-      return;
-    }
-
-    if (user.role === 'student' && isTeacherPage) {
-      router.replace('/student/dashboard');
-      return;
-    }
+    redirecting.current = null;
   }, [user, isLoading, pathname, router]);
 
   if (isLoading) {
