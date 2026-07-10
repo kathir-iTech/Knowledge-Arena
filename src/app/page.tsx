@@ -13,7 +13,7 @@ function PageContent() {
   const searchParams = useSearchParams();
   const roomCode = searchParams.get('roomCode');
   
-  if (isLoading || user) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background p-4">
         <div className="flex flex-col items-center gap-4">
@@ -24,6 +24,8 @@ function PageContent() {
       </div>
     );
   }
+
+  if (user) return null;
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
