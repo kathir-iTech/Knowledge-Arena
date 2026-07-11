@@ -2,8 +2,20 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { fetchDocsWithToken } from '@/lib/firebase-admin';
 
-export async function getPredictionSummary(_idToken?: string) {
-  const docs = await fetchDocsWithToken('quizzes', _idToken, {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt === maxRetries) throw e;
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    }
+  }
+  throw new Error('Retry exhausted');
+}
+
+export async function getPredictionSummary(uid: string) {
+  const docs = await fetchDocsWithToken('quizzes', uid, {
     orderBy: 'created_at', direction: 'desc', limit: 5
   });
 
@@ -30,7 +42,7 @@ export async function getPredictionSummary(_idToken?: string) {
     {{/each}}`
   });
 
-  const { output } = await prompt({ stats });
+  const { output } = await withRetry(() => prompt({ stats }));
   if (!output) throw new Error('Prediction engine returned empty output');
   return output;
 }

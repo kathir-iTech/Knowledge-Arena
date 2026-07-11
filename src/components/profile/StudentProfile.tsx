@@ -44,8 +44,8 @@ export default function StudentProfile() {
   return (
     <div className="p-4 md:p-8 max-w-lg mx-auto space-y-6 safe-bottom">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/student/dashboard')}>
-          <ArrowLeft className="h-5 w-5" />
+        <Button variant="ghost" size="icon" onClick={() => router.push('/student/dashboard')} aria-label="Back to dashboard">
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Button>
         <h1 className="text-3xl font-headline text-primary">Gladiator Profile</h1>
       </div>
@@ -84,6 +84,8 @@ export default function StudentProfile() {
                   className={`text-2xl w-10 h-10 flex items-center justify-center rounded-lg border transition-all ${
                     avatar === emoji ? 'border-primary bg-primary/10 scale-110' : 'border-border hover:border-primary/50'
                   }`}
+                  aria-label={`Select avatar ${emoji}`}
+                  aria-pressed={avatar === emoji}
                 >
                   {emoji}
                 </button>

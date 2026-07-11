@@ -75,7 +75,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
       <Card className="w-full max-w-5xl border-primary/20 shadow-2xl bg-card/40 backdrop-blur-lg">
         <CardHeader className="text-center space-y-2 pb-0">
           <div className="flex justify-center mb-4">
-             <Trophy className="w-16 h-16 text-yellow-400 animate-bounce" />
+             <Trophy className="w-16 h-16 text-yellow-400 animate-bounce" aria-hidden="true" />
           </div>
           <CardTitle className="text-5xl md:text-6xl font-headline text-primary uppercase tracking-tighter">Gladiator Victory</CardTitle>
           <CardDescription className="text-lg font-medium text-muted-foreground">The battle for &ldquo;{quiz.title}&rdquo; has been decided.</CardDescription>

@@ -63,7 +63,6 @@ export const quizService = {
       question_count: data.question_count,
       created_by: data.created_by,
       created_at: now,
-      createdAt: now,
     };
     if (data.question_start_at !== undefined && data.question_start_at !== null) {
       quizData.question_start_at = data.question_start_at;
@@ -74,6 +73,15 @@ export const quizService = {
   async updateQuizStatus(id: string, status: 'waiting' | 'live' | 'finished'): Promise<void> {
     const db = getFirestore();
     await updateDoc(doc(db, 'quizzes', id), { status });
+  },
+
+  async startQuiz(id: string): Promise<void> {
+    const db = getFirestore();
+    await updateDoc(doc(db, 'quizzes', id), {
+      status: 'live',
+      current_question_index: 0,
+      question_start_at: Date.now(),
+    });
   },
 
   async advanceToQuestion(id: string, index: number): Promise<void> {
@@ -87,53 +95,79 @@ export const quizService = {
   async deleteQuiz(id: string): Promise<void> {
     const db = getFirestore();
 
+    const errors: Error[] = [];
+
     // Delete all submissions under each question
     const questionsSnap = await getDocs(collection(db, 'quizzes', id, 'questions'));
     const submissionDeletions = questionsSnap.docs.map(qDoc =>
       getDocs(collection(db, 'quizzes', id, 'questions', qDoc.id, 'submissions'))
         .then(subSnap =>
-          Promise.all(subSnap.docs.map(subDoc => deleteDoc(subDoc.ref)))
+          Promise.all(subSnap.docs.map(subDoc => deleteDoc(subDoc.ref).catch(e => { errors.push(e); })))
         )
+        .catch(e => { errors.push(e); })
     );
-    await Promise.all(submissionDeletions);
+    await Promise.allSettled(submissionDeletions);
 
     // Delete all questions
-    await Promise.all(questionsSnap.docs.map(qDoc => deleteDoc(qDoc.ref)));
+    await Promise.allSettled(questionsSnap.docs.map(qDoc =>
+      deleteDoc(qDoc.ref).catch(e => { errors.push(e); })
+    ));
 
     // Delete all participants
     const participantsSnap = await getDocs(collection(db, 'quizzes', id, 'participants'));
-    await Promise.all(participantsSnap.docs.map(pDoc => deleteDoc(pDoc.ref)));
+    await Promise.allSettled(participantsSnap.docs.map(pDoc =>
+      deleteDoc(pDoc.ref).catch(e => { errors.push(e); })
+    ));
 
     // Delete all answerKeys
     const answerKeysSnap = await getDocs(collection(db, 'quizzes', id, 'answerKeys'));
-    await Promise.all(answerKeysSnap.docs.map(aDoc => deleteDoc(aDoc.ref)));
+    await Promise.allSettled(answerKeysSnap.docs.map(aDoc =>
+      deleteDoc(aDoc.ref).catch(e => { errors.push(e); })
+    ));
 
     // Delete the quiz document
-    await deleteDoc(doc(db, 'quizzes', id));
+    await deleteDoc(doc(db, 'quizzes', id)).catch(e => { errors.push(e); });
+
+    if (errors.length > 0) {
+      console.warn(`deleteQuiz: ${errors.length} sub-operation(s) failed for quiz ${id}`, errors);
+    }
   },
 
   async resetQuiz(id: string): Promise<void> {
     const db = getFirestore();
 
-    // Delete all submissions under each question
+    const errors: Error[] = [];
+
+    // Delete all submissions + reset scored flag on each question
     const questionsSnap = await getDocs(collection(db, 'quizzes', id, 'questions'));
-    const submissionDeletions = questionsSnap.docs.map(qDoc =>
+    const questionOps = questionsSnap.docs.map(qDoc =>
       getDocs(collection(db, 'quizzes', id, 'questions', qDoc.id, 'submissions'))
         .then(subSnap =>
-          Promise.all(subSnap.docs.map(subDoc => deleteDoc(subDoc.ref)))
+          Promise.allSettled([
+            ...subSnap.docs.map(subDoc => deleteDoc(subDoc.ref).catch(e => { errors.push(e); })),
+            updateDoc(qDoc.ref, { scored: false }).catch(e => { errors.push(e); }),
+          ])
         )
+        .catch(e => { errors.push(e); })
     );
-    await Promise.all(submissionDeletions);
+    await Promise.allSettled(questionOps);
 
     // Delete all participants (fresh start for new round)
     const participantsSnap = await getDocs(collection(db, 'quizzes', id, 'participants'));
-    await Promise.all(participantsSnap.docs.map(pDoc => deleteDoc(pDoc.ref)));
+    await Promise.allSettled(participantsSnap.docs.map(pDoc =>
+      deleteDoc(pDoc.ref).catch(e => { errors.push(e); })
+    ));
 
     // Reset quiz metadata
     await updateDoc(doc(db, 'quizzes', id), {
       status: 'waiting',
       current_question_index: -1,
+      question_start_at: null,
     });
+
+    if (errors.length > 0) {
+      console.warn(`resetQuiz: ${errors.length} sub-operation(s) failed for quiz ${id}`, errors);
+    }
   },
 
   subscribeToQuiz(id: string, callback: (quiz: ValidatedQuiz) => void) {
@@ -182,7 +216,6 @@ export const quizService = {
       question_count: quizData.question_count || questions.length,
       created_by: creatorId,
       created_at: now,
-      createdAt: now,
     });
 
     // Duplicate questions with new IDs

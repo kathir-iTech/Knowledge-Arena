@@ -19,8 +19,7 @@ export async function GET(req: Request) {
 
     const data = await getDecisionSupportSummary();
     return NextResponse.json(data);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Decision support temporarily unavailable. Please try again.' }, { status: 500 });
   }
 }

@@ -88,19 +88,19 @@ function PredictionCard() {
           <TrendingUp className="w-4 h-4 text-primary" />
           Prediction Engine
         </CardTitle>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refetch} disabled={isLoading}>
-          <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refetch} disabled={isLoading} aria-label="Refresh prediction">
+          <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} aria-hidden="true" />
         </Button>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="space-y-2">
+          <div className="space-y-2" aria-hidden="true">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-3/4" />
             <Skeleton className="h-4 w-5/6" />
           </div>
         ) : error ? (
-          <div className="text-xs text-destructive space-y-2">
+          <div className="text-xs text-destructive space-y-2" role="alert">
             <p>Prediction unavailable.</p>
             <p className="text-[10px] opacity-70 break-words">{error}</p>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={refetch}>Retry</Button>
@@ -133,19 +133,19 @@ function KnowledgeCard() {
           <BookOpen className="w-4 h-4 text-accent" />
           Knowledge Engine
         </CardTitle>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refetch} disabled={isLoading}>
-          <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refetch} disabled={isLoading} aria-label="Refresh knowledge">
+          <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} aria-hidden="true" />
         </Button>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="space-y-2">
+          <div className="space-y-2" aria-hidden="true">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-3/4" />
             <Skeleton className="h-4 w-5/6" />
           </div>
         ) : error ? (
-          <div className="text-xs text-destructive space-y-2">
+          <div className="text-xs text-destructive space-y-2" role="alert">
             <p>Knowledge unavailable.</p>
             <p className="text-[10px] opacity-70 break-words">{error}</p>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={refetch}>Retry</Button>
@@ -178,19 +178,19 @@ function DecisionSupportCard() {
           <ShieldCheck className="w-4 h-4 text-green-500" />
           Decision Support
         </CardTitle>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refetch} disabled={isLoading}>
-          <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refetch} disabled={isLoading} aria-label="Refresh decision support">
+          <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} aria-hidden="true" />
         </Button>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="space-y-2">
+          <div className="space-y-2" aria-hidden="true">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-3/4" />
             <Skeleton className="h-4 w-5/6" />
           </div>
         ) : error ? (
-          <div className="text-xs text-destructive space-y-2">
+          <div className="text-xs text-destructive space-y-2" role="alert">
             <p>Decision support unavailable.</p>
             <p className="text-[10px] opacity-70 break-words">{error}</p>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={refetch}>Retry</Button>

@@ -58,7 +58,7 @@ service cloud.firestore {
       }
 
       match /answerKeys/{questionId} {
-        allow read: if isSignedIn();
+        allow read: if isQuizCreator(quizId) || (isSignedIn() && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'finished');
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
       }
@@ -66,8 +66,19 @@ service cloud.firestore {
       match /participants/{userId} {
         allow read: if isSignedIn();
         allow create: if isOwner(userId);
-        // Teacher can update everyone (block/reset), students can only increment their own violations
-        allow update: if isQuizCreator(quizId) || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['violations_count']) && request.resource.data.violations_count > resource.data.violations_count);
+        // Teacher can update everyone (block/reset), students can only increment violations
+        // or block themselves (violations_count + status=blocked) in a single write
+        allow update: if isQuizCreator(quizId) || (
+          isOwner(userId) &&
+          request.resource.data.violations_count > resource.data.violations_count &&
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['violations_count']) ||
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['violations_count', 'status']) &&
+              request.resource.data.status == 'blocked'
+            )
+          )
+        );
         allow delete: if isQuizCreator(quizId);
       }
     }

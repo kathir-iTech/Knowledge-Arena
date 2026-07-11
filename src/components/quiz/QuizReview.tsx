@@ -95,7 +95,6 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
         const correctIdx = akMap.get(q.id);
         const mySub = subMap.get(q.id);
         const isCorrect = mySub && mySub.selected_option === correctIdx;
-        const timeTaken = mySub && questionStartAt ? Math.round((mySub.submittedAt - questionStartAt) / 1000) : null;
 
         return (
           <Card key={q.id} className={cn(
@@ -110,9 +109,6 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
                     {mySub ? (isCorrect ? 'CORRECT' : 'WRONG') : 'UNANSWERED'}
                   </Badge>
                 </div>
-                {timeTaken !== null && (
-                  <span className="text-xs text-muted-foreground">{timeTaken}s</span>
-                )}
               </div>
               <CardTitle className="text-base font-medium pt-2">{q.text}</CardTitle>
             </CardHeader>
@@ -127,9 +123,9 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
                     isSelected && !isCorrectOpt && "bg-red-500/10 border-red-500/30 text-red-700",
                     !isSelected && !isCorrectOpt && "bg-secondary/20 border-border/50"
                   )}>
-                    {isCorrectOpt ? <CheckCircle2 className="w-4 h-4 shrink-0 text-green-600" /> :
-                     isSelected ? <XCircle className="w-4 h-4 shrink-0 text-red-600" /> :
-                     <HelpCircle className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                    {isCorrectOpt ? <CheckCircle2 className="w-4 h-4 shrink-0 text-green-600" aria-hidden="true" /> :
+                     isSelected ? <XCircle className="w-4 h-4 shrink-0 text-red-600" aria-hidden="true" /> :
+                     <HelpCircle className="w-4 h-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
                     <span className="font-mono text-xs opacity-50 w-5">{String.fromCharCode(65 + optIdx)}</span>
                     <span>{opt}</span>
                   </div>
