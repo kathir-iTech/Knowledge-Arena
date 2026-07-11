@@ -11,13 +11,14 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from '../ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
+import { useFirebase } from '@/firebase';
 import { quizService } from '@/services/quiz.service';
 import { questionService, submissionService } from '@/services/game.service';
 import { participantService } from '@/services/participant.service';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useToast } from '@/hooks/use-toast';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { getFirestore, collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import type { Unsubscribe } from 'firebase/firestore';
 
 interface LiveQuizQuestion {
@@ -129,7 +130,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const [submittedCount, setSubmittedCount] = useState(0);
   const lastViolationRef = useRef(0);
   const prevViolationsRef = useRef<Record<string, number>>({});
+  const advancingRef = useRef(false);
+  const submittingRef = useRef(false);
   const currentQuestionIdRef = useRef<string | null>(null);
+  const { firestore } = useFirebase();
 
   useEffect(() => {
     if (participant.status === 'blocked') return;
@@ -201,26 +205,34 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     return () => clearInterval(interval);
   }, [currentQuestion, quiz.current_question_index, quiz.question_start_at]);
 
+  // Restore student's existing answer on mount or question change
   useEffect(() => {
     setSelectedAnswer(null);
     setHasAnswered(false);
-  }, [quiz.current_question_index]);
+    if (isTeacher || !currentQuestion || !user || !firestore) return;
+    const subDocRef = doc(firestore, 'quizzes', quiz.id, 'questions', currentQuestion.id, 'submissions', user.id);
+    getDoc(subDocRef).then(snap => {
+      if (snap.exists()) {
+        const data = snap.data() as { selected_option: number };
+        setSelectedAnswer(data.selected_option);
+        setHasAnswered(true);
+      }
+    }).catch(() => {});
+  }, [quiz.current_question_index, isTeacher, currentQuestion?.id, user?.id, firestore, quiz.id]);
 
   useEffect(() => {
-    if (!isTeacher) return;
+    if (!isTeacher || !firestore) return;
     const qId = currentQuestion?.id;
     if (!qId || !quiz.id) return;
     currentQuestionIdRef.current = qId;
 
-    let unsub: Unsubscribe | null = null;
-    const db = getFirestore();
-    const subsRef = collection(db, 'quizzes', quiz.id, 'questions', qId, 'submissions');
-    unsub = onSnapshot(subsRef, (snap) => {
+    const subsRef = collection(firestore, 'quizzes', quiz.id, 'questions', qId, 'submissions');
+    const unsub = onSnapshot(subsRef, (snap) => {
       setSubmittedCount(snap.docs.filter(d => d.data()?.selected_option !== undefined).length);
     });
 
-    return () => { if (unsub) { unsub(); } };
-  }, [isTeacher, currentQuestion?.id, quiz.id]);
+    return () => { unsub(); };
+  }, [isTeacher, currentQuestion?.id, quiz.id, firestore]);
 
   const onMalpractice = useCallback(async () => {
     if (isTeacher || !user || participant.status === 'blocked' || quiz.status !== 'live') return;
@@ -255,7 +267,8 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   }, [quiz.status, isTeacher, onMalpractice]);
 
   const handleAnswerSubmit = async (idx: number) => {
-    if (hasAnswered || isTeacher || !currentQuestion || !user || timeLeft === 0 || participant.status === 'blocked') return;
+    if (hasAnswered || submittingRef.current || isTeacher || !currentQuestion || !user || timeLeft === 0 || participant.status === 'blocked') return;
+    submittingRef.current = true;
     setHasAnswered(true);
     setSelectedAnswer(idx);
     try {
@@ -265,20 +278,27 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         user_id: user.id,
         selected_option: idx
       });
-    } catch {
-      setHasAnswered(false);
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to submit answer. Please try again.' });
-    }
+    } catch (e) {
+      // If Firestore rejects (e.g. duplicate submission already exists), don't reset
+      if (e instanceof Error && e.message.includes('permission')) {
+        setSelectedAnswer(idx);
+        setHasAnswered(true);
+      } else {
+        setHasAnswered(false);
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to submit answer. Please try again.' });
+      }
+    } finally { submittingRef.current = false; }
   };
 
   const handleNext = async () => {
-    if (!isTeacher || isAdvancing) return;
+    if (!isTeacher || advancingRef.current) return;
+    advancingRef.current = true;
     setIsAdvancing(true);
     try {
       if (currentQuestion) {
         const startTime = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
-        questionService.evaluateQuestion(quiz.id, currentQuestion.id, startTime)
-          .catch(() => {});
+        await questionService.evaluateQuestion(quiz.id, currentQuestion.id, startTime)
+          .catch(e => console.error('evaluateQuestion failed:', e));
       }
       const nextIdx = (quiz.current_question_index ?? 0) + 1;
       if (nextIdx < (quiz.question_count ?? 0)) {
@@ -289,7 +309,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       }
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to advance. Please try again.' });
-    } finally { setIsAdvancing(false); }
+    } finally { advancingRef.current = false; setIsAdvancing(false); }
   };
 
   if (isLoadingQuestions) return <LoadingScreen message="Loading questions..." />;
@@ -312,11 +332,11 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       {isTeacher && <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} />}
 
       <Card className="w-full max-w-4xl border-primary/20 bg-card/50 backdrop-blur-sm relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-primary/20"><Progress value={(timeLeft / currentQuestion.timer) * 100} className="h-full rounded-none" /></div>
+        <div className="absolute top-0 left-0 w-full h-1 bg-primary/20"><Progress value={(timeLeft / currentQuestion.timer) * 100} className="h-full rounded-none" aria-label={`${timeLeft} seconds remaining`} /></div>
         <CardHeader className="pt-6 md:pt-12 pb-3 md:pb-6 px-3 md:px-6">
             <div className="flex justify-between items-center mb-1 md:mb-4">
                 <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] text-primary/60">Phase {(quiz.current_question_index ?? 0) + 1} / {quiz.question_count ?? 0}</span>
-                <span className={cn("font-mono text-lg md:text-3xl font-bold", timeLeft <= 5 ? "text-destructive animate-pulse" : "text-primary")}>{timeLeft}s</span>
+                <span className={cn("font-mono text-lg md:text-3xl font-bold", timeLeft <= 5 ? "text-destructive animate-pulse" : "text-primary")} aria-live="polite" aria-atomic="true">{timeLeft}s</span>
             </div>
             <CardTitle className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-headline leading-snug md:leading-tight break-words whitespace-normal text-balance">{currentQuestion.text}</CardTitle>
         </CardHeader>
@@ -327,19 +347,19 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                   "h-auto min-h-[3rem] md:min-h-[4.5rem] text-sm md:text-base lg:text-lg font-medium border-2 whitespace-normal break-words touch-target text-left flex items-center gap-2 md:gap-3 px-2 md:px-4 py-2 md:py-3",
                   selectedAnswer === i ? "border-primary shadow-lg shadow-primary/20" : "border-border/50",
                   hasAnswered && selectedAnswer !== i && "opacity-40"
-                )}>
-                <span className="shrink-0 flex items-center justify-center w-5 h-5 md:w-7 md:h-7 rounded-full bg-primary/10 text-[10px] md:text-xs font-mono font-bold text-primary">{String.fromCharCode(65 + i)}</span>
+                )} aria-label={`Option ${String.fromCharCode(65 + i)}: ${opt}`}>
+                <span className="shrink-0 flex items-center justify-center w-5 h-5 md:w-7 md:h-7 rounded-full bg-primary/10 text-[10px] md:text-xs font-mono font-bold text-primary" aria-hidden="true">{String.fromCharCode(65 + i)}</span>
                 <span className="flex-1 leading-snug">{opt}</span>
               </Button>
             ))}
           </div>
           {isTeacher && (
             <div className="flex flex-col items-center pt-4 md:pt-8 gap-2">
-              <Button onClick={handleNext} disabled={isAdvancing} size="lg" className="w-full md:w-auto h-12 md:h-16 px-6 md:px-12 text-base md:text-xl font-headline rounded-full shadow-2xl shadow-primary/30">
-                {isAdvancing ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2" />}
+              <Button onClick={handleNext} disabled={isAdvancing} size="lg" className="w-full md:w-auto h-12 md:h-16 px-6 md:px-12 text-base md:text-xl font-headline rounded-full shadow-2xl shadow-primary/30" aria-busy={isAdvancing}>
+                {isAdvancing ? <Loader2 className="animate-spin mr-2" aria-hidden="true" /> : <ArrowRight className="mr-2" aria-hidden="true" />}
                 {(quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'REVEAL PODIUM' : 'EVALUATE & NEXT'}
               </Button>
-              <p className="text-[10px] md:text-xs text-muted-foreground">
+              <p className="text-[10px] md:text-xs text-muted-foreground" aria-live="polite" aria-atomic="true">
                 {submittedCount} / {studentCount} students answered
               </p>
             </div>

@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser({ id: userDoc.id, ...userDoc.data() } as User);
         } else {
             console.warn(`User document not found for uid: ${uid}. This may happen if creation is pending.`);
-            if (auth) signOut(auth); 
+            if (auth) await signOut(auth); 
             setUser(null);
         }
     } catch (error) {

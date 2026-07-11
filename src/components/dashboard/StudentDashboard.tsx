@@ -67,7 +67,7 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
           <p className="text-muted-foreground">Welcome, {user?.name || 'Gladiator'}.</p>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link href="/student/profile"><UserCircle className="mr-2 h-4 w-4" /> Profile</Link>
+          <Link href="/student/profile"><UserCircle className="mr-2 h-4 w-4" aria-hidden="true" /> Profile</Link>
         </Button>
       </div>
 
@@ -85,6 +85,7 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
                 className="text-center text-3xl h-16 font-mono tracking-widest uppercase"
                 maxLength={6}
                 placeholder="000000"
+                aria-label="Room code"
               />
               <Button type="submit" className="w-full h-12 text-lg" disabled={isLoading || roomCode.length < 6}>
                 {isLoading ? <Loader2 className="animate-spin" /> : <Swords className="mr-2" />}
@@ -127,8 +128,8 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">pts</p>
                     </div>
                     {h.status === 'finished' && (
-                      <Button variant="ghost" size="icon" asChild>
-                        <Link href={`/battle/${h.quizId}`}><ExternalLink className="w-4 h-4" /></Link>
+                      <Button variant="ghost" size="icon" asChild aria-label="View results for {h.title}">
+                        <Link href={`/battle/${h.quizId}`}><ExternalLink className="w-4 h-4" aria-hidden="true" /></Link>
                       </Button>
                     )}
                   </div>

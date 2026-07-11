@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import QRCode from 'react-qr-code';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,31 +36,50 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     }
   }, [quiz.id]);
 
-  useEffect(() => {
-    let unsub: (() => void) | undefined;
-    let reconnectTimer: ReturnType<typeof setTimeout>;
+  const unsubRef = useRef<(() => void) | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
-    const setup = () => {
-      unsub = participantService.subscribeToParticipants(quiz.id, (parts) => {
+  useEffect(() => {
+    mountedRef.current = true;
+
+    const subscribe = () => {
+      if (unsubRef.current) unsubRef.current();
+      unsubRef.current = participantService.subscribeToParticipants(quiz.id, (parts) => {
+        if (!mountedRef.current) return;
         setParticipants(parts);
         setIsLoading(false);
-        setTeacherOnline(parts.some(p => p.user_id === quiz.created_by));
+        if (parts.some(p => p.user_id === quiz.created_by)) {
+          setTeacherOnline(true);
+        }
         setIsReconnecting(false);
       });
     };
 
+    subscribe();
+
     const handleOffline = () => {
+      if (!mountedRef.current) return;
       setIsReconnecting(true);
-      reconnectTimer = setTimeout(setup, 3000);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) subscribe();
+      }, 3000);
     };
 
     window.addEventListener('offline', handleOffline);
-    setup();
+
+    // Quiz subscription for teacher presence (teacher may not appear in participants)
+    const unsubQuiz = quizService.subscribeToQuiz(quiz.id, (q) => {
+      if (mountedRef.current) setTeacherOnline(q.status === 'waiting' || q.status === 'live');
+    });
 
     return () => {
-      unsub?.();
-      clearTimeout(reconnectTimer);
+      mountedRef.current = false;
+      if (unsubRef.current) { unsubRef.current(); unsubRef.current = null; }
+      if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
       window.removeEventListener('offline', handleOffline);
+      unsubQuiz();
     };
   }, [quiz.id, quiz.created_by]);
 
@@ -77,8 +96,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const handleStartQuiz = async () => {
     if (!isTeacher) return;
     try {
-        await quizService.updateQuizStatus(quiz.id, 'live');
-        await quizService.advanceToQuestion(quiz.id, 0);
+        await quizService.startQuiz(quiz.id);
     } catch {
         toast({ variant: 'destructive', title: 'Error', description: 'Failed to start quiz.' });
     }
@@ -95,23 +113,23 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       </header>
 
       {isReconnecting && (
-        <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 px-4 py-2 rounded-full text-sm">
-          <Loader2 className="animate-spin h-4 w-4" />
+        <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 px-4 py-2 rounded-full text-sm" role="alert" aria-live="assertive">
+          <Loader2 className="animate-spin h-4 w-4" aria-hidden="true" />
           <span>Connection lost. Reconnecting...</span>
         </div>
       )}
 
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 text-sm">
-          <Users className="w-4 h-4 text-muted-foreground" />
+          <Users className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
           <span className="font-bold">{studentCount}</span>
           <span className="text-muted-foreground">connected</span>
         </div>
         <div className="flex items-center gap-2 text-sm">
           {teacherOnline ? (
-            <><Wifi className="w-4 h-4 text-green-500" /><span className="text-green-500">Teacher Online</span></>
+            <><Wifi className="w-4 h-4 text-green-500" aria-hidden="true" /><span className="text-green-500">Teacher Online</span></>
           ) : (
-            <><WifiOff className="w-4 h-4 text-muted-foreground" /><span className="text-muted-foreground">Waiting for Teacher</span></>
+            <><WifiOff className="w-4 h-4 text-muted-foreground" aria-hidden="true" /><span className="text-muted-foreground">Waiting for Teacher</span></>
           )}
         </div>
       </div>
@@ -156,13 +174,13 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
           <CardContent className="flex flex-col items-center gap-4">
             <div className="text-5xl font-mono font-bold tracking-widest text-primary bg-background/50 p-4 rounded-lg flex items-center gap-2">
               <span>{quiz.id}</span>
-              <Button variant="ghost" size="icon" onClick={() => copyToClipboard(quiz.id)}>
-                <Copy className="w-6 h-6" />
+              <Button variant="ghost" size="icon" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
+                <Copy className="w-6 h-6" aria-hidden="true" />
               </Button>
             </div>
             {shareableLink && (
               <div className="bg-white p-4 rounded-lg">
-                <QRCode value={shareableLink} size={Math.min(128, typeof window !== 'undefined' ? window.innerWidth * 0.3 : 128)} />
+                <QRCode value={shareableLink} size={Math.min(128, typeof window !== 'undefined' ? window.innerWidth * 0.3 : 128)} aria-label={`QR code to join quiz ${quiz.id}`} />
               </div>
             )}
             {!teacherOnline && !isTeacher && (

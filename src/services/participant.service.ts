@@ -115,7 +115,7 @@ export const participantService = {
         title: data.title || 'Untitled',
         score: part.data().score ?? 0,
         status: data.status || 'unknown',
-        created_at: data.created_at || data.createdAt || 0,
+        created_at: data.created_at || 0,
       });
     }
     results.sort((a, b) => b.created_at - a.created_at);

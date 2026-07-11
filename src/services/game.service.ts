@@ -134,7 +134,8 @@ export const questionService = {
     );
 
     // Score each submission atomically — no read-before-write race
-    const scoringPromises = submissionsSnap.docs.map(async (subDoc) => {
+    const updates: Array<{ ref: ReturnType<typeof doc>; score: number }> = [];
+    for (const subDoc of submissionsSnap.docs) {
       const subData = subDoc.data();
       const isCorrect = subData.selected_option === correctIndex;
 
@@ -146,18 +147,19 @@ export const questionService = {
       }
 
       if (scoreToAdd > 0) {
-        const participantRef = doc(
-          db,
-          'quizzes',
-          quizId,
-          'participants',
-          subDoc.id
-        );
-        await updateDoc(participantRef, { score: increment(scoreToAdd) });
+        updates.push({
+          ref: doc(db, 'quizzes', quizId, 'participants', subDoc.id),
+          score: scoreToAdd,
+        });
       }
-    });
+    }
 
-    await Promise.all(scoringPromises);
+    // Batch writes to avoid bursting Firestore write limits
+    const CHUNK_SIZE = 100;
+    for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
+      const chunk = updates.slice(i, i + CHUNK_SIZE);
+      await Promise.all(chunk.map(u => updateDoc(u.ref, { score: increment(u.score) })));
+    }
   },
 
   async getAnswerKeys(quizId: string): Promise<Array<{ questionId: string; correct_option_index: number }>> {
@@ -177,36 +179,51 @@ export const questionService = {
     if (!quizSnap.exists()) throw new Error('Quiz not found');
     if (quizSnap.data().status !== 'waiting') throw new Error('Can only edit a waiting quiz');
 
-    const oldAkSnap = await getDocs(collection(db, 'quizzes', quizId, 'answerKeys'));
-    await Promise.all(oldAkSnap.docs.map(d => deleteDoc(d.ref)));
+    // Track created docs for potential rollback
+    const createdQuestions: string[] = [];
+    const createdKeys: string[] = [];
 
-    const oldQSnap = await getDocs(collection(db, 'quizzes', quizId, 'questions'));
-    await Promise.all(oldQSnap.docs.map(async (qDoc) => {
-      const subSnap = await getDocs(collection(db, 'quizzes', quizId, 'questions', qDoc.id, 'submissions'));
-      await Promise.all(subSnap.docs.map(s => deleteDoc(s.ref)));
-      await deleteDoc(qDoc.ref);
-    }));
+    try {
+      const oldAkSnap = await getDocs(collection(db, 'quizzes', quizId, 'answerKeys'));
+      await Promise.all(oldAkSnap.docs.map(d => deleteDoc(d.ref)));
 
-    await updateDoc(doc(db, 'quizzes', quizId), { question_count: questions.length });
+      const oldQSnap = await getDocs(collection(db, 'quizzes', quizId, 'questions'));
+      await Promise.all(oldQSnap.docs.map(async (qDoc) => {
+        const subSnap = await getDocs(collection(db, 'quizzes', quizId, 'questions', qDoc.id, 'submissions'));
+        await Promise.all(subSnap.docs.map(s => deleteDoc(s.ref)));
+        await deleteDoc(qDoc.ref);
+      }));
 
-    const newIds: string[] = [];
-    for (const q of questions) {
-      const questionId = uuidv4();
-      await setDoc(doc(db, 'quizzes', quizId, 'questions', questionId), {
-        text: q.text,
-        options: q.options,
-        timer: q.timer,
-        sort_index: q.sort_index,
-      });
-      newIds.push(questionId);
+      const newIds: string[] = [];
+      for (const q of questions) {
+        const questionId = uuidv4();
+        await setDoc(doc(db, 'quizzes', quizId, 'questions', questionId), {
+          text: q.text,
+          options: q.options,
+          timer: q.timer,
+          sort_index: q.sort_index,
+        });
+        newIds.push(questionId);
+        createdQuestions.push(questionId);
+      }
+
+      const creates = answerKeys.map((ak, i) =>
+        setDoc(doc(db, 'quizzes', quizId, 'answerKeys', newIds[i]), {
+          correct_option_index: ak.correct_option_index,
+        }).then(() => newIds[i])
+      );
+      const keyIds = await Promise.all(creates);
+      createdKeys.push(...keyIds);
+
+      await updateDoc(doc(db, 'quizzes', quizId), { question_count: questions.length });
+    } catch (e) {
+      // Rollback: delete any created questions and answer keys
+      await Promise.all([
+        ...createdKeys.map(id => deleteDoc(doc(db, 'quizzes', quizId, 'answerKeys', id))),
+        ...createdQuestions.map(id => deleteDoc(doc(db, 'quizzes', quizId, 'questions', id))),
+      ]);
+      throw e;
     }
-
-    const creates = answerKeys.map((ak, i) =>
-      setDoc(doc(db, 'quizzes', quizId, 'answerKeys', newIds[i]), {
-        correct_option_index: ak.correct_option_index,
-      })
-    );
-    await Promise.all(creates);
   },
 };
 

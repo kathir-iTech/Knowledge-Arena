@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const AIInsightCards = dynamic(() => import('@/components/dashboard/AIInsightCards').then(m => m.AIInsightCards), { ssr: false });
+
 import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle, Pencil, Copy, Archive, ArchiveRestore, Download, FileText, Search as SearchIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -24,6 +25,10 @@ import { useFirebase } from '@/firebase';
 type SortKey = 'newest' | 'oldest' | 'title' | 'status';
 type FilterKey = 'all' | 'active' | 'completed' | 'draft' | 'archived';
 
+function escCsv(v: string): string {
+  return `"${v.replace(/"/g, '""')}"`;
+}
+
 function exportQuizCSV(quiz: ValidatedQuiz, participants: ValidatedParticipant[]) {
   const students = participants.filter(p => p.user_id !== quiz.created_by);
   const sorted = [...students].sort((a, b) => b.score - a.score);
@@ -31,7 +36,7 @@ function exportQuizCSV(quiz: ValidatedQuiz, participants: ValidatedParticipant[]
   sorted.forEach((p, i) => {
     rows.push([String(i + 1), p.user_id, p.name || p.user_id.slice(0, 8), String(p.score), p.status]);
   });
-  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const csv = rows.map(r => r.map(c => escCsv(c)).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -78,7 +83,6 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
         setIsProcessing(true);
         try {
             await quizService.resetQuiz(quiz.id);
-            await participantService.clearAllStudents(quiz.id);
             toast({ title: 'Quiz Reset', description: 'Room returned to waiting state.' });
         } catch (e) {
             toast({ variant: 'destructive', title: 'Error', description: 'Could not reset quiz.' });
@@ -117,11 +121,12 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
       exportQuizCSV(quiz, participants);
     };
 
+    const escHtml = (v: string | number): string => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const handleExportPDF = () => {
       const students = participants.filter(p => p.user_id !== quiz.created_by);
       const sorted = [...students].sort((a, b) => b.score - a.score);
-      const rows = sorted.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name || p.user_id.slice(0, 8)}</td><td>${p.score}</td><td>${p.status}</td></tr>`).join('');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quiz Results - ${quiz.title}</title><style>body{font-family:system-ui,sans-serif;padding:40px;max-width:800px;margin:auto}h1{font-size:24px;margin-bottom:4px}.sub{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}.rank{font-weight:bold;font-size:18px;color:#333}</style></head><body><h1>${quiz.title}</h1><p class="sub">Room: ${quiz.id} &mdash; ${sorted.length} gladiator(s)</p><table><thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+      const rows = sorted.map((p, i) => `<tr><td>${i + 1}</td><td>${escHtml(p.name || p.user_id.slice(0, 8))}</td><td>${p.score}</td><td>${escHtml(p.status)}</td></tr>`).join('');
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quiz Results - ${escHtml(quiz.title)}</title><style>body{font-family:system-ui,sans-serif;padding:40px;max-width:800px;margin:auto}h1{font-size:24px;margin-bottom:4px}.sub{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}.rank{font-weight:bold;font-size:18px;color:#333}</style></head><body><h1>${escHtml(quiz.title)}</h1><p class="sub">Room: ${escHtml(quiz.id)} &mdash; ${sorted.length} gladiator(s)</p><table><thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
       const win = window.open('', '_blank');
       if (win) {
         win.document.write(html);
@@ -165,7 +170,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                     )}
 
                     {!quiz.archived && quiz.status === 'waiting' && (
-                      <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" asChild>
+                      <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" asChild aria-label="Edit quiz">
                         <Link href={`/teacher/edit-quiz/${quiz.id}`}>
                           <Pencil className="w-4 h-4" />
                         </Link>
@@ -173,17 +178,17 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                     )}
 
                     {!quiz.archived && (
-                      <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleDuplicate} disabled={isProcessing}>
+                      <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleDuplicate} disabled={isProcessing} aria-label="Duplicate quiz">
                         <Copy className="w-4 h-4" />
                       </Button>
                     )}
 
                     {quiz.status === 'finished' && !quiz.archived && (
                       <>
-                        <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleExportCSV}>
+                        <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleExportCSV} aria-label="Export results as CSV">
                           <Download className="w-4 h-4" />
                         </Button>
-                        <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleExportPDF}>
+                        <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleExportPDF} aria-label="Export results as PDF">
                           <FileText className="w-4 h-4" />
                         </Button>
                       </>
@@ -192,7 +197,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                     {quiz.status === 'finished' && !quiz.archived && (
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" disabled={isProcessing}>
+                                <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" disabled={isProcessing} aria-label="Reset quiz">
                                     <RefreshCw className="w-4 h-4" />
                                 </Button>
                             </AlertDialogTrigger>
@@ -211,14 +216,14 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                         </AlertDialog>
                     )}
 
-                    <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleArchiveToggle} disabled={isProcessing}>
-                      {quiz.archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                    <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleArchiveToggle} disabled={isProcessing} aria-label={quiz.archived ? 'Restore quiz' : 'Archive quiz'}>
+                      {quiz.archived ? <ArchiveRestore className="w-4 h-4" aria-hidden="true" /> : <Archive className="w-4 h-4" aria-hidden="true" />}
                     </Button>
 
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" disabled={isProcessing}>
-                                <Trash2 className="w-4 h-4" />
+                            <Button variant="destructive" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" disabled={isProcessing} aria-label="Delete quiz">
+                                <Trash2 className="w-4 h-4" aria-hidden="true" />
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -328,12 +333,14 @@ export default function TeacherDashboard() {
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search arenas by name or room code..."
             className="pl-9 h-12 md:h-10 text-sm md:text-base"
+            aria-label="Search arenas"
           />
         </div>
         <select
           value={sortKey}
           onChange={e => setSortKey(e.target.value as SortKey)}
           className="h-12 md:h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Sort quizzes"
         >
           <option value="newest">Newest First</option>
           <option value="oldest">Oldest First</option>
@@ -357,6 +364,7 @@ export default function TeacherDashboard() {
               "touch-target px-4 md:px-5 py-2 rounded-full text-xs md:text-sm font-semibold transition-all uppercase tracking-wider",
               filterKey === key ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30" : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/30"
             )}
+            aria-pressed={filterKey === key}
           >
             {label}
           </button>
@@ -423,11 +431,11 @@ function StudentActivity({ quizzes, teacherId }: { quizzes: ValidatedQuiz[]; tea
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/30 border-b border-border/40">
-              <th className="text-left p-3 font-semibold text-muted-foreground">Name</th>
-              <th className="text-left p-3 font-semibold text-muted-foreground">User ID</th>
-              <th className="text-center p-3 font-semibold text-muted-foreground">Battles</th>
-              <th className="text-right p-3 font-semibold text-muted-foreground">Total Score</th>
-              <th className="text-right p-3 font-semibold text-muted-foreground">Avg Score</th>
+              <th scope="col" className="text-left p-3 font-semibold text-muted-foreground">Name</th>
+              <th scope="col" className="text-left p-3 font-semibold text-muted-foreground">User ID</th>
+              <th scope="col" className="text-center p-3 font-semibold text-muted-foreground">Battles</th>
+              <th scope="col" className="text-right p-3 font-semibold text-muted-foreground">Total Score</th>
+              <th scope="col" className="text-right p-3 font-semibold text-muted-foreground">Avg Score</th>
             </tr>
           </thead>
           <tbody>

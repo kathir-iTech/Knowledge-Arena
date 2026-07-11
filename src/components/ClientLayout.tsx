@@ -75,19 +75,21 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return <LoadingScreen message="Authenticating..." />;
   }
 
+  const skipNav = <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-background focus:text-foreground focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary" tabIndex={1}>Skip to main content</a>;
+
   if (specialPages.includes(pathname)) {
-    return <>{children}</>;
+    return <>{skipNav}<main id="main-content">{children}</main></>;
   }
 
   if (!user && isPublicPage) {
-    return <>{children}</>;
+    return <>{skipNav}<main id="main-content">{children}</main></>;
   }
 
   if (user && pathname.startsWith('/battle')) {
     return (
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset className="safe-bottom">{children}</SidebarInset>
+        <SidebarInset className="safe-bottom"><main id="main-content">{children}</main></SidebarInset>
         <CopilotChat />
       </SidebarProvider>
     );
@@ -97,11 +99,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return (
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset>{children}</SidebarInset>
+        <SidebarInset><main id="main-content">{children}</main></SidebarInset>
         <CopilotChat />
       </SidebarProvider>
     );
   }
 
-  return <>{children}</>;
+  return <>{skipNav}<main id="main-content">{children}</main></>;
 }

@@ -90,8 +90,8 @@ export default function BattleRoomLoader() {
 
   if (error || !quiz) {
     return (
-      <div className="loading-screen flex-col gap-6 text-center">
-        <ShieldX className="w-16 h-16 text-destructive crystal-float" />
+      <div className="loading-screen flex-col gap-6 text-center" role="alert">
+        <ShieldX className="w-16 h-16 text-destructive crystal-float" aria-hidden="true" />
         <h1 className="text-3xl font-headline text-destructive">Room Not Found</h1>
         <p className="text-muted-foreground max-w-md">{error || 'This quiz room does not exist or has been closed.'}</p>
         <div className="flex gap-4">

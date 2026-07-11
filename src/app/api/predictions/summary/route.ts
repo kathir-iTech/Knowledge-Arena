@@ -17,12 +17,9 @@ export async function GET(req: Request) {
       );
     }
 
-    const authHeader = req.headers.get('Authorization');
-    const idToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    const data = await getPredictionSummary(idToken);
+    const data = await getPredictionSummary(auth.uid);
     return NextResponse.json(data);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Prediction engine temporarily unavailable. Please try again.' }, { status: 500 });
   }
 }

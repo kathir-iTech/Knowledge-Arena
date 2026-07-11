@@ -21,8 +21,7 @@ export async function POST(req: Request) {
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 });
     const response = await handleCopilotChat(message);
     return NextResponse.json({ response });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Tactical Assistant temporarily unavailable. Please try again.' }, { status: 500 });
   }
 }

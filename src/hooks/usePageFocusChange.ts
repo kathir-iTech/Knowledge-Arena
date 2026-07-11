@@ -1,31 +1,31 @@
 "use client";
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
  * A hook that triggers a callback when the page loses visibility or window focus.
- * Uses both 'visibilitychange' (tab switches, app switches, screen lock) and
- * 'blur' (window losing focus - catches some overlay gestures on mobile, though
- * not all system-level overlays like Circle to Search are guaranteed to trigger this).
- * @param onFocusLoss The callback function to execute when focus is lost.
- * @param enabled Whether the hook is active.
+ * Uses refs internally so listeners are registered once and always call the latest
+ * callback — no stale closures, no listener re-attachment on callback change.
  */
 export const usePageFocusChange = (onFocusLoss: () => void, enabled: boolean = true) => {
+  const callbackRef = useRef(onFocusLoss);
+  const enabledRef = useRef(enabled);
 
-  const handleVisibilityChange = useCallback(() => {
-    if (document.hidden && enabled) {
-      onFocusLoss();
-    }
-  }, [onFocusLoss, enabled]);
-
-  const handleBlur = useCallback(() => {
-    if (enabled) {
-      onFocusLoss();
-    }
-  }, [onFocusLoss, enabled]);
+  callbackRef.current = onFocusLoss;
+  enabledRef.current = enabled;
 
   useEffect(() => {
-    if (!enabled) return;
+    const handleVisibilityChange = () => {
+      if (document.hidden && enabledRef.current) {
+        callbackRef.current();
+      }
+    };
+
+    const handleBlur = () => {
+      if (enabledRef.current) {
+        callbackRef.current();
+      }
+    };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
@@ -34,5 +34,5 @@ export const usePageFocusChange = (onFocusLoss: () => void, enabled: boolean = t
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [handleVisibilityChange, handleBlur, enabled]);
+  }, []);
 };

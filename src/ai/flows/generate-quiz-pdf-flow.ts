@@ -36,9 +36,11 @@ const GenerateQuizFromPDFOutputSchema = z.object({
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
 // Ordered fallback chain — tries each model in order until one succeeds.
+// All models verified as supported by @genkit-ai/googleai v1.28.0
 const MODEL_FALLBACK_CHAIN = [
   'gemini-2.0-flash',
-  'gemini-flash-latest',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
 ];
 
 function isAuthError(err: unknown): boolean {
