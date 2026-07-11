@@ -117,8 +117,10 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         msg = "The Intelligence Forge is temporarily overloaded or the key is invalid. Please verify your Anthropic credits.";
       } else if (msg.includes("UNAUTHORIZED")) {
         msg = "Your session has expired. Please log out and log back in.";
-      } else if (msg.includes("PDF_TOO_LARGE")) {
+      } else       if (msg.includes("PDF_TOO_LARGE")) {
         msg = "The uploaded PDF exceeds the maximum size limit on the server.";
+      } else if (msg.includes("PDF_FORGE_RATE_LIMITED")) {
+        msg = "PDF Forge rate limit reached (5 per minute). Please wait before forging again.";
       }
       
       setError(msg);
