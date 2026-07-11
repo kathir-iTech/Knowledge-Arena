@@ -10,6 +10,7 @@ import { googleAI } from '@genkit-ai/googleai';
 
 import pdf from 'pdf-parse';
 import { verifyFirebaseToken } from '@/lib/verify-auth';
+import { rateLimiter, Limits, buildRateLimitHeaders } from '@/lib/rate-limiter';
 
 const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
 
@@ -103,6 +104,12 @@ async function callGeminiWithFallback(promptText: string) {
 export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Promise<GenerateQuizFromPDFOutput> {
   const auth = await verifyFirebaseToken(input.idToken);
   if (!auth) throw new Error("UNAUTHORIZED");
+
+  // Rate limit: 5 PDF forges per minute per user
+  const rl = rateLimiter.check(`ai:pdf:${auth.uid}`, { maxRequests: 5, windowMs: 60000, message: 'PDF Forge rate limit exceeded (5/min).' });
+  if (!rl.allowed) {
+    throw new Error("PDF_FORGE_RATE_LIMITED");
+  }
 
   // Validate PDF size server-side
   const rawBase64 = input.pdfDataUri.split(',')[1] || input.pdfDataUri;

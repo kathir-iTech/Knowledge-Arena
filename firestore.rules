@@ -46,8 +46,7 @@ service cloud.firestore {
 
       match /questions/{questionId} {
         allow read: if isSignedIn();
-        // Allow creation if the user is a teacher (needed for initial batch)
-        allow create: if isTeacher();
+        allow create: if isQuizCreator(quizId);
         allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
@@ -59,7 +58,7 @@ service cloud.firestore {
 
       match /answerKeys/{questionId} {
         allow read: if isQuizCreator(quizId) || (isSignedIn() && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'finished');
-        allow create: if isTeacher();
+        allow create: if isQuizCreator(quizId);
         allow update, delete: if isQuizCreator(quizId);
       }
 
