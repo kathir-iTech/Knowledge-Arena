@@ -19,8 +19,8 @@ export default function KickedPage() {
   const timeStr = blockedAt ? new Date(parseInt(blockedAt)).toLocaleTimeString() : null;
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background text-center">
-      <ShieldAlert className="w-24 h-24 text-destructive mb-6" />
+    <main className="loading-screen flex-col text-center">
+      <ShieldAlert className="w-24 h-24 text-destructive mb-6 crystal-float" />
       <h1 className="text-4xl font-headline text-destructive mb-2">You Have Been Blocked</h1>
       <p className="text-xl text-muted-foreground mb-2 max-w-md">
         Malpractice was detected. Fair play is required in the arena.

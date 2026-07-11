@@ -1,19 +1,20 @@
-
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { firebaseConfig } from '@/firebase/config';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { fetchDocsWithToken } from '@/lib/firebase-admin';
 
-export async function getPredictionSummary() {
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  const firestore = getFirestore(app);
-  const quizzesSnap = await getDocs(query(collection(firestore, 'quizzes'), orderBy('created_at', 'desc'), limit(5)));
+export async function getPredictionSummary(_idToken?: string) {
+  const docs = await fetchDocsWithToken('quizzes', _idToken, {
+    orderBy: 'created_at', direction: 'desc', limit: 5
+  });
 
-  const stats = quizzesSnap.docs.map(doc => ({
-    title: doc.data().title,
-    count: doc.data().question_count
+  const stats = docs.map(d => ({
+    title: String(d.title || ''),
+    count: Number(d.question_count || 0)
   }));
+
+  if (!stats.length) {
+    return { trend: 'Insufficient data', predictedEngagement: 0, recommendation: 'Create more quizzes to enable predictions.' };
+  }
 
   const prompt = ai.definePrompt({
     name: 'predictionSummary',

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { cn, generateRoomCode } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { questionService } from '@/services/game.service';
+import { validateQuiz, type QuizValidationIssue, groupIssuesByQuestion } from '@/lib/quiz-validator';
 
 interface Question {
   id: string;
@@ -41,9 +42,10 @@ interface QuestionReviewPanelProps {
   difficulty: string;
   onRegenerate: () => void;
   onEditSettings: () => void;
+  onRegenerateQuestion?: (index: number) => void;
 }
 
-export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate, onEditSettings }: QuestionReviewPanelProps) {
+export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate, onEditSettings, onRegenerateQuestion }: QuestionReviewPanelProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -58,6 +60,18 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
       timer: 30
     }))
   );
+
+  const [validationIssues, setValidationIssues] = useState<QuizValidationIssue[]>([]);
+
+  useEffect(() => {
+    const mapped = questions.map(q => ({
+      text: q.text,
+      options: q.options,
+      correctAnswerIndex: q.correctAnswerIndex,
+      explanation: q.explanation,
+    }));
+    setValidationIssues(validateQuiz(mapped));
+  }, [questions]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Question | null>(null);
@@ -141,8 +155,22 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   };
 
   return (
-    <div className="space-y-6 pb-32">
-      <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-secondary/20 border border-primary/20 rounded-2xl gap-4 sticky top-0 z-40 backdrop-blur-md">
+      <div className="space-y-6 pb-32">
+        {(() => {
+          const globalIssues = validationIssues.filter(i => i.questionIndex === -1);
+          if (!globalIssues.length) return null;
+          return (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                {globalIssues.map((issue, ii) => (
+                  <p key={ii} className="text-sm text-yellow-700">{issue.message}</p>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+        <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-secondary/20 border border-primary/20 rounded-2xl gap-4 sticky top-0 z-40 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="bg-primary/20 p-2 rounded-lg">
             <Sparkles className="w-5 h-5 text-primary" />
@@ -218,6 +246,9 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                   </div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => startEditing(q)}><Edit3 className="w-4 h-4" /></Button>
+                    {onRegenerateQuestion && (
+                      <Button variant="ghost" size="icon" onClick={() => onRegenerateQuestion(index)} className="text-primary hover:text-primary"><RefreshCw className="w-4 h-4" /></Button>
+                    )}
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(q.id)} className="text-destructive"><Trash2 className="w-4 h-4" /></Button>
                   </div>
                 </CardHeader>
@@ -234,6 +265,23 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                       </div>
                     ))}
                   </div>
+                  {(() => {
+                    const qIssues = validationIssues.filter(i => i.questionIndex === index);
+                    if (!qIssues.length) return null;
+                    return (
+                      <div className="space-y-1">
+                        {qIssues.map((issue, ii) => (
+                          <div key={ii} className={cn(
+                            "flex items-start gap-2 p-2 rounded-lg text-xs",
+                            issue.severity === 'error' ? "bg-destructive/10 text-destructive" : "bg-yellow-500/10 text-yellow-600"
+                          )}>
+                            <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                            <span>{issue.message}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                   <button 
                     onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}
                     className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors"

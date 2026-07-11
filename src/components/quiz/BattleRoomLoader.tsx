@@ -7,7 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { Loader2, ShieldX, RefreshCw } from 'lucide-react';
+import { ShieldX, RefreshCw } from 'lucide-react';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import LiveQuiz from '@/components/quiz/LiveQuiz';
 import QuizResults from '@/components/quiz/QuizResults';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
@@ -49,12 +50,17 @@ export default function BattleRoomLoader() {
         if (!mounted) return;
         setQuiz(q);
 
-        // Reconnect: if user is not in participants, auto-join
+        // Block joining mid-quiz: only allow joins during waiting phase
         const initialParts = await participantService.getAllParticipants(quizId);
         if (!mounted) return;
         const self = initialParts.find(p => p.user_id === user.id);
-        if (!self && q.status !== 'finished') {
-          await participantService.joinQuiz(quizId, user.id, user.name);
+        if (!self && user.id !== q.created_by) {
+          if (q.status === 'waiting') {
+            await participantService.joinQuiz(quizId, user.id, user.name);
+          } else {
+            setError('This battle is already in progress. You cannot join mid-quiz.');
+            return;
+          }
         }
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : 'Failed to load quiz');
@@ -79,37 +85,27 @@ export default function BattleRoomLoader() {
   }, [participant, router]);
 
   if (isLoading || isAuthLoading) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="text-muted-foreground">Entering the Arena...</p>
-      </div>
-    );
+    return <LoadingScreen message="Entering the Arena..." />;
   }
 
   if (error || !quiz) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 text-center">
-        <ShieldX className="h-12 w-12 text-destructive" />
-        <h1 className="text-2xl font-bold">Room Not Found</h1>
-        <p className="text-muted-foreground">{error || 'This quiz room does not exist or has been closed.'}</p>
+      <div className="loading-screen flex-col gap-6 text-center">
+        <ShieldX className="w-16 h-16 text-destructive crystal-float" />
+        <h1 className="text-3xl font-headline text-destructive">Room Not Found</h1>
+        <p className="text-muted-foreground max-w-md">{error || 'This quiz room does not exist or has been closed.'}</p>
         <div className="flex gap-4">
-          <Button variant="outline" onClick={() => setRetryCount(c => c + 1)}>
+          <Button variant="outline" size="lg" onClick={() => setRetryCount(c => c + 1)}>
             <RefreshCw className="mr-2 h-4 w-4" /> Retry
           </Button>
-          <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
+          <Button size="lg" onClick={() => router.push('/')}>Return to Dashboard</Button>
         </div>
       </div>
     );
   }
 
   if (!user) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="text-muted-foreground">Joining Quiz...</p>
-      </div>
-    );
+    return <LoadingScreen message="Joining Quiz..." />;
   }
 
   if (quiz.status === 'waiting') {
@@ -127,12 +123,7 @@ export default function BattleRoomLoader() {
 
   if (quiz.status === 'live') {
     if (!participant) {
-      return (
-        <div className="flex h-screen flex-col items-center justify-center gap-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground">Joining the arena...</p>
-        </div>
-      );
+      return <LoadingScreen message="Joining the arena..." />;
     }
     return (
         <LiveQuiz
@@ -145,10 +136,11 @@ export default function BattleRoomLoader() {
   }
 
   return (
-    <div className="flex flex-col h-screen items-center justify-center gap-4">
-        <ShieldX className="h-12 w-12 text-destructive" />
-        <p className="text-muted-foreground">This room is in an unexpected state. Please try again later.</p>
-        <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
+    <div className="loading-screen flex-col gap-6 text-center">
+        <ShieldX className="w-16 h-16 text-destructive crystal-float" />
+        <h1 className="text-2xl font-headline">Unexpected State</h1>
+        <p className="text-muted-foreground max-w-md">This room is in an unexpected state. Please try again later.</p>
+        <Button size="lg" onClick={() => router.push('/')}>Return to Dashboard</Button>
     </div>
   );
 }

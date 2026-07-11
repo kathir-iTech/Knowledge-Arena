@@ -19,7 +19,7 @@ interface GeneratedQuestion {
 }
 
 interface PDFQuizGeneratorProps {
-  onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string) => void;
+  onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string, dataUri?: string, questionCount?: number) => void;
 }
 
 const STATUS_MESSAGES = [
@@ -100,7 +100,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
 
       if (result.questions && result.questions.length > 0) {
         toast({ title: "Forge Successful", description: `Successfully generated ${result.questions.length} tactical rounds.` });
-        onQuestionsGenerated(result.questions, result.difficulty);
+        onQuestionsGenerated(result.questions, result.difficulty, dataUri, questionCount);
       } else {
         throw new Error("AI_FAILED");
       }

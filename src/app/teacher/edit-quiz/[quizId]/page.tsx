@@ -6,7 +6,8 @@ import { quizService } from '@/services/quiz.service';
 import { questionService } from '@/services/game.service';
 import { useAuth } from '@/hooks/useAuth';
 import { QuizEditor } from '@/components/quiz/QuizEditor';
-import { Loader2, ShieldX } from 'lucide-react';
+import { ShieldX } from 'lucide-react';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { Button } from '@/components/ui/button';
 import type { ValidatedQuiz } from '@/lib/schemas';
 import type { ExistingQuestion, ExistingAnswerKey } from '@/components/quiz/QuizEditor';
@@ -52,21 +53,16 @@ export default function EditQuizPage() {
   }, [quizId, user, isAuthLoading, router]);
 
   if (isLoading || isAuthLoading) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="text-muted-foreground animate-pulse">Loading quiz editor...</p>
-      </div>
-    );
+    return <LoadingScreen message="Loading quiz editor..." />;
   }
 
   if (error || !quiz) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <ShieldX className="h-12 w-12 text-destructive" />
-        <h1 className="text-2xl font-bold">Cannot Edit</h1>
-        <p className="text-muted-foreground">{errorMsg}</p>
-        <Button onClick={() => router.push('/teacher/dashboard')}>Return to Dashboard</Button>
+      <div className="loading-screen flex-col text-center gap-6">
+        <ShieldX className="w-16 h-16 text-destructive crystal-float" />
+        <h1 className="text-3xl font-headline text-destructive">Cannot Edit</h1>
+        <p className="text-muted-foreground max-w-md">{errorMsg}</p>
+        <Button size="lg" onClick={() => router.push('/teacher/dashboard')}>Return to Dashboard</Button>
       </div>
     );
   }

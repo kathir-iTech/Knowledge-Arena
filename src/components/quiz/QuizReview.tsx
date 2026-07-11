@@ -5,7 +5,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { questionService } from '@/services/game.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { cn } from '@/lib/utils';
 
 interface ReviewQuestion {
@@ -78,7 +79,7 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
     load();
   }, [quizId, user]);
 
-  if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  if (isLoading) return <LoadingScreen message="Loading review..." />;
 
   if (error) return <p className="text-center text-destructive py-8">Failed to load review data.</p>;
 

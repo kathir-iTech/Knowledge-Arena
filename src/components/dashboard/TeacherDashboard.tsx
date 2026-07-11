@@ -1,15 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/hooks/useAuth';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AIInsightCards } from '@/components/dashboard/AIInsightCards';
+
+const AIInsightCards = dynamic(() => import('@/components/dashboard/AIInsightCards').then(m => m.AIInsightCards), { ssr: false });
 import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle, Pencil, Copy, Archive, ArchiveRestore, Download, FileText, Search as SearchIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -22,7 +25,8 @@ type SortKey = 'newest' | 'oldest' | 'title' | 'status';
 type FilterKey = 'all' | 'active' | 'completed' | 'draft' | 'archived';
 
 function exportQuizCSV(quiz: ValidatedQuiz, participants: ValidatedParticipant[]) {
-  const sorted = [...participants].sort((a, b) => b.score - a.score);
+  const students = participants.filter(p => p.user_id !== quiz.created_by);
+  const sorted = [...students].sort((a, b) => b.score - a.score);
   const rows = [['Rank', 'User ID', 'Name', 'Score', 'Status']];
   sorted.forEach((p, i) => {
     rows.push([String(i + 1), p.user_id, p.name || p.user_id.slice(0, 8), String(p.score), p.status]);
@@ -114,9 +118,10 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     };
 
     const handleExportPDF = () => {
-      const sorted = [...participants].sort((a, b) => b.score - a.score);
+      const students = participants.filter(p => p.user_id !== quiz.created_by);
+      const sorted = [...students].sort((a, b) => b.score - a.score);
       const rows = sorted.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name || p.user_id.slice(0, 8)}</td><td>${p.score}</td><td>${p.status}</td></tr>`).join('');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quiz Results - ${quiz.title}</title><style>body{font-family:system-ui,sans-serif;padding:40px;max-width:800px;margin:auto}h1{font-size:24px;margin-bottom:4px}.sub{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}.rank{font-weight:bold;font-size:18px;color:#333}</style></head><body><h1>${quiz.title}</h1><p class="sub">Room: ${quiz.id} &mdash; ${participants.length} gladiator(s)</p><table><thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quiz Results - ${quiz.title}</title><style>body{font-family:system-ui,sans-serif;padding:40px;max-width:800px;margin:auto}h1{font-size:24px;margin-bottom:4px}.sub{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}.rank{font-weight:bold;font-size:18px;color:#333}</style></head><body><h1>${quiz.title}</h1><p class="sub">Room: ${quiz.id} &mdash; ${sorted.length} gladiator(s)</p><table><thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
       const win = window.open('', '_blank');
       if (win) {
         win.document.write(html);
@@ -144,7 +149,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                         </Badge>
                         <span className="text-sm text-muted-foreground flex items-center gap-1">
                             <Users className="w-4 h-4" />
-                            {participants?.length || 0}
+                            {participants?.filter(p => p.user_id !== quiz.created_by).length || 0}
                         </span>
                     </div>
                 </div>
@@ -299,7 +304,7 @@ export default function TeacherDashboard() {
     return result;
   }, [quizzes, searchQuery, sortKey, filterKey]);
 
-  if (loading) return <div className="p-8 flex flex-col justify-center h-[50vh] items-center gap-4"><Loader2 className="animate-spin h-12 w-12 text-primary" /><p className="text-muted-foreground animate-pulse">Loading arenas...</p></div>;
+  if (loading) return <LoadingScreen message="Loading arenas..." />;
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-6xl mx-auto safe-bottom">
@@ -313,43 +318,47 @@ export default function TeacherDashboard() {
         </Button>
       </header>
 
-      <AIInsightCards />
+      <Suspense fallback={<div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="h-32 bg-secondary/10 rounded-xl animate-pulse" /><div className="h-32 bg-secondary/10 rounded-xl animate-pulse" /><div className="h-32 bg-secondary/10 rounded-xl animate-pulse" /></div>}><AIInsightCards /></Suspense>
 
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
         <div className="relative flex-1 max-w-md">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search arenas..."
-            className="pl-9 h-10"
+            placeholder="Search arenas by name or room code..."
+            className="pl-9 h-12 md:h-10 text-sm md:text-base"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={sortKey}
-            onChange={e => setSortKey(e.target.value as SortKey)}
-            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="title">Title</option>
-            <option value="status">Status</option>
-          </select>
-        </div>
+        <select
+          value={sortKey}
+          onChange={e => setSortKey(e.target.value as SortKey)}
+          className="h-12 md:h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="title">By Title</option>
+          <option value="status">By Status</option>
+        </select>
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {(['all', 'active', 'completed', 'draft', 'archived'] as FilterKey[]).map(key => (
+        {[
+          { key: 'all', label: 'Active' },
+          { key: 'active', label: 'Running' },
+          { key: 'completed', label: 'Completed' },
+          { key: 'draft', label: 'Draft' },
+          { key: 'archived', label: 'Archived' }
+        ].map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setFilterKey(key)}
+            onClick={() => setFilterKey(key as FilterKey)}
             className={cn(
-              "px-4 py-1.5 rounded-full text-xs font-medium transition-all uppercase tracking-wider",
-              filterKey === key ? "bg-primary text-primary-foreground" : "bg-secondary/50 text-muted-foreground hover:bg-secondary"
+              "touch-target px-4 md:px-5 py-2 rounded-full text-xs md:text-sm font-semibold transition-all uppercase tracking-wider",
+              filterKey === key ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30" : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/30"
             )}
           >
-            {key === 'all' ? 'Active' : key}
+            {label}
           </button>
         ))}
       </div>
@@ -367,6 +376,85 @@ export default function TeacherDashboard() {
             </div>
         )}
       </div>
+
+      <StudentActivity quizzes={quizzes} teacherId={user?.id} />
     </div>
   );
+}
+
+function StudentActivity({ quizzes, teacherId }: { quizzes: ValidatedQuiz[]; teacherId?: string }) {
+  const [students, setStudents] = useState<StudentSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!quizzes.length || !teacherId) { setLoading(false); return; }
+    let cancelled = false;
+    participantService.getAllParticipantsBulk(quizzes.map(q => q.id)).then(all => {
+      if (cancelled) return;
+      const grouped = new Map<string, { name: string; quizCount: number; totalScore: number }>();
+      for (const p of all) {
+        if (p.user_id === teacherId) continue;
+        const key = p.user_id;
+        const cur = grouped.get(key);
+        if (cur) {
+          cur.quizCount++;
+          cur.totalScore += p.score || 0;
+        } else {
+          grouped.set(key, { name: p.name || p.user_id.slice(0, 8), quizCount: 1, totalScore: p.score || 0 });
+        }
+      }
+      setStudents(Array.from(grouped.entries()).map(([userId, s]) => ({ userId, ...s })).sort((a, b) => b.totalScore - a.totalScore));
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [quizzes, teacherId]);
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (!students.length) return null;
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Users className="h-5 w-5 text-primary" />
+        <h2 className="text-2xl font-headline">Gladiator History</h2>
+        <span className="text-sm text-muted-foreground ml-auto">{students.length} unique students</span>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-border/40">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-muted/30 border-b border-border/40">
+              <th className="text-left p-3 font-semibold text-muted-foreground">Name</th>
+              <th className="text-left p-3 font-semibold text-muted-foreground">User ID</th>
+              <th className="text-center p-3 font-semibold text-muted-foreground">Battles</th>
+              <th className="text-right p-3 font-semibold text-muted-foreground">Total Score</th>
+              <th className="text-right p-3 font-semibold text-muted-foreground">Avg Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map((s, i) => (
+              <tr key={s.userId} className={cn("border-b border-border/20", i % 2 === 0 ? "bg-background" : "bg-muted/10")}>
+                <td className="p-3 font-medium flex items-center gap-2">
+                  <Avatar className="h-6 w-6">
+                    <AvatarFallback className="text-[10px]">{s.name.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  {s.name}
+                </td>
+                <td className="p-3 font-mono text-xs text-muted-foreground">{s.userId.slice(0, 12)}...</td>
+                <td className="p-3 text-center"><Badge variant="secondary">{s.quizCount}</Badge></td>
+                <td className="p-3 text-right font-semibold">{s.totalScore}</td>
+                <td className="p-3 text-right text-muted-foreground">{s.quizCount ? Math.round(s.totalScore / s.quizCount) : 0}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+interface StudentSummary {
+  userId: string;
+  name: string;
+  quizCount: number;
+  totalScore: number;
 }
