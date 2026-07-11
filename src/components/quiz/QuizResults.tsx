@@ -6,7 +6,8 @@ import type { ValidatedQuiz } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Crown, Home, Loader2, Trophy, Medal, User, Eye } from 'lucide-react';
+import { Crown, Home, Trophy, Medal, User, Eye } from 'lucide-react';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { participantService } from '@/services/participant.service';
@@ -56,7 +57,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
     return p.avatar || '🎮';
   };
 
-  if (isLoading) return <div className="flex h-screen items-center justify-center bg-background"><Loader2 className="animate-spin h-12 w-12 text-primary" /></div>;
+  if (isLoading) return <LoadingScreen message="Loading results..." />;
 
   if (showReview) {
     return (

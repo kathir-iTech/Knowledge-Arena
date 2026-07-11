@@ -103,12 +103,15 @@ export const questionService = {
     const db = getFirestore();
     const questionRef = doc(db, 'quizzes', quizId, 'questions', questionId);
 
-    // Idempotency: atomically check if already scored
+    let timerSeconds = 30;
+
+    // Idempotency: atomically check if already scored, caching timer value
     try {
       await runTransaction(db, async (transaction) => {
         const qSnap = await transaction.get(questionRef);
         if (!qSnap.exists()) return;
         if (qSnap.data().scored) return;
+        timerSeconds = qSnap.data().timer || 30;
         transaction.update(questionRef, { scored: true });
       });
     } catch {
@@ -116,18 +119,14 @@ export const questionService = {
       return;
     }
 
+    const timeLimit = timerSeconds * 1000;
+
     // Read the answer key
     const answerKeySnap = await getDoc(
       doc(db, 'quizzes', quizId, 'answerKeys', questionId)
     );
     if (!answerKeySnap.exists()) return;
     const correctIndex = answerKeySnap.data().correct_option_index;
-
-    // Read the question for timer value
-    const questionSnap = await getDoc(questionRef);
-    if (!questionSnap.exists()) return;
-    const timerSeconds = questionSnap.data().timer || 30;
-    const timeLimit = timerSeconds * 1000;
 
     // Read all submissions
     const submissionsSnap = await getDocs(

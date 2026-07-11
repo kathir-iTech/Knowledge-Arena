@@ -25,6 +25,12 @@ function participantPath(quizId: string, userId: string) {
 }
 
 export const participantService = {
+  async getAllParticipantsBulk(quizIds: string[]): Promise<ValidatedParticipant[]> {
+    const db = getFirestore();
+    const results = await Promise.all(quizIds.map(id => getDocs(collection(db, 'quizzes', id, 'participants'))));
+    return results.flatMap(snap => snap.docs.map(d => ({ user_id: d.id, ...d.data() } as ValidatedParticipant)));
+  },
+
   async getAllParticipants(quizId: string): Promise<ValidatedParticipant[]> {
     const db = getFirestore();
     const snap = await getDocs(collection(db, 'quizzes', quizId, 'participants'));
@@ -59,6 +65,15 @@ export const participantService = {
       status: 'playing',
       violations_count: 0,
     });
+  },
+
+  async markAllFinished(quizId: string, teacherId: string): Promise<void> {
+    const db = getFirestore();
+    const snap = await getDocs(collection(db, 'quizzes', quizId, 'participants'));
+    const updates = snap.docs
+      .filter(d => d.id !== teacherId)
+      .map(d => updateDoc(d.ref, { status: 'finished' }));
+    await Promise.all(updates);
   },
 
   async clearAllStudents(quizId: string): Promise<void> {

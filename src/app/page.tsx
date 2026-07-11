@@ -3,10 +3,13 @@
 
 import { useAuth } from '@/hooks/useAuth';
 import { useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BrainCircuit } from 'lucide-react';
-import { LoginForm } from '@/components/auth/LoginForm';
 import { Suspense } from 'react';
+import { LoadingScreen } from '@/components/LoadingScreen';
+
+const LoginForm = dynamic(() => import('@/components/auth/LoginForm').then(m => m.LoginForm), { ssr: false });
 
 function PageContent() {
   const { user, isLoading } = useAuth();
@@ -14,15 +17,7 @@ function PageContent() {
   const roomCode = searchParams.get('roomCode');
   
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-background p-4">
-        <div className="flex flex-col items-center gap-4">
-          <BrainCircuit className="w-16 h-16 text-primary mx-auto animate-pulse" />
-          <h1 className="text-2xl font-headline text-primary">KNOWLEDGE ARENA</h1>
-          <Skeleton className="h-4 w-48" />
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="Preparing the arena..." />;
   }
 
   if (user) return null;
@@ -35,7 +30,7 @@ function PageContent() {
           <h1 className="text-4xl font-headline text-primary">Knowledge Arena</h1>
           <p className="text-muted-foreground">The ultimate quiz battleground. Sign in to enter.</p>
         </div>
-        <LoginForm />
+        <Suspense fallback={<div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-24 mx-auto" /></div>}><LoginForm /></Suspense>
       </div>
     </main>
   );

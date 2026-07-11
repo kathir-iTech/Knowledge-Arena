@@ -41,6 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signupInProgress = useRef(false);
   const signupUserId = useRef<string | null>(null);
+  const lastFetchedUid = useRef<string | null>(null);
 
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
@@ -48,6 +49,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserDocument = useCallback(async (uid: string) => {
     if (!firestore) return;
+    if (lastFetchedUid.current === uid && user) return;
+    lastFetchedUid.current = uid;
     try {
         const userRef = doc(firestore, 'users', uid);
         const userDoc = await getDoc(userRef);
@@ -82,6 +85,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [firebaseUser, isUserLoading, fetchUserDocument]);
 
+  const checkRateLimit = async (type: 'login' | 'signup', identifier?: string) => {
+    try {
+      const res = await fetch('/api/rate-limit/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, identifier }),
+      });
+      if (res.status === 429) {
+        const data = await res.json();
+        throw new Error(data.error || 'Too many attempts. Please wait.');
+      }
+      if (!res.ok) throw new Error('Rate limit check failed');
+    } catch (err) {
+      if (err instanceof Error) throw err;
+      throw new Error('Rate limit check failed');
+    }
+  };
+
   const login = async (credentials: { email: string, password?: string }) => {
     if (!auth) throw new Error("Auth service not available");
     if (!credentials.password) {
@@ -93,8 +114,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Password is required.");
     }
     try {
+      await checkRateLimit('login', credentials.email);
       await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
     } catch (error: unknown) {
+      if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
+        toast({ variant: "destructive", title: "Rate Limited", description: error.message });
+        throw error;
+      }
       toast({
         variant: "destructive",
         title: "Login Failed",
@@ -109,6 +135,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!credentials.password) {
         toast({ variant: "destructive", title: "Signup Failed", description: "Password is required." });
         throw new Error("Password is required.");
+    }
+
+    try {
+      await checkRateLimit('signup');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Rate limit exceeded.';
+      toast({ variant: "destructive", title: "Rate Limited", description: msg });
+      throw err;
     }
 
     // Teacher role is determined by email domain. Set NEXT_PUBLIC_TEACHER_DOMAIN env var

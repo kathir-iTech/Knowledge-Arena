@@ -1,17 +1,12 @@
-
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { firebaseConfig } from '@/firebase/config';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import { fetchDocsWithToken } from '@/lib/firebase-admin';
 
-export async function getKnowledgeSummary() {
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  const firestore = getFirestore(app);
-  const quizzesSnap = await getDocs(collection(firestore, 'quizzes'));
-  
+export async function getKnowledgeSummary(_idToken?: string) {
+  const docs = await fetchDocsWithToken('quizzes', _idToken, { limit: 1000 });
+
   const summary = {
-    totalArenas: quizzesSnap.size,
+    totalArenas: docs.length,
     lastUpdated: Date.now()
   };
 

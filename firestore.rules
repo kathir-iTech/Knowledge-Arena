@@ -51,14 +51,14 @@ service cloud.firestore {
         allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
-          allow read: if isQuizCreator(quizId);
+          allow read: if isQuizCreator(quizId) || isOwner(userId);
           allow create: if isOwner(userId) && isNotBlocked(quizId, userId);
           allow delete: if isQuizCreator(quizId);
         }
       }
 
       match /answerKeys/{questionId} {
-        allow read: if isQuizCreator(quizId);
+        allow read: if isSignedIn();
         allow create: if isTeacher();
         allow update, delete: if isQuizCreator(quizId);
       }
