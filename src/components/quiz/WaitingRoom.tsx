@@ -105,45 +105,67 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const areParticipantsLoading = isLoading;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 space-y-8 animate-in">
-      <header className="text-center space-y-2">
-        <h1 className="text-display font-headline text-foreground tracking-tight">{quiz.title}</h1>
-        <p className="text-base text-muted-foreground">The quiz will begin shortly. Awaiting the host&apos;s command.</p>
-      </header>
+    <div className="flex flex-col items-center min-h-screen p-4 md:p-8 animate-in">
+      <div className="w-full max-w-lg space-y-8">
+        <header className="text-center space-y-2">
+          <h1 className="text-display font-headline text-foreground tracking-tight">{quiz.title}</h1>
+          <p className="text-base text-muted-foreground">The quiz will begin shortly. Awaiting the host&apos;s command.</p>
+        </header>
 
-      {isReconnecting && (
-        <div className="flex items-center gap-2 bg-warning/5 border border-warning/10 px-4 py-2.5 rounded-[10px] text-sm" role="alert" aria-live="assertive">
-          <Loader2 className="animate-spin h-4 w-4 text-warning" />
-          <span className="text-warning font-medium">Connection lost. Reconnecting...</span>
-        </div>
-      )}
+        {isReconnecting && (
+          <div className="flex items-center justify-center gap-2 bg-warning/5 border border-warning/10 px-4 py-2.5 rounded-[12px] text-sm" role="alert" aria-live="assertive">
+            <Loader2 className="animate-spin h-4 w-4 text-warning" />
+            <span className="text-warning font-medium">Connection lost. Reconnecting...</span>
+          </div>
+        )}
 
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2 text-sm">
-          <Users className="w-4 h-4 text-muted-foreground" />
-          <span className="font-semibold">{studentCount}</span>
-          <span className="text-muted-foreground">connected</span>
+        <div className="flex items-center justify-center gap-6">
+          <div className="flex items-center gap-2 text-sm">
+            <Users className="w-4 h-4 text-muted-foreground" />
+            <span className="font-semibold">{studentCount}</span>
+            <span className="text-muted-foreground">connected</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            {teacherOnline ? (
+              <><Wifi className="w-4 h-4 text-success" /><span className="text-success font-medium">Teacher Online</span></>
+            ) : (
+              <><WifiOff className="w-4 h-4 text-muted-foreground" /><span className="text-muted-foreground">Waiting for Teacher</span></>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          {teacherOnline ? (
-            <><Wifi className="w-4 h-4 text-success" /><span className="text-success font-medium">Teacher Online</span></>
-          ) : (
-            <><WifiOff className="w-4 h-4 text-muted-foreground" /><span className="text-muted-foreground">Waiting for Teacher</span></>
-          )}
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl">
-        <Card className="md:col-span-2">
-          <CardHeader className="pb-4">
-            <CardTitle className="font-headline flex items-center gap-2.5 text-base">
+
+        <Card>
+          <CardContent className="flex flex-col items-center gap-6 py-8">
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Room Code</span>
+              <div className="text-4xl md:text-5xl font-mono font-bold tracking-[0.15em] text-primary">
+                <span>{quiz.id}</span>
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground hover:text-foreground" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
+                <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Code
+              </Button>
+            </div>
+            {shareableLink && (
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-xs text-muted-foreground">Or scan to join</span>
+                <div className="bg-white p-3 rounded-[12px] shadow-elevation-small">
+                  <QRCode value={shareableLink} size={140} aria-label={`QR code to join quiz ${quiz.id}`} />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-4 text-center">
+            <CardTitle className="font-headline flex items-center justify-center gap-2.5 text-base">
                 <Users className="w-5 h-5 text-primary" />
                 Participants
             </CardTitle>
             <CardDescription className="text-sm">{isTeacher ? `${studentCount} student${studentCount !== 1 ? 's' : ''} have joined.` : "See who's ready for battle."}</CardDescription>
           </CardHeader>
           <CardContent>
-                <div className="flex flex-wrap gap-4">
+                <div className="flex flex-wrap justify-center gap-4">
                   {areParticipantsLoading && studentCount === 0 ? (
                      Array.from({ length: 3 }).map((_, i) => (
                       <div key={i} className="flex flex-col items-center gap-2 text-center">
@@ -167,51 +189,30 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                 </div>
           </CardContent>
         </Card>
-        
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base">Join Quiz</CardTitle>
-            <CardDescription className="text-sm">Use this code or scan QR to enter.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-5">
-            <div className="text-3xl md:text-4xl font-mono font-bold tracking-widest text-primary bg-muted/30 px-5 py-3.5 rounded-[12px] flex items-center gap-3">
-              <span>{quiz.id}</span>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
-                <Copy className="w-4 h-4" />
-              </Button>
-            </div>
-            {shareableLink && (
-              <div className="bg-white p-3.5 rounded-[12px] shadow-elevation-small">
-                <QRCode value={shareableLink} size={Math.min(130, typeof window !== 'undefined' ? window.innerWidth * 0.25 : 130)} aria-label={`QR code to join quiz ${quiz.id}`} />
-              </div>
-            )}
-            {!teacherOnline && !isTeacher && (
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Clock className="w-3.5 h-3.5" />
-                <span>Quiz starting soon...</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
-      {isTeacher && (
-        <div className="w-full max-w-6xl">
-            <Button 
-              size="lg" 
-              className="w-full text-base font-headline font-semibold" 
-              onClick={handleStartQuiz}
-              disabled={studentCount === 0 || areParticipantsLoading}
-            >
-              <ShieldCheck className="mr-2.5 h-5 w-5" />
-               {areParticipantsLoading && studentCount === 0
-                ? 'Loading participants...'
-                : studentCount === 0 
-                ? 'Waiting for students to join...'
-                : `Start Quiz for ${studentCount} Participant${studentCount !== 1 ? 's' : ''}`}
-            </Button>
-        </div>
-      )}
+        {isTeacher && (
+          <Button 
+            size="lg" 
+            className="w-full text-base font-headline font-semibold" 
+            onClick={handleStartQuiz}
+            disabled={studentCount === 0 || areParticipantsLoading}
+          >
+            <ShieldCheck className="mr-2.5 h-5 w-5" />
+             {areParticipantsLoading && studentCount === 0
+              ? 'Loading participants...'
+              : studentCount === 0 
+              ? 'Waiting for students to join...'
+              : `Start Quiz for ${studentCount} Participant${studentCount !== 1 ? 's' : ''}`}
+          </Button>
+        )}
+
+        {!teacherOnline && !isTeacher && (
+          <div className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+            <Clock className="w-3.5 h-3.5" />
+            <span>Quiz starting soon...</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

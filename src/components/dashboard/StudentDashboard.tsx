@@ -13,8 +13,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { Loader2, Swords, History, UserCircle, ExternalLink, Trophy } from 'lucide-react';
+import { Loader2, Swords, History, UserCircle, ExternalLink, Trophy, TrendingUp, Star, Target, Zap, Medal, Award, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+interface Achievement {
+  label: string;
+  description: string;
+  icon: React.ElementType;
+  unlocked: boolean;
+}
 
 export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?: string }) {
   const { user } = useAuth();
@@ -60,6 +67,21 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
   };
 
   const totalScore = history.reduce((sum, h) => sum + h.score, 0);
+  const completedBattles = history.filter(h => h.status === 'finished').length;
+  const avgScore = completedBattles > 0 ? Math.round(totalScore / completedBattles) : 0;
+  const bestScore = history.length > 0 ? Math.max(...history.map(h => h.score)) : 0;
+  const recentBattles = [...history].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)).slice(0, 5);
+
+  const achievements: Achievement[] = [
+    { label: 'First Battle', description: 'Complete your first quiz', icon: Star, unlocked: completedBattles >= 1 },
+    { label: 'Score Master', description: 'Score 100+ total points', icon: Zap, unlocked: totalScore >= 100 },
+    { label: 'Veteran', description: 'Complete 5 battles', icon: Medal, unlocked: completedBattles >= 5 },
+    { label: 'Champion', description: 'Score 50 in a single battle', icon: Trophy, unlocked: bestScore >= 50 },
+    { label: 'Scholar', description: 'Complete 10 battles', icon: Award, unlocked: completedBattles >= 10 },
+    { label: 'Legend', description: 'Score 500+ total points', icon: Sparkles, unlocked: totalScore >= 500 },
+  ];
+
+  if (historyLoading) return <LoadingScreen message="Loading your arena..." />;
 
   return (
     <div className="page-container safe-bottom animate-in">
@@ -73,54 +95,148 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
         </Button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 page-section">
-        <Card className="md:col-span-2">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5">
-              <Swords className="w-5 h-5 text-primary" />
-              Enter the Arena
-            </CardTitle>
-            <CardDescription className="text-sm">Enter the 6-digit room code to join a battle.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleJoin} className="flex gap-3">
-              <Input
-                value={roomCode}
-                onChange={e => setRoomCode(e.target.value)}
-                className="text-center text-lg font-mono tracking-[0.25em] uppercase flex-1"
-                maxLength={6}
-                placeholder="000000"
-                aria-label="Room code"
-              />
-              <Button type="submit" className="shrink-0" disabled={isLoading || roomCode.length < 6}>
-                {isLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Swords className="mr-2 h-4 w-4" />}
-                Join
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex flex-col items-center justify-center h-full gap-2.5">
-            <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-warning/10">
-              <Trophy className="w-5 h-5 text-warning" />
-            </div>
-            <div className="text-center space-y-0.5">
-              <span className="text-sm text-muted-foreground">Total Score</span>
-              <div className="text-display font-semibold tracking-tight text-foreground">{totalScore}</div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <section className="page-section">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="md:col-span-2">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base flex items-center gap-2.5">
+                <Swords className="w-5 h-5 text-primary" />
+                Enter the Arena
+              </CardTitle>
+              <CardDescription className="text-sm">Enter the 6-digit room code to join a battle.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleJoin} className="flex gap-3">
+                <Input
+                  value={roomCode}
+                  onChange={e => setRoomCode(e.target.value)}
+                  className="text-center text-lg font-mono tracking-[0.25em] uppercase flex-1"
+                  maxLength={6}
+                  placeholder="000000"
+                  aria-label="Room code"
+                />
+                <Button type="submit" className="shrink-0" disabled={isLoading || roomCode.length < 6}>
+                  {isLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Swords className="mr-2 h-4 w-4" />}
+                  Join
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex flex-col items-center justify-center h-full gap-2.5">
+              <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-warning/10">
+                <Trophy className="w-5 h-5 text-warning" />
+              </div>
+              <div className="text-center space-y-0.5">
+                <span className="text-sm text-muted-foreground">Total Score</span>
+                <div className="text-display font-semibold tracking-tight text-foreground">{totalScore}</div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
-      <div className="space-y-4">
-        <div className="flex items-center gap-2.5">
+      <section className="page-section">
+        <div className="flex items-center gap-2.5 mb-4">
+          <TrendingUp className="w-5 h-5 text-primary" />
+          <h2 className="text-section-title tracking-tight">Performance Summary</h2>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="p-4 flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Battles</span>
+              <span className="text-2xl font-semibold tracking-tight">{completedBattles}</span>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Total Score</span>
+              <span className="text-2xl font-semibold tracking-tight">{totalScore}</span>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Average</span>
+              <span className="text-2xl font-semibold tracking-tight">{avgScore}</span>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Best Score</span>
+              <span className="text-2xl font-semibold tracking-tight">{bestScore}</span>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {recentBattles.length > 0 && (
+        <section className="page-section">
+          <div className="flex items-center gap-2.5 mb-4">
+            <Zap className="w-5 h-5 text-primary" />
+            <h2 className="text-section-title tracking-tight">Recent Battles</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            {recentBattles.map((h) => (
+              <Link key={h.quizId} href={`/battle/${h.quizId}`} className="block">
+                <Card className="hover:border-primary/20 transition-all duration-150 h-full">
+                  <CardContent className="p-4 flex flex-col gap-2">
+                    <p className="text-sm font-semibold truncate">{h.title}</p>
+                    <div className="flex items-center justify-between">
+                      <Badge variant={h.status === 'finished' ? 'outline' : h.status === 'live' ? 'default' : 'secondary'} className="h-5 text-[10px]">
+                        {h.status.toUpperCase()}
+                      </Badge>
+                      <span className="text-sm font-mono font-bold text-primary">{h.score}<span className="text-xs text-muted-foreground font-normal">pts</span></span>
+                    </div>
+                    {!!h.created_at && (
+                      <span className="text-[11px] text-muted-foreground">{new Date(h.created_at).toLocaleDateString()}</span>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="page-section">
+        <div className="flex items-center gap-2.5 mb-4">
+          <Award className="w-5 h-5 text-primary" />
+          <h2 className="text-section-title tracking-tight">Achievements</h2>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {achievements.map((a) => (
+            <div key={a.label} className={cn(
+              "flex flex-col items-center gap-2 p-4 rounded-[18px] border text-center transition-all duration-150",
+              a.unlocked
+                ? "bg-primary/[0.03] border-primary/20"
+                : "bg-muted/20 border-border/30 opacity-40"
+            )}>
+              <div className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-[12px]",
+                a.unlocked ? "bg-primary/10 text-primary" : "bg-muted/50 text-muted-foreground"
+              )}>
+                <a.icon className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold">{a.label}</p>
+                <p className="text-[10px] text-muted-foreground">{a.description}</p>
+              </div>
+              {a.unlocked && (
+                <Badge className="h-5 text-[10px] bg-primary/10 text-primary border-0">Unlocked</Badge>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="page-section">
+        <div className="flex items-center gap-2.5 mb-4">
           <History className="w-5 h-5 text-primary" />
           <h2 className="text-section-title tracking-tight">Battle History</h2>
+          <span className="text-sm text-muted-foreground ml-auto">{history.length} battle{history.length !== 1 ? 's' : ''}</span>
         </div>
 
-        {historyLoading ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-3"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /><p className="text-sm text-muted-foreground">Loading battle history...</p></div>
-        ) : history.length === 0 ? (
+        {history.length === 0 ? (
           <div className="py-16 text-center border-2 border-dashed border-border/50 rounded-[18px]">
             <Swords className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
             <p className="text-base text-muted-foreground mb-2">No battles fought yet.</p>
@@ -171,7 +287,7 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
             </table>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

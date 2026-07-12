@@ -10,17 +10,24 @@ import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 
 const AIInsightCards = dynamic(() => import('@/components/dashboard/AIInsightCards').then(m => m.AIInsightCards), { ssr: false });
 
-import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle, Pencil, Copy, Archive, ArchiveRestore, Download, FileText, Search as SearchIcon, BarChart3, BookOpen, TrendingUp } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle, Pencil, Copy, Archive, ArchiveRestore, Download, FileText, Search as SearchIcon, BarChart3, BookOpen, TrendingUp, MoreHorizontal, Zap, Sparkles, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { cn } from '@/lib/utils';
-import { useFirebase } from '@/firebase';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Progress } from '@/components/ui/progress';
 
 type SortKey = 'newest' | 'oldest' | 'title' | 'status';
 type FilterKey = 'all' | 'active' | 'completed' | 'draft' | 'archived';
@@ -48,9 +55,10 @@ function exportQuizCSV(quiz: ValidatedQuiz, participants: ValidatedParticipant[]
 
 const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => void }) => {
     const { toast } = useToast();
-    const { auth } = useFirebase();
     const [isProcessing, setIsProcessing] = useState(false);
     const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showResetDialog, setShowResetDialog] = useState(false);
 
     useEffect(() => {
         const sub = participantService.subscribeToParticipants(quiz.id, setParticipants);
@@ -76,6 +84,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
             toast({ variant: 'destructive', title: 'Error', description: 'Could not delete quiz.' });
         } finally {
             setIsProcessing(false);
+            setShowDeleteDialog(false);
         }
     };
 
@@ -88,6 +97,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
             toast({ variant: 'destructive', title: 'Error', description: 'Could not reset quiz.' });
         } finally {
             setIsProcessing(false);
+            setShowResetDialog(false);
         }
     };
 
@@ -137,138 +147,154 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     };
 
     const participantCount = participants?.filter(p => p.user_id !== quiz.created_by).length || 0;
+    const completedCount = participants?.filter(p => p.status === 'finished' && p.user_id !== quiz.created_by).length || 0;
 
     return (
         <Card className={cn(
           "transition-all duration-200",
           quiz.archived && "opacity-50"
         )}>
-            <CardHeader className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 pb-4">
-                <div className="space-y-2 flex-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <CardTitle className="text-base font-headline tracking-tight group-hover:text-primary transition-colors">
-                        <Link href={`/battle/${quiz.id}`}>{quiz.title}</Link>
-                      </CardTitle>
-                      <span className="font-mono text-[11px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-[6px]">{quiz.id}</span>
-                    </div>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <Badge className={cn(
-                            "font-medium h-6",
-                            quiz.archived ? "bg-muted/50 text-muted-foreground" :
-                            quiz.status === 'live' ? "bg-success/10 text-success" :
-                            quiz.status === 'finished' ? "bg-primary/10 text-primary" :
-                            "bg-muted/30 text-muted-foreground"
-                        )}>
-                            {quiz.archived ? 'Archived' : quiz.status.charAt(0).toUpperCase() + quiz.status.slice(1)}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <Users className="w-3.5 h-3.5" />
-                            {participantCount} student{participantCount !== 1 ? 's' : ''}
-                        </span>
-                        {!!quiz.created_at && quiz.created_at > 0 && (
-                          <span className="text-xs text-muted-foreground">{new Date(quiz.created_at).toLocaleDateString()}</span>
-                        )}
-                    </div>
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-                    {!quiz.archived && (
-                      <Button asChild size="sm" variant={quiz.status === 'waiting' ? 'default' : 'outline'}>
-                          <Link href={`/battle/${quiz.id}`}>
-                              {quiz.status === 'waiting' ? (
-                                <><PlayCircle className="mr-1.5 h-4 w-4" /> Start</>
-                              ) : 'Enter'}
-                          </Link>
-                      </Button>
+            <div className="p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-3 mb-1.5">
+                    <Link href={`/battle/${quiz.id}`} className="text-card-title font-headline tracking-tight hover:text-primary transition-colors truncate">
+                      {quiz.title}
+                    </Link>
+                    <Badge className={cn(
+                        "shrink-0 h-6",
+                        quiz.archived ? "bg-muted/50 text-muted-foreground" :
+                        quiz.status === 'live' ? "bg-success/10 text-success" :
+                        quiz.status === 'finished' ? "bg-primary/10 text-primary" :
+                        "bg-muted/30 text-muted-foreground"
+                    )}>
+                        {quiz.archived ? 'Archived' : quiz.status.charAt(0).toUpperCase() + quiz.status.slice(1)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="font-mono text-[11px] bg-muted/50 px-2 py-0.5 rounded-[6px]">{quiz.id}</span>
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      {participantCount} student{participantCount !== 1 ? 's' : ''}
+                    </span>
+                    {!!quiz.created_at && quiz.created_at > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(quiz.created_at).toLocaleDateString()}
+                      </span>
                     )}
-
-                    {!quiz.archived && quiz.status === 'waiting' && (
-                      <Button variant="outline" size="icon" asChild aria-label="Edit quiz">
-                        <Link href={`/teacher/edit-quiz/${quiz.id}`}>
-                          <Pencil className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!quiz.archived && (
+                    <Button asChild size="sm" variant={quiz.status === 'waiting' ? 'default' : 'outline'}>
+                        <Link href={`/battle/${quiz.id}`}>
+                            {quiz.status === 'waiting' ? (
+                              <><PlayCircle className="mr-1.5 h-4 w-4" /> Start</>
+                            ) : 'Enter'}
                         </Link>
-                      </Button>
-                    )}
-
-                    {!quiz.archived && (
-                      <Button variant="outline" size="icon" onClick={handleDuplicate} disabled={isProcessing} aria-label="Duplicate quiz">
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    )}
-
-                    {quiz.status === 'finished' && !quiz.archived && (
-                      <>
-                        <Button variant="outline" size="icon" onClick={handleExportCSV} aria-label="Export results as CSV">
-                          <Download className="w-4 h-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" onClick={handleExportPDF} aria-label="Export results as PDF">
-                          <FileText className="w-4 h-4" />
-                        </Button>
-                      </>
-                    )}
-
-                    {quiz.status === 'finished' && !quiz.archived && (
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="outline" size="icon" disabled={isProcessing} aria-label="Reset quiz">
-                                    <RefreshCw className="w-4 h-4" />
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Reset Quiz?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        This will purge all scores and student entries. The room will return to the 'Waiting' state.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Keep results</AlertDialogCancel>
-                                    <AlertDialogAction onClick={handleResetQuiz}>Reset Room</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    )}
-
-                    <Button variant="outline" size="icon" onClick={handleArchiveToggle} disabled={isProcessing} aria-label={quiz.archived ? 'Restore quiz' : 'Archive quiz'}>
-                      {quiz.archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                     </Button>
+                  )}
 
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="icon" disabled={isProcessing} aria-label="Delete quiz">
-                                <Trash2 className="w-4 h-4" />
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Arena?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This action is permanent. The quiz room and all gladiator history will be destroyed forever.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Destroy Forever</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="More actions">
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      {!quiz.archived && quiz.status === 'waiting' && (
+                        <DropdownMenuItem asChild>
+                          <Link href={`/teacher/edit-quiz/${quiz.id}`}>
+                            <Pencil className="w-4 h-4 mr-2" /> Edit
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={handleDuplicate} disabled={isProcessing}>
+                        <Copy className="w-4 h-4 mr-2" /> Duplicate
+                      </DropdownMenuItem>
+                      {quiz.status === 'finished' && !quiz.archived && (
+                        <>
+                          <DropdownMenuItem onClick={handleExportCSV}>
+                            <Download className="w-4 h-4 mr-2" /> Export CSV
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={handleExportPDF}>
+                            <FileText className="w-4 h-4 mr-2" /> Export PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowResetDialog(true); }}>
+                            <RefreshCw className="w-4 h-4 mr-2" /> Reset
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleArchiveToggle} disabled={isProcessing}>
+                        {quiz.archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
+                        {quiz.archived ? 'Restore' : 'Archive'}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowDeleteDialog(true); }} className="text-destructive focus:text-destructive">
+                        <Trash2 className="w-4 h-4 mr-2" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-            </CardHeader>
-            {participants && participants.some(p => p.status === 'blocked') && (
-              <CardContent className="pt-0 pb-4 px-6">
-                <div className="p-4 bg-destructive/5 rounded-[12px] border border-destructive/10 space-y-2">
-                  <p className="text-[11px] font-semibold text-destructive uppercase tracking-wider">Blocked Students:</p>
-                  {participants.filter(p => p.status === 'blocked').map(p => (
-                    <div key={p.user_id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar className="h-7 w-7"><AvatarFallback className="text-[10px]">B</AvatarFallback></Avatar>
-                        <span className="text-sm">{p.user_id.slice(0, 12)}</span>
+              </div>
+
+              {participantCount > 0 && (
+                <div className="flex items-center gap-3 mt-4 pt-4 border-t border-border/40">
+                  <Progress value={(completedCount / participantCount) * 100} className="h-1.5 flex-1" />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{completedCount}/{participantCount} completed</span>
+                </div>
+              )}
+
+              {participants?.some(p => p.status === 'blocked') && (
+                <div className="mt-4 pt-4 border-t border-border/40">
+                  <div className="p-3 bg-destructive/5 rounded-[12px] border border-destructive/10 space-y-2">
+                    <p className="text-[11px] font-semibold text-destructive uppercase tracking-wider">Blocked Students:</p>
+                    {participants.filter(p => p.status === 'blocked').map(p => (
+                      <div key={p.user_id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar className="h-7 w-7"><AvatarFallback className="text-[10px]">B</AvatarFallback></Avatar>
+                          <span className="text-sm">{p.user_id.slice(0, 12)}</span>
+                        </div>
+                        <Button size="sm" variant="ghost" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10" onClick={() => handleResetStudent(p.user_id)}>Unblock</Button>
                       </div>
-                      <Button size="sm" variant="ghost" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10" onClick={() => handleResetStudent(p.user_id)}>Unblock</Button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </CardContent>
-            )}
+              )}
+            </div>
+
+            <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset Quiz?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will purge all scores and student entries. The room will return to the 'Waiting' state.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Keep results</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleResetQuiz}>Reset Room</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Arena?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action is permanent. The quiz room and all gladiator history will be destroyed forever.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Destroy Forever</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
         </Card>
     );
 };
@@ -378,13 +404,68 @@ export default function TeacherDashboard() {
         <OverviewCards quizzes={quizzes} participants={allParticipants} />
       </div>
 
-      <div className="page-section">
+      <section className="page-section">
+        <div className="flex items-center gap-2.5 mb-4">
+          <Zap className="w-5 h-5 text-primary" />
+          <h2 className="text-section-title tracking-tight">Quick Actions</h2>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Link href="/create-quiz" className="flex flex-col gap-2 p-4 rounded-[18px] border border-border/50 bg-card hover:border-primary/20 hover:bg-primary/[0.02] transition-all duration-150 group">
+            <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors">
+              <PlusCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Create Arena</p>
+              <p className="text-xs text-muted-foreground">Build a new quiz battle</p>
+            </div>
+          </Link>
+          <Link href="/teacher/dashboard" className="flex flex-col gap-2 p-4 rounded-[18px] border border-border/50 bg-card hover:border-primary/20 hover:bg-primary/[0.02] transition-all duration-150 group">
+            <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-warning/10 text-warning group-hover:bg-warning/20 transition-colors">
+              <BarChart3 className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Analytics</p>
+              <p className="text-xs text-muted-foreground">View class performance</p>
+            </div>
+          </Link>
+          <Link href="/teacher/dashboard" className="flex flex-col gap-2 p-4 rounded-[18px] border border-border/50 bg-card hover:border-primary/20 hover:bg-primary/[0.02] transition-all duration-150 group">
+            <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-success/10 text-success group-hover:bg-success/20 transition-colors">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Students</p>
+              <p className="text-xs text-muted-foreground">Manage participants</p>
+            </div>
+          </Link>
+          <Link href="/teacher/dashboard" className="flex flex-col gap-2 p-4 rounded-[18px] border border-border/50 bg-card hover:border-primary/20 hover:bg-primary/[0.02] transition-all duration-150 group">
+            <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">AI Insights</p>
+              <p className="text-xs text-muted-foreground">Smart recommendations</p>
+            </div>
+          </Link>
+        </div>
+      </section>
+
+      <section className="page-section">
+        <div className="flex items-center gap-2.5 mb-4">
+          <Sparkles className="w-5 h-5 text-primary" />
+          <h2 className="text-section-title tracking-tight">AI Workspace</h2>
+        </div>
         <Suspense fallback={<div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="h-32 bg-muted/50 rounded-[18px] animate-pulse" /><div className="h-32 bg-muted/50 rounded-[18px] animate-pulse" /><div className="h-32 bg-muted/50 rounded-[18px] animate-pulse" /></div>}>
           <AIInsightCards />
         </Suspense>
-      </div>
+      </section>
 
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center page-section">
+      <section className="page-section">
+        <div className="flex items-center gap-2.5 mb-4">
+          <BookOpen className="w-5 h-5 text-primary" />
+          <h2 className="text-section-title tracking-tight">Arena Library</h2>
+          <span className="text-sm text-muted-foreground ml-auto">{filteredAndSorted.length} arena{filteredAndSorted.length !== 1 ? 's' : ''}</span>
+        </div>
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mb-6">
         <div className="relative flex-1 max-w-sm">
           <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -418,7 +499,7 @@ export default function TeacherDashboard() {
               key={key}
               onClick={() => setFilterKey(key as FilterKey)}
               className={cn(
-                "px-3.5 py-1.5 rounded-[8px] text-xs font-medium transition-all duration-150",
+                "px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-150",
                 filterKey === key ? "bg-primary text-primary-foreground shadow-elevation-small" : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
               )}
               aria-pressed={filterKey === key}
@@ -429,7 +510,7 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      <div className="space-y-4 page-section">
+      <div className="space-y-4">
         {filteredAndSorted.map(q => <QuizCard key={q.id} quiz={q} onUpdate={fetchQuizzes} />)}
         {filteredAndSorted.length === 0 && (
             <div className="py-16 text-center border-2 border-dashed border-border/50 rounded-[18px]">
@@ -443,10 +524,15 @@ export default function TeacherDashboard() {
             </div>
         )}
       </div>
+      </section>
 
-      <div className="page-section">
+      <section className="page-section">
+        <div className="flex items-center gap-2.5 mb-4">
+          <TrendingUp className="w-5 h-5 text-primary" />
+          <h2 className="text-section-title tracking-tight">Student Activity</h2>
+        </div>
         <StudentActivity quizzes={quizzes} teacherId={user?.id} />
-      </div>
+      </section>
     </div>
   );
 }

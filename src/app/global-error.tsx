@@ -17,7 +17,7 @@ export default function GlobalError({
           </p>
           <button
             onClick={() => reset()}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-[12px] bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-all duration-150 active:scale-[0.97]"
           >
             Try again
           </button>
