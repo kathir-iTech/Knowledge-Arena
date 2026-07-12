@@ -85,6 +85,6 @@ service cloud.firestore {
 
   // Collection group queries for student history
   match /{path=**}/participants/{userId} {
-    allow read: if isSignedIn();
+    allow read: if request.auth != null;
   }
 }

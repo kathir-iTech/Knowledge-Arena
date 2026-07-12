@@ -297,8 +297,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     try {
       if (currentQuestion) {
         const startTime = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
-        await questionService.evaluateQuestion(quiz.id, currentQuestion.id, startTime)
-          .catch(e => console.error('evaluateQuestion failed:', e));
+        await questionService.evaluateQuestion(quiz.id, currentQuestion.id, startTime);
       }
       const nextIdx = (quiz.current_question_index ?? 0) + 1;
       if (nextIdx < (quiz.question_count ?? 0)) {

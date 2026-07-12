@@ -42,6 +42,7 @@ export const participantService = {
     if (!userId) throw new Error('User ID required');
     const db = getFirestore();
     const data: Record<string, unknown> = {
+      user_id: userId,
       score: 0,
       status: 'playing',
       violations_count: 0,
@@ -98,7 +99,7 @@ export const participantService = {
 
   async getStudentHistory(userId: string): Promise<Array<{ quizId: string; title: string; score: number; status: string; created_at: number }>> {
     const db = getFirestore();
-    const q = query(collectionGroup(db, 'participants'), where('__name__', '==', userId));
+    const q = query(collectionGroup(db, 'participants'), where('user_id', '==', userId));
     const snap = await getDocs(q);
     const quizIds = snap.docs.map(d => d.ref.parent.parent?.id).filter(Boolean) as string[];
     if (!quizIds.length) return [];
