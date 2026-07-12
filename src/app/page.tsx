@@ -23,14 +23,17 @@ function PageContent() {
   if (user) return null;
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
+    <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background animate-in">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
-           <BrainCircuit className="w-16 h-16 text-primary mx-auto" aria-hidden="true" />
-          <h1 className="text-4xl font-headline text-primary">Knowledge Arena</h1>
-          <p className="text-muted-foreground">The ultimate quiz battleground. Sign in to enter.</p>
+          <div className="relative inline-flex">
+            <BrainCircuit className="w-16 h-16 text-primary mx-auto" />
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full animate-pulse-soft" />
+          </div>
+          <h1 className="text-4xl font-headline text-primary tracking-tight">Knowledge Arena</h1>
+          <p className="text-sm text-muted-foreground">The ultimate quiz battleground. Sign in to enter.</p>
         </div>
-        <Suspense fallback={<div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-24 mx-auto" /></div>}><LoginForm /></Suspense>
+        <Suspense fallback={<div className="space-y-4"><Skeleton className="h-10 w-full rounded-lg" /><Skeleton className="h-10 w-full rounded-lg" /><Skeleton className="h-10 w-24 mx-auto rounded-lg" /></div>}><LoginForm /></Suspense>
       </div>
     </main>
   );

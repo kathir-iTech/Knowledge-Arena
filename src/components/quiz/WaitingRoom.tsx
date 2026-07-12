@@ -106,85 +106,88 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const areParticipantsLoading = isLoading;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 space-y-6">
-      <header className="text-center">
-        <h1 className="text-4xl font-headline text-primary tracking-tight">Quiz Room: {quiz.title}</h1>
-        <p className="text-muted-foreground">The quiz will begin shortly. Awaiting the host's command.</p>
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 space-y-6 animate-in">
+      <header className="text-center space-y-1">
+        <h1 className="text-3xl md:text-4xl font-headline text-primary tracking-tight">{quiz.title}</h1>
+        <p className="text-sm text-muted-foreground">The quiz will begin shortly. Awaiting the host&apos;s command.</p>
       </header>
 
       {isReconnecting && (
-        <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 px-4 py-2 rounded-full text-sm" role="alert" aria-live="assertive">
-          <Loader2 className="animate-spin h-4 w-4" aria-hidden="true" />
+        <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 px-4 py-2 rounded-lg text-xs" role="alert" aria-live="assertive">
+          <Loader2 className="animate-spin h-3.5 w-3.5" />
           <span>Connection lost. Reconnecting...</span>
         </div>
       )}
 
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 text-sm">
-          <Users className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-          <span className="font-bold">{studentCount}</span>
-          <span className="text-muted-foreground">connected</span>
+        <div className="flex items-center gap-1.5 text-sm">
+          <Users className="w-4 h-4 text-muted-foreground" />
+          <span className="font-semibold">{studentCount}</span>
+          <span className="text-muted-foreground text-xs">connected</span>
         </div>
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-1.5 text-sm">
           {teacherOnline ? (
-            <><Wifi className="w-4 h-4 text-green-500" aria-hidden="true" /><span className="text-green-500">Teacher Online</span></>
+            <><Wifi className="w-4 h-4 text-green-500" /><span className="text-green-500 text-xs font-medium">Teacher Online</span></>
           ) : (
-            <><WifiOff className="w-4 h-4 text-muted-foreground" aria-hidden="true" /><span className="text-muted-foreground">Waiting for Teacher</span></>
+            <><WifiOff className="w-4 h-4 text-muted-foreground" /><span className="text-muted-foreground text-xs">Waiting for Teacher</span></>
           )}
         </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl">
-        <Card className="md:col-span-2 border-accent/50">
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2">
-                <Users />
+        <Card className="md:col-span-2 border-primary/20 shadow-glow-primary">
+          <CardHeader className="pb-3">
+            <CardTitle className="font-headline flex items-center gap-2 text-base">
+                <Users className="w-4 h-4 text-primary" />
                 Gladiators in the Arena
             </CardTitle>
-            <CardDescription>{isTeacher ? `${studentCount} student(s) have joined.` : "See who's ready for battle."}</CardDescription>
+            <CardDescription className="text-xs">{isTeacher ? `${studentCount} student${studentCount !== 1 ? 's' : ''} have joined.` : "See who's ready for battle."}</CardDescription>
           </CardHeader>
           <CardContent>
                 <div className="flex flex-wrap gap-4">
                   {areParticipantsLoading && studentCount === 0 ? (
                      Array.from({ length: 3 }).map((_, i) => (
                       <div key={i} className="flex flex-col items-center gap-2 text-center">
-                        <Skeleton className="h-16 w-16 rounded-full" />
-                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-14 w-14 rounded-full" />
+                        <Skeleton className="h-3 w-16" />
                       </div>
                     ))
                   ) : studentParticipants.length > 0 ? studentParticipants.map(p => (
-                    <div key={p.user_id} className="flex flex-col items-center gap-2 text-center">
-                      <Avatar className="h-16 w-16">
-                        <AvatarFallback className="text-3xl bg-secondary">{p.avatar || '🎮'}</AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium max-w-20 truncate">{p.name || p.user_id.slice(0, 8)}</span>
+                    <div key={p.user_id} className="flex flex-col items-center gap-2 text-center group">
+                      <div className="relative">
+                        <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-primary/10 group-hover:ring-primary/30 transition-all">
+                          <AvatarFallback className="text-2xl bg-secondary">{p.avatar || '🎮'}</AvatarFallback>
+                        </Avatar>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background" />
+                      </div>
+                      <span className="text-xs font-medium max-w-20 truncate">{p.name || p.user_id.slice(0, 8)}</span>
                     </div>
                   )) : (
-                    <p className="text-muted-foreground">Waiting for gladiators to arrive...</p>
+                    <p className="text-sm text-muted-foreground">Waiting for gladiators to arrive...</p>
                   )}
                 </div>
           </CardContent>
         </Card>
         
-        <Card className="bg-secondary">
-          <CardHeader>
-            <CardTitle className="font-headline">Join the Quiz</CardTitle>
-            <CardDescription>Use this code or QR to enter the arena.</CardDescription>
+        <Card className="bg-secondary/30 border-primary/15">
+          <CardHeader className="pb-3">
+            <CardTitle className="font-headline text-base">Join the Quiz</CardTitle>
+            <CardDescription className="text-xs">Use this code or QR to enter the arena.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
-            <div className="text-5xl font-mono font-bold tracking-widest text-primary bg-background/50 p-4 rounded-lg flex items-center gap-2">
+            <div className="text-4xl font-mono font-bold tracking-widest text-primary bg-background/50 px-5 py-3 rounded-xl flex items-center gap-3 border border-primary/10">
               <span>{quiz.id}</span>
-              <Button variant="ghost" size="icon" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
-                <Copy className="w-6 h-6" aria-hidden="true" />
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
+                <Copy className="w-4 h-4" />
               </Button>
             </div>
             {shareableLink && (
-              <div className="bg-white p-4 rounded-lg">
-                <QRCode value={shareableLink} size={Math.min(128, typeof window !== 'undefined' ? window.innerWidth * 0.3 : 128)} aria-label={`QR code to join quiz ${quiz.id}`} />
+              <div className="bg-white p-3 rounded-xl">
+                <QRCode value={shareableLink} size={Math.min(120, typeof window !== 'undefined' ? window.innerWidth * 0.25 : 120)} aria-label={`QR code to join quiz ${quiz.id}`} />
               </div>
             )}
             {!teacherOnline && !isTeacher && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="w-3 h-3" />
                 <span>Quiz starting soon...</span>
               </div>
@@ -197,16 +200,16 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
         <div className="w-full max-w-6xl">
             <Button 
               size="lg" 
-              className="w-full bg-accent hover:bg-accent/80 text-accent-foreground text-lg py-8" 
+              className="w-full bg-accent hover:bg-accent/80 text-accent-foreground text-base font-headline font-semibold h-14 shadow-glow-accent" 
               onClick={handleStartQuiz}
               disabled={studentCount === 0 || areParticipantsLoading}
             >
-              <ShieldCheck className="mr-3 h-6 w-6" />
+              <ShieldCheck className="mr-2.5 h-5 w-5" />
                {areParticipantsLoading && studentCount === 0
                 ? 'Loading participants...'
                 : studentCount === 0 
                 ? 'Waiting for students to join...'
-                : `Start Quiz for ${studentCount} Gladiator(s)`}
+                : `Start Quiz for ${studentCount} Gladiator${studentCount !== 1 ? 's' : ''}`}
             </Button>
         </div>
       )}

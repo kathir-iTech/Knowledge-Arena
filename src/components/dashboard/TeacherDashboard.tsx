@@ -137,59 +137,69 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     };
 
     return (
-        <Card className={cn("bg-secondary/10 border-primary/20 shadow-md", quiz.archived && "opacity-60")}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div className="space-y-1">
-                    <CardTitle className="text-xl hover:text-primary transition-colors">
-                        <Link href={`/battle/${quiz.id}`}>{quiz.title}</Link>
-                    </CardTitle>
-                    <div className="flex gap-2 items-center">
-                        <Badge variant="outline" className="font-mono bg-background">{quiz.id}</Badge>
+        <Card className={cn(
+          "group border-primary/20 transition-all duration-200 hover:shadow-card-hover hover:border-primary/30",
+          quiz.archived && "opacity-50"
+        )}>
+            <CardHeader className="flex flex-col lg:flex-row lg:items-start justify-between gap-3 pb-3">
+                <div className="space-y-2 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CardTitle className="text-lg font-headline tracking-tight group-hover:text-primary transition-colors">
+                          <Link href={`/battle/${quiz.id}`}>{quiz.title}</Link>
+                      </CardTitle>
+                      <Badge variant="outline" className="font-mono text-[10px] bg-background/50 h-5">{quiz.id}</Badge>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
                         <Badge className={cn(
-                            quiz.archived ? "bg-muted text-muted-foreground" :
-                            quiz.status === 'live' ? "bg-green-500/10 text-green-500 border-green-500/20" : 
-                            quiz.status === 'finished' ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary border-primary/20"
+                            "text-[10px] font-semibold h-5",
+                            quiz.archived ? "bg-muted/50 text-muted-foreground" :
+                            quiz.status === 'live' ? "bg-green-500/10 text-green-400 border-green-500/20" : 
+                            quiz.status === 'finished' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                            "bg-primary/10 text-primary border-primary/20"
                         )}>
                             {quiz.archived ? 'ARCHIVED' : quiz.status.toUpperCase()}
                         </Badge>
-                        <span className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Users className="w-4 h-4" />
-                            {participants?.filter(p => p.user_id !== quiz.created_by).length || 0}
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5" />
+                            {participants?.filter(p => p.user_id !== quiz.created_by).length || 0} gladiator{(participants?.filter(p => p.user_id !== quiz.created_by).length || 0) !== 1 ? 's' : ''}
                         </span>
+                        {!!quiz.created_at && quiz.created_at > 0 && (
+                          <span className="text-xs text-muted-foreground">{new Date(quiz.created_at).toLocaleDateString()}</span>
+                        )}
                     </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
                     {!quiz.archived && (
-                      <Button asChild size="sm" variant={quiz.status === 'waiting' ? 'default' : 'outline'}>
+                      <Button asChild size="sm" variant={quiz.status === 'waiting' ? 'default' : 'outline'} className="h-8 text-xs font-semibold">
                           <Link href={`/battle/${quiz.id}`}>
                               {quiz.status === 'waiting' ? (
-                                  <><PlayCircle className="mr-2 h-4 w-4" /> Start Battle</>
-                              ) : 'Enter Arena'}
+                                  <><PlayCircle className="mr-1.5 h-3.5 w-3.5" /> Start</>
+                              ) : 'Enter'}
                           </Link>
                       </Button>
                     )}
 
                     {!quiz.archived && quiz.status === 'waiting' && (
-                      <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" asChild aria-label="Edit quiz">
+                      <Button variant="outline" size="icon" className="h-8 w-8" asChild aria-label="Edit quiz">
                         <Link href={`/teacher/edit-quiz/${quiz.id}`}>
-                          <Pencil className="w-4 h-4" />
+                          <Pencil className="w-3.5 h-3.5" />
                         </Link>
                       </Button>
                     )}
 
                     {!quiz.archived && (
-                      <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleDuplicate} disabled={isProcessing} aria-label="Duplicate quiz">
-                        <Copy className="w-4 h-4" />
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDuplicate} disabled={isProcessing} aria-label="Duplicate quiz">
+                        <Copy className="w-3.5 h-3.5" />
                       </Button>
                     )}
 
                     {quiz.status === 'finished' && !quiz.archived && (
                       <>
-                        <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleExportCSV} aria-label="Export results as CSV">
-                          <Download className="w-4 h-4" />
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleExportCSV} aria-label="Export results as CSV">
+                          <Download className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleExportPDF} aria-label="Export results as PDF">
-                          <FileText className="w-4 h-4" />
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleExportPDF} aria-label="Export results as PDF">
+                          <FileText className="w-3.5 h-3.5" />
                         </Button>
                       </>
                     )}
@@ -197,8 +207,8 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                     {quiz.status === 'finished' && !quiz.archived && (
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" disabled={isProcessing} aria-label="Reset quiz">
-                                    <RefreshCw className="w-4 h-4" />
+                                <Button variant="outline" size="icon" className="h-8 w-8" disabled={isProcessing} aria-label="Reset quiz">
+                                    <RefreshCw className="w-3.5 h-3.5" />
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
@@ -216,14 +226,14 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                         </AlertDialog>
                     )}
 
-                    <Button variant="outline" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" onClick={handleArchiveToggle} disabled={isProcessing} aria-label={quiz.archived ? 'Restore quiz' : 'Archive quiz'}>
-                      {quiz.archived ? <ArchiveRestore className="w-4 h-4" aria-hidden="true" /> : <Archive className="w-4 h-4" aria-hidden="true" />}
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleArchiveToggle} disabled={isProcessing} aria-label={quiz.archived ? 'Restore quiz' : 'Archive quiz'}>
+                      {quiz.archived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
                     </Button>
 
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="icon" className="max-sm:min-h-[44px] max-sm:min-w-[44px]" disabled={isProcessing} aria-label="Delete quiz">
-                                <Trash2 className="w-4 h-4" aria-hidden="true" />
+                            <Button variant="destructive" size="icon" className="h-8 w-8" disabled={isProcessing} aria-label="Delete quiz">
+                                <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -242,14 +252,14 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                 </div>
             </CardHeader>
             {participants && participants.some(p => p.status === 'blocked') && (
-              <CardContent className="pt-2">
-                <div className="space-y-2 p-3 bg-destructive/5 rounded-lg border border-destructive/10">
-                  <p className="text-[10px] font-black text-destructive uppercase tracking-widest">Awaiting Amnesty (Blocked):</p>
+              <CardContent className="pt-0 pb-3 px-4">
+                <div className="p-3 bg-destructive/5 rounded-lg border border-destructive/10 space-y-2">
+                  <p className="text-[10px] font-bold text-destructive uppercase tracking-widest">Awaiting Amnesty (Blocked):</p>
                   {participants.filter(p => p.status === 'blocked').map(p => (
                     <div key={p.user_id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6"><AvatarFallback className="text-[10px]">🎮</AvatarFallback></Avatar>
-                        <span className="text-sm font-medium">{p.user_id.slice(0, 12)}</span>
+                        <span className="text-sm">{p.user_id.slice(0, 12)}</span>
                       </div>
                       <Button size="sm" variant="ghost" className="h-7 px-3 text-xs text-destructive hover:bg-destructive/10" onClick={() => handleResetStudent(p.user_id)}>Unblock</Button>
                     </div>
@@ -312,34 +322,34 @@ export default function TeacherDashboard() {
   if (loading) return <LoadingScreen message="Loading arenas..." />;
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-6xl mx-auto safe-bottom">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-6xl mx-auto safe-bottom animate-in">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-4xl font-headline text-primary">Commander's Dashboard</h1>
-          <p className="text-muted-foreground">Manage your battle rooms and review gladiator performance.</p>
+        <div className="space-y-1">
+          <h1 className="text-3xl md:text-4xl font-headline text-primary tracking-tight">Commander&apos;s Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Manage your battle rooms and review gladiator performance.</p>
         </div>
-        <Button asChild size="lg" className="h-14 px-8 shadow-lg shadow-primary/20">
-            <Link href="/create-quiz"><PlusCircle className="mr-2 h-5 w-5" />Construct New Arena</Link>
+        <Button asChild size="default" className="h-11 px-6 shadow-glow-primary">
+            <Link href="/create-quiz"><PlusCircle className="mr-2 h-4 w-4" />New Arena</Link>
         </Button>
       </header>
 
       <Suspense fallback={<div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="h-32 bg-secondary/10 rounded-xl animate-pulse" /><div className="h-32 bg-secondary/10 rounded-xl animate-pulse" /><div className="h-32 bg-secondary/10 rounded-xl animate-pulse" /></div>}><AIInsightCards /></Suspense>
 
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1 max-w-sm">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search arenas by name or room code..."
-            className="pl-9 h-12 md:h-10 text-sm md:text-base"
+            placeholder="Search by name or room code..."
+            className="pl-9 h-10 text-sm"
             aria-label="Search arenas"
           />
         </div>
         <select
           value={sortKey}
           onChange={e => setSortKey(e.target.value as SortKey)}
-          className="h-12 md:h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Sort quizzes"
         >
           <option value="newest">Newest First</option>
@@ -349,7 +359,7 @@ export default function TeacherDashboard() {
         </select>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-1.5 flex-wrap">
         {[
           { key: 'all', label: 'Active' },
           { key: 'active', label: 'Running' },
@@ -361,8 +371,8 @@ export default function TeacherDashboard() {
             key={key}
             onClick={() => setFilterKey(key as FilterKey)}
             className={cn(
-              "touch-target px-4 md:px-5 py-2 rounded-full text-xs md:text-sm font-semibold transition-all uppercase tracking-wider",
-              filterKey === key ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30" : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/30"
+              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
+              filterKey === key ? "bg-primary text-primary-foreground shadow-sm" : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/30"
             )}
             aria-pressed={filterKey === key}
           >
@@ -371,15 +381,15 @@ export default function TeacherDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {filteredAndSorted.map(q => <QuizCard key={q.id} quiz={q} onUpdate={fetchQuizzes} />)}
         {filteredAndSorted.length === 0 && (
-            <div className="md:col-span-2 py-20 text-center border-2 border-dashed border-muted rounded-3xl">
-                <p className="text-muted-foreground text-lg mb-4">
+            <div className="lg:col-span-2 py-16 text-center border-2 border-dashed border-muted/40 rounded-2xl">
+                <p className="text-muted-foreground mb-4">
                   {searchQuery ? 'No arenas match your search.' : filterKey === 'archived' ? 'No archived arenas.' : filterKey === 'draft' ? 'No draft quizzes.' : filterKey === 'completed' ? 'No completed quizzes.' : filterKey === 'active' ? 'No active quizzes.' : 'No arenas have been constructed yet.'}
                 </p>
                 {!searchQuery && (
-                  <Button asChild variant="outline"><Link href="/create-quiz">Create Your First Quiz</Link></Button>
+                  <Button asChild variant="outline" size="sm"><Link href="/create-quiz">Create Your First Quiz</Link></Button>
                 )}
             </div>
         )}
@@ -421,36 +431,38 @@ function StudentActivity({ quizzes, teacherId }: { quizzes: ValidatedQuiz[]; tea
   if (!students.length) return null;
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div className="flex items-center gap-2">
         <Users className="h-5 w-5 text-primary" />
-        <h2 className="text-2xl font-headline">Gladiator History</h2>
-        <span className="text-sm text-muted-foreground ml-auto">{students.length} unique students</span>
+        <h2 className="text-xl font-headline tracking-tight">Gladiator History</h2>
+        <span className="text-xs text-muted-foreground ml-auto">{students.length} unique student{students.length !== 1 ? 's' : ''}</span>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-border/40">
+      <div className="overflow-x-auto rounded-xl border border-border/30">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-muted/30 border-b border-border/40">
-              <th scope="col" className="text-left p-3 font-semibold text-muted-foreground">Name</th>
-              <th scope="col" className="text-left p-3 font-semibold text-muted-foreground">User ID</th>
-              <th scope="col" className="text-center p-3 font-semibold text-muted-foreground">Battles</th>
-              <th scope="col" className="text-right p-3 font-semibold text-muted-foreground">Total Score</th>
-              <th scope="col" className="text-right p-3 font-semibold text-muted-foreground">Avg Score</th>
+            <tr className="bg-muted/20 border-b border-border/30">
+              <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Name</th>
+              <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">User ID</th>
+              <th scope="col" className="text-center p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Battles</th>
+              <th scope="col" className="text-right p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Total</th>
+              <th scope="col" className="text-right p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Avg</th>
             </tr>
           </thead>
           <tbody>
             {students.map((s, i) => (
-              <tr key={s.userId} className={cn("border-b border-border/20", i % 2 === 0 ? "bg-background" : "bg-muted/10")}>
-                <td className="p-3 font-medium flex items-center gap-2">
-                  <Avatar className="h-6 w-6">
-                    <AvatarFallback className="text-[10px]">{s.name.charAt(0).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  {s.name}
+              <tr key={s.userId} className={cn("border-b border-border/15 transition-colors hover:bg-muted/5", i % 2 === 0 ? "bg-background" : "bg-muted/[0.02]")}>
+                <td className="p-3">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-7 w-7">
+                      <AvatarFallback className="text-xs bg-primary/10 text-primary">{s.name.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <span className="font-medium text-sm">{s.name}</span>
+                  </div>
                 </td>
                 <td className="p-3 font-mono text-xs text-muted-foreground">{s.userId.slice(0, 12)}...</td>
-                <td className="p-3 text-center"><Badge variant="secondary">{s.quizCount}</Badge></td>
-                <td className="p-3 text-right font-semibold">{s.totalScore}</td>
-                <td className="p-3 text-right text-muted-foreground">{s.quizCount ? Math.round(s.totalScore / s.quizCount) : 0}</td>
+                <td className="p-3 text-center"><Badge variant="secondary" className="text-[10px] h-5">{s.quizCount}</Badge></td>
+                <td className="p-3 text-right font-semibold text-sm">{s.totalScore}</td>
+                <td className="p-3 text-right text-muted-foreground text-sm">{s.quizCount ? Math.round(s.totalScore / s.quizCount) : 0}</td>
               </tr>
             ))}
           </tbody>

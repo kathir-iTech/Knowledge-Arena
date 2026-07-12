@@ -58,17 +58,17 @@ export default function EditQuizPage() {
 
   if (error || !quiz) {
     return (
-      <div className="loading-screen flex-col text-center gap-6">
-        <ShieldX className="w-16 h-16 text-destructive crystal-float" />
-        <h1 className="text-3xl font-headline text-destructive">Cannot Edit</h1>
-        <p className="text-muted-foreground max-w-md">{errorMsg}</p>
-        <Button size="lg" onClick={() => router.push('/teacher/dashboard')}>Return to Dashboard</Button>
+      <div className="loading-screen flex-col text-center gap-6 animate-in">
+        <ShieldX className="w-14 h-14 text-destructive" />
+        <h1 className="text-2xl font-headline text-destructive">Cannot Edit</h1>
+        <p className="text-sm text-muted-foreground max-w-md">{errorMsg}</p>
+        <Button size="lg" className="h-11" onClick={() => router.push('/teacher/dashboard')}>Return to Dashboard</Button>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto safe-bottom">
+    <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto safe-bottom animate-in">
       <QuizEditor
         quizId={quizId}
         initialTitle={quiz.title}
