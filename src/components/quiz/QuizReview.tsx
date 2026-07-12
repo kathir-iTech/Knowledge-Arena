@@ -87,8 +87,8 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
   const subMap = new Map(submissions.map(s => [s.questionId, s]));
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-headline text-primary">Post-Battle Debrief</h2>
+    <div className="space-y-4 animate-in">
+      <h2 className="text-xl font-headline text-primary tracking-tight">Post-Battle Debrief</h2>
       <p className="text-sm text-muted-foreground">Review each question and your response.</p>
 
       {questions.map((q, idx) => {
@@ -105,12 +105,12 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono text-muted-foreground">Q{idx + 1}</span>
-                  <Badge variant={mySub ? (isCorrect ? "default" : "destructive") : "outline"}>
+                  <Badge variant={mySub ? (isCorrect ? "default" : "destructive") : "outline"} className="text-[10px] h-5">
                     {mySub ? (isCorrect ? 'CORRECT' : 'WRONG') : 'UNANSWERED'}
                   </Badge>
                 </div>
               </div>
-              <CardTitle className="text-base font-medium pt-2">{q.text}</CardTitle>
+              <CardTitle className="text-base font-medium pt-2 leading-relaxed">{q.text}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {q.options.map((opt, optIdx) => {
@@ -118,16 +118,16 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
                 const isCorrectOpt = optIdx === correctIdx;
                 return (
                   <div key={optIdx} className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border text-sm",
-                    isCorrectOpt && "bg-green-500/10 border-green-500/30 text-green-700",
-                    isSelected && !isCorrectOpt && "bg-red-500/10 border-red-500/30 text-red-700",
-                    !isSelected && !isCorrectOpt && "bg-secondary/20 border-border/50"
+                    "flex items-center gap-3 p-3 rounded-lg border text-sm transition-all",
+                    isCorrectOpt && "bg-green-500/10 border-green-500/30",
+                    isSelected && !isCorrectOpt && "bg-red-500/10 border-red-500/30",
+                    !isSelected && !isCorrectOpt && "bg-secondary/20 border-border/40 hover:border-border/60"
                   )}>
-                    {isCorrectOpt ? <CheckCircle2 className="w-4 h-4 shrink-0 text-green-600" aria-hidden="true" /> :
-                     isSelected ? <XCircle className="w-4 h-4 shrink-0 text-red-600" aria-hidden="true" /> :
-                     <HelpCircle className="w-4 h-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
-                    <span className="font-mono text-xs opacity-50 w-5">{String.fromCharCode(65 + optIdx)}</span>
-                    <span>{opt}</span>
+                    {isCorrectOpt ? <CheckCircle2 className="w-4 h-4 shrink-0 text-green-500" /> :
+                     isSelected ? <XCircle className="w-4 h-4 shrink-0 text-red-500" /> :
+                     <HelpCircle className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                    <span className="font-mono text-xs text-muted-foreground w-5 shrink-0">{String.fromCharCode(65 + optIdx)}</span>
+                    <span className="leading-snug">{opt}</span>
                   </div>
                 );
               })}

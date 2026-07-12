@@ -42,47 +42,47 @@ export default function StudentProfile() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-lg mx-auto space-y-6 safe-bottom">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/student/dashboard')} aria-label="Back to dashboard">
-          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+    <div className="p-4 md:p-6 lg:p-8 max-w-lg mx-auto space-y-6 safe-bottom animate-in">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push('/student/dashboard')} aria-label="Back to dashboard">
+          <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-3xl font-headline text-primary">Gladiator Profile</h1>
+        <h1 className="text-2xl font-headline text-primary tracking-tight">Gladiator Profile</h1>
       </div>
 
-      <Card className="border-primary/20 bg-secondary/10">
-        <CardHeader className="text-center">
+      <Card className="border-primary/20 shadow-glow-primary">
+        <CardHeader className="text-center pb-3">
           <div className="flex justify-center mb-4">
-            <Avatar className="h-24 w-24 border-4 border-primary/20">
+            <Avatar className="h-24 w-24 border-4 border-primary/20 ring-2 ring-primary/10">
               <AvatarFallback className="text-5xl bg-background">{avatar}</AvatarFallback>
             </Avatar>
           </div>
-          <CardTitle className="text-xl">{user?.name || 'Anonymous Gladiator'}</CardTitle>
-          <CardDescription>{user?.email}</CardDescription>
-          <Badge variant="outline" className="mt-2">{user?.role?.toUpperCase()}</Badge>
+          <CardTitle className="text-xl font-headline">{user?.name || 'Anonymous Gladiator'}</CardTitle>
+          <CardDescription className="text-xs">{user?.email}</CardDescription>
+          <div className="mt-2"><Badge variant="outline" className="text-[10px] h-5">{user?.role?.toUpperCase()}</Badge></div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Display Name</label>
+        <CardContent className="space-y-5">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Display Name</label>
             <Input
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
               placeholder="Your gladiator name"
               maxLength={30}
-              className="h-12 text-lg"
+              className="h-11"
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Avatar</label>
-            <div className="flex flex-wrap gap-2">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Avatar</label>
+            <div className="flex flex-wrap gap-1.5">
               {EMOJIS.map(emoji => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => setAvatar(emoji)}
-                  className={`text-2xl w-10 h-10 flex items-center justify-center rounded-lg border transition-all ${
-                    avatar === emoji ? 'border-primary bg-primary/10 scale-110' : 'border-border hover:border-primary/50'
+                  className={`text-lg w-9 h-9 flex items-center justify-center rounded-lg border transition-all duration-150 ${
+                    avatar === emoji ? 'border-primary bg-primary/10 scale-110 shadow-sm' : 'border-border/50 hover:border-primary/40 hover:bg-primary/5'
                   }`}
                   aria-label={`Select avatar ${emoji}`}
                   aria-pressed={avatar === emoji}
@@ -96,9 +96,9 @@ export default function StudentProfile() {
           <Button
             onClick={handleSave}
             disabled={isSaving || !displayName.trim()}
-            className="w-full h-12 text-lg"
+            className="w-full h-11 text-sm font-semibold"
           >
-            {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
+            {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />}
             Save Profile
           </Button>
         </CardContent>

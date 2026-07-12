@@ -55,25 +55,25 @@ export function AnalyticsDashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Analytics Dashboard</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+    <div className="space-y-6 animate-in">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <h2 className="text-2xl font-headline tracking-tight">Analytics Dashboard</h2>
+          <p className="text-xs text-muted-foreground">
             Last updated: {new Date(data.fetchedAt).toLocaleString()}
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleExportCSV} variant="outline" size="sm" aria-label="Export as CSV">
-            <Download className="w-4 h-4 mr-2" aria-hidden="true" />
+          <Button onClick={handleExportCSV} variant="outline" size="sm" className="h-8 text-xs" aria-label="Export as CSV">
+            <Download className="w-3.5 h-3.5 mr-1.5" />
             CSV
           </Button>
-          <Button onClick={handleExportHTML} variant="outline" size="sm" aria-label="Export as HTML report">
-            <FileText className="w-4 h-4 mr-2" aria-hidden="true" />
+          <Button onClick={handleExportHTML} variant="outline" size="sm" className="h-8 text-xs" aria-label="Export as HTML report">
+            <FileText className="w-3.5 h-3.5 mr-1.5" />
             Report
           </Button>
-          <Button onClick={refetch} variant="outline" size="sm" aria-label="Refresh analytics data">
-            <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />
+          <Button onClick={refetch} variant="outline" size="sm" className="h-8 text-xs" aria-label="Refresh analytics data">
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
             Refresh
           </Button>
         </div>

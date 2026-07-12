@@ -71,24 +71,24 @@ export function LoginForm() {
 
 
   return (
-    <Card className="border-border shadow-lg shadow-primary/10">
+    <Card className="border-primary/15 shadow-glow-primary">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="login">Login</TabsTrigger>
-          <TabsTrigger value="signup">Sign Up</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 rounded-t-xl rounded-b-none">
+          <TabsTrigger value="login" className="text-sm">Login</TabsTrigger>
+          <TabsTrigger value="signup" className="text-sm">Sign Up</TabsTrigger>
         </TabsList>
         <TabsContent value="login">
           <Form {...loginForm}>
             <form onSubmit={loginForm.handleSubmit(onLoginSubmit)}>
-              <CardContent className="space-y-4 pt-6">
+              <CardContent className="space-y-4 pt-5">
                 <FormField
                   control={loginForm.control}
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel className="text-xs">Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="gladiator@arena.com" {...field} />
+                        <Input placeholder="gladiator@arena.com" className="h-10" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -99,17 +99,17 @@ export function LoginForm() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Password</FormLabel>
+                      <FormLabel className="text-xs">Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
+                        <Input type="password" placeholder="••••••••" className="h-10" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+              <CardFooter className="pt-2">
+                <Button type="submit" className="w-full h-10 text-sm font-semibold" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Enter Arena
                 </Button>
@@ -120,16 +120,16 @@ export function LoginForm() {
         <TabsContent value="signup">
           <Form {...signupForm}>
             <form onSubmit={signupForm.handleSubmit(onSignupSubmit)}>
-              <CardContent className="space-y-4 pt-6">
-                <p className="text-xs text-muted-foreground text-center -mt-2">Use an email ending in <code className="bg-muted px-1 py-0.5 rounded">{process.env.NEXT_PUBLIC_TEACHER_DOMAIN || '@staffs.com'}</code> to create a Teacher account.</p>
+              <CardContent className="space-y-4 pt-5">
+                <p className="text-xs text-muted-foreground text-center">Use an email ending in <code className="bg-muted px-1 py-0.5 rounded text-[10px]">{process.env.NEXT_PUBLIC_TEACHER_DOMAIN || '@staffs.com'}</code> to create a Teacher account.</p>
                 <FormField
                   control={signupForm.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Full Name</FormLabel>
+                      <FormLabel className="text-xs">Full Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="Your name" {...field} />
+                        <Input placeholder="Your name" className="h-10" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -140,9 +140,9 @@ export function LoginForm() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel className="text-xs">Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="your.email@domain.com" {...field} />
+                        <Input placeholder="your.email@domain.com" className="h-10" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -153,9 +153,9 @@ export function LoginForm() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Password</FormLabel>
+                      <FormLabel className="text-xs">Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
+                        <Input type="password" placeholder="••••••••" className="h-10" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -166,17 +166,17 @@ export function LoginForm() {
                   name="confirmPassword"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Confirm Password</FormLabel>
+                      <FormLabel className="text-xs">Confirm Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
+                        <Input type="password" placeholder="••••••••" className="h-10" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+              <CardFooter className="pt-2">
+                <Button type="submit" className="w-full h-10 text-sm font-semibold" disabled={isLoading}>
                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create Account
                 </Button>
@@ -185,7 +185,7 @@ export function LoginForm() {
           </Form>
         </TabsContent>
       </Tabs>
-      {error && <p className="text-destructive text-center text-sm p-4" role="alert" aria-live="polite">{error}</p>}
+      {error && <p className="text-destructive text-center text-xs p-3 border-t border-border/20" role="alert" aria-live="polite">{error}</p>}
     </Card>
   );
 }

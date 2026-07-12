@@ -74,12 +74,12 @@ export default function CreateQuizPage() {
 
   if (generatedQuestions && !showForgeWithPreserved) {
     return (
-      <div className="p-4 md:p-8 max-w-5xl mx-auto min-h-screen safe-bottom">
+      <div className="p-4 md:p-8 max-w-5xl mx-auto min-h-screen safe-bottom animate-in">
         <header className="mb-8 flex items-center justify-between">
-           <Button variant="ghost" onClick={handleRegenerate}>
+           <Button variant="ghost" onClick={handleRegenerate} className="h-9">
              <ChevronLeft className="mr-2 h-4 w-4" /> Back to Architect
            </Button>
-           <h1 className="text-2xl font-headline text-primary uppercase">Intelligence Review</h1>
+           <h1 className="text-xl font-headline text-primary tracking-tight">Intelligence Review</h1>
         </header>
         <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
           <QuestionReviewPanel 
@@ -95,29 +95,29 @@ export default function CreateQuizPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto min-h-screen safe-bottom">
-      <header className="mb-12">
-        <h1 className="text-5xl font-headline tracking-tighter text-primary uppercase">Arena Architect</h1>
-        <p className="text-muted-foreground text-lg">Design a new battleground. Construct challenges manually or forge them from data.</p>
+    <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto min-h-screen safe-bottom animate-in">
+      <header className="mb-8">
+        <h1 className="text-3xl md:text-4xl font-headline tracking-tight text-primary">Arena Architect</h1>
+        <p className="text-sm text-muted-foreground mt-1">Design a new battleground. Construct challenges manually or forge them from data.</p>
       </header>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-8">
-        <TabsList className="grid w-full grid-cols-2 h-16 bg-secondary/20 p-1 border border-primary/10">
-          <TabsTrigger value="manual" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-lg font-headline uppercase">
-            <PencilRuler className="mr-2 h-5 w-5" /> Manual Construct
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+        <TabsList className="grid w-full grid-cols-2 h-12 bg-secondary/20 p-1 rounded-lg border border-primary/10">
+          <TabsTrigger value="manual" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
+            <PencilRuler className="mr-2 h-4 w-4" /> Manual
           </TabsTrigger>
-          <TabsTrigger value="forge" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-lg font-headline uppercase">
-            <Sparkles className="mr-2 h-5 w-5" /> AI PDF Forge
+          <TabsTrigger value="forge" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
+            <Sparkles className="mr-2 h-4 w-4" /> AI PDF Forge
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="manual" className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <TabsContent value="manual" className="animate-in">
           <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
             <QuizCreatorForm />
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="forge" className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <TabsContent value="forge" className="animate-in">
           <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
             <PDFQuizGenerator onQuestionsGenerated={handleQuestionsGenerated} />
           </Suspense>
