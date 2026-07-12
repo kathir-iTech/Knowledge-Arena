@@ -329,7 +329,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
       {isTeacher && <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} />}
 
-      <Card className="w-full max-w-4xl border-primary/20 bg-card/50 backdrop-blur-sm relative overflow-hidden shadow-glow-primary">
+      <Card className="w-full max-w-4xl border-primary/20 bg-card/50 backdrop-blur-sm relative overflow-hidden shadow-elevation-medium">
         <div className="absolute top-0 left-0 w-full h-1 bg-primary/15">
           <Progress value={(timeLeft / currentQuestion.timer) * 100} className="h-full rounded-none bg-primary transition-all duration-300" />
         </div>
@@ -345,7 +345,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
             {currentQuestion.options.map((opt: string, i: number) => (
               <Button key={i} onClick={() => handleAnswerSubmit(i)} disabled={hasAnswered || isTeacher || timeLeft === 0 || participant.status === 'blocked'} variant={selectedAnswer === i ? 'default' : 'outline'} className={cn(
                   "h-auto min-h-[3.5rem] md:min-h-[5rem] text-sm md:text-base font-medium border whitespace-normal break-words touch-target text-left flex items-center gap-3 px-3 md:px-5 py-2.5 md:py-3.5 transition-all duration-150",
-                  selectedAnswer === i ? "border-primary bg-primary/10 shadow-glow-primary" : "border-border/40 hover:border-primary/40 hover:bg-primary/5",
+                  selectedAnswer === i ? "border-primary bg-primary/10 shadow-elevation-medium" : "border-border/40 hover:border-primary/40 hover:bg-primary/5",
                   hasAnswered && selectedAnswer !== i && "opacity-30"
                 )} aria-label={`Option ${String.fromCharCode(65 + i)}: ${opt}`}>
                 <span className="shrink-0 flex items-center justify-center w-6 h-6 md:w-8 md:h-8 rounded-lg bg-primary/10 text-xs md:text-sm font-semibold font-mono text-primary">{String.fromCharCode(65 + i)}</span>
@@ -355,7 +355,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           </div>
           {isTeacher && (
             <div className="flex flex-col items-center pt-4 md:pt-8 gap-2">
-              <Button onClick={handleNext} disabled={isAdvancing} size="lg" className="w-full md:w-auto h-12 md:h-14 px-8 md:px-14 text-base md:text-lg font-headline font-semibold shadow-glow-primary" aria-busy={isAdvancing}>
+              <Button onClick={handleNext} disabled={isAdvancing} size="lg" className="w-full md:w-auto h-12 md:h-14 px-8 md:px-14 text-base md:text-lg font-headline font-semibold shadow-elevation-medium" aria-busy={isAdvancing}>
                 {isAdvancing ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
                 {(quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
               </Button>

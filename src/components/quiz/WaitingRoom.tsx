@@ -135,7 +135,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl">
-        <Card className="md:col-span-2 border-primary/20 shadow-glow-primary">
+        <Card className="md:col-span-2 border-primary/20 shadow-elevation-medium">
           <CardHeader className="pb-3">
             <CardTitle className="font-headline flex items-center gap-2 text-base">
                 <Users className="w-4 h-4 text-primary" />
@@ -200,7 +200,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
         <div className="w-full max-w-6xl">
             <Button 
               size="lg" 
-              className="w-full bg-accent hover:bg-accent/80 text-accent-foreground text-base font-headline font-semibold h-14 shadow-glow-accent" 
+              className="w-full bg-accent hover:bg-accent/80 text-accent-foreground text-base font-headline font-semibold h-14 shadow-elevation-medium" 
               onClick={handleStartQuiz}
               disabled={studentCount === 0 || areParticipantsLoading}
             >

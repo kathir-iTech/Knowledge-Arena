@@ -71,7 +71,7 @@ export function LoginForm() {
 
 
   return (
-    <Card className="border-primary/15 shadow-glow-primary">
+    <Card className="shadow-elevation-medium">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 rounded-t-xl rounded-b-none">
           <TabsTrigger value="login" className="text-sm">Login</TabsTrigger>
