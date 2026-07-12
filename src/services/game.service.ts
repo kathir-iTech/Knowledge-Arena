@@ -106,18 +106,13 @@ export const questionService = {
     let timerSeconds = 30;
 
     // Idempotency: atomically check if already scored, caching timer value
-    try {
-      await runTransaction(db, async (transaction) => {
-        const qSnap = await transaction.get(questionRef);
-        if (!qSnap.exists()) return;
-        if (qSnap.data().scored) return;
-        timerSeconds = qSnap.data().timer || 30;
-        transaction.update(questionRef, { scored: true });
-      });
-    } catch {
-      // Transaction failed (contention) — skip to prevent double-scoring
-      return;
-    }
+    await runTransaction(db, async (transaction) => {
+      const qSnap = await transaction.get(questionRef);
+      if (!qSnap.exists()) return;
+      if (qSnap.data().scored) return;
+      timerSeconds = qSnap.data().timer || 30;
+      transaction.update(questionRef, { scored: true });
+    });
 
     const timeLimit = timerSeconds * 1000;
 
@@ -251,6 +246,7 @@ export const submissionService = {
         submission.user_id
       ),
       {
+        question_id: submission.question_id,
         selected_option: submission.selected_option,
         submittedAt: Date.now(),
       }

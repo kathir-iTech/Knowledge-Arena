@@ -209,32 +209,46 @@ export const quizService = {
     // Create new quiz
     const quizData = quizSnap.data();
     const now = Date.now();
-    await setDoc(doc(db, 'quizzes', newId), {
-      title: quizData.title,
-      status: 'waiting',
-      current_question_index: -1,
-      question_count: quizData.question_count || questions.length,
-      created_by: creatorId,
-      created_at: now,
-    });
+    const quizDocRef = doc(db, 'quizzes', newId);
 
-    // Duplicate questions with new IDs
-    for (const q of questions) {
-      const newQId = uuidv4();
-      await setDoc(doc(db, 'quizzes', newId, 'questions', newQId), {
-        text: q.text,
-        options: q.options,
-        timer: q.timer,
-        sort_index: q.sort_index,
+    const createdDocs: Array<ReturnType<typeof doc>> = [quizDocRef];
+
+    try {
+      await setDoc(quizDocRef, {
+        title: quizData.title,
+        status: 'waiting',
+        current_question_index: -1,
+        question_count: quizData.question_count || questions.length,
+        created_by: creatorId,
+        created_at: now,
       });
 
-      // Duplicate answer keys
-      const ak = answerKeys[q.id];
-      if (ak) {
-        await setDoc(doc(db, 'quizzes', newId, 'answerKeys', newQId), {
-          correct_option_index: ak.correct_option_index,
+      // Duplicate questions with new IDs
+      for (const q of questions) {
+        const newQId = uuidv4();
+        const qDocRef = doc(db, 'quizzes', newId, 'questions', newQId);
+        createdDocs.push(qDocRef);
+        await setDoc(qDocRef, {
+          text: q.text,
+          options: q.options,
+          timer: q.timer,
+          sort_index: q.sort_index,
         });
+
+        // Duplicate answer keys
+        const ak = answerKeys[q.id];
+        if (ak) {
+          const akDocRef = doc(db, 'quizzes', newId, 'answerKeys', newQId);
+          createdDocs.push(akDocRef);
+          await setDoc(akDocRef, {
+            correct_option_index: ak.correct_option_index,
+          });
+        }
       }
+    } catch (e) {
+      // Rollback: delete every document created so far
+      await Promise.allSettled(createdDocs.map(ref => deleteDoc(ref)));
+      throw e;
     }
 
     return newId;
