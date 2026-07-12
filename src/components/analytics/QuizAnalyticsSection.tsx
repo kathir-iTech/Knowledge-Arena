@@ -13,24 +13,20 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
   AreaChart,
   Area,
 } from './charts';
 import { Clock, Users, Target, Activity, AlertTriangle } from 'lucide-react';
 
 function ScoreDistributionChart({ quiz }: { quiz: QuizAnalytics }) {
-  const BAR_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6'];
+  const BAR_COLORS = ['hsl(var(--destructive))', 'hsl(var(--warning))', '#eab308', 'hsl(var(--success))', 'hsl(var(--primary))'];
   return (
     <div className="h-48">
-      <p className="text-xs font-medium text-muted-foreground mb-2">Score Distribution</p>
+      <p className="text-sm font-medium text-muted-foreground mb-3">Score Distribution</p>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={quiz.scoreDistribution} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis dataKey="range" tick={{ fontSize: 10 }} />
+          <XAxis dataKey="range" tick={{ fontSize: 11 }} />
           <YAxis />
           <Tooltip />
           <Bar dataKey="count" radius={[4, 4, 0, 0]}>
@@ -44,18 +40,20 @@ function ScoreDistributionChart({ quiz }: { quiz: QuizAnalytics }) {
   );
 }
 
+import { Cell } from './charts';
+
 function TimelineChart({ quiz }: { quiz: QuizAnalytics }) {
   if (!quiz.participationTimeline.length) return null;
   return (
     <div className="h-48">
-      <p className="text-xs font-medium text-muted-foreground mb-2">Participation Timeline</p>
+      <p className="text-sm font-medium text-muted-foreground mb-3">Participation Timeline</p>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={quiz.participationTimeline} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis dataKey="time" tick={{ fontSize: 10 }} tickFormatter={v => new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
+          <XAxis dataKey="time" tick={{ fontSize: 11 }} tickFormatter={v => new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
           <YAxis />
           <Tooltip labelFormatter={v => new Date(Number(v)).toLocaleTimeString()} />
-          <Area type="monotone" dataKey="count" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
+          <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.15} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -66,70 +64,70 @@ export function QuizAnalyticsSection({ quizzes }: { quizzes: QuizAnalytics[] }) 
   if (!quizzes.length) {
     return (
       <Card>
-        <CardHeader><CardTitle>Quiz Analytics</CardTitle></CardHeader>
-        <CardContent className="text-center py-8 text-muted-foreground">No finished quizzes yet.</CardContent>
+        <CardHeader><CardTitle className="text-base">Quiz Analytics</CardTitle></CardHeader>
+        <CardContent className="text-center py-12 text-muted-foreground">No finished quizzes yet.</CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-4 mb-8">
-      <div className="flex items-center gap-2">
+    <div className="space-y-6">
+      <div className="flex items-center gap-2.5">
         <h2 className="text-section-title tracking-tight">Quiz Analytics</h2>
       </div>
       {quizzes.map(quiz => (
         <Card key={quiz.quizId}>
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">{quiz.title}</CardTitle>
-              <Badge variant="outline" className="font-mono text-xs">{quiz.quizId}</Badge>
+              <Badge variant="outline" className="font-mono">{quiz.quizId}</Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-              <div className="text-center p-2 bg-muted/30 rounded-lg">
-                <div className="text-lg font-bold">{quiz.finishedParticipants}<span className="text-xs text-muted-foreground ml-1">/ {quiz.totalParticipants}</span></div>
-                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1"><Users className="w-3 h-3" aria-hidden="true" /> Finished</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="text-center p-4 bg-muted/30 rounded-[12px]">
+                <div className="text-xl font-semibold tracking-tight">{quiz.finishedParticipants}<span className="text-sm text-muted-foreground ml-1">/ {quiz.totalParticipants}</span></div>
+                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-1"><Users className="w-3 h-3" aria-hidden="true" /> Finished</div>
               </div>
-              <div className="text-center p-2 bg-muted/30 rounded-lg">
-                <div className="text-lg font-bold">{quiz.averageScore}</div>
-                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1"><Target className="w-3 h-3" aria-hidden="true" /> Avg Score</div>
+              <div className="text-center p-4 bg-muted/30 rounded-[12px]">
+                <div className="text-xl font-semibold tracking-tight">{quiz.averageScore}</div>
+                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-1"><Target className="w-3 h-3" aria-hidden="true" /> Avg Score</div>
               </div>
-              <div className="text-center p-2 bg-muted/30 rounded-lg">
-                <div className="text-lg font-bold">{Math.round(quiz.duration / 60000)}m</div>
-                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1"><Clock className="w-3 h-3" aria-hidden="true" /> Duration</div>
+              <div className="text-center p-4 bg-muted/30 rounded-[12px]">
+                <div className="text-xl font-semibold tracking-tight">{Math.round(quiz.duration / 60000)}m</div>
+                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-1"><Clock className="w-3 h-3" aria-hidden="true" /> Duration</div>
               </div>
-              <div className="text-center p-2 bg-muted/30 rounded-lg">
-                <div className="text-lg font-bold">{quiz.engagementScore}</div>
-                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1"><Activity className="w-3 h-3" aria-hidden="true" /> Engagement</div>
+              <div className="text-center p-4 bg-muted/30 rounded-[12px]">
+                <div className="text-xl font-semibold tracking-tight">{quiz.engagementScore}</div>
+                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-1"><Activity className="w-3 h-3" aria-hidden="true" /> Engagement</div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <ScoreDistributionChart quiz={quiz} />
               <TimelineChart quiz={quiz} />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <span className={cn('inline-block w-2 h-2 rounded-full', quiz.completionPercent >= 50 ? 'bg-green-500' : 'bg-amber-500')} />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 text-sm">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className={cn('inline-block w-2 h-2 rounded-full', quiz.completionPercent >= 50 ? 'bg-success' : 'bg-warning')} />
                 Completion: {quiz.completionPercent}%
               </div>
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="inline-block w-2 h-2 rounded-full bg-destructive" />
                 Dropout: {quiz.dropoutPercent}%
               </div>
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
                 Violations: {quiz.totalViolations}
               </div>
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <Users className="w-3 h-3" aria-hidden="true" />
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Users className="w-3.5 h-3.5" aria-hidden="true" />
                 Blocked: {quiz.blockedParticipants}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2 text-xs text-muted-foreground">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 text-sm text-muted-foreground">
               <div>Median: {quiz.medianScore}</div>
               <div>StdDev: {quiz.stdDevScore}</div>
               <div>Avg Answer: {quiz.averageAnswerTime}s</div>

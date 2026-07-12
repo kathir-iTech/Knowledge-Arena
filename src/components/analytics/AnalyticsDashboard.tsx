@@ -22,7 +22,7 @@ export function AnalyticsDashboard() {
   if (error) {
     return (
       <Card>
-        <CardContent className="py-8 text-center">
+        <CardContent className="py-12 text-center">
           <p className="text-destructive mb-4 text-sm" role="alert">{error}</p>
           <Button onClick={refetch} variant="outline" size="sm"><RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" /> Retry</Button>
         </CardContent>
@@ -55,11 +55,11 @@ export function AnalyticsDashboard() {
   };
 
   return (
-    <div className="space-y-6 animate-in">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="space-y-0.5">
+    <div className="space-y-8 animate-in">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="space-y-1.5">
           <h1 className="text-page-title font-headline tracking-tight">Analytics</h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Last updated: {new Date(data.fetchedAt).toLocaleString()}
           </p>
         </div>

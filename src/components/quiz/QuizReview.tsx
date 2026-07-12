@@ -88,8 +88,8 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
 
   return (
     <div className="space-y-4 animate-in">
-      <h2 className="text-xl font-headline text-primary tracking-tight">Post-Battle Debrief</h2>
-      <p className="text-sm text-muted-foreground">Review each question and your response.</p>
+      <h2 className="text-section-title font-headline tracking-tight">Post-Battle Debrief</h2>
+      <p className="text-base text-muted-foreground">Review each question and your response.</p>
 
       {questions.map((q, idx) => {
         const correctIdx = akMap.get(q.id);
@@ -98,19 +98,19 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
 
         return (
           <Card key={q.id} className={cn(
-            "border-l-4",
-            mySub ? (isCorrect ? "border-l-green-500" : "border-l-red-500") : "border-l-muted"
+            "border-l-[3px]",
+            mySub ? (isCorrect ? "border-l-success" : "border-l-destructive") : "border-l-muted"
           )}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <span className="text-xs font-mono text-muted-foreground">Q{idx + 1}</span>
-                  <Badge variant={mySub ? (isCorrect ? "default" : "destructive") : "outline"} className="text-[10px] h-5 px-1.5">
+                  <Badge variant={mySub ? (isCorrect ? "success" : "destructive") : "outline"} className="h-6">
                     {mySub ? (isCorrect ? 'CORRECT' : 'WRONG') : 'UNANSWERED'}
                   </Badge>
                 </div>
               </div>
-              <CardTitle className="text-base font-medium pt-1 leading-relaxed">{q.text}</CardTitle>
+              <CardTitle className="text-lg font-medium pt-2 leading-relaxed">{q.text}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {q.options.map((opt, optIdx) => {
@@ -118,14 +118,14 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
                 const isCorrectOpt = optIdx === correctIdx;
                 return (
                   <div key={optIdx} className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border text-sm",
-                    isCorrectOpt && "bg-green-500/5 border-green-500/20",
-                    isSelected && !isCorrectOpt && "bg-red-500/5 border-red-500/20",
-                    !isSelected && !isCorrectOpt && "bg-secondary/20 border-border/30"
+                    "flex items-center gap-3 p-3.5 rounded-[12px] border text-sm transition-all",
+                    isCorrectOpt && "bg-success/5 border-success/20",
+                    isSelected && !isCorrectOpt && "bg-destructive/5 border-destructive/20",
+                    !isSelected && !isCorrectOpt && "bg-card border-border/50"
                   )}>
                     <span className="shrink-0 flex items-center justify-center w-5 h-5">
-                      {isCorrectOpt ? <CheckCircle2 className="w-4 h-4 text-green-500" /> :
-                       isSelected ? <XCircle className="w-4 h-4 text-red-500" /> :
+                      {isCorrectOpt ? <CheckCircle2 className="w-4 h-4 text-success" /> :
+                       isSelected ? <XCircle className="w-4 h-4 text-destructive" /> :
                        <HelpCircle className="w-4 h-4 text-muted-foreground" />}
                     </span>
                     <span className="font-mono text-xs text-muted-foreground w-5 shrink-0">{String.fromCharCode(65 + optIdx)}</span>

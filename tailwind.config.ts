@@ -79,10 +79,10 @@ export default {
         '3xl': '1.125rem',
       },
       fontSize: {
-        'display': ['2.5rem', { lineHeight: '1.1', letterSpacing: '-0.03em', fontWeight: '700' }],
-        'page-title': ['1.75rem', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '600' }],
-        'section-title': ['1.25rem', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '600' }],
-        'card-title': ['1rem', { lineHeight: '1.4', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'display': ['3rem', { lineHeight: '1.1', letterSpacing: '-0.03em', fontWeight: '700' }],
+        'page-title': ['2.125rem', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '600' }],
+        'section-title': ['1.5rem', { lineHeight: '1.25', letterSpacing: '-0.015em', fontWeight: '600' }],
+        'card-title': ['1.125rem', { lineHeight: '1.35', letterSpacing: '-0.01em', fontWeight: '600' }],
       },
       keyframes: {
         'accordion-down': {
@@ -109,10 +109,6 @@ export default {
           from: { opacity: '0', transform: 'scale(0.95)' },
           to: { opacity: '1', transform: 'scale(1)' },
         },
-        'pulse-soft': {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.6' },
-        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -121,7 +117,6 @@ export default {
         'slide-up': 'slide-up 0.2s ease-out',
         'slide-down': 'slide-down 0.2s ease-out',
         'scale-in': 'scale-in 0.2s ease-out',
-        'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
       },
     },
   },

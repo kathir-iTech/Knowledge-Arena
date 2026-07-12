@@ -34,26 +34,26 @@ const LiveLeaderboard = ({ quizId, participants, teacherId, currentUserId }: { q
     const total = sortedParticipants.filter(p => p.user_id !== teacherId).length;
 
     return (
-        <Card className="w-full max-w-4xl mt-3 md:mt-6">
-            <CardHeader className="py-2 md:py-3">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Standings ({total})</CardTitle>
+        <Card className="w-full max-w-4xl mt-4 md:mt-6">
+            <CardHeader className="py-3 md:py-4">
+              <CardTitle className="text-sm font-semibold text-muted-foreground">Standings ({total})</CardTitle>
             </CardHeader>
-            <CardContent className="p-2 md:p-4">
-                <div className="flex flex-wrap gap-2 md:gap-3">
+            <CardContent className="p-3 md:p-5">
+                <div className="flex flex-wrap gap-2.5 md:gap-3">
                     {sortedParticipants.filter(p => p.user_id !== teacherId).map((p, idx) => {
                       const rank = idx + 1;
                       const percentile = total > 0 ? Math.round(((total - rank) / total) * 100) : 0;
                       const isSelf = p.user_id === currentUserId;
                       return (
                         <div key={p.user_id} className={cn(
-                          "flex items-center gap-2 md:gap-3 p-1.5 md:p-2 rounded-lg border transition-all duration-150",
-                          isSelf ? "bg-primary/10 border-primary/30 ring-1 ring-primary/20" : p.status === 'blocked' ? "bg-destructive/5 border-destructive/10 opacity-50" : "bg-secondary/20 border-border/30 hover:bg-secondary/30"
+                          "flex items-center gap-2 md:gap-3 p-2 md:p-2.5 rounded-[12px] border transition-all duration-150",
+                          isSelf ? "bg-primary/5 border-primary/20" : p.status === 'blocked' ? "bg-destructive/5 border-destructive/10 opacity-50" : "bg-card border-border/50 hover:border-primary/20"
                         )}>
                             <div className="relative shrink-0">
-                              <Avatar className="h-7 w-7 md:h-8 md:w-8">
+                              <Avatar className="h-8 w-8 md:h-9 md:w-9">
                                   <AvatarFallback className="text-xs md:text-sm bg-secondary">{p.avatar || '🎮'}</AvatarFallback>
                               </Avatar>
-                              <span className={cn("absolute -bottom-1 -right-1 text-[8px] font-bold bg-background border border-border rounded-full w-4 h-4 flex items-center justify-center", rank <= 3 ? "text-primary" : "text-muted-foreground")}>{rank}</span>
+                              <span className={cn("absolute -bottom-1 -right-1 text-[9px] font-bold bg-background border border-border rounded-full w-4 h-4 flex items-center justify-center", rank <= 3 ? "text-primary" : "text-muted-foreground")}>{rank}</span>
                             </div>
                             <div className="flex flex-col min-w-0">
                                 <span className="text-xs md:text-sm font-semibold truncate max-w-[60px] md:max-w-[80px]">{isSelf ? 'You' : p.name || p.user_id.slice(0, 6)}</span>
@@ -61,7 +61,7 @@ const LiveLeaderboard = ({ quizId, participants, teacherId, currentUserId }: { q
                                   {p.status === 'blocked' ? 'BLOCKED' : `${p.score} PTS`}
                                 </span>
                                 {isSelf && p.status !== 'blocked' && (
-                                  <span className="text-[8px] text-muted-foreground">Top {percentile}%</span>
+                                  <span className="text-[9px] text-muted-foreground">Top {percentile}%</span>
                                 )}
                             </div>
                         </div>
@@ -80,32 +80,32 @@ const ParticipantStats = ({ participants, teacherId, submittedCount }: { partici
   const finished = students.filter(p => p.status === 'finished').length;
 
   return (
-    <div className="flex flex-wrap gap-2 justify-center mb-3 md:mb-6">
-      <div className="flex items-center gap-1.5 bg-secondary/30 px-3 py-1.5 rounded-lg text-xs">
+    <div className="flex flex-wrap gap-2 justify-center mb-4 md:mb-6">
+      <div className="flex items-center gap-1.5 bg-muted/50 px-3 py-1.5 rounded-[10px] text-xs">
         <Users className="w-3.5 h-3.5 text-primary" />
         <span className="font-semibold">{students.length}</span>
         <span className="text-muted-foreground">total</span>
       </div>
-      <div className="flex items-center gap-1.5 bg-green-500/10 px-3 py-1.5 rounded-lg text-xs">
-        <User className="w-3.5 h-3.5 text-green-500" />
-        <span className="font-semibold text-green-500">{playing}</span>
+      <div className="flex items-center gap-1.5 bg-success/5 px-3 py-1.5 rounded-[10px] text-xs">
+        <User className="w-3.5 h-3.5 text-success" />
+        <span className="font-semibold text-success">{playing}</span>
         <span className="text-muted-foreground">active</span>
       </div>
-      <div className="flex items-center gap-1.5 bg-blue-500/10 px-3 py-1.5 rounded-lg text-xs">
-        <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />
-        <span className="font-semibold text-blue-500">{submittedCount}</span>
+      <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[10px] text-xs">
+        <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+        <span className="font-semibold text-primary">{submittedCount}</span>
         <span className="text-muted-foreground">answered</span>
       </div>
       {blocked > 0 && (
-        <div className="flex items-center gap-1.5 bg-destructive/10 px-3 py-1.5 rounded-lg text-xs">
+        <div className="flex items-center gap-1.5 bg-destructive/5 px-3 py-1.5 rounded-[10px] text-xs">
           <Ban className="w-3.5 h-3.5 text-destructive" />
           <span className="font-semibold text-destructive">{blocked}</span>
           <span className="text-muted-foreground">blocked</span>
         </div>
       )}
       {finished > 0 && (
-        <div className="flex items-center gap-1.5 bg-blue-500/10 px-3 py-1.5 rounded-lg text-xs">
-          <span className="font-semibold text-blue-500">{finished}</span>
+        <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[10px] text-xs">
+          <span className="font-semibold text-primary">{finished}</span>
           <span className="text-muted-foreground">done</span>
         </div>
       )}
@@ -204,7 +204,6 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     return () => clearInterval(interval);
   }, [currentQuestion, quiz.current_question_index, quiz.question_start_at]);
 
-  // Restore student's existing answer on mount or question change
   useEffect(() => {
     setSelectedAnswer(null);
     setHasAnswered(false);
@@ -278,7 +277,6 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         selected_option: idx
       });
     } catch (e) {
-      // If Firestore rejects (e.g. duplicate submission already exists), don't reset
       if (e instanceof Error && e.message.includes('permission')) {
         setSelectedAnswer(idx);
         setHasAnswered(true);
@@ -318,55 +316,58 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-3 md:p-4 bg-background overflow-x-hidden animate-in">
       <AlertDialog open={showViolationWarning} onOpenChange={setShowViolationWarning}>
-        <AlertDialogContent className="bg-destructive/5 border-destructive/20">
+        <AlertDialogContent className="bg-destructive/5 border-destructive/10">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><ShieldAlert className="w-5 h-5 text-destructive" /> Tab Switch Detected!</AlertDialogTitle>
-            <AlertDialogDescription>Fair play is mandatory. One more switch and you will be blocked from the arena.</AlertDialogDescription>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive"><ShieldAlert className="w-5 h-5 text-destructive" /> Tab Switch Detected</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">Fair play is mandatory. One more switch and you will be blocked from the arena.</AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogAction onClick={() => setShowViolationWarning(false)}>RE-FOCUS</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogFooter><AlertDialogAction onClick={() => setShowViolationWarning(false)} className="bg-destructive hover:bg-destructive/90">I Understand</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {isTeacher && <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} />}
 
       <Card className="w-full max-w-4xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-primary/10">
+        <div className="absolute top-0 left-0 w-full h-1 bg-muted">
           <Progress value={(timeLeft / currentQuestion.timer) * 100} className="h-full rounded-none bg-primary transition-all duration-150" />
         </div>
-        <CardHeader className="pt-8 md:pt-14 pb-4 md:pb-6 px-4 md:px-8">
+        <CardHeader className="pt-8 md:pt-14 pb-4 md:pb-6 px-5 md:px-10">
             <div className="flex justify-between items-center mb-2 md:mb-4">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Question {(quiz.current_question_index ?? 0) + 1} / {quiz.question_count ?? 0}</span>
-                <span className={cn("font-mono text-2xl md:text-4xl font-bold tabular-nums leading-none", timeLeft <= 5 ? "text-destructive" : "text-primary")} aria-live="polite" aria-atomic="true">{timeLeft}s</span>
+                <div className={cn("font-mono text-3xl md:text-5xl font-bold tabular-nums leading-none", timeLeft <= 5 ? "text-destructive" : "text-primary")} aria-live="polite" aria-atomic="true">
+                  <span className={timeLeft <= 5 ? "animate-pulse" : ""}>{timeLeft}</span>
+                  <span className="text-sm md:text-base font-normal text-muted-foreground ml-1">s</span>
+                </div>
             </div>
-            <CardTitle className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
+            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 md:space-y-5 pb-8 md:pb-14 px-4 md:px-8">
+        <CardContent className="space-y-3 md:space-y-4 pb-8 md:pb-14 px-5 md:px-10">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             {currentQuestion.options.map((opt: string, i: number) => (
               <Button key={i} onClick={() => handleAnswerSubmit(i)} disabled={hasAnswered || isTeacher || timeLeft === 0 || participant.status === 'blocked'} variant={selectedAnswer === i ? 'default' : 'outline'} className={cn(
-                  "h-auto min-h-[3.5rem] md:min-h-[4.5rem] text-sm md:text-base font-medium whitespace-normal break-words touch-target text-left flex items-center gap-3 px-3 md:px-5 py-2.5 md:py-3.5 transition-all duration-150",
-                  selectedAnswer === i ? "" : "hover:border-primary/30 hover:bg-primary/5",
+                  "h-auto min-h-[3.5rem] md:min-h-[4.5rem] text-sm md:text-base font-medium whitespace-normal break-words touch-target text-left flex items-center gap-3 px-4 md:px-5 py-3 md:py-3.5 transition-all duration-150 rounded-[14px]",
+                  selectedAnswer === i ? "ring-2 ring-primary/30" : "hover:border-primary/30 hover:bg-primary/5",
                   hasAnswered && selectedAnswer !== i && "opacity-30"
                 )} aria-label={`Option ${String.fromCharCode(65 + i)}: ${opt}`}>
-                <span className="shrink-0 flex items-center justify-center w-6 h-6 md:w-7 md:h-7 rounded-md bg-primary/10 text-xs md:text-sm font-semibold font-mono text-primary">{String.fromCharCode(65 + i)}</span>
+                <span className="shrink-0 flex items-center justify-center w-7 h-7 rounded-[10px] bg-primary/10 text-xs md:text-sm font-semibold font-mono text-primary">{String.fromCharCode(65 + i)}</span>
                 <span className="flex-1 leading-snug">{opt}</span>
               </Button>
             ))}
           </div>
           {isTeacher && (
             <div className="flex flex-col items-center pt-4 md:pt-8 gap-2">
-              <Button onClick={handleNext} disabled={isAdvancing} size="lg" className="w-full md:w-auto h-12 md:h-14 px-8 md:px-14 text-base md:text-lg font-headline font-semibold" aria-busy={isAdvancing}>
+              <Button onClick={handleNext} disabled={isAdvancing} size="lg" className="w-full md:w-auto" aria-busy={isAdvancing}>
                 {isAdvancing ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
                 {(quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
               </Button>
-              <p className="text-xs text-muted-foreground">{submittedCount} / {studentCount} students answered</p>
+              <p className="text-sm text-muted-foreground">{submittedCount} / {studentCount} students answered</p>
             </div>
           )}
           {participant.status === 'blocked' && !isTeacher && (
-             <div className="bg-destructive/5 border border-destructive/10 p-8 rounded-lg text-center space-y-3">
+             <div className="bg-destructive/5 border border-destructive/10 p-8 rounded-[14px] text-center space-y-3">
                 <ShieldAlert className="w-12 h-12 text-destructive mx-auto" />
                 <h3 className="text-xl font-bold text-destructive">Disqualified</h3>
-                <p className="text-sm text-muted-foreground">Malpractice detected. Await Commander Amnesty.</p>
+                <p className="text-sm text-muted-foreground">Malpractice detected. Await commander amnesty.</p>
              </div>
           )}
         </CardContent>

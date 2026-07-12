@@ -19,27 +19,29 @@ export default function KickedPage() {
   const timeStr = blockedAt ? new Date(parseInt(blockedAt)).toLocaleTimeString() : null;
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-5">
-      <ShieldAlert className="w-16 h-16 text-destructive" />
-      <div className="space-y-2">
-        <h1 className="text-2xl font-headline tracking-tight text-destructive">You Have Been Blocked</h1>
-        <p className="text-sm text-muted-foreground max-w-sm">
+    <main className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-6">
+      <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
+        <ShieldAlert className="w-8 h-8 text-destructive" />
+      </div>
+      <div className="space-y-2 max-w-sm">
+        <h1 className="text-page-title font-headline tracking-tight text-destructive">You Have Been Blocked</h1>
+        <p className="text-base text-muted-foreground">
           Malpractice was detected. Fair play is required in the arena.
         </p>
       </div>
       <div className="flex flex-wrap gap-3 justify-center">
-        <div className="flex items-center gap-1.5 bg-destructive/10 px-3 py-1.5 rounded-full text-xs">
-          <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+        <div className="flex items-center gap-1.5 bg-destructive/10 px-3 py-1.5 rounded-full text-xs font-medium text-destructive">
+          <AlertTriangle className="w-3.5 h-3.5" />
           <span>Violations: {violations}</span>
         </div>
         {timeStr && (
-          <div className="flex items-center gap-1.5 bg-secondary/30 px-3 py-1.5 rounded-full text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 bg-muted/30 px-3 py-1.5 rounded-full text-xs text-muted-foreground">
             <Clock className="w-3.5 h-3.5" />
             <span>Blocked at: {timeStr}</span>
           </div>
         )}
       </div>
-      <p className="text-sm text-muted-foreground max-w-sm">
+      <p className="text-base text-muted-foreground max-w-sm">
         Wait for your teacher to review and reset your attempt from the dashboard.
         Refreshing the page will not remove the block.
       </p>

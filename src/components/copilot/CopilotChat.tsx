@@ -78,13 +78,13 @@ export function CopilotChat() {
       <SheetTrigger asChild>
         <Button
           size="icon"
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl shadow-primary/30 z-50"
+          className="fixed bottom-6 right-6 h-12 w-12 rounded-full shadow-elevation-large z-50"
         >
           {isOpen ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
         </Button>
       </SheetTrigger>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
-        <SheetHeader className="px-4 py-3 border-b border-border/30 shrink-0">
+        <SheetHeader className="px-4 py-3.5 border-b border-border/50 shrink-0">
           <SheetTitle className="flex items-center gap-2 text-primary text-sm">
             <Bot className="h-4 w-4" />
             Tactical Assistant
@@ -108,12 +108,12 @@ export function CopilotChat() {
                   {msg.role === 'user' ? <User className="h-3.5 w-3.5 text-primary" /> : <Bot className="h-3.5 w-3.5 text-accent" />}
                 </div>
                 <div className={cn(
-                  "rounded-lg px-3.5 py-2 text-sm leading-relaxed",
+                  "rounded-[12px] px-4 py-2.5 text-sm leading-relaxed",
                   msg.role === 'user'
                     ? "bg-primary text-primary-foreground"
                     : msg.content.startsWith('Error:')
                       ? "bg-destructive/5 border border-destructive/10 text-destructive"
-                      : "bg-secondary/30 border border-border/20"
+                      : "bg-secondary border border-border/50"
                 )}>
                   {msg.content}
                 </div>
@@ -136,7 +136,7 @@ export function CopilotChat() {
           </div>
         </ScrollArea>
 
-        <div className="p-3 border-t border-border/30 shrink-0">
+        <div className="p-4 border-t border-border/50 shrink-0">
           <form
             onSubmit={(e) => { e.preventDefault(); handleSend(); }}
             className="flex gap-2"
@@ -146,12 +146,10 @@ export function CopilotChat() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask the Tactical Assistant..."
               disabled={isLoading}
-              className="h-10 text-sm"
             />
             <Button
               type="submit"
               size="icon"
-              className="h-10 w-10 shrink-0"
               disabled={isLoading || !input.trim()}
             >
               <Send className="h-4 w-4" />

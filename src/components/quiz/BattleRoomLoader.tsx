@@ -90,15 +90,19 @@ export default function BattleRoomLoader() {
 
   if (error || !quiz) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4" role="alert">
-         <ShieldX className="w-16 h-16 text-destructive" aria-hidden="true" />
-        <h1 className="text-3xl font-headline text-destructive">Room Not Found</h1>
-        <p className="text-muted-foreground max-w-md">{error || 'This quiz room does not exist or has been closed.'}</p>
-        <div className="flex gap-4">
-          <Button variant="outline" size="lg" onClick={() => setRetryCount(c => c + 1)}>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in" role="alert">
+        <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
+          <ShieldX className="w-8 h-8 text-destructive" aria-hidden="true" />
+        </div>
+        <div className="space-y-2 max-w-sm">
+          <h1 className="text-page-title font-headline tracking-tight text-destructive">Room Not Found</h1>
+          <p className="text-base text-muted-foreground">{error || 'This quiz room does not exist or has been closed.'}</p>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setRetryCount(c => c + 1)}>
             <RefreshCw className="mr-2 h-4 w-4" /> Retry
           </Button>
-          <Button size="lg" onClick={() => router.push('/')}>Return to Dashboard</Button>
+          <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
         </div>
       </div>
     );
@@ -136,11 +140,15 @@ export default function BattleRoomLoader() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4">
-        <ShieldX className="w-16 h-16 text-destructive" />
-        <h1 className="text-2xl font-headline">Unexpected State</h1>
-        <p className="text-muted-foreground max-w-md">This room is in an unexpected state. Please try again later.</p>
-        <Button size="lg" onClick={() => router.push('/')}>Return to Dashboard</Button>
+    <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in">
+        <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
+          <ShieldX className="w-8 h-8 text-destructive" />
+        </div>
+        <div className="space-y-2 max-w-sm">
+          <h1 className="text-page-title font-headline tracking-tight text-destructive">Unexpected State</h1>
+          <p className="text-base text-muted-foreground">This room is in an unexpected state. Please try again later.</p>
+        </div>
+        <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
     </div>
   );
 }

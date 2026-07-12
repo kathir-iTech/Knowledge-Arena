@@ -42,67 +42,69 @@ export function StudentAnalyticsSection({ students }: { students: StudentAnalyti
   if (!students.length) {
     return (
       <Card>
-        <CardHeader><CardTitle>Student Analytics</CardTitle></CardHeader>
-        <CardContent className="text-center py-8 text-muted-foreground">No student data yet.</CardContent>
+        <CardHeader><CardTitle className="text-base">Student Analytics</CardTitle></CardHeader>
+        <CardContent className="text-center py-12 text-muted-foreground">No student data yet.</CardContent>
       </Card>
     );
   }
 
   const chartData = filtered.slice(0, 20).map(s => ({ name: s.name, score: s.averageScore }));
-  const barColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+  const barColors = ['hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
   return (
-    <Card className="mb-8">
+    <Card>
       <CardHeader>
-        <CardTitle>Student Analytics</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Student Analytics</CardTitle>
+        </div>
         <div className="relative mt-2">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
           <Input
             placeholder="Search students..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-9 max-w-xs"
+            className="pl-10 max-w-xs"
             aria-label="Search students"
           />
         </div>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-[12px] border border-border/50">
           <table className="w-full text-sm" role="table">
             <thead>
-              <tr className="border-b">
-                <th scope="col" className="text-left py-2 px-3 font-medium text-muted-foreground">Student</th>
-                <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Attended</th>
-                <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Completed</th>
-                <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Avg Score</th>
-                <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">High / Low</th>
-                <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Percentile</th>
-                <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Trend</th>
-                <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Avg Time</th>
-                <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Violations</th>
+              <tr className="bg-muted/30 border-b border-border/50">
+                <th scope="col" className="text-left py-3 px-4 font-medium text-muted-foreground text-xs">Student</th>
+                <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Attended</th>
+                <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Completed</th>
+                <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Avg Score</th>
+                <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">High / Low</th>
+                <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Percentile</th>
+                <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Trend</th>
+                <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Avg Time</th>
+                <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Violations</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(s => (
-                <tr key={s.userId} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                  <td className="py-2 px-3">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-7 h-7">
-                        <AvatarFallback className="text-sm">{s.avatar}</AvatarFallback>
+                <tr key={s.userId} className="border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar className="w-8 h-8">
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary">{s.avatar}</AvatarFallback>
                       </Avatar>
-                      <span className="font-medium">{s.name}</span>
+                      <span className="font-medium text-sm">{s.name}</span>
                     </div>
                   </td>
-                  <td className="text-center py-2 px-3">{s.quizzesAttended}</td>
-                  <td className="text-center py-2 px-3">{s.quizzesCompleted} <span className="text-muted-foreground text-xs">({s.completionPercent}%)</span></td>
-                  <td className="text-center py-2 px-3 font-semibold">{s.averageScore}</td>
-                  <td className="text-center py-2 px-3 text-xs">
+                  <td className="text-center py-3 px-4 text-sm">{s.quizzesAttended}</td>
+                  <td className="text-center py-3 px-4 text-sm">{s.quizzesCompleted} <span className="text-muted-foreground text-xs">({s.completionPercent}%)</span></td>
+                  <td className="text-center py-3 px-4 font-semibold text-sm">{s.averageScore}</td>
+                  <td className="text-center py-3 px-4 text-xs">
                     <span className="text-success">{s.highestScore}</span>
                     <span className="text-muted-foreground mx-1">/</span>
                     <span className="text-destructive">{s.lowestScore}</span>
                   </td>
-                  <td className="text-center py-2 px-3"><PercentileBadge pct={s.latestPercentile} /></td>
-                  <td className="text-center py-2 px-3">
+                  <td className="text-center py-3 px-4"><PercentileBadge pct={s.latestPercentile} /></td>
+                  <td className="text-center py-3 px-4">
                     <div className="flex items-center justify-center gap-1">
                       <TrendIcon trend={s.improvementTrend} />
                       <span className={cn('text-xs', s.improvementTrend > 0 ? 'text-success' : s.improvementTrend < 0 ? 'text-destructive' : 'text-muted-foreground')}>
@@ -110,17 +112,17 @@ export function StudentAnalyticsSection({ students }: { students: StudentAnalyti
                       </span>
                     </div>
                   </td>
-                  <td className="text-center py-2 px-3">
+                  <td className="text-center py-3 px-4">
                     <span className="text-xs flex items-center justify-center gap-1">
                       <Clock className="w-3 h-3" aria-hidden="true" />
                       {s.averageAnswerTime}s
                     </span>
                   </td>
-                  <td className="text-center py-2 px-3">
+                  <td className="text-center py-3 px-4">
                     <span className={cn('flex items-center justify-center gap-1 text-xs', s.totalViolations > 0 ? 'text-destructive' : 'text-muted-foreground')}>
                       <AlertTriangle className="w-3 h-3" aria-hidden="true" />
                       {s.totalViolations}
-                      {s.blockedCount > 0 && <Badge variant="destructive" className="ml-1 text-[10px] px-1 py-0">{s.blockedCount}B</Badge>}
+                      {s.blockedCount > 0 && <Badge variant="destructive" className="ml-1 h-5 px-1 text-[10px]">{s.blockedCount}B</Badge>}
                     </span>
                   </td>
                 </tr>

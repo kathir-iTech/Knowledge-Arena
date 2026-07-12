@@ -4,15 +4,17 @@ import { FileSearch } from 'lucide-react';
 
 export default function NotFound() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-5">
-      <FileSearch className="w-16 h-16 text-muted-foreground" />
-      <div className="space-y-2">
-        <h1 className="text-2xl font-headline tracking-tight">Page not found</h1>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          The page you're looking for doesn't exist or has been moved.
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-6">
+      <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-muted">
+        <FileSearch className="w-8 h-8 text-muted-foreground" />
+      </div>
+      <div className="space-y-2 max-w-sm">
+        <h1 className="text-page-title font-headline tracking-tight">Page not found</h1>
+        <p className="text-base text-muted-foreground">
+          The page you&apos;re looking for doesn&apos;t exist or has been moved.
         </p>
       </div>
-      <Button asChild>
+      <Button asChild variant="outline">
         <Link href="/">Go home</Link>
       </Button>
     </div>
