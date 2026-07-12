@@ -33,15 +33,15 @@ const GenerateQuizFromPDFOutputSchema = z.object({
   questions: z.array(QuizQuestionOutputSchema),
   difficulty: z.string(),
   engine: z.string().optional(),
+  error: z.string().optional(),
 });
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
 // Ordered fallback chain — tries each model in order until one succeeds.
-// All models verified as supported by @genkit-ai/googleai v1.28.0
 const MODEL_FALLBACK_CHAIN = [
+  'gemini-2.5-flash',
   'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash',
+  'gemini-2.5-pro',
 ];
 
 function isAuthError(err: unknown): boolean {
@@ -67,8 +67,16 @@ function isRateLimitError(err: unknown): boolean {
   );
 }
 
-async function callGeminiWithFallback(promptText: string) {
+type QuizQuestions = z.infer<typeof QuizQuestionOutputSchema>[];
+
+type GeminiResult =
+  | { ok: true; output: { questions: QuizQuestions }; engine: string }
+  | { ok: false; reason: 'quota_exceeded'; errors: string[] }
+  | { ok: false; reason: 'all_models_failed'; errors: string[] };
+
+async function callGeminiWithFallback(promptText: string): Promise<GeminiResult> {
   const errors: string[] = [];
+  let allQuota = true;
 
   for (const modelName of MODEL_FALLBACK_CHAIN) {
     try {
@@ -86,7 +94,7 @@ async function callGeminiWithFallback(promptText: string) {
         throw new Error(`EMPTY_OUTPUT_${modelName}`);
       }
 
-      return { output: response.output, engine: modelName };
+      return { ok: true, output: response.output as { questions: QuizQuestions }, engine: modelName };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${modelName}: ${msg}`);
@@ -94,11 +102,17 @@ async function callGeminiWithFallback(promptText: string) {
       if (isAuthError(err)) {
         throw err;
       }
+      if (!isRateLimitError(err)) {
+        allQuota = false;
+      }
       continue;
     }
   }
 
-  throw new Error(`ALL_MODELS_EXHAUSTED: ${errors.join(' | ')}`);
+  if (allQuota) {
+    return { ok: false, reason: 'quota_exceeded', errors };
+  }
+  return { ok: false, reason: 'all_models_failed', errors };
 }
 
 export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Promise<GenerateQuizFromPDFOutput> {
@@ -172,11 +186,21 @@ Output format MUST be a JSON object with a "questions" array:
 Content:
 ${text.substring(0, 40000)}`;
 
-    const { output, engine } = await callGeminiWithFallback(promptText);
+    const result = await callGeminiWithFallback(promptText);
+    if (!result.ok) {
+      return {
+        questions: [],
+        difficulty: input.difficulty,
+        engine: result.reason,
+        error: result.reason === 'quota_exceeded'
+          ? 'AI generation temporarily unavailable due to quota limits.'
+          : 'AI generation failed. Please try again.',
+      };
+    }
     return {
-      questions: output.questions,
+      questions: result.output.questions,
       difficulty: input.difficulty,
-      engine
+      engine: result.engine,
     };
   }
 );

@@ -5,13 +5,33 @@ import { firebaseConfig } from '@/firebase/config';
 function initAdmin() {
   if (getApps().length) return getApp();
 
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  console.log("[firebase-admin] FIREBASE_SERVICE_ACCOUNT_KEY exists:", !!raw);
+  if (raw) {
+    console.log("[firebase-admin] key length:", raw.length);
+    console.log("[firebase-admin] starts with:", raw.substring(0, 40));
+    console.log("[firebase-admin] ends with:", raw.substring(raw.length - 40));
+
+    let parsed: Record<string, unknown>;
     try {
-      return initializeApp({
-        credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)),
-      });
+      parsed = JSON.parse(raw);
     } catch (e) {
-      throw new Error(`Firebase Admin SDK: Invalid FIREBASE_SERVICE_ACCOUNT_KEY. ${e}`);
+      const hint = e instanceof SyntaxError
+        ? `Invalid JSON at position ${(e as unknown as { position?: number }).position ?? 'unknown'}. Expected the full service account JSON object (not the Node.js snippet).`
+        : `Parse failed: ${e}`;
+      throw new Error(`Firebase Admin SDK: ${hint}`);
+    }
+
+    if (!parsed.type || !parsed.project_id || !parsed.private_key || !parsed.client_email) {
+      throw new Error(
+        'Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY is missing required fields (type, project_id, private_key, client_email). Ensure the full service account JSON is provided, not a partial snippet.'
+      );
+    }
+
+    try {
+      return initializeApp({ credential: cert(parsed) });
+    } catch (e) {
+      throw new Error(`Firebase Admin SDK: Initialization failed. ${e}`);
     }
   }
 
