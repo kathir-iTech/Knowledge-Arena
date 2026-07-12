@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Save, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
 const EMOJIS = [
   '🤖', '👾', '🔮', '🧠', '👻', '🧑‍🚀', '🧛', '🧟', '🧞', '🦹', '🦸',
@@ -32,7 +33,7 @@ export default function StudentProfile() {
     setIsSaving(true);
     try {
       await updateProfile({ name: displayName.trim(), avatar });
-      toast({ title: 'Profile Updated', description: 'Your gladiator profile has been updated.' });
+      toast({ title: 'Profile Updated', description: 'Your profile has been updated.' });
       router.push('/student/dashboard');
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to update profile.' });
@@ -44,45 +45,45 @@ export default function StudentProfile() {
   return (
     <div className="page-container space-y-6 safe-bottom animate-in">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push('/student/dashboard')} aria-label="Back to dashboard">
+        <Button variant="ghost" size="icon" onClick={() => router.push('/student/dashboard')} aria-label="Back to dashboard">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-page-title font-headline text-primary tracking-tight">Gladiator Profile</h1>
+        <h1 className="text-page-title font-headline tracking-tight">Profile</h1>
       </div>
 
       <Card>
-        <CardHeader className="text-center pb-3">
+        <CardHeader className="text-center pb-4">
           <div className="flex justify-center mb-4">
-            <Avatar className="h-24 w-24 border-4 border-primary/10">
+            <Avatar className="h-24 w-24 ring-4 ring-primary/10">
               <AvatarFallback className="text-5xl bg-secondary">{avatar}</AvatarFallback>
             </Avatar>
           </div>
-          <CardTitle className="text-xl font-headline">{user?.name || 'Anonymous Gladiator'}</CardTitle>
-          <CardDescription className="text-xs">{user?.email}</CardDescription>
-          <div className="mt-2"><Badge variant="outline" className="text-[10px] h-5">{user?.role?.toUpperCase()}</Badge></div>
+          <CardTitle className="text-xl font-headline">{user?.name || 'Anonymous'}</CardTitle>
+          <CardDescription className="text-sm">{user?.email}</CardDescription>
+          <div className="mt-2"><Badge variant="outline" className="h-6">{user?.role?.toUpperCase()}</Badge></div>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Display Name</label>
+            <label className="text-sm font-medium text-muted-foreground">Display Name</label>
             <Input
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
-              placeholder="Your gladiator name"
+              placeholder="Your name"
               maxLength={30}
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Avatar</label>
+            <label className="text-sm font-medium text-muted-foreground">Avatar</label>
             <div className="flex flex-wrap gap-1.5">
               {EMOJIS.map(emoji => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => setAvatar(emoji)}
-                  className={`text-lg w-9 h-9 flex items-center justify-center rounded-lg border transition-all duration-150 ${
-                    avatar === emoji ? 'border-primary bg-primary/10' : 'border-border/40 hover:border-primary/30 hover:bg-primary/5'
-                  }`}
+                  className={cn(`text-lg w-9 h-9 flex items-center justify-center rounded-[10px] border transition-all duration-150`,
+                    avatar === emoji ? 'border-primary bg-primary/10' : 'border-border/50 hover:border-primary/30 hover:bg-primary/5'
+                  )}
                   aria-label={`Select avatar ${emoji}`}
                   aria-pressed={avatar === emoji}
                 >

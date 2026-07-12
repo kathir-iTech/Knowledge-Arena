@@ -18,7 +18,7 @@ const cards = [
 
 export function QuizOverviewCards({ overview }: { overview: OverviewStats }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {cards.map(c => {
         const Icon = c.icon;
         let value: string | number = (overview as unknown as Record<string, number>)[c.key] ?? 0;
@@ -30,13 +30,13 @@ export function QuizOverviewCards({ overview }: { overview: OverviewStats }) {
           }
         }
         return (
-          <Card key={c.key} className="border-border/30 transition-all duration-200 hover:border-primary/20">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground">{c.label}</CardTitle>
+          <Card key={c.key}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 px-5 pt-5">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{c.label}</CardTitle>
               <Icon className={`w-4 h-4 ${c.color}`} />
             </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <div className="text-xl font-bold tracking-tight">{value}{c.suffix || ''}</div>
+            <CardContent className="px-5 pb-5">
+              <div className="text-2xl font-semibold tracking-tight">{value}{c.suffix || ''}</div>
             </CardContent>
           </Card>
         );

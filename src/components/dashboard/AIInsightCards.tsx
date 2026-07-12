@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useFirebase } from '@/firebase';
-import { RefreshCw, TrendingUp, BookOpen, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { RefreshCw, TrendingUp, BookOpen, ShieldCheck, AlertTriangle, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface PredictionData {
   trend: string;
@@ -62,139 +63,116 @@ function useAIFetch<T>(url: string) {
   return { data, isLoading, error, refetch: fetchData };
 }
 
-function CardSkeleton() {
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-4 rounded" />
-            <Skeleton className="h-4 w-28" />
-          </div>
-          <Skeleton className="h-6 w-6 rounded" />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-2.5">
-        <Skeleton className="h-3.5 w-full" />
-        <Skeleton className="h-3.5 w-3/4" />
-        <Skeleton className="h-3.5 w-5/6" />
-      </CardContent>
-    </Card>
-  );
-}
+const tabs = [
+  { id: 'prediction', label: 'Prediction', icon: TrendingUp },
+  { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
+  { id: 'decisions', label: 'Decisions', icon: ShieldCheck },
+];
 
-function InfoCardShell({ icon, label, color, isLoading, error, onRefresh, children }: {
-  icon: React.ElementType; label: string; color: string;
-  isLoading: boolean; error: string | null; onRefresh: () => void;
-  children: React.ReactNode;
-}) {
-  const Icon = icon;
-  return (
-    <Card className={cn("transition-all duration-200 hover:shadow-elevation-hover", isLoading && "opacity-60")}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <Icon className={cn("w-4 h-4", color)} />
-          {label}
-        </CardTitle>
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={onRefresh} disabled={isLoading} aria-label={`Refresh ${label}`}>
-          <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
-        </Button>
-      </CardHeader>
-      <CardContent className="min-h-[80px]">
-        {isLoading ? (
-          <div className="space-y-2" aria-hidden="true">
-            <Skeleton className="h-3.5 w-full" />
-            <Skeleton className="h-3.5 w-3/4" />
-            <Skeleton className="h-3.5 w-2/3" />
-          </div>
-        ) : error ? (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Currently unavailable.</p>
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onRefresh}>Try Again</Button>
-          </div>
-        ) : (
-          children
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function PredictionCard() {
+function PredictionPanel() {
   const { data, isLoading, error, refetch } = useAIFetch<PredictionData>('/api/predictions/summary');
 
+  if (isLoading) return <div className="space-y-3 py-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-2/3" /></div>;
+  if (error) return <div className="text-center py-6"><p className="text-sm text-muted-foreground mb-3">Prediction data unavailable.</p><Button variant="outline" size="sm" onClick={refetch}>Try Again</Button></div>;
+  if (!data) return null;
+
   return (
-    <InfoCardShell icon={TrendingUp} label="Prediction Engine" color="text-primary" isLoading={isLoading} error={error} onRefresh={refetch}>
-      {data && (
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Trend</span>
-            <span className="font-medium text-xs">{data.trend}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Engagement</span>
-            <Badge variant="outline" className="font-mono text-[10px] h-5">{data.predictedEngagement}%</Badge>
-          </div>
-          <p className="text-xs text-muted-foreground/80 leading-relaxed pt-1 border-t border-border/20">{data.recommendation}</p>
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <span className="text-xs text-muted-foreground">Trend</span>
+          <p className="text-sm font-medium">{data.trend}</p>
         </div>
-      )}
-    </InfoCardShell>
+        <div className="space-y-1.5">
+          <span className="text-xs text-muted-foreground">Engagement</span>
+          <Badge variant="success" className="font-mono h-6">{data.predictedEngagement}%</Badge>
+        </div>
+      </div>
+      <div className="pt-3 border-t border-border/50">
+        <p className="text-sm text-muted-foreground leading-relaxed">{data.recommendation}</p>
+      </div>
+    </div>
   );
 }
 
-function KnowledgeCard() {
+function KnowledgePanel() {
   const { data, isLoading, error, refetch } = useAIFetch<KnowledgeData>('/api/knowledge/summary');
 
+  if (isLoading) return <div className="space-y-3 py-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-2/3" /></div>;
+  if (error) return <div className="text-center py-6"><p className="text-sm text-muted-foreground mb-3">Knowledge data unavailable.</p><Button variant="outline" size="sm" onClick={refetch}>Try Again</Button></div>;
+  if (!data) return null;
+
   return (
-    <InfoCardShell icon={BookOpen} label="Knowledge Engine" color="text-primary" isLoading={isLoading} error={error} onRefresh={refetch}>
-      {data && (
-        <div className="space-y-2.5">
-          <p className="text-xs text-muted-foreground/80 leading-relaxed">{data.insight}</p>
-          {data.topicCoverage.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {data.topicCoverage.map((topic, i) => (
-                <Badge key={i} variant="secondary" className="text-[9px] h-5">{topic}</Badge>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-primary font-medium pt-1 border-t border-border/20">{data.nextStrategicMove}</p>
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground leading-relaxed">{data.insight}</p>
+      {data.topicCoverage.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {data.topicCoverage.map((topic, i) => (
+            <Badge key={i} variant="secondary" className="h-6">{topic}</Badge>
+          ))}
         </div>
       )}
-    </InfoCardShell>
+      <div className="pt-3 border-t border-border/50 flex items-start gap-2.5">
+        <Sparkles className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+        <p className="text-sm font-medium text-primary">{data.nextStrategicMove}</p>
+      </div>
+    </div>
   );
 }
 
-function DecisionSupportCard() {
+function DecisionPanel() {
   const { data, isLoading, error, refetch } = useAIFetch<DecisionSupportData>('/api/decision-support/summary');
 
+  if (isLoading) return <div className="space-y-3 py-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-2/3" /></div>;
+  if (error) return <div className="text-center py-6"><p className="text-sm text-muted-foreground mb-3">Decision support unavailable.</p><Button variant="outline" size="sm" onClick={refetch}>Try Again</Button></div>;
+  if (!data) return null;
+
   return (
-    <InfoCardShell icon={ShieldCheck} label="Decision Support" color="text-primary" isLoading={isLoading} error={error} onRefresh={refetch}>
-      {data && (
-        <div className="space-y-2.5">
-          {data.criticalAlerts.length > 0 && (
-            <div className="space-y-1.5">
-              {data.criticalAlerts.map((alert, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs text-destructive bg-destructive/5 p-2 rounded-[8px]">
-                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                  <span>{alert}</span>
-                </div>
-              ))}
+    <div className="space-y-4">
+      {data.criticalAlerts.length > 0 && (
+        <div className="space-y-2">
+          {data.criticalAlerts.map((alert, i) => (
+            <div key={i} className="flex items-start gap-2.5 text-sm text-destructive bg-destructive/5 p-3 rounded-[10px] border border-destructive/10">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{alert}</span>
             </div>
-          )}
-          <p className="text-xs text-muted-foreground/80">{data.arenaOptimization}</p>
-          <p className="text-xs font-medium text-primary pt-1 border-t border-border/20">{data.commanderAdvice}</p>
+          ))}
         </div>
       )}
-    </InfoCardShell>
+      <p className="text-sm text-muted-foreground leading-relaxed">{data.arenaOptimization}</p>
+      <div className="pt-3 border-t border-border/50">
+        <p className="text-sm font-medium text-primary">{data.commanderAdvice}</p>
+      </div>
+    </div>
   );
 }
 
 export function AIInsightCards() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <PredictionCard />
-      <KnowledgeCard />
-      <DecisionSupportCard />
-    </div>
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-5 h-5 text-primary" />
+            <CardTitle className="text-base">AI Workspace</CardTitle>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <Tabs defaultValue="prediction" className="w-full">
+          <TabsList className="w-full grid grid-cols-3 h-10 mb-4 rounded-[10px]">
+            {tabs.map(tab => (
+              <TabsTrigger key={tab.id} value={tab.id} className="text-xs gap-1.5">
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value="prediction"><PredictionPanel /></TabsContent>
+          <TabsContent value="knowledge"><KnowledgePanel /></TabsContent>
+          <TabsContent value="decisions"><DecisionPanel /></TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 }

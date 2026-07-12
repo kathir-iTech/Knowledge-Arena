@@ -24,15 +24,17 @@ function PageContent() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen bg-background animate-in px-4">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center space-y-3">
-          <div className="relative inline-flex mb-1">
-            <BrainCircuit className="w-14 h-14 text-primary mx-auto" />
+      <div className="w-full max-w-md space-y-10">
+        <div className="text-center space-y-4">
+          <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-primary/10 mx-auto">
+            <BrainCircuit className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-4xl font-headline text-primary tracking-tight leading-tight">Knowledge Arena</h1>
-          <p className="text-sm text-muted-foreground max-w-xs mx-auto">Sign in to enter the arena.</p>
+          <div className="space-y-1.5">
+            <h1 className="text-display font-headline text-foreground tracking-tight">Knowledge Arena</h1>
+            <p className="text-base text-muted-foreground">The ultimate quiz battleground.</p>
+          </div>
         </div>
-        <Suspense fallback={<div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-24 mx-auto" /></div>}><LoginForm /></Suspense>
+        <Suspense fallback={<div className="space-y-4"><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-28 mx-auto" /></div>}><LoginForm /></Suspense>
       </div>
     </main>
   );

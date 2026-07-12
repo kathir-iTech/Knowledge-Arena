@@ -5,73 +5,38 @@
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 96%;
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 96%;
-    --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 96%;
-    --primary: 217 91% 60%;
+    --background: 228 16% 97%;
+    --foreground: 220 40% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 40% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 40% 11%;
+    --primary: 243 75% 59%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 13%;
-    --secondary-foreground: 0 0% 96%;
-    --muted: 0 0% 13%;
-    --muted-foreground: 0 0% 48%;
-    --accent: 0 0% 13%;
-    --accent-foreground: 0 0% 96%;
+    --secondary: 228 16% 96%;
+    --secondary-foreground: 220 40% 11%;
+    --muted: 228 16% 94%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 239 84% 66%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-    --border: 0 0% 14%;
-    --input: 0 0% 14%;
-    --ring: 217 91% 60%;
-    --radius: 0.625rem;
-    --sidebar-background: 0 0% 6%;
-    --sidebar-foreground: 0 0% 80%;
-    --sidebar-primary: 217 91% 60%;
+    --border: 228 16% 90%;
+    --input: 228 16% 90%;
+    --ring: 243 75% 59%;
+    --radius: 0.75rem;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 9% 46%;
+    --sidebar-primary: 243 75% 59%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 10%;
-    --sidebar-accent-foreground: 0 0% 96%;
-    --sidebar-border: 0 0% 12%;
-    --sidebar-ring: 217 91% 60%;
-  }
-
-  .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 96%;
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 96%;
-    --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 96%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 13%;
-    --secondary-foreground: 0 0% 96%;
-    --muted: 0 0% 13%;
-    --muted-foreground: 0 0% 48%;
-    --accent: 0 0% 13%;
-    --accent-foreground: 0 0% 96%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 142 71% 45%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
-    --border: 0 0% 14%;
-    --input: 0 0% 14%;
-    --ring: 217 91% 60%;
-    --radius: 0.625rem;
-    --sidebar-background: 0 0% 6%;
-    --sidebar-foreground: 0 0% 80%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 10%;
-    --sidebar-accent-foreground: 0 0% 96%;
-    --sidebar-border: 0 0% 12%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-accent: 228 16% 96%;
+    --sidebar-accent-foreground: 220 40% 11%;
+    --sidebar-border: 228 16% 92%;
+    --sidebar-ring: 243 75% 59%;
   }
 }
 
@@ -89,19 +54,19 @@
 
 @layer utilities {
   .shadow-elevation-small {
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
   }
   .shadow-elevation-medium {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.04);
   }
   .shadow-elevation-large {
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
   }
   .shadow-elevation-hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
   }
   .shadow-elevation-focus {
-    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.35);
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.2);
   }
   .text-balance {
     text-wrap: balance;
@@ -110,7 +75,7 @@
     @apply mx-auto w-full max-w-[1400px] px-4 md:px-6 lg:px-8;
   }
   .page-section {
-    @apply mb-8;
+    @apply mb-10;
   }
   .animate-in {
     animation: fade-in 0.2s ease-out, slide-up 0.2s ease-out;
@@ -165,10 +130,3 @@
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
-
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-

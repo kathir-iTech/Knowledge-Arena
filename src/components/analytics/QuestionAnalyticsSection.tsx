@@ -21,7 +21,7 @@ import {
   Legend,
 } from './charts';
 
-const PIE_COLORS = ['#22c55e', '#ef4444', '#6b7280'];
+const PIE_COLORS = ['hsl(var(--success))', 'hsl(var(--destructive))', 'hsl(var(--muted-foreground))'];
 
 export function QuestionAnalyticsSection({ questions }: { questions: QuestionAnalytics[] }) {
   const [search, setSearch] = useState('');
@@ -38,8 +38,8 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
   if (!questions.length) {
     return (
       <Card>
-        <CardHeader><CardTitle>Question Analytics</CardTitle></CardHeader>
-        <CardContent className="text-center py-8 text-muted-foreground">No question data yet.</CardContent>
+        <CardHeader><CardTitle className="text-base">Question Analytics</CardTitle></CardHeader>
+        <CardContent className="text-center py-12 text-muted-foreground">No question data yet.</CardContent>
       </Card>
     );
   }
@@ -48,24 +48,26 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
   const easiest = useMemo(() => [...questions].sort((a, b) => b.correctPercent - a.correctPercent).slice(0, 5), [questions]);
 
   return (
-    <div className="space-y-6 mb-8">
+    <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Question Analytics</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Question Analytics</CardTitle>
+          </div>
           <div className="relative mt-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
               placeholder="Search questions..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="pl-9 max-w-xs"
+              className="pl-10 max-w-xs"
               aria-label="Search questions"
             />
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-destructive/5 border border-destructive/10 rounded-[14px] p-4 space-y-3">
+            <div className="bg-destructive/5 border border-destructive/10 rounded-[14px] p-5 space-y-3">
               <h4 className="text-sm font-medium flex items-center gap-2 text-destructive"><AlertTriangle className="w-4 h-4" aria-hidden="true" /> Hardest Questions</h4>
               {hardest.map((q, i) => (
                 <div key={q.questionId} className="flex items-center justify-between text-sm">
@@ -74,7 +76,7 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
                 </div>
               ))}
             </div>
-            <div className="bg-success/5 border border-success/10 rounded-[14px] p-4 space-y-3">
+            <div className="bg-success/5 border border-success/10 rounded-[14px] p-5 space-y-3">
               <h4 className="text-sm font-medium flex items-center gap-2 text-success"><Target className="w-4 h-4" aria-hidden="true" /> Easiest Questions</h4>
               {easiest.map((q, i) => (
                 <div key={q.questionId} className="flex items-center justify-between text-sm">
@@ -85,43 +87,42 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-[12px] border border-border/50">
             <table className="w-full text-sm" role="table">
               <thead>
-                <tr className="border-b">
-                  <th scope="col" className="text-left py-2 px-3 font-medium text-muted-foreground">Question</th>
-                  <th scope="col" className="text-left py-2 px-3 font-medium text-muted-foreground">Quiz</th>
-                  <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Correct</th>
-                  <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Wrong</th>
-                  <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Skipped</th>
-                  <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Avg Time</th>
-                  <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Submissions</th>
-                  <th scope="col" className="text-center py-2 px-3 font-medium text-muted-foreground">Detail</th>
+                <tr className="bg-muted/30 border-b border-border/50">
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-muted-foreground text-xs">Question</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-muted-foreground text-xs">Quiz</th>
+                  <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Correct</th>
+                  <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Wrong</th>
+                  <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Skipped</th>
+                  <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Avg Time</th>
+                  <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Submissions</th>
+                  <th scope="col" className="text-center py-3 px-4 font-medium text-muted-foreground text-xs">Detail</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(q => {
-                  const common = q.commonWrongAnswer;
                   return (
-                    <tr key={q.questionId} className={cn('border-b last:border-0 hover:bg-muted/50 transition-colors', selected === q.questionId && 'bg-muted/30')}>
-                      <td className="py-2 px-3 max-w-[200px] truncate font-medium">{q.text}</td>
-                      <td className="py-2 px-3 text-xs text-muted-foreground">{q.quizTitle}</td>
-                      <td className="text-center py-2 px-3">
-                        <Badge className="bg-green-500/10 text-green-600 border-0">{q.correctPercent}%</Badge>
+                    <tr key={q.questionId} className={cn('border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors', selected === q.questionId && 'bg-muted/30')}>
+                      <td className="py-3 px-4 max-w-[200px] truncate font-medium text-sm">{q.text}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{q.quizTitle}</td>
+                      <td className="text-center py-3 px-4">
+                        <Badge className="bg-success/10 text-success border-0 font-mono">{q.correctPercent}%</Badge>
                       </td>
-                      <td className="text-center py-2 px-3 text-red-600">{q.wrongPercent}%</td>
-                      <td className="text-center py-2 px-3 text-muted-foreground">{q.skippedPercent}%</td>
-                      <td className="text-center py-2 px-3">
+                      <td className="text-center py-3 px-4 text-destructive text-sm">{q.wrongPercent}%</td>
+                      <td className="text-center py-3 px-4 text-muted-foreground text-sm">{q.skippedPercent}%</td>
+                      <td className="text-center py-3 px-4">
                         <span className="text-xs flex items-center justify-center gap-1">
                           <Clock className="w-3 h-3" aria-hidden="true" />
                           {q.averageResponseTime}s
                         </span>
                       </td>
-                      <td className="text-center py-2 px-3">{q.totalSubmissions}</td>
-                      <td className="text-center py-2 px-3">
+                      <td className="text-center py-3 px-4 text-sm">{q.totalSubmissions}</td>
+                      <td className="text-center py-3 px-4">
                         <button
                           onClick={() => setSelected(selected === q.questionId ? null : q.questionId)}
-                          className="text-xs text-primary hover:underline"
+                          className="text-sm text-primary hover:underline"
                           aria-label={`View detail for question: ${q.text}`}
                         >
                           {selected === q.questionId ? 'Hide' : 'View'}
@@ -137,7 +138,7 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
       </Card>
 
       {selectedQ && (
-        <Card className="border-primary/30">
+        <Card className="border-primary/20">
           <CardHeader><CardTitle className="text-base">{selectedQ.text}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -165,7 +166,7 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
                 <p className="text-sm font-medium text-muted-foreground">Option Distribution</p>
                 {selectedQ.optionDistribution.map((opt, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <Badge variant={opt.isCorrect ? 'default' : 'outline'} className={cn(opt.isCorrect && 'bg-green-500')}>
+                    <Badge variant={opt.isCorrect ? 'default' : 'outline'} className={cn(opt.isCorrect && 'bg-success/10 text-success border-0')}>
                       {String.fromCharCode(65 + i)}
                     </Badge>
                     <div className="flex-1">
@@ -176,8 +177,8 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
                   </div>
                 ))}
                 {selectedQ.commonWrongAnswer && (
-                  <div className="mt-4 p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                    <p className="text-xs font-medium text-amber-600 flex items-center gap-1 mb-1">
+                  <div className="mt-4 p-4 bg-warning/5 rounded-[12px] border border-warning/10">
+                    <p className="text-xs font-medium text-warning flex items-center gap-1.5 mb-1.5">
                       <AlertTriangle className="w-3 h-3" aria-hidden="true" />
                       Common Wrong Answer
                     </p>
