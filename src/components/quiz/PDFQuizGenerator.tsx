@@ -131,10 +131,10 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
   };
 
   return (
-    <Card className="border-primary/20 bg-secondary/10 shadow-xl overflow-hidden">
+    <Card className="overflow-hidden">
       <CardHeader className="bg-primary/5 border-b border-primary/10">
         <div className="flex items-center gap-3">
-          <Sparkles className="w-6 h-6 text-primary animate-pulse" />
+          <Sparkles className="w-6 h-6 text-primary" />
           <div>
             <CardTitle className="text-2xl font-headline text-primary uppercase">AI PDF Forge</CardTitle>
             <CardDescription>Upload training manuals or research to automate arena construction.</CardDescription>
@@ -143,15 +143,15 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
       </CardHeader>
       <CardContent className="space-y-8 pt-8">
         {error && error.includes("ANTHROPIC_API_KEY") && (
-            <div className="flex flex-col gap-4 bg-destructive/10 p-6 rounded-xl border border-destructive/20 animate-in fade-in zoom-in">
+            <div className="flex flex-col gap-4 bg-destructive/5 p-6 rounded-lg border border-destructive/10 animate-in">
                 <div className="flex items-center gap-3 text-destructive">
                     <Key className="w-8 h-8" />
-                    <h3 className="text-lg font-black uppercase tracking-tighter">API Key Missing</h3>
+                    <h3 className="text-lg font-bold uppercase tracking-tight">API Key Missing</h3>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                    To use the AI Forge, you must add your <strong>Anthropic API Key</strong> to the <code>.env</code> file in your project root.
+                    To use the AI Forge, you must add your <strong>Anthropic API Key</strong> to the <code className="bg-background/50 px-1 rounded">.env</code> file in your project root.
                 </p>
-                <div className="bg-background/50 p-3 rounded font-mono text-xs border border-destructive/20 select-all">
+                <div className="bg-background/50 p-3 rounded font-mono text-xs border border-destructive/10 select-all">
                     ANTHROPIC_API_KEY=your_key_here
                 </div>
                 <Button variant="outline" size="sm" className="w-fit" onClick={() => window.open('https://console.anthropic.com/', '_blank')}>
@@ -164,8 +164,8 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           <Label className="text-lg font-medium">1. Tactical Intelligence (PDF)</Label>
           {!file ? (
             <div className={cn(
-              "border-2 border-dashed border-primary/20 rounded-2xl p-12 transition-all hover:bg-primary/5 hover:border-primary/40 cursor-pointer flex flex-col items-center justify-center gap-4 text-center relative",
-              error && !error.includes("KEY") && "border-destructive/40 bg-destructive/5"
+              "border-2 border-dashed border-border/30 rounded-lg p-12 transition-all hover:border-primary/30 cursor-pointer flex flex-col items-center justify-center gap-4 text-center relative",
+              error && !error.includes("KEY") && "border-destructive/30 bg-destructive/5"
             )}>
               <input 
                 type="file" 
@@ -174,22 +174,22 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                 disabled={isGenerating}
               />
-              <div className="bg-primary/10 p-4 rounded-full">
+              <div className="bg-primary/5 p-4 rounded-full">
                 <Upload className="w-8 h-8 text-primary" />
               </div>
               <div>
-                <p className="font-bold text-lg">Drop your intelligence report here</p>
+                <p className="font-semibold text-lg">Upload your PDF material</p>
                 <p className="text-sm text-muted-foreground">Max size 10MB. Text-based PDFs only.</p>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between p-4 bg-background/50 border border-primary/20 rounded-xl">
+            <div className="flex items-center justify-between p-4 bg-background/50 border border-border/20 rounded-lg">
               <div className="flex items-center gap-3 overflow-hidden">
-                <div className="bg-primary/10 p-2 rounded-lg">
+                <div className="bg-primary/5 p-2 rounded-lg">
                   <FileText className="w-6 h-6 text-primary" />
                 </div>
                 <div className="flex flex-col truncate">
-                  <span className="font-bold truncate">{file.name}</span>
+                  <span className="font-medium truncate">{file.name}</span>
                   <span className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
                 </div>
               </div>
@@ -219,13 +219,13 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
                 onClick={() => setDifficulty(d.id as 'easy' | 'moderate' | 'hard')}
                 disabled={isGenerating}
                 className={cn(
-                  "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center group",
+                  "flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all text-center",
                   difficulty === d.id 
-                    ? "bg-primary/10 border-primary shadow-lg shadow-primary/20 scale-105" 
-                    : "bg-background/40 border-border/50 hover:border-primary/40 hover:bg-primary/5"
+                    ? "bg-primary/5 border-primary" 
+                    : "bg-background/30 border-border/40 hover:border-primary/30 hover:bg-primary/5"
                 )}
               >
-                <span className="text-3xl mb-1 group-hover:scale-125 transition-transform">{d.emoji}</span>
+                <span className="text-3xl mb-1 transition-transform duration-150">{d.emoji}</span>
                 <span className="font-bold uppercase tracking-widest text-sm">{d.label}</span>
                 <span className="text-xs text-muted-foreground leading-tight">{d.desc}</span>
               </button>
@@ -236,7 +236,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <Label className="text-lg font-medium">3. Mission Scope</Label>
-            <span className="bg-primary/20 text-primary font-black px-3 py-1 rounded-lg text-sm">
+            <span className="bg-primary/10 text-primary font-bold px-3 py-1 rounded text-sm">
               {questionCount} ROUNDS
             </span>
           </div>
@@ -247,7 +247,6 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
             max={25}
             step={1}
             disabled={isGenerating}
-            className="py-4"
           />
         </div>
 
@@ -256,12 +255,12 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
             onClick={handleGenerate}
             disabled={isGenerating || !file || !difficulty}
             size="lg"
-            className="w-full h-20 text-xl font-headline shadow-2xl shadow-primary/30 relative"
+            className="w-full h-20 text-xl font-headline"
           >
             {isGenerating ? (
               <div className="flex flex-col items-center">
                 <Loader2 className="animate-spin mb-1" />
-                <span className="text-xs animate-pulse tracking-widest font-body uppercase">
+                <span className="text-xs tracking-widest uppercase">
                   {STATUS_MESSAGES[statusIndex]}
                 </span>
               </div>
@@ -274,7 +273,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           </Button>
           
           {error && !error.includes("KEY") && (
-            <div className="mt-4 flex flex-col gap-2 bg-destructive/10 p-4 rounded-xl border border-destructive/20 animate-in fade-in">
+            <div className="mt-4 flex flex-col gap-2 bg-destructive/5 p-4 rounded-lg border border-destructive/10 animate-in">
               <div className="flex items-center gap-2 text-destructive font-bold text-sm">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 Extraction Violation

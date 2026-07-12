@@ -160,36 +160,36 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
           const globalIssues = validationIssues.filter(i => i.questionIndex === -1);
           if (!globalIssues.length) return null;
           return (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-4 flex items-start gap-3">
+            <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-4 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 {globalIssues.map((issue, ii) => (
-                  <p key={ii} className="text-sm text-yellow-700">{issue.message}</p>
+                  <p key={ii} className="text-sm text-yellow-600">{issue.message}</p>
                 ))}
               </div>
             </div>
           );
         })()}
-        <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-secondary/20 border border-primary/20 rounded-2xl gap-4 sticky top-0 z-40 backdrop-blur-md">
+        <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-secondary/20 border border-border/20 rounded-lg gap-4 sticky top-0 z-40">
         <div className="flex items-center gap-3">
-          <div className="bg-primary/20 p-2 rounded-lg">
+          <div className="bg-primary/10 p-2 rounded-lg">
             <Sparkles className="w-5 h-5 text-primary" />
           </div>
           <div>
             <h2 className="font-headline font-bold text-lg">{questions.length} Rounds Prepared</h2>
-            <Badge variant="outline" className="uppercase tracking-widest text-[10px] bg-background">Level: {difficulty}</Badge>
+            <Badge variant="outline" className="uppercase tracking-widest text-[10px]">Level: {difficulty}</Badge>
           </div>
         </div>
         <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={onEditSettings}>Edit Parameters</Button>
-            <Button variant="outline" size="sm" onClick={onRegenerate} className="border-primary/20 text-primary">Regenerate Intel</Button>
+            <Button variant="outline" size="sm" onClick={onRegenerate} className="text-primary">Regenerate Intel</Button>
         </div>
       </div>
 
       <div className="space-y-4">
         {questions.map((q, index) => (
-          <Card key={q.id} className="border-border/50 bg-background/50 backdrop-blur-sm relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 group-hover:bg-primary/50 transition-all" />
+          <Card key={q.id} className="relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-1 h-full bg-primary/10 group-hover:bg-primary/30 transition-colors" />
             
             {editingId === q.id && editForm ? (
               <CardContent className="pt-6 space-y-4">
@@ -203,7 +203,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {editForm.options.map((opt, i) => (
                     <div key={i} className="space-y-1">
-                      <Label className="text-[10px] uppercase opacity-50">Option {String.fromCharCode(65 + i)}</Label>
+                      <Label className="text-xs uppercase text-muted-foreground">Option {String.fromCharCode(65 + i)}</Label>
                       <Input 
                         value={opt} 
                         onChange={e => {
@@ -215,7 +215,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                     </div>
                   ))}
                 </div>
-                <div className="flex flex-col md:flex-row gap-6 p-4 bg-secondary/20 rounded-xl">
+                <div className="flex flex-col md:flex-row gap-6 p-4 bg-secondary/20 rounded-lg">
                   <div className="space-y-2 flex-1">
                     <Label>Valid Solution</Label>
                     <RadioGroup 
@@ -234,7 +234,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                 </div>
                 <div className="flex justify-end gap-2 pt-4">
                   <Button variant="ghost" onClick={cancelEditing}><X className="mr-2 h-4 w-4" /> Cancel</Button>
-                  <Button onClick={saveEditing} className="bg-primary text-primary-foreground"><Save className="mr-2 h-4 w-4" /> Commit Changes</Button>
+                  <Button onClick={saveEditing}><Save className="mr-2 h-4 w-4" /> Commit Changes</Button>
                 </div>
               </CardContent>
             ) : (
@@ -247,7 +247,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => startEditing(q)}><Edit3 className="w-4 h-4" /></Button>
                     {onRegenerateQuestion && (
-                      <Button variant="ghost" size="icon" onClick={() => onRegenerateQuestion(index)} className="text-primary hover:text-primary"><RefreshCw className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => onRegenerateQuestion(index)} className="text-primary"><RefreshCw className="w-4 h-4" /></Button>
                     )}
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(q.id)} className="text-destructive"><Trash2 className="w-4 h-4" /></Button>
                   </div>
@@ -257,11 +257,11 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                     {q.options.map((opt, i) => (
                       <div key={i} className={cn(
                         "p-3 rounded-lg border text-sm flex items-center gap-3",
-                        q.correctAnswerIndex === i ? "bg-primary/10 border-primary text-primary font-bold" : "bg-secondary/20 border-border/50"
+                        q.correctAnswerIndex === i ? "bg-primary/5 border-primary/20 text-primary font-semibold" : "bg-secondary/20 border-border/30"
                       )}>
-                        <span className="opacity-50 font-mono">{String.fromCharCode(65 + i)}</span>
+                        <span className="text-muted-foreground font-mono">{String.fromCharCode(65 + i)}</span>
                         {opt}
-                        {q.correctAnswerIndex === i && <CheckCircle2 className="ml-auto w-4 h-4" />}
+                        {q.correctAnswerIndex === i && <CheckCircle2 className="ml-auto w-4 h-4 text-primary" />}
                       </div>
                     ))}
                   </div>
@@ -272,8 +272,8 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                       <div className="space-y-1">
                         {qIssues.map((issue, ii) => (
                           <div key={ii} className={cn(
-                            "flex items-start gap-2 p-2 rounded-lg text-xs",
-                            issue.severity === 'error' ? "bg-destructive/10 text-destructive" : "bg-yellow-500/10 text-yellow-600"
+                            "flex items-start gap-2 p-2 rounded text-xs",
+                            issue.severity === 'error' ? "bg-destructive/5 text-destructive" : "bg-yellow-500/5 text-yellow-600"
                           )}>
                             <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
                             <span>{issue.message}</span>
@@ -301,10 +301,10 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         ))}
       </div>
 
-      <div className="question-review-fixed-bar fixed bottom-0 left-0 right-0 p-4 md:p-6 bg-background/80 backdrop-blur-xl border-t border-border/50 z-50 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6">
+      <div className="fixed bottom-0 left-0 right-0 p-4 md:p-6 bg-background/80 backdrop-blur-xl border-t border-border/20 z-50 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6">
         <div className="flex items-center gap-3 text-sm">
            <div className={cn(
-               "w-3 h-3 rounded-full animate-pulse",
+               "w-3 h-3 rounded-full",
                questions.length < 3 ? "bg-destructive" : "bg-primary"
            )} />
            <span className="font-bold">{questions.length} Rounds Ready</span>
@@ -318,14 +318,14 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             disabled={questions.length < 3} 
             size="lg" 
             onClick={() => setIsModalOpen(true)}
-            className="h-16 px-12 text-xl font-headline shadow-2xl shadow-primary/30 rounded-full"
+            className="h-14 px-12 text-xl font-headline"
         >
           DEPLOY ARENA <ChevronUp className="ml-2" />
         </Button>
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-md bg-card border-primary/20">
+        <DialogContent className="sm:max-w-md">
             <DialogHeader>
                 <DialogTitle className="text-2xl font-headline text-primary uppercase">Arena Mission Profile</DialogTitle>
                 <DialogDescription>Finalize the parameters for this combat deployment.</DialogDescription>
@@ -351,7 +351,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                         value={globalTimer}
                         onChange={e => setGlobalTimer(parseInt(e.target.value))}
                     />
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Standard window: 30s</p>
+                    <p className="text-xs text-muted-foreground">Standard window: 30s</p>
                 </div>
                 <div className="space-y-4 pt-2">
                     <div className="flex items-center space-x-3">

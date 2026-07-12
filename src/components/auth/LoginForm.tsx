@@ -71,9 +71,9 @@ export function LoginForm() {
 
 
   return (
-    <Card className="shadow-elevation-medium">
+    <Card>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 rounded-t-xl rounded-b-none">
+        <TabsList className="grid w-full grid-cols-2 rounded-t-[14px] rounded-b-none">
           <TabsTrigger value="login" className="text-sm">Login</TabsTrigger>
           <TabsTrigger value="signup" className="text-sm">Sign Up</TabsTrigger>
         </TabsList>
@@ -88,7 +88,7 @@ export function LoginForm() {
                     <FormItem>
                       <FormLabel className="text-xs">Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="gladiator@arena.com" className="h-10" {...field} />
+                        <Input placeholder="gladiator@arena.com" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -101,7 +101,7 @@ export function LoginForm() {
                     <FormItem>
                       <FormLabel className="text-xs">Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" className="h-10" {...field} />
+                        <Input type="password" placeholder="••••••••" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -109,7 +109,7 @@ export function LoginForm() {
                 />
               </CardContent>
               <CardFooter className="pt-2">
-                <Button type="submit" className="w-full h-10 text-sm font-semibold" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Enter Arena
                 </Button>
@@ -129,7 +129,7 @@ export function LoginForm() {
                     <FormItem>
                       <FormLabel className="text-xs">Full Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="Your name" className="h-10" {...field} />
+                        <Input placeholder="Your name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -142,7 +142,7 @@ export function LoginForm() {
                     <FormItem>
                       <FormLabel className="text-xs">Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="your.email@domain.com" className="h-10" {...field} />
+                        <Input placeholder="your.email@domain.com" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -155,7 +155,7 @@ export function LoginForm() {
                     <FormItem>
                       <FormLabel className="text-xs">Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" className="h-10" {...field} />
+                        <Input type="password" placeholder="••••••••" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -168,7 +168,7 @@ export function LoginForm() {
                     <FormItem>
                       <FormLabel className="text-xs">Confirm Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" className="h-10" {...field} />
+                        <Input type="password" placeholder="••••••••" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -176,7 +176,7 @@ export function LoginForm() {
                 />
               </CardContent>
               <CardFooter className="pt-2">
-                <Button type="submit" className="w-full h-10 text-sm font-semibold" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading}>
                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create Account
                 </Button>

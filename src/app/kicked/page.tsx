@@ -19,30 +19,32 @@ export default function KickedPage() {
   const timeStr = blockedAt ? new Date(parseInt(blockedAt)).toLocaleTimeString() : null;
 
   return (
-    <main className="loading-screen flex-col text-center">
-      <ShieldAlert className="w-20 h-20 text-destructive mb-6" />
-      <h1 className="text-4xl font-headline text-destructive mb-2">You Have Been Blocked</h1>
-      <p className="text-xl text-muted-foreground mb-2 max-w-md">
-        Malpractice was detected. Fair play is required in the arena.
-      </p>
-      <div className="flex flex-wrap gap-4 justify-center mb-8">
-        <div className="flex items-center gap-2 bg-destructive/10 px-4 py-2 rounded-full text-sm">
-          <AlertTriangle className="w-4 h-4 text-destructive" />
+    <main className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-5">
+      <ShieldAlert className="w-16 h-16 text-destructive" />
+      <div className="space-y-2">
+        <h1 className="text-2xl font-headline tracking-tight text-destructive">You Have Been Blocked</h1>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Malpractice was detected. Fair play is required in the arena.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-3 justify-center">
+        <div className="flex items-center gap-1.5 bg-destructive/10 px-3 py-1.5 rounded-full text-xs">
+          <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
           <span>Violations: {violations}</span>
         </div>
         {timeStr && (
-          <div className="flex items-center gap-2 bg-muted px-4 py-2 rounded-full text-sm">
-            <Clock className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 bg-secondary/30 px-3 py-1.5 rounded-full text-xs text-muted-foreground">
+            <Clock className="w-3.5 h-3.5" />
             <span>Blocked at: {timeStr}</span>
           </div>
         )}
       </div>
-      <p className="text-muted-foreground mb-8 max-w-md">
-        Wait for your teacher to review and reset your attempt from the Commander&apos;s Dashboard.
+      <p className="text-sm text-muted-foreground max-w-sm">
+        Wait for your teacher to review and reset your attempt from the dashboard.
         Refreshing the page will not remove the block.
       </p>
       <Link href="/student/dashboard" passHref>
-        <Button variant="outline" size="lg">
+        <Button variant="outline">
           Return to Dashboard
         </Button>
       </Link>

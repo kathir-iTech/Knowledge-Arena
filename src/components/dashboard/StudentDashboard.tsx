@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { Loader2, Swords, History, UserCircle, ExternalLink } from 'lucide-react';
+import { Loader2, Swords, History, UserCircle, ExternalLink, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?: string }) {
@@ -59,39 +59,51 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
     }
   };
 
+  const totalScore = history.reduce((sum, h) => sum + h.score, 0);
+
   return (
     <div className="page-container safe-bottom animate-in">
       <header className="flex items-center justify-between page-section">
         <div className="space-y-1">
-          <h1 className="text-page-title font-headline text-primary tracking-tight">Gladiator Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Welcome, {user?.name || 'Gladiator'}.</p>
+          <h1 className="text-page-title font-headline tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Welcome back, {user?.name || 'Student'}.</p>
         </div>
         <Button variant="outline" size="sm" asChild className="h-9">
           <Link href="/student/profile"><UserCircle className="mr-2 h-4 w-4" /> Profile</Link>
         </Button>
       </header>
 
-      <div className="flex justify-center">
-        <Card className="w-full max-w-md border-primary/20 shadow-elevation-medium">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 page-section">
+        <Card className="md:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-center text-xl font-headline">Enter the Arena</CardTitle>
-            <CardDescription className="text-center text-sm">Enter the 6-digit code to join the battle.</CardDescription>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Swords className="w-4 h-4 text-primary" />
+              Enter the Arena
+            </CardTitle>
+            <CardDescription className="text-xs">Enter the 6-digit room code to join a battle.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleJoin} className="space-y-4">
+            <form onSubmit={handleJoin} className="flex gap-3">
               <Input
                 value={roomCode}
                 onChange={e => setRoomCode(e.target.value)}
-                className="text-center text-2xl h-14 font-mono tracking-[0.3em] uppercase"
+                className="text-center text-lg font-mono tracking-[0.25em] uppercase flex-1"
                 maxLength={6}
                 placeholder="000000"
                 aria-label="Room code"
               />
-              <Button type="submit" className="w-full h-11 text-base font-semibold" disabled={isLoading || roomCode.length < 6}>
-                {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Swords className="mr-2 h-4 w-4" />}
-                Join Battle
+              <Button type="submit" className="shrink-0" disabled={isLoading || roomCode.length < 6}>
+                {isLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Swords className="mr-2 h-4 w-4" />}
+                Join
               </Button>
             </form>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex flex-col items-center justify-center h-full gap-1">
+            <Trophy className="w-5 h-5 text-amber-400" />
+            <span className="text-xs text-muted-foreground">Total Score</span>
+            <span className="text-3xl font-semibold tracking-tight">{totalScore}</span>
           </CardContent>
         </Card>
       </div>
@@ -99,44 +111,60 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <History className="w-5 h-5 text-primary" />
-          <h2 className="text-xl font-headline tracking-tight">Battle History</h2>
+          <h2 className="text-section-title tracking-tight">Battle History</h2>
         </div>
 
         {historyLoading ? (
-          <div className="flex flex-col items-center justify-center py-8 gap-3"><Loader2 className="animate-spin h-8 w-8 text-primary" /><p className="text-sm text-muted-foreground">Loading battle history...</p></div>
+          <div className="flex flex-col items-center justify-center py-8 gap-3"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /><p className="text-sm text-muted-foreground">Loading battle history...</p></div>
         ) : history.length === 0 ? (
-          <div className="text-center py-12 border-2 border-dashed border-muted/30 rounded-2xl">
-            <p className="text-muted-foreground">No battles fought yet. Join an arena above!</p>
+          <div className="py-16 text-center border-2 border-dashed border-muted/30 rounded-[14px]">
+            <Swords className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground mb-4">No battles fought yet.</p>
+            <p className="text-xs text-muted-foreground/70">Enter a room code above to join a battle.</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {history.map((h, idx) => (
-              <div key={h.quizId} className="group flex items-center justify-between p-4 rounded-xl bg-secondary/10 border border-border/30 hover:bg-secondary/20 hover:border-primary/20 transition-all duration-200 animate-in" style={{ animationDelay: `${idx * 50}ms` }}>
-                <div className="flex items-center gap-3">
-                  <div className="hidden sm:flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 text-primary font-mono text-sm font-bold">#{idx + 1}</div>
-                  <div>
-                    <p className="font-semibold text-sm group-hover:text-primary transition-colors">{h.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+          <div className="overflow-x-auto rounded-[10px] border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/30 border-b">
+                  <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">#</th>
+                  <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Title</th>
+                  <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Status</th>
+                  <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Date</th>
+                  <th scope="col" className="text-right p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Score</th>
+                  <th scope="col" className="text-center p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Review</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h, idx) => (
+                  <tr key={h.quizId} className={cn("border-b border-border/40 transition-colors hover:bg-muted/20", idx % 2 === 0 ? "bg-background" : "bg-muted/[0.03]")}>
+                    <td className="p-3">
+                      <span className="flex items-center justify-center w-7 h-7 rounded-[8px] bg-primary/10 text-primary font-mono text-xs font-bold">{idx + 1}</span>
+                    </td>
+                    <td className="p-3 font-medium text-sm">{h.title}</td>
+                    <td className="p-3">
                       <Badge variant={h.status === 'finished' ? 'outline' : h.status === 'live' ? 'default' : 'secondary'} className="text-[10px] h-5">
                         {h.status.toUpperCase()}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">{new Date(h.created_at).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <p className="font-mono text-lg font-bold text-primary">{h.score}</p>
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">pts</p>
-                  </div>
-                  {h.status === 'finished' && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" asChild aria-label={`View results for ${h.title}`}>
-                      <Link href={`/battle/${h.quizId}`}><ExternalLink className="w-4 h-4" /></Link>
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
+                    </td>
+                    <td className="p-3 text-xs text-muted-foreground">{new Date(h.created_at).toLocaleDateString()}</td>
+                    <td className="p-3 text-right">
+                      <span className="font-semibold text-sm text-primary">{h.score}</span>
+                      <span className="text-[10px] text-muted-foreground ml-0.5">pts</span>
+                    </td>
+                    <td className="p-3 text-center">
+                      {h.status === 'finished' ? (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" asChild aria-label={`View results for ${h.title}`}>
+                          <Link href={`/battle/${h.quizId}`}><ExternalLink className="w-3.5 h-3.5" /></Link>
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

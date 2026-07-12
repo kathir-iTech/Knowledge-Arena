@@ -58,7 +58,7 @@ export default function EditQuizPage() {
 
   if (error || !quiz) {
     return (
-      <div className="loading-screen flex-col text-center gap-6 animate-in">
+      <div className="flex flex-col items-center justify-center min-h-screen text-center gap-5 animate-in p-4">
         <ShieldX className="w-14 h-14 text-destructive" />
         <h1 className="text-2xl font-headline text-destructive">Cannot Edit</h1>
         <p className="text-sm text-muted-foreground max-w-md">{errorMsg}</p>

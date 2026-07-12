@@ -74,9 +74,11 @@ export function QuizAnalyticsSection({ quizzes }: { quizzes: QuizAnalytics[] }) 
 
   return (
     <div className="space-y-4 mb-8">
-      <h3 className="text-lg font-semibold">Quiz Analytics</h3>
+      <div className="flex items-center gap-2">
+        <h2 className="text-section-title tracking-tight">Quiz Analytics</h2>
+      </div>
       {quizzes.map(quiz => (
-        <Card key={quiz.quizId} className="border-primary/20">
+        <Card key={quiz.quizId}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">{quiz.title}</CardTitle>

@@ -166,7 +166,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl mx-auto pb-20">
-        <Card className="border-primary/20 bg-secondary/10 shadow-lg">
+        <Card>
           <CardHeader>
               <CardTitle className="text-xl font-headline text-primary flex items-center gap-2">
                   <PencilRuler className="w-5 h-5" />
@@ -188,14 +188,14 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h3 className="text-2xl font-headline uppercase tracking-tight text-primary/80">Combat Rounds</h3>
-                <span className="text-xs font-mono bg-primary/20 text-primary px-3 py-1 rounded-full">{fields.length} TOTAL</span>
+                <span className="text-xs font-mono bg-primary/10 text-primary px-3 py-1 rounded-full">{fields.length} TOTAL</span>
             </div>
 
             {fields.map((field, index) => (
-            <Card key={field.id} className="relative pt-12 border-border/50 group bg-background/40 backdrop-blur-sm overflow-hidden transition-all hover:border-primary/30">
-                <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 group-hover:bg-primary/50 transition-colors" />
+            <Card key={field.id} className="relative pt-12 overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-primary/15 group-hover:bg-primary/30 transition-colors" />
                 <div className="absolute top-3 left-4 flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest bg-primary/20 text-primary px-3 py-1 rounded-full">ROUND {index + 1}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary px-3 py-1 rounded-full">ROUND {index + 1}</span>
                     {field.explanation && (
                         <div className="flex items-center gap-1 text-[9px] text-primary bg-primary/5 px-2 py-1 rounded-full border border-primary/20">
                             <Sparkles className="w-2 h-2" /> AI GENERATED
@@ -203,7 +203,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
                     )}
                 </div>
                 
-                <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && remove(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10" disabled={fields.length <= 1}><Trash2 className="h-4 w-4" /></Button>
+                <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && remove(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5" disabled={fields.length <= 1}><Trash2 className="h-4 w-4" /></Button>
                 
                 <CardContent className="space-y-6">
                 <FormField control={form.control} name={`questions.${index}.text`} render={({ field }) => (
@@ -240,7 +240,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
                                     if (currentCorrect === optIdx) form.setValue(`questions.${index}.correctAnswerIndex`, -1);
                                     else if (currentCorrect > optIdx) form.setValue(`questions.${index}.correctAnswerIndex`, currentCorrect - 1);
                                 }
-                            }} className="absolute right-2 top-2 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 v-3" /></button>
+                            }} className="absolute right-2 top-2 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                             )}
                             <FormMessage />
                         </FormItem>
@@ -250,12 +250,12 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
                     <Button type="button" variant="outline" size="sm" onClick={() => addOption(index)} disabled={form.watch(`questions.${index}.options`).length >= 4} className="mt-2"><PlusCircle className="mr-2 h-4 w-4" /> Add Option</Button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-secondary/20 rounded-xl border border-border/30">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-secondary/20 rounded-lg border border-border/20">
                     <FormField control={form.control} name={`questions.${index}.correctAnswerIndex`} render={({ field }) => (
                     <FormItem>
                         <FormLabel>Correct Answer</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value > -1 ? String(field.value) : undefined}>
-                        <FormControl><SelectTrigger className="bg-background"><SelectValue placeholder="Identify the solution" /></SelectTrigger></FormControl>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Identify the solution" /></SelectTrigger></FormControl>
                         <SelectContent>
                             {form.watch(`questions.${index}.options`).map((opt, oI) => (
                             <SelectItem key={oI} value={String(oI)} disabled={!opt}>
@@ -270,14 +270,14 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
                     <FormField control={form.control} name={`questions.${index}.timer`} render={({ field }) => (
                     <FormItem>
                         <FormLabel>Combat Timer (Seconds)</FormLabel>
-                        <FormControl><Input type="number" className="bg-background" {...field} /></FormControl>
+                        <FormControl><Input type="number" {...field} /></FormControl>
                         <FormMessage />
                     </FormItem>
                     )} />
                 </div>
 
                 {form.watch(`questions.${index}.explanation`) && (
-                    <div className="flex gap-3 p-4 bg-primary/5 rounded-xl border border-primary/10">
+                    <div className="flex gap-3 p-4 bg-primary/5 rounded-lg border border-primary/10">
                         <Info className="w-5 h-5 text-primary shrink-0" />
                         <div className="space-y-1">
                             <p className="text-xs font-black uppercase text-primary/70 tracking-widest">AI Intelligence Note:</p>
@@ -295,17 +295,17 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
                 type="button" 
                 variant="secondary" 
                 onClick={() => append({ id: uuidv4(), text: '', options: ['', ''], correctAnswerIndex: -1, timer: 30 })} 
-                className="w-full md:w-auto h-16 px-8 shadow-2xl backdrop-blur-md"
+                className="w-full md:w-auto h-14 px-8"
             >
-                <PlusCircle className="mr-2 h-6 w-6" /> 
+                <PlusCircle className="mr-2 h-5 w-5" /> 
                 Add Round
             </Button>
             <Button 
                 type="submit" 
-                className="w-full md:flex-1 h-16 text-2xl font-headline shadow-2xl shadow-primary/30" 
+                className="w-full md:flex-1 h-14 text-xl font-headline" 
                 disabled={isSubmitting}
             >
-                {isSubmitting ? <Loader2 className="animate-spin mr-2 h-6 w-6" /> : 'DEPLOY ARENA'}
+                {isSubmitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : 'DEPLOY ARENA'}
             </Button>
         </div>
       </form>

@@ -90,7 +90,7 @@ export default function BattleRoomLoader() {
 
   if (error || !quiz) {
     return (
-      <div className="loading-screen flex-col gap-6 text-center" role="alert">
+      <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4" role="alert">
          <ShieldX className="w-16 h-16 text-destructive" aria-hidden="true" />
         <h1 className="text-3xl font-headline text-destructive">Room Not Found</h1>
         <p className="text-muted-foreground max-w-md">{error || 'This quiz room does not exist or has been closed.'}</p>
@@ -136,7 +136,7 @@ export default function BattleRoomLoader() {
   }
 
   return (
-    <div className="loading-screen flex-col gap-6 text-center">
+    <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4">
         <ShieldX className="w-16 h-16 text-destructive" />
         <h1 className="text-2xl font-headline">Unexpected State</h1>
         <p className="text-muted-foreground max-w-md">This room is in an unexpected state. Please try again later.</p>

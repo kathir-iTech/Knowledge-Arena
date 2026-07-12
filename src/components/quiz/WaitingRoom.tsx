@@ -113,7 +113,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       </header>
 
       {isReconnecting && (
-        <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 px-4 py-2 rounded-lg text-xs" role="alert" aria-live="assertive">
+        <div className="flex items-center gap-2 bg-yellow-500/5 border border-yellow-500/10 px-4 py-2 rounded-lg text-xs" role="alert" aria-live="assertive">
           <Loader2 className="animate-spin h-3.5 w-3.5" />
           <span>Connection lost. Reconnecting...</span>
         </div>
@@ -135,7 +135,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl">
-        <Card className="md:col-span-2 border-primary/20 shadow-elevation-medium">
+        <Card className="md:col-span-2">
           <CardHeader className="pb-3">
             <CardTitle className="font-headline flex items-center gap-2 text-base">
                 <Users className="w-4 h-4 text-primary" />
@@ -155,7 +155,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                   ) : studentParticipants.length > 0 ? studentParticipants.map(p => (
                     <div key={p.user_id} className="flex flex-col items-center gap-2 text-center group">
                       <div className="relative">
-                        <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-primary/10 group-hover:ring-primary/30 transition-all">
+                        <Avatar className="h-14 w-14 md:h-16 md:w-16">
                           <AvatarFallback className="text-2xl bg-secondary">{p.avatar || '🎮'}</AvatarFallback>
                         </Avatar>
                         <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background" />
@@ -169,20 +169,20 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
           </CardContent>
         </Card>
         
-        <Card className="bg-secondary/30 border-primary/15">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="font-headline text-base">Join the Quiz</CardTitle>
             <CardDescription className="text-xs">Use this code or QR to enter the arena.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
-            <div className="text-4xl font-mono font-bold tracking-widest text-primary bg-background/50 px-5 py-3 rounded-xl flex items-center gap-3 border border-primary/10">
+            <div className="text-4xl font-mono font-bold tracking-widest text-primary bg-background/50 px-5 py-3 rounded-lg flex items-center gap-3 border border-border/30">
               <span>{quiz.id}</span>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
                 <Copy className="w-4 h-4" />
               </Button>
             </div>
             {shareableLink && (
-              <div className="bg-white p-3 rounded-xl">
+              <div className="bg-white p-3 rounded-lg">
                 <QRCode value={shareableLink} size={Math.min(120, typeof window !== 'undefined' ? window.innerWidth * 0.25 : 120)} aria-label={`QR code to join quiz ${quiz.id}`} />
               </div>
             )}
@@ -200,7 +200,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
         <div className="w-full max-w-6xl">
             <Button 
               size="lg" 
-              className="w-full bg-accent hover:bg-accent/80 text-accent-foreground text-base font-headline font-semibold h-14 shadow-elevation-medium" 
+              className="w-full text-base font-headline font-semibold h-14" 
               onClick={handleStartQuiz}
               disabled={studentCount === 0 || areParticipantsLoading}
             >

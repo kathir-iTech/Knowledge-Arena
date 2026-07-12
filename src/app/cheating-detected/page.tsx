@@ -2,25 +2,23 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ShieldX, HelpCircle } from "lucide-react";
+import { ShieldX } from "lucide-react";
 
 export default function CheatingDetectedPage() {
   return (
-    <main className="loading-screen flex-col text-center">
-      <ShieldX className="w-20 h-20 text-destructive mb-6" />
-      <h1 className="text-4xl font-headline text-destructive mb-2">Access Denied</h1>
-      <p className="text-xl text-muted-foreground mb-2 max-w-md">
-        Your attempt to join was denied.
-      </p>
-      <div className="flex items-center gap-2 bg-destructive/10 px-4 py-2 rounded-full text-sm mb-8">
-        <HelpCircle className="w-4 h-4 text-destructive" />
-        <span>This can happen if you try to join a room you are not authorized to access.</span>
+    <main className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-5">
+      <ShieldX className="w-16 h-16 text-destructive" />
+      <div className="space-y-2">
+        <h1 className="text-2xl font-headline tracking-tight text-destructive">Access Denied</h1>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Your attempt to join was denied. This can happen if you try to join a room you are not authorized to access.
+        </p>
       </div>
-      <p className="text-muted-foreground mb-8 max-w-md">
-        Please contact your teacher if you believe this is an error. You can return to the dashboard and try again.
+      <p className="text-sm text-muted-foreground max-w-sm">
+        Please contact your teacher if you believe this is an error.
       </p>
       <Link href="/" passHref>
-        <Button variant="outline" size="lg">
+        <Button variant="outline">
           Return to Dashboard
         </Button>
       </Link>

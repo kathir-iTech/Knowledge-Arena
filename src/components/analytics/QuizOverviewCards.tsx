@@ -6,14 +6,14 @@ import { Files, PlayCircle, CheckCircle2, Archive, Users, Activity, BarChart3, C
 import type { OverviewStats } from '@/services/analytics.service';
 
 const cards = [
-  { key: 'totalQuizzes', label: 'Total Quizzes', icon: Files, color: 'text-blue-500' },
-  { key: 'liveQuizzes', label: 'Live Now', icon: PlayCircle, color: 'text-green-500' },
-  { key: 'completedQuizzes', label: 'Completed', icon: CheckCircle2, color: 'text-emerald-500' },
+  { key: 'totalQuizzes', label: 'Total Quizzes', icon: Files, color: 'text-primary' },
+  { key: 'liveQuizzes', label: 'Live Now', icon: PlayCircle, color: 'text-success' },
+  { key: 'completedQuizzes', label: 'Completed', icon: CheckCircle2, color: 'text-success' },
   { key: 'archivedQuizzes', label: 'Archived', icon: Archive, color: 'text-muted-foreground' },
-  { key: 'totalParticipants', label: 'Total Participants', icon: Users, color: 'text-violet-500' },
-  { key: 'activeParticipants', label: 'Active Now', icon: Activity, color: 'text-amber-500' },
-  { key: 'averageScore', label: 'Avg Score', icon: BarChart3, color: 'text-rose-500', suffix: '' },
-  { key: 'completionRate', label: 'Completion Rate', icon: Clock, color: 'text-cyan-500', suffix: '%' },
+  { key: 'totalParticipants', label: 'Total Participants', icon: Users, color: 'text-primary' },
+  { key: 'activeParticipants', label: 'Active Now', icon: Activity, color: 'text-success' },
+  { key: 'averageScore', label: 'Avg Score', icon: BarChart3, color: 'text-warning', suffix: '' },
+  { key: 'completionRate', label: 'Completion Rate', icon: Clock, color: 'text-primary', suffix: '%' },
 ];
 
 export function QuizOverviewCards({ overview }: { overview: OverviewStats }) {
