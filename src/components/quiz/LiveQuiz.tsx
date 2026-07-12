@@ -4,8 +4,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
 import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
@@ -81,30 +79,30 @@ const ParticipantStats = ({ participants, teacherId, submittedCount }: { partici
 
   return (
     <div className="flex flex-wrap gap-2 justify-center mb-4 md:mb-6">
-      <div className="flex items-center gap-1.5 bg-muted/50 px-3 py-1.5 rounded-[10px] text-xs">
+      <div className="flex items-center gap-1.5 bg-muted/50 px-3 py-1.5 rounded-[12px] text-xs">
         <Users className="w-3.5 h-3.5 text-primary" />
         <span className="font-semibold">{students.length}</span>
         <span className="text-muted-foreground">total</span>
       </div>
-      <div className="flex items-center gap-1.5 bg-success/5 px-3 py-1.5 rounded-[10px] text-xs">
+      <div className="flex items-center gap-1.5 bg-success/5 px-3 py-1.5 rounded-[12px] text-xs">
         <User className="w-3.5 h-3.5 text-success" />
         <span className="font-semibold text-success">{playing}</span>
         <span className="text-muted-foreground">active</span>
       </div>
-      <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[10px] text-xs">
+      <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[12px] text-xs">
         <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
         <span className="font-semibold text-primary">{submittedCount}</span>
         <span className="text-muted-foreground">answered</span>
       </div>
       {blocked > 0 && (
-        <div className="flex items-center gap-1.5 bg-destructive/5 px-3 py-1.5 rounded-[10px] text-xs">
+        <div className="flex items-center gap-1.5 bg-destructive/5 px-3 py-1.5 rounded-[12px] text-xs">
           <Ban className="w-3.5 h-3.5 text-destructive" />
           <span className="font-semibold text-destructive">{blocked}</span>
           <span className="text-muted-foreground">blocked</span>
         </div>
       )}
       {finished > 0 && (
-        <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[10px] text-xs">
+        <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[12px] text-xs">
           <span className="font-semibold text-primary">{finished}</span>
           <span className="text-muted-foreground">done</span>
         </div>
@@ -312,6 +310,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   if (!currentQuestion) return null;
 
   const studentCount = participants.filter(p => p.user_id !== quiz.created_by).length;
+  const progressValue = Math.max(0, Math.min(100, (timeLeft / (currentQuestion.timer || 1)) * 100));
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-3 md:p-4 bg-background overflow-x-hidden animate-in">
@@ -327,36 +326,68 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
       {isTeacher && <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} />}
 
-      <Card className="w-full max-w-4xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-muted">
-          <Progress value={(timeLeft / currentQuestion.timer) * 100} className="h-full rounded-none bg-primary transition-all duration-150" />
+      {!isTeacher && (
+        <div className={cn(
+          "flex items-center gap-2 mb-4 px-4 py-2 rounded-[12px] border transition-all duration-150",
+          timeLeft <= 5 ? "bg-destructive/5 border-destructive/10" : "bg-card border-border/50"
+        )}>
+          <Clock className={cn("w-4 h-4", timeLeft <= 5 ? "text-destructive" : "text-muted-foreground")} />
+          <span className={cn("font-mono text-base font-bold tabular-nums", timeLeft <= 5 ? "text-destructive animate-pulse" : "text-foreground")} aria-live="polite" aria-atomic="true">{timeLeft}</span>
+          <span className="text-sm text-muted-foreground">seconds remaining</span>
         </div>
-        <CardHeader className="pt-8 md:pt-14 pb-4 md:pb-6 px-5 md:px-10">
-            <div className="flex justify-between items-center mb-2 md:mb-4">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Question {(quiz.current_question_index ?? 0) + 1} / {quiz.question_count ?? 0}</span>
-                <div className={cn("font-mono text-3xl md:text-5xl font-bold tabular-nums leading-none", timeLeft <= 5 ? "text-destructive" : "text-primary")} aria-live="polite" aria-atomic="true">
-                  <span className={timeLeft <= 5 ? "animate-pulse" : ""}>{timeLeft}</span>
-                  <span className="text-sm md:text-base font-normal text-muted-foreground ml-1">s</span>
-                </div>
+      )}
+
+      <Card className="w-full max-w-4xl">
+        <CardHeader className="text-center pt-10 pb-4 md:pb-6 px-5 md:px-10">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 block">
+            Question {(quiz.current_question_index ?? 0) + 1} / {quiz.question_count ?? 0}
+          </span>
+          <CardTitle className="text-2xl sm:text-3xl md:text-4xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
+          {isTeacher && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              <span className={cn("font-mono text-lg font-bold tabular-nums", timeLeft <= 5 ? "text-destructive" : "text-foreground")} aria-live="polite" aria-atomic="true">{timeLeft}<span className="text-sm font-normal text-muted-foreground ml-0.5">s</span></span>
             </div>
-            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
+          )}
         </CardHeader>
-        <CardContent className="space-y-3 md:space-y-4 pb-8 md:pb-14 px-5 md:px-10">
+        <CardContent className="pb-10 md:pb-14 px-5 md:px-10">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             {currentQuestion.options.map((opt: string, i: number) => (
-              <Button key={i} onClick={() => handleAnswerSubmit(i)} disabled={hasAnswered || isTeacher || timeLeft === 0 || participant.status === 'blocked'} variant={selectedAnswer === i ? 'default' : 'outline'} className={cn(
-                  "h-auto min-h-[3.5rem] md:min-h-[4.5rem] text-sm md:text-base font-medium whitespace-normal break-words touch-target text-left flex items-center gap-3 px-4 md:px-5 py-3 md:py-3.5 transition-all duration-150 rounded-[14px]",
-                  selectedAnswer === i ? "ring-2 ring-primary/30" : "hover:border-primary/30 hover:bg-primary/5",
-                  hasAnswered && selectedAnswer !== i && "opacity-30"
-                )} aria-label={`Option ${String.fromCharCode(65 + i)}: ${opt}`}>
-                <span className="shrink-0 flex items-center justify-center w-7 h-7 rounded-[10px] bg-primary/10 text-xs md:text-sm font-semibold font-mono text-primary">{String.fromCharCode(65 + i)}</span>
-                <span className="flex-1 leading-snug">{opt}</span>
-              </Button>
+              <button
+                key={i}
+                onClick={() => handleAnswerSubmit(i)}
+                disabled={hasAnswered || isTeacher || timeLeft === 0 || participant.status === 'blocked'}
+                className={cn(
+                  "group relative flex flex-col gap-2 p-4 md:p-5 rounded-[14px] border-2 text-left transition-all duration-150 min-h-[4.5rem] md:min-h-[5.5rem]",
+                  selectedAnswer === i
+                    ? "border-primary bg-primary/5 shadow-elevation-small"
+                    : hasAnswered
+                      ? "border-border/30 bg-muted/10 opacity-40"
+                      : "border-border/50 bg-card hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-elevation-small cursor-pointer",
+                  (hasAnswered || isTeacher || timeLeft === 0) && "cursor-default"
+                )}
+                aria-label={`Option ${String.fromCharCode(65 + i)}: ${opt}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={cn(
+                    "shrink-0 flex items-center justify-center w-8 h-8 rounded-[10px] text-sm font-bold font-mono transition-all duration-150",
+                    selectedAnswer === i
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-primary/10 text-primary group-hover:bg-primary/20"
+                  )}>
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                  <span className="flex-1 text-sm md:text-base font-medium leading-snug">{opt}</span>
+                  {selectedAnswer === i && (
+                    <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
+                  )}
+                </div>
+              </button>
             ))}
           </div>
           {isTeacher && (
-            <div className="flex flex-col items-center pt-4 md:pt-8 gap-2">
-              <Button onClick={handleNext} disabled={isAdvancing} size="lg" className="w-full md:w-auto" aria-busy={isAdvancing}>
+            <div className="flex flex-col items-center pt-6 md:pt-8 gap-2">
+              <Button onClick={handleNext} disabled={isAdvancing} size="lg" className="w-full md:w-auto min-w-[200px]" aria-busy={isAdvancing}>
                 {isAdvancing ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
                 {(quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
               </Button>
@@ -364,7 +395,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
             </div>
           )}
           {participant.status === 'blocked' && !isTeacher && (
-             <div className="bg-destructive/5 border border-destructive/10 p-8 rounded-[14px] text-center space-y-3">
+             <div className="bg-destructive/5 border border-destructive/10 p-8 rounded-[18px] text-center space-y-3 mt-6">
                 <ShieldAlert className="w-12 h-12 text-destructive mx-auto" />
                 <h3 className="text-xl font-bold text-destructive">Disqualified</h3>
                 <p className="text-sm text-muted-foreground">Malpractice detected. Await commander amnesty.</p>
