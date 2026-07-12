@@ -42,15 +42,15 @@ export default function StudentProfile() {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-lg mx-auto space-y-6 safe-bottom animate-in">
+    <div className="page-container space-y-6 safe-bottom animate-in">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push('/student/dashboard')} aria-label="Back to dashboard">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-headline text-primary tracking-tight">Gladiator Profile</h1>
+        <h1 className="text-page-title font-headline text-primary tracking-tight">Gladiator Profile</h1>
       </div>
 
-      <Card className="border-primary/20 shadow-glow-primary">
+      <Card className="shadow-elevation-medium">
         <CardHeader className="text-center pb-3">
           <div className="flex justify-center mb-4">
             <Avatar className="h-24 w-24 border-4 border-primary/20 ring-2 ring-primary/10">

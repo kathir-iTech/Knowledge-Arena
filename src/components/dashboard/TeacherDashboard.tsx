@@ -322,13 +322,13 @@ export default function TeacherDashboard() {
   if (loading) return <LoadingScreen message="Loading arenas..." />;
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-6xl mx-auto safe-bottom animate-in">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="page-container safe-bottom animate-in">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 page-section">
         <div className="space-y-1">
-          <h1 className="text-3xl md:text-4xl font-headline text-primary tracking-tight">Commander&apos;s Dashboard</h1>
+          <h1 className="text-page-title font-headline text-primary tracking-tight">Commander&apos;s Dashboard</h1>
           <p className="text-sm text-muted-foreground">Manage your battle rooms and review gladiator performance.</p>
         </div>
-        <Button asChild size="default" className="h-11 px-6 shadow-glow-primary">
+        <Button asChild size="default" className="h-11 px-6">
             <Link href="/create-quiz"><PlusCircle className="mr-2 h-4 w-4" />New Arena</Link>
         </Button>
       </header>

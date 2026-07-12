@@ -7,7 +7,7 @@ import { ShieldX, HelpCircle } from "lucide-react";
 export default function CheatingDetectedPage() {
   return (
     <main className="loading-screen flex-col text-center">
-      <ShieldX className="w-24 h-24 text-destructive mb-6 crystal-float" />
+      <ShieldX className="w-20 h-20 text-destructive mb-6" />
       <h1 className="text-4xl font-headline text-destructive mb-2">Access Denied</h1>
       <p className="text-xl text-muted-foreground mb-2 max-w-md">
         Your attempt to join was denied.

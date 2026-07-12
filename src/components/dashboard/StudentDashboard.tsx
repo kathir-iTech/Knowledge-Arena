@@ -60,19 +60,19 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-8 max-w-4xl mx-auto safe-bottom animate-in">
-      <div className="flex items-center justify-between">
+    <div className="page-container safe-bottom animate-in">
+      <header className="flex items-center justify-between page-section">
         <div className="space-y-1">
-          <h1 className="text-3xl md:text-4xl font-headline text-primary tracking-tight">Gladiator Dashboard</h1>
+          <h1 className="text-page-title font-headline text-primary tracking-tight">Gladiator Dashboard</h1>
           <p className="text-sm text-muted-foreground">Welcome, {user?.name || 'Gladiator'}.</p>
         </div>
         <Button variant="outline" size="sm" asChild className="h-9">
           <Link href="/student/profile"><UserCircle className="mr-2 h-4 w-4" /> Profile</Link>
         </Button>
-      </div>
+      </header>
 
       <div className="flex justify-center">
-        <Card className="w-full max-w-md border-primary/20 shadow-glow-primary">
+        <Card className="w-full max-w-md border-primary/20 shadow-elevation-medium">
           <CardHeader className="pb-3">
             <CardTitle className="text-center text-xl font-headline">Enter the Arena</CardTitle>
             <CardDescription className="text-center text-sm">Enter the 6-digit code to join the battle.</CardDescription>

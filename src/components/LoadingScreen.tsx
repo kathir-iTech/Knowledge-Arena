@@ -10,8 +10,8 @@ export function LoadingScreen({ message = 'Initializing...' }: LoadingScreenProp
   return (
     <div className="loading-screen">
       <div className="flex flex-col items-center gap-6">
-        <BrainCircuit className="w-20 h-20 text-primary crystal-float liquid-glow" />
-        <h1 className="text-3xl font-headline liquid-shimmer-text tracking-widest uppercase">Knowledge Arena</h1>
+        <BrainCircuit className="w-16 h-16 text-primary" />
+        <h1 className="text-2xl font-headline tracking-tight">Knowledge Arena</h1>
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0s' }} />
           <div className="w-2 h-2 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.3s' }} />

@@ -20,7 +20,7 @@ export default function KickedPage() {
 
   return (
     <main className="loading-screen flex-col text-center">
-      <ShieldAlert className="w-24 h-24 text-destructive mb-6 crystal-float" />
+      <ShieldAlert className="w-20 h-20 text-destructive mb-6" />
       <h1 className="text-4xl font-headline text-destructive mb-2">You Have Been Blocked</h1>
       <p className="text-xl text-muted-foreground mb-2 max-w-md">
         Malpractice was detected. Fair play is required in the arena.

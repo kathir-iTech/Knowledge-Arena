@@ -11,7 +11,7 @@ const AnalyticsDashboard = dynamic(
 
 export default function AnalyticsPage() {
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="page-container page-section">
       <Suspense fallback={<LoadingScreen />}>
         <AnalyticsDashboard />
       </Suspense>

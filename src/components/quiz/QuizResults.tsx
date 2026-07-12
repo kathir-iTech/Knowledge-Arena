@@ -168,7 +168,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
               </Button>
             )}
             <Link href={user?.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard'}>
-              <Button size="lg" className="h-12 px-6 text-sm rounded-xl shadow-glow-primary">
+              <Button size="lg" className="h-12 px-6 text-sm rounded-xl shadow-elevation-medium">
                 <Home className="mr-2 h-4 w-4" />
                 Dashboard
               </Button>
