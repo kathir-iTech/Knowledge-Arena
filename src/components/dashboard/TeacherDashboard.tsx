@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const AIInsightCards = dynamic(() => import('@/components/dashboard/AIInsightCards').then(m => m.AIInsightCards), { ssr: false });
 
-import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle, Pencil, Copy, Archive, ArchiveRestore, Download, FileText, Search as SearchIcon } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle, Pencil, Copy, Archive, ArchiveRestore, Download, FileText, Search as SearchIcon, BarChart3, BookOpen, TrendingUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
@@ -136,24 +136,26 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
       }
     };
 
+    const participantCount = participants?.filter(p => p.user_id !== quiz.created_by).length || 0;
+
     return (
         <Card className={cn(
-          "group border-primary/20 transition-all duration-200 hover:shadow-card-hover hover:border-primary/30",
+          "transition-all duration-200 hover:shadow-elevation-hover",
           quiz.archived && "opacity-50"
         )}>
             <CardHeader className="flex flex-col lg:flex-row lg:items-start justify-between gap-3 pb-3">
                 <div className="space-y-2 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <CardTitle className="text-lg font-headline tracking-tight group-hover:text-primary transition-colors">
-                          <Link href={`/battle/${quiz.id}`}>{quiz.title}</Link>
+                      <CardTitle className="text-sm font-headline tracking-tight group-hover:text-primary transition-colors">
+                        <Link href={`/battle/${quiz.id}`}>{quiz.title}</Link>
                       </CardTitle>
-                      <Badge variant="outline" className="font-mono text-[10px] bg-background/50 h-5">{quiz.id}</Badge>
+                      <span className="font-mono text-[11px] text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded-[4px]">{quiz.id}</span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                         <Badge className={cn(
-                            "text-[10px] font-semibold h-5",
+                            "text-[10px] font-medium h-5",
                             quiz.archived ? "bg-muted/50 text-muted-foreground" :
-                            quiz.status === 'live' ? "bg-green-500/10 text-green-400 border-green-500/20" : 
+                            quiz.status === 'live' ? "bg-green-500/10 text-green-400 border-green-500/20" :
                             quiz.status === 'finished' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
                             "bg-primary/10 text-primary border-primary/20"
                         )}>
@@ -161,16 +163,16 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                         </Badge>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Users className="w-3.5 h-3.5" />
-                            {participants?.filter(p => p.user_id !== quiz.created_by).length || 0} gladiator{(participants?.filter(p => p.user_id !== quiz.created_by).length || 0) !== 1 ? 's' : ''}
+                            {participantCount} student{participantCount !== 1 ? 's' : ''}
                         </span>
                         {!!quiz.created_at && quiz.created_at > 0 && (
                           <span className="text-xs text-muted-foreground">{new Date(quiz.created_at).toLocaleDateString()}</span>
                         )}
                     </div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                <div className="flex items-center gap-1 flex-wrap shrink-0">
                     {!quiz.archived && (
-                      <Button asChild size="sm" variant={quiz.status === 'waiting' ? 'default' : 'outline'} className="h-8 text-xs font-semibold">
+                      <Button asChild size="sm" variant={quiz.status === 'waiting' ? 'default' : 'outline'} className="h-8 text-xs font-medium">
                           <Link href={`/battle/${quiz.id}`}>
                               {quiz.status === 'waiting' ? (
                                   <><PlayCircle className="mr-1.5 h-3.5 w-3.5" /> Start</>
@@ -253,7 +255,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
             </CardHeader>
             {participants && participants.some(p => p.status === 'blocked') && (
               <CardContent className="pt-0 pb-3 px-4">
-                <div className="p-3 bg-destructive/5 rounded-lg border border-destructive/10 space-y-2">
+                <div className="p-3 bg-destructive/5 rounded-[10px] border border-destructive/10 space-y-2">
                   <p className="text-[10px] font-bold text-destructive uppercase tracking-widest">Awaiting Amnesty (Blocked):</p>
                   {participants.filter(p => p.status === 'blocked').map(p => (
                     <div key={p.user_id} className="flex items-center justify-between">
@@ -271,9 +273,42 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     );
 };
 
+function OverviewCards({ quizzes, participants }: { quizzes: ValidatedQuiz[]; participants: ValidatedParticipant[] }) {
+  const total = quizzes.filter(q => !q.archived).length;
+  const running = quizzes.filter(q => q.status === 'live' && !q.archived).length;
+  const uniqueStudents = new Set(participants.filter(p => p.status !== 'blocked').map(p => p.user_id)).size;
+  const avgScore = participants.length > 0
+    ? Math.round(participants.reduce((sum, p) => sum + (p.score || 0), 0) / participants.length)
+    : 0;
+
+  const cards = [
+    { icon: BookOpen, label: 'Total Quizzes', value: total, color: 'text-primary' },
+    { icon: TrendingUp, label: 'Running', value: running, color: 'text-green-400' },
+    { icon: Users, label: 'Students', value: uniqueStudents, color: 'text-blue-400' },
+    { icon: BarChart3, label: 'Avg Score', value: avgScore + '%', color: 'text-amber-400' },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {cards.map(card => (
+        <Card key={card.label}>
+          <CardContent className="p-4 flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <card.icon className={cn("w-4 h-4", card.color)} />
+              <span className="text-xs text-muted-foreground">{card.label}</span>
+            </div>
+            <span className="text-2xl font-semibold tracking-tight">{card.value}</span>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function TeacherDashboard() {
   const { user } = useAuth();
   const [quizzes, setQuizzes] = useState<ValidatedQuiz[]>([]);
+  const [allParticipants, setAllParticipants] = useState<ValidatedParticipant[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
@@ -281,8 +316,14 @@ export default function TeacherDashboard() {
 
   const fetchQuizzes = useCallback(() => {
     if (!user) return;
-    quizService.getQuizzesByCreator(user.id)
-      .then(setQuizzes)
+    Promise.all([
+      quizService.getQuizzesByCreator(user.id),
+      participantService.getAllParticipantsBulk([]).catch(() => [] as ValidatedParticipant[]),
+    ])
+      .then(([qs, parts]) => {
+        setQuizzes(qs);
+        setAllParticipants(parts);
+      })
       .catch(e => console.error(e))
       .finally(() => setLoading(false));
   }, [user]);
@@ -325,31 +366,39 @@ export default function TeacherDashboard() {
     <div className="page-container safe-bottom animate-in">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 page-section">
         <div className="space-y-1">
-          <h1 className="text-page-title font-headline text-primary tracking-tight">Commander&apos;s Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Manage your battle rooms and review gladiator performance.</p>
+          <h1 className="text-page-title font-headline tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Welcome back, {user?.name || 'Commander'}.</p>
         </div>
-        <Button asChild size="default" className="h-11 px-6">
+        <Button asChild>
             <Link href="/create-quiz"><PlusCircle className="mr-2 h-4 w-4" />New Arena</Link>
         </Button>
       </header>
 
-      <Suspense fallback={<div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="h-32 bg-secondary/10 rounded-xl animate-pulse" /><div className="h-32 bg-secondary/10 rounded-xl animate-pulse" /><div className="h-32 bg-secondary/10 rounded-xl animate-pulse" /></div>}><AIInsightCards /></Suspense>
+      <div className="page-section">
+        <OverviewCards quizzes={quizzes} participants={allParticipants} />
+      </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+      <div className="page-section">
+        <Suspense fallback={<div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="h-32 bg-secondary/10 rounded-[10px] animate-pulse" /><div className="h-32 bg-secondary/10 rounded-[10px] animate-pulse" /><div className="h-32 bg-secondary/10 rounded-[10px] animate-pulse" /></div>}>
+          <AIInsightCards />
+        </Suspense>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center page-section">
         <div className="relative flex-1 max-w-sm">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search by name or room code..."
-            className="pl-9 h-10 text-sm"
+            className="pl-9"
             aria-label="Search arenas"
           />
         </div>
         <select
           value={sortKey}
           onChange={e => setSortKey(e.target.value as SortKey)}
-          className="h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 rounded-[10px] border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Sort quizzes"
         >
           <option value="newest">Newest First</option>
@@ -357,45 +406,46 @@ export default function TeacherDashboard() {
           <option value="title">By Title</option>
           <option value="status">By Status</option>
         </select>
+        <div className="flex gap-1 flex-wrap">
+          {[
+            { key: 'all', label: 'Active' },
+            { key: 'active', label: 'Running' },
+            { key: 'completed', label: 'Completed' },
+            { key: 'draft', label: 'Draft' },
+            { key: 'archived', label: 'Archived' }
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setFilterKey(key as FilterKey)}
+              className={cn(
+                "px-3 py-1.5 rounded-[8px] text-xs font-medium transition-all duration-150",
+                filterKey === key ? "bg-primary text-primary-foreground" : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground"
+              )}
+              aria-pressed={filterKey === key}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex gap-1.5 flex-wrap">
-        {[
-          { key: 'all', label: 'Active' },
-          { key: 'active', label: 'Running' },
-          { key: 'completed', label: 'Completed' },
-          { key: 'draft', label: 'Draft' },
-          { key: 'archived', label: 'Archived' }
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setFilterKey(key as FilterKey)}
-            className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
-              filterKey === key ? "bg-primary text-primary-foreground shadow-sm" : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/30"
-            )}
-            aria-pressed={filterKey === key}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="space-y-3">
         {filteredAndSorted.map(q => <QuizCard key={q.id} quiz={q} onUpdate={fetchQuizzes} />)}
         {filteredAndSorted.length === 0 && (
-            <div className="lg:col-span-2 py-16 text-center border-2 border-dashed border-muted/40 rounded-2xl">
+            <div className="py-12 text-center border-2 border-dashed border-muted/30 rounded-[14px]">
                 <p className="text-muted-foreground mb-4">
                   {searchQuery ? 'No arenas match your search.' : filterKey === 'archived' ? 'No archived arenas.' : filterKey === 'draft' ? 'No draft quizzes.' : filterKey === 'completed' ? 'No completed quizzes.' : filterKey === 'active' ? 'No active quizzes.' : 'No arenas have been constructed yet.'}
                 </p>
                 {!searchQuery && (
-                  <Button asChild variant="outline" size="sm"><Link href="/create-quiz">Create Your First Quiz</Link></Button>
+                  <Button asChild variant="outline"><Link href="/create-quiz">Create Your First Quiz</Link></Button>
                 )}
             </div>
         )}
       </div>
 
-      <StudentActivity quizzes={quizzes} teacherId={user?.id} />
+      <div className="mt-8">
+        <StudentActivity quizzes={quizzes} teacherId={user?.id} />
+      </div>
     </div>
   );
 }
@@ -427,20 +477,20 @@ function StudentActivity({ quizzes, teacherId }: { quizzes: ValidatedQuiz[]; tea
     return () => { cancelled = true; };
   }, [quizzes, teacherId]);
 
-  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   if (!students.length) return null;
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-4 page-section">
       <div className="flex items-center gap-2">
-        <Users className="h-5 w-5 text-primary" />
-        <h2 className="text-xl font-headline tracking-tight">Gladiator History</h2>
-        <span className="text-xs text-muted-foreground ml-auto">{students.length} unique student{students.length !== 1 ? 's' : ''}</span>
+        <Users className="w-5 h-5 text-primary" />
+        <h2 className="text-section-title tracking-tight">Student Activity</h2>
+        <span className="text-xs text-muted-foreground ml-auto">{students.length} student{students.length !== 1 ? 's' : ''}</span>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-border/30">
+      <div className="overflow-x-auto rounded-[10px] border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-muted/20 border-b border-border/30">
+            <tr className="bg-muted/30 border-b">
               <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Name</th>
               <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">User ID</th>
               <th scope="col" className="text-center p-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Battles</th>
@@ -450,7 +500,7 @@ function StudentActivity({ quizzes, teacherId }: { quizzes: ValidatedQuiz[]; tea
           </thead>
           <tbody>
             {students.map((s, i) => (
-              <tr key={s.userId} className={cn("border-b border-border/15 transition-colors hover:bg-muted/5", i % 2 === 0 ? "bg-background" : "bg-muted/[0.02]")}>
+              <tr key={s.userId} className={cn("border-b border-border/40 transition-colors hover:bg-muted/20", i % 2 === 0 ? "bg-background" : "bg-muted/[0.03]")}>
                 <td className="p-3">
                   <div className="flex items-center gap-2">
                     <Avatar className="h-7 w-7">

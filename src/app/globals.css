@@ -120,18 +120,6 @@
   }
 }
 
-.loading-screen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  background: hsl(var(--background));
-}
-
-.crystal-float {
-  animation: none;
-}
-
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -183,8 +171,4 @@
   50% { opacity: 0.6; }
 }
 
-@media (max-height: 600px) {
-  .question-review-fixed-bar {
-    position: static;
-  }
-}
+

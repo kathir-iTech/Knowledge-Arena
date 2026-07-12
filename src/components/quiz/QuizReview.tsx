@@ -105,12 +105,12 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono text-muted-foreground">Q{idx + 1}</span>
-                  <Badge variant={mySub ? (isCorrect ? "default" : "destructive") : "outline"} className="text-[10px] h-5">
+                  <Badge variant={mySub ? (isCorrect ? "default" : "destructive") : "outline"} className="text-[10px] h-5 px-1.5">
                     {mySub ? (isCorrect ? 'CORRECT' : 'WRONG') : 'UNANSWERED'}
                   </Badge>
                 </div>
               </div>
-              <CardTitle className="text-base font-medium pt-2 leading-relaxed">{q.text}</CardTitle>
+              <CardTitle className="text-base font-medium pt-1 leading-relaxed">{q.text}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {q.options.map((opt, optIdx) => {
@@ -118,14 +118,16 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
                 const isCorrectOpt = optIdx === correctIdx;
                 return (
                   <div key={optIdx} className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border text-sm transition-all",
-                    isCorrectOpt && "bg-green-500/10 border-green-500/30",
-                    isSelected && !isCorrectOpt && "bg-red-500/10 border-red-500/30",
-                    !isSelected && !isCorrectOpt && "bg-secondary/20 border-border/40 hover:border-border/60"
+                    "flex items-center gap-3 p-3 rounded-lg border text-sm",
+                    isCorrectOpt && "bg-green-500/5 border-green-500/20",
+                    isSelected && !isCorrectOpt && "bg-red-500/5 border-red-500/20",
+                    !isSelected && !isCorrectOpt && "bg-secondary/20 border-border/30"
                   )}>
-                    {isCorrectOpt ? <CheckCircle2 className="w-4 h-4 shrink-0 text-green-500" /> :
-                     isSelected ? <XCircle className="w-4 h-4 shrink-0 text-red-500" /> :
-                     <HelpCircle className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                    <span className="shrink-0 flex items-center justify-center w-5 h-5">
+                      {isCorrectOpt ? <CheckCircle2 className="w-4 h-4 text-green-500" /> :
+                       isSelected ? <XCircle className="w-4 h-4 text-red-500" /> :
+                       <HelpCircle className="w-4 h-4 text-muted-foreground" />}
+                    </span>
                     <span className="font-mono text-xs text-muted-foreground w-5 shrink-0">{String.fromCharCode(65 + optIdx)}</span>
                     <span className="leading-snug">{opt}</span>
                   </div>

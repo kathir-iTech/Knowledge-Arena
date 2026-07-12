@@ -65,28 +65,24 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <Card className="bg-red-500/5 border-red-500/20">
-              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" aria-hidden="true" /> Hardest Questions</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {hardest.map((q, i) => (
-                  <div key={q.questionId} className="flex items-center justify-between text-sm">
-                    <span className="truncate mr-2">{i + 1}. {q.text}</span>
-                    <Badge variant="destructive" className="shrink-0">{q.correctPercent}%</Badge>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-            <Card className="bg-green-500/5 border-green-500/20">
-              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Target className="w-4 h-4 text-green-500" aria-hidden="true" /> Easiest Questions</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {easiest.map((q, i) => (
-                  <div key={q.questionId} className="flex items-center justify-between text-sm">
-                    <span className="truncate mr-2">{i + 1}. {q.text}</span>
-                    <Badge className="bg-green-500/10 text-green-600 border-0 shrink-0">{q.correctPercent}%</Badge>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            <div className="bg-destructive/5 border border-destructive/10 rounded-[14px] p-4 space-y-3">
+              <h4 className="text-sm font-medium flex items-center gap-2 text-destructive"><AlertTriangle className="w-4 h-4" aria-hidden="true" /> Hardest Questions</h4>
+              {hardest.map((q, i) => (
+                <div key={q.questionId} className="flex items-center justify-between text-sm">
+                  <span className="truncate mr-2">{i + 1}. {q.text}</span>
+                  <Badge variant="destructive" className="shrink-0">{q.correctPercent}%</Badge>
+                </div>
+              ))}
+            </div>
+            <div className="bg-success/5 border border-success/10 rounded-[14px] p-4 space-y-3">
+              <h4 className="text-sm font-medium flex items-center gap-2 text-success"><Target className="w-4 h-4" aria-hidden="true" /> Easiest Questions</h4>
+              {easiest.map((q, i) => (
+                <div key={q.questionId} className="flex items-center justify-between text-sm">
+                  <span className="truncate mr-2">{i + 1}. {q.text}</span>
+                  <Badge className="bg-success/10 text-success border-0 shrink-0">{q.correctPercent}%</Badge>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="overflow-x-auto">

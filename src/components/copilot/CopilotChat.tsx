@@ -80,57 +80,63 @@ export function CopilotChat() {
           size="icon"
           className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl shadow-primary/30 z-50"
         >
-          {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+          {isOpen ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
         </Button>
       </SheetTrigger>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
-        <SheetHeader className="p-4 border-b border-border/50">
-          <SheetTitle className="flex items-center gap-2 text-primary">
-            <Bot className="h-5 w-5" />
+        <SheetHeader className="px-4 py-3 border-b border-border/30 shrink-0">
+          <SheetTitle className="flex items-center gap-2 text-primary text-sm">
+            <Bot className="h-4 w-4" />
             Tactical Assistant
           </SheetTitle>
         </SheetHeader>
 
-        <ScrollArea ref={scrollRef} className="flex-1 p-4 space-y-4">
-          {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={cn(
-                "flex gap-3 max-w-[85%]",
-                msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
-              )}
-            >
-              <div className={cn(
-                "shrink-0 h-8 w-8 rounded-full flex items-center justify-center",
-                msg.role === 'user' ? "bg-primary/20" : "bg-accent/20"
-              )}>
-                {msg.role === 'user' ? <User className="h-4 w-4 text-primary" /> : <Bot className="h-4 w-4 text-accent" />}
+        <ScrollArea ref={scrollRef} className="flex-1 px-4 py-3">
+          <div className="space-y-3">
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "flex gap-2.5 max-w-[88%]",
+                  msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
+                )}
+              >
+                <div className={cn(
+                  "shrink-0 h-7 w-7 rounded-full flex items-center justify-center",
+                  msg.role === 'user' ? "bg-primary/10" : "bg-accent/10"
+                )}>
+                  {msg.role === 'user' ? <User className="h-3.5 w-3.5 text-primary" /> : <Bot className="h-3.5 w-3.5 text-accent" />}
+                </div>
+                <div className={cn(
+                  "rounded-lg px-3.5 py-2 text-sm leading-relaxed",
+                  msg.role === 'user'
+                    ? "bg-primary text-primary-foreground"
+                    : msg.content.startsWith('Error:')
+                      ? "bg-destructive/5 border border-destructive/10 text-destructive"
+                      : "bg-secondary/30 border border-border/20"
+                )}>
+                  {msg.content}
+                </div>
               </div>
-              <div className={cn(
-                "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-                msg.role === 'user'
-                  ? "bg-primary text-primary-foreground"
-                  : msg.content.startsWith('Error:')
-                    ? "bg-destructive/10 border border-destructive/20 text-destructive"
-                    : "bg-secondary/50 border border-border/30"
-              )}>
-                {msg.content}
+            ))}
+            {isLoading && (
+              <div className="flex gap-2.5 max-w-[88%]">
+                <div className="shrink-0 h-7 w-7 rounded-full bg-accent/10 flex items-center justify-center">
+                  <Bot className="h-3.5 w-3.5 text-accent" />
+                </div>
+                <div className="rounded-lg px-3.5 py-2.5 bg-secondary/30 border border-border/20">
+                  <div className="flex gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex gap-3 max-w-[85%]">
-              <div className="shrink-0 h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center">
-                <Bot className="h-4 w-4 text-accent" />
-              </div>
-              <div className="rounded-2xl px-4 py-3 bg-secondary/50 border border-border/30">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </ScrollArea>
 
-        <div className="p-4 border-t border-border/50">
+        <div className="p-3 border-t border-border/30 shrink-0">
           <form
             onSubmit={(e) => { e.preventDefault(); handleSend(); }}
             className="flex gap-2"
@@ -140,15 +146,15 @@ export function CopilotChat() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask the Tactical Assistant..."
               disabled={isLoading}
-              className="h-12"
+              className="h-10 text-sm"
             />
             <Button
               type="submit"
               size="icon"
-              className="h-12 w-12 shrink-0"
+              className="h-10 w-10 shrink-0"
               disabled={isLoading || !input.trim()}
             >
-              <Send className="h-5 w-5" />
+              <Send className="h-4 w-4" />
             </Button>
           </form>
         </div>

@@ -20,13 +20,13 @@ import {
 } from './charts';
 
 function TrendIcon({ trend }: { trend: number }) {
-  if (trend > 0) return <TrendingUp className="w-4 h-4 text-green-500" aria-hidden="true" />;
-  if (trend < 0) return <TrendingDown className="w-4 h-4 text-red-500" aria-hidden="true" />;
+  if (trend > 0) return <TrendingUp className="w-4 h-4 text-success" aria-hidden="true" />;
+  if (trend < 0) return <TrendingDown className="w-4 h-4 text-destructive" aria-hidden="true" />;
   return <Minus className="w-4 h-4 text-muted-foreground" aria-hidden="true" />;
 }
 
 function PercentileBadge({ pct }: { pct: number }) {
-  const color = pct >= 80 ? 'bg-green-500/10 text-green-600' : pct >= 50 ? 'bg-amber-500/10 text-amber-600' : 'bg-red-500/10 text-red-600';
+  const color = pct >= 80 ? 'bg-success/10 text-success' : pct >= 50 ? 'bg-warning/10 text-warning' : 'bg-destructive/10 text-destructive';
   return <Badge variant="outline" className={cn(color, 'border-0')}>{pct.toFixed(0)}th</Badge>;
 }
 
@@ -97,15 +97,15 @@ export function StudentAnalyticsSection({ students }: { students: StudentAnalyti
                   <td className="text-center py-2 px-3">{s.quizzesCompleted} <span className="text-muted-foreground text-xs">({s.completionPercent}%)</span></td>
                   <td className="text-center py-2 px-3 font-semibold">{s.averageScore}</td>
                   <td className="text-center py-2 px-3 text-xs">
-                    <span className="text-green-600">{s.highestScore}</span>
+                    <span className="text-success">{s.highestScore}</span>
                     <span className="text-muted-foreground mx-1">/</span>
-                    <span className="text-red-600">{s.lowestScore}</span>
+                    <span className="text-destructive">{s.lowestScore}</span>
                   </td>
                   <td className="text-center py-2 px-3"><PercentileBadge pct={s.latestPercentile} /></td>
                   <td className="text-center py-2 px-3">
                     <div className="flex items-center justify-center gap-1">
                       <TrendIcon trend={s.improvementTrend} />
-                      <span className={cn('text-xs', s.improvementTrend > 0 ? 'text-green-600' : s.improvementTrend < 0 ? 'text-red-600' : 'text-muted-foreground')}>
+                      <span className={cn('text-xs', s.improvementTrend > 0 ? 'text-success' : s.improvementTrend < 0 ? 'text-destructive' : 'text-muted-foreground')}>
                         {s.improvementTrend > 0 ? '+' : ''}{s.improvementTrend}
                       </span>
                     </div>
@@ -117,7 +117,7 @@ export function StudentAnalyticsSection({ students }: { students: StudentAnalyti
                     </span>
                   </td>
                   <td className="text-center py-2 px-3">
-                    <span className={cn('flex items-center justify-center gap-1 text-xs', s.totalViolations > 0 ? 'text-red-600' : 'text-muted-foreground')}>
+                    <span className={cn('flex items-center justify-center gap-1 text-xs', s.totalViolations > 0 ? 'text-destructive' : 'text-muted-foreground')}>
                       <AlertTriangle className="w-3 h-3" aria-hidden="true" />
                       {s.totalViolations}
                       {s.blockedCount > 0 && <Badge variant="destructive" className="ml-1 text-[10px] px-1 py-0">{s.blockedCount}B</Badge>}

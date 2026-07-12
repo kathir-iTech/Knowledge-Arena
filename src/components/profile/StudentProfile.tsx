@@ -50,11 +50,11 @@ export default function StudentProfile() {
         <h1 className="text-page-title font-headline text-primary tracking-tight">Gladiator Profile</h1>
       </div>
 
-      <Card className="shadow-elevation-medium">
+      <Card>
         <CardHeader className="text-center pb-3">
           <div className="flex justify-center mb-4">
-            <Avatar className="h-24 w-24 border-4 border-primary/20 ring-2 ring-primary/10">
-              <AvatarFallback className="text-5xl bg-background">{avatar}</AvatarFallback>
+            <Avatar className="h-24 w-24 border-4 border-primary/10">
+              <AvatarFallback className="text-5xl bg-secondary">{avatar}</AvatarFallback>
             </Avatar>
           </div>
           <CardTitle className="text-xl font-headline">{user?.name || 'Anonymous Gladiator'}</CardTitle>
@@ -69,7 +69,6 @@ export default function StudentProfile() {
               onChange={e => setDisplayName(e.target.value)}
               placeholder="Your gladiator name"
               maxLength={30}
-              className="h-11"
             />
           </div>
 
@@ -82,7 +81,7 @@ export default function StudentProfile() {
                   type="button"
                   onClick={() => setAvatar(emoji)}
                   className={`text-lg w-9 h-9 flex items-center justify-center rounded-lg border transition-all duration-150 ${
-                    avatar === emoji ? 'border-primary bg-primary/10 scale-110 shadow-sm' : 'border-border/50 hover:border-primary/40 hover:bg-primary/5'
+                    avatar === emoji ? 'border-primary bg-primary/10' : 'border-border/40 hover:border-primary/30 hover:bg-primary/5'
                   }`}
                   aria-label={`Select avatar ${emoji}`}
                   aria-pressed={avatar === emoji}
@@ -96,7 +95,7 @@ export default function StudentProfile() {
           <Button
             onClick={handleSave}
             disabled={isSaving || !displayName.trim()}
-            className="w-full h-11 text-sm font-semibold"
+            className="w-full"
           >
             {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />}
             Save Profile

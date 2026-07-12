@@ -24,15 +24,15 @@ function PageContent() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen bg-background animate-in px-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
-          <div className="relative inline-flex">
-            <BrainCircuit className="w-12 h-12 text-primary mx-auto" />
+      <div className="w-full max-w-md space-y-8">
+        <div className="text-center space-y-3">
+          <div className="relative inline-flex mb-1">
+            <BrainCircuit className="w-14 h-14 text-primary mx-auto" />
           </div>
-          <h1 className="text-3xl font-headline text-primary tracking-tight">Knowledge Arena</h1>
-          <p className="text-sm text-muted-foreground">Sign in to enter.</p>
+          <h1 className="text-4xl font-headline text-primary tracking-tight leading-tight">Knowledge Arena</h1>
+          <p className="text-sm text-muted-foreground max-w-xs mx-auto">Sign in to enter the arena.</p>
         </div>
-        <Suspense fallback={<div className="space-y-4"><Skeleton className="h-10 w-full rounded-[10px]" /><Skeleton className="h-10 w-full rounded-[10px]" /><Skeleton className="h-10 w-24 mx-auto rounded-[10px]" /></div>}><LoginForm /></Suspense>
+        <Suspense fallback={<div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-24 mx-auto" /></div>}><LoginForm /></Suspense>
       </div>
     </main>
   );

@@ -22,9 +22,9 @@ const AppSidebar = () => {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
-  
+
   if (!user) {
-    return null; 
+    return null;
   }
 
   const isTeacher = user.role === 'teacher';
@@ -42,35 +42,32 @@ const AppSidebar = () => {
   return (
     <>
       <Sidebar>
-        <SidebarHeader className="pb-2">
-          <div className="flex items-center gap-3 px-2">
-            <div className="relative">
-              <BrainCircuit className="w-9 h-9 text-primary" aria-hidden="true" />
-              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary rounded-full animate-pulse-soft" />
-            </div>
-            <span className="text-base font-headline font-bold text-primary whitespace-nowrap hidden group-data-[collapsed=false]:block tracking-tight">Knowledge Arena</span>
+        <SidebarHeader className="pb-0">
+          <div className="flex items-center gap-2.5 px-3 py-1">
+            <BrainCircuit className="w-7 h-7 text-primary shrink-0" aria-hidden="true" />
+            <span className="text-sm font-headline font-bold text-primary whitespace-nowrap hidden group-data-[collapsed=false]:block tracking-tight">Knowledge Arena</span>
           </div>
         </SidebarHeader>
-        <SidebarContent className="gap-1">
-            {user && (
-              <div className="mx-2 mb-2 p-2.5 rounded-xl bg-sidebar-accent/50 border border-sidebar-border/40 transition-colors hover:bg-sidebar-accent/80">
-                <button onClick={() => setAvatarEditorOpen(true)} className="flex items-center gap-3 w-full text-left" aria-label="Change avatar">
-                  <Avatar className="h-10 w-10 ring-2 ring-primary/20 shrink-0">
-                    <AvatarFallback className="bg-muted text-xl">{user.avatar}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col overflow-hidden hidden group-data-[collapsed=false]:flex min-w-0">
-                    <span className="font-semibold text-sm truncate">{user.name}</span>
-                    <span className="text-[11px] text-muted-foreground capitalize">{user.role}</span>
-                  </div>
-                </button>
-              </div>
-            )}
+        <SidebarContent className="gap-0.5">
+          {user && (
+            <div className="mx-2 mb-2 pt-1">
+              <button onClick={() => setAvatarEditorOpen(true)} className="flex items-center gap-2.5 w-full text-left rounded-[8px] p-2 transition-colors hover:bg-sidebar-accent" aria-label="Change avatar">
+                <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarFallback className="bg-sidebar-accent text-sm">{user.avatar}</AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col overflow-hidden hidden group-data-[collapsed=false]:flex min-w-0">
+                  <span className="font-medium text-sm truncate leading-tight">{user.name}</span>
+                  <span className="text-[11px] text-muted-foreground capitalize leading-tight">{user.role}</span>
+                </div>
+              </button>
+            </div>
+          )}
           <SidebarMenu>
             {navItems.map((item) => (
               <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label} className="group/menu-button">
+                <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
                   <Link href={item.href}>
-                    <item.icon className="!w-4 !h-4" />
+                    <item.icon className="!size-[18px]" />
                     <span>{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
@@ -78,11 +75,11 @@ const AppSidebar = () => {
             ))}
           </SidebarMenu>
         </SidebarContent>
-        <SidebarFooter className="border-t border-sidebar-border/40 pt-2">
+        <SidebarFooter className="border-t border-sidebar-border/30 pt-2">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={logout} tooltip="Log Out" className="text-muted-foreground hover:text-foreground transition-colors">
-                <LogOut className="!w-4 !h-4" />
+              <SidebarMenuButton onClick={logout} tooltip="Log Out" className="text-muted-foreground hover:text-foreground">
+                <LogOut className="!size-[18px]" />
                 <span>Log Out</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
