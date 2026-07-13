@@ -10,7 +10,13 @@ import { QuizAnalyticsSection } from './QuizAnalyticsSection';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { RefreshCw, Download, FileText } from 'lucide-react';
+import { RefreshCw, Download, FileText, MoreHorizontal } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { exportAnalyticsCSV, exportAnalyticsHTML } from '@/services/analytics.service';
 
 export function AnalyticsDashboard() {
@@ -64,18 +70,26 @@ export function AnalyticsDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleExportCSV} variant="outline" size="sm" aria-label="Export as CSV">
-            <Download className="h-4 w-4 mr-1.5" />
-            CSV
-          </Button>
-          <Button onClick={handleExportHTML} variant="outline" size="sm" aria-label="Export as HTML report">
-            <FileText className="h-4 w-4 mr-1.5" />
-            Report
-          </Button>
           <Button onClick={refetch} variant="outline" size="sm" aria-label="Refresh analytics data">
             <RefreshCw className="h-4 w-4 mr-1.5" />
             Refresh
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" aria-label="Export options">
+                <Download className="h-4 w-4 mr-1.5" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={handleExportCSV}>
+                <Download className="w-4 h-4 mr-2" /> CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportHTML}>
+                <FileText className="w-4 h-4 mr-2" /> Report
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

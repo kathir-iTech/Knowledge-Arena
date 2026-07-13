@@ -78,10 +78,10 @@
     @apply mb-10;
   }
   .animate-in {
-    animation: fade-in 0.2s ease-out, slide-up 0.2s ease-out;
+    animation: fade-in 150ms ease-out, slide-up 150ms ease-out;
   }
   .animate-in-fast {
-    animation: fade-in 0.15s ease-out;
+    animation: fade-in 100ms ease-out;
   }
 }
 
@@ -111,6 +111,16 @@
   .touch-target { min-height: 44px; min-width: 44px; }
 }
 
+@media (max-width: 640px) {
+  .mobile-full { width: 100%; }
+  .mobile-stack { flex-direction: column; }
+  .mobile-gap-3 { gap: 0.75rem; }
+  .mobile-pb-safe { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+  .mobile-pt-safe { padding-top: calc(0.5rem + env(safe-area-inset-top, 0px)); }
+  .mobile-text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+  .mobile-hide-overflow { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -124,9 +134,4 @@
 @keyframes slide-down {
   from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes scale-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
 }

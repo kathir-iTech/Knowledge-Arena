@@ -4,7 +4,7 @@ import { FileSearch } from 'lucide-react';
 
 export default function NotFound() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-6">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-6 safe-top safe-bottom">
       <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-muted">
         <FileSearch className="w-8 h-8 text-muted-foreground" />
       </div>

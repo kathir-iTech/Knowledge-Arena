@@ -16,7 +16,7 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-6" role="alert">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center animate-in gap-6 safe-top safe-bottom" role="alert">
       <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
         <AlertTriangle className="w-8 h-8 text-destructive" />
       </div>

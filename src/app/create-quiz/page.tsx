@@ -74,12 +74,12 @@ export default function CreateQuizPage() {
 
   if (generatedQuestions && !showForgeWithPreserved) {
     return (
-      <div className="page-container safe-bottom animate-in">
+      <div className="page-container safe-top safe-bottom animate-in">
         <header className="page-section flex items-center justify-between">
            <Button variant="ghost" onClick={handleRegenerate} className="h-9">
              <ChevronLeft className="mr-2 h-4 w-4" /> Back to Architect
            </Button>
-           <h1 className="text-xl font-headline text-primary tracking-tight">Intelligence Review</h1>
+           <h1 className="text-xl font-headline text-primary tracking-tight">Question Review</h1>
         </header>
         <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
           <QuestionReviewPanel 
@@ -95,9 +95,9 @@ export default function CreateQuizPage() {
   }
 
   return (
-    <div className="page-container safe-bottom animate-in">
-      <header className="page-section">
-        <h1 className="text-page-title font-headline tracking-tight text-primary">Arena Architect</h1>
+    <div className="page-container safe-top safe-bottom animate-in">
+        <header className="page-section safe-top">
+          <h1 className="text-page-title font-headline tracking-tight text-primary">Arena Architect</h1>
         <p className="text-sm text-muted-foreground mt-1">Design a new battleground. Construct challenges manually or forge them from data.</p>
       </header>
 

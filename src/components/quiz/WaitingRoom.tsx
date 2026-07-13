@@ -14,6 +14,7 @@ import { Skeleton } from '../ui/skeleton';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
+import { useAuth } from '@/hooks/useAuth';
 
 interface WaitingRoomProps {
   quiz: ValidatedQuiz;
@@ -21,6 +22,7 @@ interface WaitingRoomProps {
 }
 
 export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
+  const { user } = useAuth();
   const [shareableLink, setShareableLink] = useState('');
   const { toast } = useToast();
   const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
@@ -30,7 +32,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const url = new URL(window.location.origin);
+      const url = new URL(window.location.origin + '/gladiator/dashboard');
       url.searchParams.set('roomCode', quiz.id);
       setShareableLink(url.toString());
     }
@@ -93,7 +95,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   };
 
   const handleStartQuiz = async () => {
-    if (!isTeacher) return;
+    if (!isTeacher || !user || user.role !== 'teacher') return;
     try {
         await quizService.startQuiz(quiz.id);
     } catch {
@@ -105,11 +107,11 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const areParticipantsLoading = isLoading;
 
   return (
-    <div className="flex flex-col items-center min-h-screen p-4 md:p-8 animate-in">
+    <div className="flex flex-col items-center min-h-screen p-4 md:p-8 animate-in safe-top safe-bottom">
       <div className="w-full max-w-lg space-y-8">
         <header className="text-center space-y-2">
           <h1 className="text-display font-headline text-foreground tracking-tight">{quiz.title}</h1>
-          <p className="text-base text-muted-foreground">The quiz will begin shortly. Awaiting the host&apos;s command.</p>
+          <p className="text-base text-muted-foreground">{isTeacher ? 'Share the room code below to invite gladiators.' : 'Awaiting the Commander to start the battle.'}</p>
         </header>
 
         {isReconnecting && (
@@ -126,30 +128,33 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
             <span className="text-muted-foreground">connected</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            {teacherOnline ? (
-              <><Wifi className="w-4 h-4 text-success" /><span className="text-success font-medium">Teacher Online</span></>
-            ) : (
-              <><WifiOff className="w-4 h-4 text-muted-foreground" /><span className="text-muted-foreground">Waiting for Teacher</span></>
-            )}
+              {teacherOnline ? (
+                <><span className="w-2 h-2 rounded-full bg-success" /><span className="text-success font-medium">Commander Online</span></>
+              ) : (
+                <><span className="w-2 h-2 rounded-full bg-muted-foreground/30" /><span className="text-muted-foreground">Waiting for Commander</span></>
+              )}
           </div>
         </div>
 
         <Card>
-          <CardContent className="flex flex-col items-center gap-6 py-8">
+          <CardContent className="flex flex-col sm:flex-row items-center justify-center gap-6 py-8">
             <div className="flex flex-col items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground">Room Code</span>
               <div className="text-4xl md:text-5xl font-mono font-bold tracking-[0.15em] text-primary">
                 <span>{quiz.id}</span>
               </div>
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground hover:text-foreground" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
+              <Button variant="ghost" size="sm" className="h-10 touch-target text-xs text-muted-foreground hover:text-foreground" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
                 <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Code
               </Button>
             </div>
             {shareableLink && (
+              <div className="hidden sm:block w-px h-16 bg-border/50" />
+            )}
+            {shareableLink && (
               <div className="flex flex-col items-center gap-2">
                 <span className="text-xs text-muted-foreground">Or scan to join</span>
                 <div className="bg-white p-3 rounded-[12px] shadow-elevation-small">
-                  <QRCode value={shareableLink} size={140} aria-label={`QR code to join quiz ${quiz.id}`} />
+                  <QRCode value={shareableLink} size={120} aria-label={`QR code to join quiz ${quiz.id}`} />
                 </div>
               </div>
             )}
@@ -158,11 +163,11 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
 
         <Card>
           <CardHeader className="pb-4 text-center">
-            <CardTitle className="font-headline flex items-center justify-center gap-2.5 text-base">
+            <CardTitle className="font-headline flex items-center justify-center gap-2.5 text-xl">
                 <Users className="w-5 h-5 text-primary" />
                 Participants
             </CardTitle>
-            <CardDescription className="text-sm">{isTeacher ? `${studentCount} student${studentCount !== 1 ? 's' : ''} have joined.` : "See who's ready for battle."}</CardDescription>
+            <CardDescription className="text-sm">{isTeacher ? `${studentCount} gladiator${studentCount !== 1 ? 's' : ''} have joined.` : "See who's ready for battle."}</CardDescription>
           </CardHeader>
           <CardContent>
                 <div className="flex flex-wrap justify-center gap-4">
@@ -193,7 +198,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
         {isTeacher && (
           <Button 
             size="lg" 
-            className="w-full text-base font-headline font-semibold" 
+            className="w-full text-base font-headline font-semibold touch-target" 
             onClick={handleStartQuiz}
             disabled={studentCount === 0 || areParticipantsLoading}
           >
@@ -201,8 +206,8 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
              {areParticipantsLoading && studentCount === 0
               ? 'Loading participants...'
               : studentCount === 0 
-              ? 'Waiting for students to join...'
-              : `Start Quiz for ${studentCount} Participant${studentCount !== 1 ? 's' : ''}`}
+              ? 'Waiting for gladiators to join...'
+               : `Start Battle for ${studentCount} Gladiator${studentCount !== 1 ? 's' : ''}`}
           </Button>
         )}
 

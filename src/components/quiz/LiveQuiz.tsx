@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from '../ui/alert-dialog';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { quizService } from '@/services/quiz.service';
@@ -171,7 +171,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           }
           if (curr > prev) {
             toast({
-              title: p.status === 'blocked' ? 'Student Blocked' : 'Malpractice Warning',
+              title: p.status === 'blocked' ? 'Gladiator Blocked' : 'Malpractice Warning',
               description: `${p.name || p.user_id.slice(0, 8)} — Violation #${curr} (${new Date().toLocaleTimeString()})`,
               variant: p.status === 'blocked' ? 'destructive' : 'default',
             });
@@ -313,16 +313,29 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const progressValue = Math.max(0, Math.min(100, (timeLeft / (currentQuestion.timer || 1)) * 100));
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-3 md:p-4 bg-background overflow-x-hidden animate-in">
-      <AlertDialog open={showViolationWarning} onOpenChange={setShowViolationWarning}>
-        <AlertDialogContent className="bg-destructive/5 border-destructive/10">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-destructive"><ShieldAlert className="w-5 h-5 text-destructive" /> Tab Switch Detected</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">Fair play is mandatory. One more switch and you will be blocked from the arena.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogAction onClick={() => setShowViolationWarning(false)} className="bg-destructive hover:bg-destructive/90">I Understand</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+    <div className="flex flex-col items-center justify-center min-h-screen px-3 md:p-4 bg-background overflow-x-hidden animate-in safe-top safe-bottom">
+      {showViolationWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setShowViolationWarning(false)} />
+          <div className="relative bg-card border border-destructive/20 rounded-[18px] shadow-elevation-medium p-6 max-w-sm w-full space-y-4 animate-in">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-destructive/10 shrink-0">
+                <ShieldAlert className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-base">Focus Lost</h3>
+                <p className="text-sm text-muted-foreground">You looked away from the battle. One more violation will disqualify you.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowViolationWarning(false)}
+              className="w-full h-11 rounded-[12px] bg-destructive text-destructive-foreground font-medium text-sm hover:bg-destructive/90 transition-colors"
+            >
+              Continue Battle
+            </button>
+          </div>
+        </div>
+      )}
 
       {isTeacher && <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} />}
 
@@ -332,7 +345,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           timeLeft <= 5 ? "bg-destructive/5 border-destructive/10" : "bg-card border-border/50"
         )}>
           <Clock className={cn("w-4 h-4", timeLeft <= 5 ? "text-destructive" : "text-muted-foreground")} />
-          <span className={cn("font-mono text-base font-bold tabular-nums", timeLeft <= 5 ? "text-destructive animate-pulse" : "text-foreground")} aria-live="polite" aria-atomic="true">{timeLeft}</span>
+          <span className={cn("font-mono text-base font-bold tabular-nums", timeLeft <= 5 ? "text-destructive" : "text-foreground")} aria-live="polite" aria-atomic="true">{timeLeft}</span>
           <span className="text-sm text-muted-foreground">seconds remaining</span>
         </div>
       )}
@@ -342,7 +355,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 block">
             Question {(quiz.current_question_index ?? 0) + 1} / {quiz.question_count ?? 0}
           </span>
-          <CardTitle className="text-2xl sm:text-3xl md:text-4xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
+          <CardTitle className="text-xl sm:text-3xl md:text-4xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
           {isTeacher && (
             <div className="flex items-center justify-center gap-2 mt-4">
               <Clock className="w-4 h-4 text-muted-foreground" />
@@ -358,7 +371,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                 onClick={() => handleAnswerSubmit(i)}
                 disabled={hasAnswered || isTeacher || timeLeft === 0 || participant.status === 'blocked'}
                 className={cn(
-                  "group relative flex flex-col gap-2 p-4 md:p-5 rounded-[14px] border-2 text-left transition-all duration-150 min-h-[4.5rem] md:min-h-[5.5rem]",
+                  "group relative flex flex-col gap-2 p-3 md:p-5 rounded-[14px] border-2 text-left transition-all duration-150 min-h-[3.5rem] md:min-h-[5.5rem]",
                   selectedAnswer === i
                     ? "border-primary bg-primary/5 shadow-elevation-small"
                     : hasAnswered
@@ -391,14 +404,14 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                 {isAdvancing ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
                 {(quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
               </Button>
-              <p className="text-sm text-muted-foreground">{submittedCount} / {studentCount} students answered</p>
+              <p className="text-sm text-muted-foreground">{submittedCount} / {studentCount} gladiators answered</p>
             </div>
           )}
           {participant.status === 'blocked' && !isTeacher && (
              <div className="bg-destructive/5 border border-destructive/10 p-8 rounded-[18px] text-center space-y-3 mt-6">
                 <ShieldAlert className="w-12 h-12 text-destructive mx-auto" />
                 <h3 className="text-xl font-bold text-destructive">Disqualified</h3>
-                <p className="text-sm text-muted-foreground">Malpractice detected. Await commander amnesty.</p>
+                <p className="text-sm text-muted-foreground">Malpractice detected. Awaiting review.</p>
              </div>
           )}
         </CardContent>

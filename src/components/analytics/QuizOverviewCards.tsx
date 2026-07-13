@@ -2,18 +2,14 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Files, PlayCircle, CheckCircle2, Archive, Users, Activity, BarChart3, Clock } from 'lucide-react';
+import { BookOpen, Users, BarChart3, TrendingUp } from 'lucide-react';
 import type { OverviewStats } from '@/services/analytics.service';
 
 const cards = [
-  { key: 'totalQuizzes', label: 'Total Quizzes', icon: Files, color: 'text-primary' },
-  { key: 'liveQuizzes', label: 'Live Now', icon: PlayCircle, color: 'text-success' },
-  { key: 'completedQuizzes', label: 'Completed', icon: CheckCircle2, color: 'text-success' },
-  { key: 'archivedQuizzes', label: 'Archived', icon: Archive, color: 'text-muted-foreground' },
-  { key: 'totalParticipants', label: 'Total Participants', icon: Users, color: 'text-primary' },
-  { key: 'activeParticipants', label: 'Active Now', icon: Activity, color: 'text-success' },
+  { key: 'totalQuizzes', label: 'Total Quizzes', icon: BookOpen, color: 'text-primary' },
+  { key: 'totalParticipants', label: 'Gladiators', icon: Users, color: 'text-primary' },
   { key: 'averageScore', label: 'Avg Score', icon: BarChart3, color: 'text-warning', suffix: '' },
-  { key: 'completionRate', label: 'Completion Rate', icon: Clock, color: 'text-primary', suffix: '%' },
+  { key: 'completionRate', label: 'Completion Rate', icon: TrendingUp, color: 'text-success', suffix: '%' },
 ];
 
 export function QuizOverviewCards({ overview }: { overview: OverviewStats }) {

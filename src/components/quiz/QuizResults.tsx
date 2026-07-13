@@ -6,7 +6,7 @@ import type { ValidatedQuiz } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Crown, Home, Trophy, Medal, User, Eye, BarChart3, Target, Users } from 'lucide-react';
+import { Crown, Home, Trophy, User, Eye, BarChart3, Target, Users } from 'lucide-react';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -82,13 +82,13 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background animate-in">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background animate-in safe-top safe-bottom">
       <Card className="w-full max-w-5xl">
         <CardHeader className="text-center space-y-3 pb-0">
           <div className="flex justify-center mb-4">
-            <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-warning/10">
-              <Trophy className="w-8 h-8 text-warning" />
-            </div>
+                <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-warning/10 mx-auto">
+                  <Trophy className="w-8 h-8 text-warning" />
+                </div>
           </div>
           <CardTitle className="text-display font-headline text-foreground tracking-tight">Results</CardTitle>
           <CardDescription className="text-base text-muted-foreground max-w-md mx-auto">The battle for &ldquo;{quiz.title}&rdquo; has been decided.</CardDescription>
@@ -120,14 +120,14 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
           </div>
 
           {/* Podium */}
-          <div className="flex justify-center items-end gap-3 md:gap-8 h-56 md:h-72 mt-4 md:mt-8">
+          <div className="flex justify-center items-end gap-2 md:gap-8 h-40 md:h-72 mt-4 md:mt-8">
             {/* 2nd Place */}
             {ranked[1] && (
               <div className={cn(
-                "flex flex-col items-center gap-2 md:gap-3 p-3 md:p-6 rounded-t-[18px] w-24 md:w-44 h-36 md:h-48 border border-border/50 relative group transition-all duration-150",
+                "flex flex-col items-center gap-1 md:gap-3 p-2 md:p-6 rounded-t-[18px] w-20 md:w-44 h-28 md:h-48 border border-border/50 relative group transition-all duration-150",
                 ranked[1].user_id === uid ? "bg-primary/5 ring-1 ring-primary/20" : "bg-card"
               )}>
-                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-muted-foreground text-xs font-bold absolute -top-3">2</div>
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-muted-foreground text-xs font-bold absolute -top-3 left-1/2 -translate-x-1/2">2</div>
                 <Avatar className="h-12 w-12 md:h-16 md:w-16 mt-4"><AvatarFallback className="text-xl bg-secondary">{getParticipantAvatar(ranked[1])}</AvatarFallback></Avatar>
                 <div className="text-center">
                   <p className="font-semibold text-xs truncate w-20 md:w-32">{getParticipantLabel(ranked[1])}</p>
@@ -139,11 +139,11 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
             {/* 1st Place */}
             {ranked[0] && (
               <div className={cn(
-                "flex flex-col items-center gap-2 md:gap-3 p-3 md:p-6 rounded-t-[18px] w-28 md:w-56 h-44 md:h-60 border-2 border-warning/30 relative group transition-all duration-150",
+                "flex flex-col items-center gap-1 md:gap-3 p-2 md:p-6 rounded-t-[18px] w-24 md:w-56 h-36 md:h-60 border-2 border-warning/30 relative group transition-all duration-150",
                 ranked[0].user_id === uid ? "bg-warning/5 ring-2 ring-warning/20" : "bg-warning/[0.02]"
               )}>
                 <Crown className="w-8 h-8 text-warning absolute -top-5" />
-                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-warning/20 text-warning text-xs font-bold absolute -top-3 right-3">1</div>
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-warning/20 text-warning text-xs font-bold absolute -top-3 left-1/2 -translate-x-1/2">1</div>
                 <Avatar className="h-16 w-16 md:h-20 md:w-20 mt-4 ring-2 ring-warning/20"><AvatarFallback className="text-3xl bg-secondary">{getParticipantAvatar(ranked[0])}</AvatarFallback></Avatar>
                 <div className="text-center mt-1">
                   <p className="font-bold text-sm md:text-lg truncate w-24 md:w-48">{getParticipantLabel(ranked[0])}</p>
@@ -155,10 +155,10 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
             {/* 3rd Place */}
             {ranked[2] && (
               <div className={cn(
-                "flex flex-col items-center gap-2 md:gap-3 p-3 md:p-6 rounded-t-[18px] w-24 md:w-40 h-32 md:h-40 border border-border/50 relative group transition-all duration-150",
+                "flex flex-col items-center gap-1 md:gap-3 p-2 md:p-6 rounded-t-[18px] w-20 md:w-40 h-24 md:h-40 border border-border/50 relative group transition-all duration-150",
                 ranked[2].user_id === uid ? "bg-primary/5 ring-1 ring-primary/20" : "bg-card"
               )}>
-                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-muted-foreground text-xs font-bold absolute -top-3">3</div>
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-muted-foreground text-xs font-bold absolute -top-3 left-1/2 -translate-x-1/2">3</div>
                 <Avatar className="h-10 w-10 md:h-14 md:w-14 mt-4"><AvatarFallback className="text-lg bg-secondary">{getParticipantAvatar(ranked[2])}</AvatarFallback></Avatar>
                 <div className="text-center">
                   <p className="font-semibold text-xs truncate w-20 md:w-32">{getParticipantLabel(ranked[2])}</p>
@@ -201,7 +201,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
                 <Eye className="mr-2 h-4 w-4" /> Review Answers
               </Button>
             )}
-            <Link href={user?.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard'}>
+            <Link href={user?.role === 'teacher' ? '/commander/dashboard' : '/gladiator/dashboard'}>
               <Button size="lg">
                 <Home className="mr-2 h-4 w-4" />
                 Dashboard

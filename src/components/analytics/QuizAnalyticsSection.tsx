@@ -16,7 +16,7 @@ import {
   AreaChart,
   Area,
 } from './charts';
-import { Clock, Users, Target, Activity, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Users } from 'lucide-react';
 
 function ScoreDistributionChart({ quiz }: { quiz: QuizAnalytics }) {
   const BAR_COLORS = ['hsl(var(--destructive))', 'hsl(var(--warning))', '#eab308', 'hsl(var(--success))', 'hsl(var(--primary))'];
@@ -87,19 +87,19 @@ export function QuizAnalyticsSection({ quizzes }: { quizzes: QuizAnalytics[] }) 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="text-center p-4 bg-muted/30 rounded-[12px]">
                 <div className="text-xl font-semibold tracking-tight">{quiz.finishedParticipants}<span className="text-sm text-muted-foreground ml-1">/ {quiz.totalParticipants}</span></div>
-                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-1"><Users className="w-3 h-3" aria-hidden="true" /> Finished</div>
+                <div className="text-xs text-muted-foreground mt-1">Finished</div>
               </div>
               <div className="text-center p-4 bg-muted/30 rounded-[12px]">
                 <div className="text-xl font-semibold tracking-tight">{quiz.averageScore}</div>
-                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-1"><Target className="w-3 h-3" aria-hidden="true" /> Avg Score</div>
+                <div className="text-xs text-muted-foreground mt-1">Avg Score</div>
               </div>
               <div className="text-center p-4 bg-muted/30 rounded-[12px]">
                 <div className="text-xl font-semibold tracking-tight">{Math.round(quiz.duration / 60000)}m</div>
-                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-1"><Clock className="w-3 h-3" aria-hidden="true" /> Duration</div>
+                <div className="text-xs text-muted-foreground mt-1">Duration</div>
               </div>
               <div className="text-center p-4 bg-muted/30 rounded-[12px]">
                 <div className="text-xl font-semibold tracking-tight">{quiz.engagementScore}</div>
-                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-1"><Activity className="w-3 h-3" aria-hidden="true" /> Engagement</div>
+                <div className="text-xs text-muted-foreground mt-1">Engagement</div>
               </div>
             </div>
 

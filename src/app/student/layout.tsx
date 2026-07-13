@@ -15,7 +15,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       return;
     }
     if (user.role !== 'student') {
-      router.replace('/teacher/dashboard');
+      router.replace('/commander/dashboard');
       return;
     }
   }, [user, isLoading, router]);

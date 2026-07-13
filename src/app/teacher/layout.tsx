@@ -15,7 +15,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       return;
     }
     if (user.role !== 'teacher') {
-      router.replace('/student/dashboard');
+      router.replace('/gladiator/dashboard');
       return;
     }
   }, [user, isLoading, router]);

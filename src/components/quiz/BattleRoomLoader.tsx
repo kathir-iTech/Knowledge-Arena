@@ -90,7 +90,7 @@ export default function BattleRoomLoader() {
 
   if (error || !quiz) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in" role="alert">
+      <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in safe-top safe-bottom" role="alert">
         <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
           <ShieldX className="w-8 h-8 text-destructive" aria-hidden="true" />
         </div>
@@ -116,7 +116,7 @@ export default function BattleRoomLoader() {
     return (
       <WaitingRoom
         quiz={quiz}
-        isTeacher={quiz.created_by === participant?.user_id}
+        isTeacher={user?.role === 'teacher' && quiz.created_by === participant?.user_id}
       />
     );
   }
@@ -133,14 +133,14 @@ export default function BattleRoomLoader() {
         <LiveQuiz
             quiz={quiz}
             participant={participant}
-            isTeacher={quiz.created_by === participant.user_id}
+            isTeacher={user?.role === 'teacher' && quiz.created_by === participant.user_id}
             allParticipants={allParticipants}
         />
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in">
+    <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in safe-top safe-bottom">
         <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
           <ShieldX className="w-8 h-8 text-destructive" />
         </div>

@@ -21,7 +21,7 @@ export default function EditQuizPage() {
   const [answerKeys, setAnswerKeys] = useState<ExistingAnswerKey[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('This quiz does not exist or you do not have permission to edit it.');
+    const [errorMsg, setErrorMsg] = useState('This arena does not exist or you do not have permission to edit it.');
 
   useEffect(() => {
     if (!quizId || isAuthLoading) return;
@@ -42,7 +42,7 @@ export default function EditQuizPage() {
         setAnswerKeys(aks);
       } catch (e) {
         if (e instanceof Error && e.message === 'Can only edit a waiting quiz') {
-          setErrorMsg('This quiz is already live or finished and cannot be edited.');
+          setErrorMsg('This arena is already live or finished and cannot be edited.');
         }
         setError(true);
       } finally {
@@ -58,17 +58,17 @@ export default function EditQuizPage() {
 
   if (error || !quiz) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen text-center gap-5 animate-in p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen text-center gap-5 animate-in p-4 safe-top safe-bottom">
         <ShieldX className="w-14 h-14 text-destructive" />
         <h1 className="text-2xl font-headline text-destructive">Cannot Edit</h1>
         <p className="text-sm text-muted-foreground max-w-md">{errorMsg}</p>
-        <Button size="lg" className="h-11" onClick={() => router.push('/teacher/dashboard')}>Return to Dashboard</Button>
+        <Button size="lg" className="h-11" onClick={() => router.push('/commander/dashboard')}>Return to Dashboard</Button>
       </div>
     );
   }
 
   return (
-    <div className="page-container safe-bottom animate-in">
+    <div className="page-container safe-top safe-bottom animate-in">
       <QuizEditor
         quizId={quizId}
         initialTitle={quiz.title}
