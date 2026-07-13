@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key } from 'lucide-react';
+import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
 import { useToast } from '@/hooks/use-toast';
@@ -26,8 +26,8 @@ const STATUS_MESSAGES = [
   "Uploading intelligence report...",
   "Parsing strategic data...",
   "Forging elite challenges...",
-  "Analyzing tactical depth...",
-  "Optimizing combat rounds...",
+  "Analyzing content...",
+  "Optimizing questions...",
   "Finalizing arena parameters..."
 ];
 
@@ -99,32 +99,35 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
       });
 
       if (result.questions && result.questions.length > 0) {
-        toast({ title: "Forge Successful", description: `Successfully generated ${result.questions.length} tactical rounds.` });
+        toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions.` });
         onQuestionsGenerated(result.questions, result.difficulty, dataUri, questionCount);
       } else {
         throw new Error("AI_FAILED");
       }
     } catch (err: unknown) {
       console.error(err);
-      let msg = err instanceof Error ? err.message : "The AI Forge was interrupted.";
+      let msg = err instanceof Error ? err.message : "Unable to generate questions. Please retry.";
       
-      // Map specific backend errors to user-friendly messages
-      if (msg.includes("MISSING_ANTHROPIC_API_KEY")) {
-        msg = "The Arena Architect requires an Anthropic API Key. Please set 'ANTHROPIC_API_KEY' in your .env file and restart the server.";
+      if (msg.includes("AI_FAILED")) {
+        msg = "Unable to generate questions. Please retry.";
+      } else if (msg.includes("MISSING_ANTHROPIC_API_KEY")) {
+        msg = "The generator requires an API key. Please set 'ANTHROPIC_API_KEY' in your .env file and restart the server.";
       } else if (msg.includes("PDF_CONTENT_TOO_SHORT")) {
-        msg = "The PDF Forge failed because no extractable text was found. This usually happens with scanned image-based PDFs. Please upload a text-based document.";
+        msg = "No extractable text was found in the PDF. This usually happens with scanned documents. Please upload a text-based PDF.";
       } else if (msg.includes("ANTHROPIC_API_ERROR")) {
-        msg = "The Intelligence Forge is temporarily overloaded or the key is invalid. Please verify your Anthropic credits.";
+        msg = "The AI service is temporarily unavailable. Please try again.";
       } else if (msg.includes("UNAUTHORIZED")) {
         msg = "Your session has expired. Please log out and log back in.";
-      } else       if (msg.includes("PDF_TOO_LARGE")) {
+      } else if (msg.includes("PDF_TOO_LARGE")) {
         msg = "The uploaded PDF exceeds the maximum size limit on the server.";
       } else if (msg.includes("PDF_FORGE_RATE_LIMITED")) {
-        msg = "PDF Forge rate limit reached (5 per minute). Please wait before forging again.";
+        msg = "Rate limit reached (5 per minute). Please wait before trying again.";
+      } else if (msg.includes("quota_exceeded") || msg.includes("all_models_failed")) {
+        msg = "Unable to generate questions. Please retry.";
       }
       
       setError(msg);
-      toast({ variant: 'destructive', title: "Forge Error", description: "Tactical data extraction failed." });
+      toast({ variant: 'destructive', title: "Generation Failed", description: "Could not generate questions." });
     } finally {
       setIsGenerating(false);
     }
@@ -137,12 +140,12 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
           <Sparkles className="w-6 h-6 text-primary" />
           <div>
             <CardTitle className="text-2xl font-headline text-primary uppercase">AI PDF Forge</CardTitle>
-            <CardDescription>Upload training manuals or research to automate arena construction.</CardDescription>
+            <CardDescription>Upload a PDF to automatically generate quiz questions.</CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-8 pt-8">
-        {error && error.includes("ANTHROPIC_API_KEY") && (
+        {error && error.includes("API key") && (
             <div className="flex flex-col gap-4 bg-destructive/5 p-6 rounded-lg border border-destructive/10 animate-in">
                 <div className="flex items-center gap-3 text-destructive">
                     <Key className="w-8 h-8" />
@@ -161,11 +164,11 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         )}
 
         <div className="space-y-4">
-          <Label className="text-lg font-medium">1. Tactical Intelligence (PDF)</Label>
+          <Label className="text-lg font-medium">1. Source Material (PDF)</Label>
           {!file ? (
             <div className={cn(
               "border-2 border-dashed border-border/30 rounded-lg p-12 transition-all hover:border-primary/30 cursor-pointer flex flex-col items-center justify-center gap-4 text-center relative",
-              error && !error.includes("KEY") && "border-destructive/30 bg-destructive/5"
+              error && !error.includes("API key") && "border-destructive/30 bg-destructive/5"
             )}>
               <input 
                 type="file" 
@@ -207,7 +210,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         </div>
 
         <div className="space-y-4">
-          <Label className="text-lg font-medium">2. Combat Intensity</Label>
+          <Label className="text-lg font-medium">2. Difficulty</Label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               { id: 'easy', label: 'Easy', emoji: '🟢', desc: 'Recall & Terminology' },
@@ -235,9 +238,9 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
 
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <Label className="text-lg font-medium">3. Mission Scope</Label>
+            <Label className="text-lg font-medium">3. Question Count</Label>
             <span className="bg-primary/10 text-primary font-bold px-3 py-1 rounded text-sm">
-              {questionCount} ROUNDS
+              {questionCount} QUESTIONS
             </span>
           </div>
           <Slider
@@ -267,18 +270,21 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
             ) : (
               <div className="flex items-center gap-2">
                 <Sparkles className="w-6 h-6" />
-                <span>INITIATE FORGE</span>
+                <span>Generate Questions</span>
               </div>
             )}
           </Button>
           
-          {error && !error.includes("KEY") && (
-            <div className="mt-4 flex flex-col gap-2 bg-destructive/5 p-4 rounded-lg border border-destructive/10 animate-in">
+          {error && !error.includes("API key") && (
+            <div className="mt-4 flex flex-col gap-3 bg-destructive/5 p-4 rounded-lg border border-destructive/10 animate-in">
               <div className="flex items-center gap-2 text-destructive font-bold text-sm">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                Extraction Violation
+                Generation Failed
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">{error}</p>
+              <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating || !file || !difficulty} className="w-fit">
+                <RefreshCw className="w-3 h-3 mr-2" /> Retry
+              </Button>
             </div>
           )}
         </div>

@@ -110,7 +110,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
 
       toast({ title: 'Arena Updated', description: 'Quiz changes have been saved.' });
       setIsSubmitting(false);
-      router.push('/teacher/dashboard');
+      router.push('/commander/dashboard');
     } catch (error: unknown) {
       toast({ variant: 'destructive', title: 'Update Failed', description: error instanceof Error ? error.message : 'Unknown error' });
       setIsSubmitting(false);
@@ -125,8 +125,8 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/teacher/dashboard')}>
-          <ArrowLeft className="h-5 w-5" />
+        <Button variant="ghost" size="icon" onClick={() => router.push('/commander/dashboard')}>
+          <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
           <h1 className="text-2xl font-headline text-primary">Edit Arena</h1>
@@ -140,7 +140,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
             <CardHeader>
               <CardTitle className="text-xl font-headline text-primary flex items-center gap-2">
                 <PencilRuler className="w-5 h-5" />
-                Mission Profile
+                Arena Details
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -157,7 +157,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
 
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-2xl font-headline uppercase tracking-tight text-primary/80">Combat Rounds</h3>
+              <h3 className="text-2xl font-headline uppercase tracking-tight text-primary/80">Questions</h3>
               <span className="text-xs font-mono bg-primary/10 text-primary px-3 py-1 rounded-full">{fields.length} TOTAL</span>
             </div>
 
@@ -165,7 +165,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
               <Card key={field.id} className="relative pt-12 overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-primary/15 group-hover:bg-primary/30 transition-colors" />
                 <div className="absolute top-3 left-4 flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary px-3 py-1 rounded-full">ROUND {index + 1}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary px-3 py-1 rounded-full">QUESTION {index + 1}</span>
                 </div>
 
                 <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && remove(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5" disabled={fields.length <= 1}><Trash2 className="h-4 w-4" /></Button>
@@ -234,7 +234,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
                     )} />
                     <FormField control={form.control} name={`questions.${index}.timer`} render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Combat Timer (Seconds)</FormLabel>
+                        <FormLabel>Timer (Seconds)</FormLabel>
                         <FormControl><Input type="number" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
@@ -245,22 +245,22 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
             ))}
           </div>
 
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-4 flex flex-col md:flex-row gap-4 z-50">
+          <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] w-full max-w-4xl mx-auto flex flex-col md:flex-row gap-4 z-50 md:bottom-6 md:left-1/2 md:-translate-x-1/2 md:p-0 md:pb-0">
             <Button
               type="button"
               variant="secondary"
               onClick={() => append({ id: uuidv4(), text: '', options: ['', ''], correctAnswerIndex: -1, timer: 30 })}
               className="w-full md:w-auto h-14 px-8"
             >
-              <PlusCircle className="mr-2 h-5 w-5" />
-              Add Round
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Question
             </Button>
             <Button
               type="submit"
               className="w-full md:flex-1 h-14 text-xl font-headline"
               disabled={isSubmitting}
             >
-              {isSubmitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : 'SAVE CHANGES'}
+              {isSubmitting ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : 'SAVE CHANGES'}
             </Button>
           </div>
         </form>

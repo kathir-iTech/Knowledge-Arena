@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Search, TrendingUp, TrendingDown, Minus, Medal, Clock, AlertTriangle } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Minus, Medal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { StudentAnalytics } from '@/services/analytics.service';
 import {
@@ -113,14 +113,12 @@ export function StudentAnalyticsSection({ students }: { students: StudentAnalyti
                     </div>
                   </td>
                   <td className="text-center py-3 px-4">
-                    <span className="text-xs flex items-center justify-center gap-1">
-                      <Clock className="w-3 h-3" aria-hidden="true" />
+                    <span className="text-xs">
                       {s.averageAnswerTime}s
                     </span>
                   </td>
                   <td className="text-center py-3 px-4">
-                    <span className={cn('flex items-center justify-center gap-1 text-xs', s.totalViolations > 0 ? 'text-destructive' : 'text-muted-foreground')}>
-                      <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+                    <span className={cn('text-xs', s.totalViolations > 0 ? 'text-destructive' : 'text-muted-foreground')}>
                       {s.totalViolations}
                       {s.blockedCount > 0 && <Badge variant="destructive" className="ml-1 h-5 px-1 text-[10px]">{s.blockedCount}B</Badge>}
                     </span>

@@ -13,15 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { Loader2, Swords, History, UserCircle, ExternalLink, Trophy, TrendingUp, Star, Target, Zap, Medal, Award, Sparkles } from 'lucide-react';
+import { Loader2, Swords, History, UserCircle, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface Achievement {
-  label: string;
-  description: string;
-  icon: React.ElementType;
-  unlocked: boolean;
-}
 
 export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?: string }) {
   const { user } = useAuth();
@@ -66,20 +59,7 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
     }
   };
 
-  const totalScore = history.reduce((sum, h) => sum + h.score, 0);
-  const completedBattles = history.filter(h => h.status === 'finished').length;
-  const avgScore = completedBattles > 0 ? Math.round(totalScore / completedBattles) : 0;
-  const bestScore = history.length > 0 ? Math.max(...history.map(h => h.score)) : 0;
   const recentBattles = [...history].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)).slice(0, 5);
-
-  const achievements: Achievement[] = [
-    { label: 'First Battle', description: 'Complete your first quiz', icon: Star, unlocked: completedBattles >= 1 },
-    { label: 'Score Master', description: 'Score 100+ total points', icon: Zap, unlocked: totalScore >= 100 },
-    { label: 'Veteran', description: 'Complete 5 battles', icon: Medal, unlocked: completedBattles >= 5 },
-    { label: 'Champion', description: 'Score 50 in a single battle', icon: Trophy, unlocked: bestScore >= 50 },
-    { label: 'Scholar', description: 'Complete 10 battles', icon: Award, unlocked: completedBattles >= 10 },
-    { label: 'Legend', description: 'Score 500+ total points', icon: Sparkles, unlocked: totalScore >= 500 },
-  ];
 
   if (historyLoading) return <LoadingScreen message="Loading your arena..." />;
 
@@ -88,16 +68,16 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
       <header className="flex items-center justify-between page-section">
         <div className="space-y-1.5">
           <h1 className="text-page-title font-headline tracking-tight">Dashboard</h1>
-          <p className="text-base text-muted-foreground">Welcome back, {user?.name || 'Student'}.</p>
+          <p className="text-base text-muted-foreground">Welcome back, {user?.name || 'Gladiator'}.</p>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link href="/student/profile"><UserCircle className="mr-2 h-4 w-4" /> Profile</Link>
+          <Link href="/gladiator/profile"><UserCircle className="mr-2 h-4 w-4" /> Profile</Link>
         </Button>
       </header>
 
       <section className="page-section">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="md:col-span-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="md:col-span-1">
             <CardHeader className="pb-4">
               <CardTitle className="text-base flex items-center gap-2.5">
                 <Swords className="w-5 h-5 text-primary" />
@@ -122,110 +102,7 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
               </form>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-5 flex flex-col items-center justify-center h-full gap-2.5">
-              <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-warning/10">
-                <Trophy className="w-5 h-5 text-warning" />
-              </div>
-              <div className="text-center space-y-0.5">
-                <span className="text-sm text-muted-foreground">Total Score</span>
-                <div className="text-display font-semibold tracking-tight text-foreground">{totalScore}</div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
 
-      <section className="page-section">
-        <div className="flex items-center gap-2.5 mb-4">
-          <TrendingUp className="w-5 h-5 text-primary" />
-          <h2 className="text-section-title tracking-tight">Performance Summary</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="p-4 flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Battles</span>
-              <span className="text-2xl font-semibold tracking-tight">{completedBattles}</span>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Total Score</span>
-              <span className="text-2xl font-semibold tracking-tight">{totalScore}</span>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Average</span>
-              <span className="text-2xl font-semibold tracking-tight">{avgScore}</span>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Best Score</span>
-              <span className="text-2xl font-semibold tracking-tight">{bestScore}</span>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {recentBattles.length > 0 && (
-        <section className="page-section">
-          <div className="flex items-center gap-2.5 mb-4">
-            <Zap className="w-5 h-5 text-primary" />
-            <h2 className="text-section-title tracking-tight">Recent Battles</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            {recentBattles.map((h) => (
-              <Link key={h.quizId} href={`/battle/${h.quizId}`} className="block">
-                <Card className="hover:border-primary/20 transition-all duration-150 h-full">
-                  <CardContent className="p-4 flex flex-col gap-2">
-                    <p className="text-sm font-semibold truncate">{h.title}</p>
-                    <div className="flex items-center justify-between">
-                      <Badge variant={h.status === 'finished' ? 'outline' : h.status === 'live' ? 'default' : 'secondary'} className="h-5 text-[10px]">
-                        {h.status.toUpperCase()}
-                      </Badge>
-                      <span className="text-sm font-mono font-bold text-primary">{h.score}<span className="text-xs text-muted-foreground font-normal">pts</span></span>
-                    </div>
-                    {!!h.created_at && (
-                      <span className="text-[11px] text-muted-foreground">{new Date(h.created_at).toLocaleDateString()}</span>
-                    )}
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="page-section">
-        <div className="flex items-center gap-2.5 mb-4">
-          <Award className="w-5 h-5 text-primary" />
-          <h2 className="text-section-title tracking-tight">Achievements</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {achievements.map((a) => (
-            <div key={a.label} className={cn(
-              "flex flex-col items-center gap-2 p-4 rounded-[18px] border text-center transition-all duration-150",
-              a.unlocked
-                ? "bg-primary/[0.03] border-primary/20"
-                : "bg-muted/20 border-border/30 opacity-40"
-            )}>
-              <div className={cn(
-                "flex items-center justify-center w-10 h-10 rounded-[12px]",
-                a.unlocked ? "bg-primary/10 text-primary" : "bg-muted/50 text-muted-foreground"
-              )}>
-                <a.icon className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold">{a.label}</p>
-                <p className="text-[10px] text-muted-foreground">{a.description}</p>
-              </div>
-              {a.unlocked && (
-                <Badge className="h-5 text-[10px] bg-primary/10 text-primary border-0">Unlocked</Badge>
-              )}
-            </div>
-          ))}
         </div>
       </section>
 
@@ -245,7 +122,7 @@ export default function StudentDashboard({ initialRoomCode }: { initialRoomCode?
         ) : (
           <div className="overflow-x-auto rounded-[14px] border border-border/50">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-muted/30 border-b border-border/50">
                   <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs">#</th>
                   <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs">Title</th>

@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, LayoutDashboard, BrainCircuit, PencilRuler, BarChart3 } from 'lucide-react';
+import { LogOut, LayoutDashboard, BrainCircuit, PencilRuler, BarChart3, Shield, Users, BookOpen, Inbox, Settings, History, UserCircle, Swords } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -31,15 +31,31 @@ const AppSidebar = () => {
 
   const isTeacher = user.role === 'teacher';
 
-  const navItems = isTeacher
-    ? [
-        { href: '/teacher/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { href: '/create-quiz', label: 'Create Quiz', icon: PencilRuler },
-        { href: '/teacher/analytics', label: 'Analytics', icon: BarChart3 },
-      ]
-    : [
-        { href: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      ];
+  type NavItem = { href: string; label: string; icon: React.ElementType };
+
+  const executiveNav: NavItem[] = [
+    { href: '/executive/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/executive/commanders', label: 'Commanders', icon: Shield },
+    { href: '/executive/students', label: 'Students', icon: Users },
+    { href: '/executive/question-bank', label: 'Question Bank', icon: BookOpen },
+    { href: '/executive/analytics', label: 'Analytics', icon: BarChart3 },
+    { href: '/executive/requests', label: 'Requests', icon: Inbox },
+    { href: '/executive/settings', label: 'Settings', icon: Settings },
+  ];
+
+  const commanderNav: NavItem[] = [
+    { href: '/commander/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/create-quiz', label: 'Create Arena', icon: PencilRuler },
+    { href: '/commander/history', label: 'Battle History', icon: History },
+    { href: '/commander/requests', label: 'Requests', icon: Inbox },
+    { href: '/commander/profile', label: 'Profile', icon: UserCircle },
+  ];
+
+  const gladiatorNav: NavItem[] = [
+    { href: '/gladiator/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/gladiator/history', label: 'Battle History', icon: Swords },
+    { href: '/gladiator/profile', label: 'Profile', icon: UserCircle },
+  ];
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
@@ -63,34 +79,91 @@ const AppSidebar = () => {
                 </Avatar>
                 <div className="flex flex-col overflow-hidden hidden group-data-[collapsed=false]:flex min-w-0">
                   <span className="font-medium text-sm truncate leading-tight text-sidebar-accent-foreground">{user.name}</span>
-                  <span className="text-[11px] text-sidebar-foreground capitalize leading-tight">{user.role}</span>
+                  <span className="text-[11px] text-sidebar-foreground capitalize leading-tight">{isTeacher ? 'Commander' : 'Gladiator'}</span>
                 </div>
               </button>
             </div>
           )}
           <SidebarSeparator className="mb-1" />
-          <SidebarMenu>
-            {navItems.map((item) => {
-              const active = isActive(item.href);
-              return (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={active}
-                    tooltip={item.label}
-                    className={cn(
-                      active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary"
-                    )}
-                  >
-                    <Link href={item.href}>
-                      <item.icon className={cn("!size-[18px]", active && "text-primary")} />
-                      <span>{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
+          {isTeacher && (
+            <>
+              <div className="px-3 py-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/50">Executive</span>
+              </div>
+              <SidebarMenu className="mb-1">
+                {executiveNav.map((item) => {
+                  const active = isActive(item.href);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={item.label}
+                        className={cn(
+                          active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary"
+                        )}
+                      >
+                        <Link href={item.href}>
+                          <item.icon className={cn("!size-[18px]", active && "text-primary")} />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+              <SidebarSeparator className="my-1" />
+              <div className="px-3 py-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/50">Commander</span>
+              </div>
+              <SidebarMenu className="mb-1">
+                {commanderNav.map((item) => {
+                  const active = isActive(item.href);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={item.label}
+                        className={cn(
+                          active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary"
+                        )}
+                      >
+                        <Link href={item.href}>
+                          <item.icon className={cn("!size-[18px]", active && "text-primary")} />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </>
+          )}
+          {!isTeacher && (
+            <SidebarMenu>
+              {gladiatorNav.map((item) => {
+                const active = isActive(item.href);
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={item.label}
+                      className={cn(
+                        active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary"
+                      )}
+                    >
+                      <Link href={item.href}>
+                        <item.icon className={cn("!size-[18px]", active && "text-primary")} />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          )}
         </SidebarContent>
         <SidebarFooter className="border-t border-sidebar-border/50 pt-3">
           <SidebarMenu>

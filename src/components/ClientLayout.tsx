@@ -4,12 +4,9 @@
 import React, { useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePathname, useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import AppSidebar from '@/components/AppSidebar';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { LoadingScreen } from '@/components/LoadingScreen';
-
-const CopilotChat = dynamic(() => import('@/components/copilot/CopilotChat').then(m => m.CopilotChat), { ssr: false });
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -51,13 +48,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     let target: string | null = null;
 
     if (currentPath === '/') {
-      target = user.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
+      target = user.role === 'teacher' ? '/commander/dashboard' : '/gladiator/dashboard';
     } else {
-      const isTeacherPage = currentPath.startsWith('/teacher') || currentPath.startsWith('/create-quiz');
-      const isStudentPage = currentPath.startsWith('/student');
+      const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/executive') || currentPath.startsWith('/create-quiz') || currentPath.startsWith('/teacher');
+      const isGladiatorPage = currentPath.startsWith('/gladiator') || currentPath.startsWith('/student');
 
-      if (user.role === 'teacher' && isStudentPage) target = '/teacher/dashboard';
-      else if (user.role === 'student' && isTeacherPage) target = '/student/dashboard';
+      if (user.role === 'teacher' && isGladiatorPage) target = '/commander/dashboard';
+      else if (user.role === 'student' && isCommanderPage) target = '/gladiator/dashboard';
     }
 
     if (target) {
@@ -89,8 +86,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return (
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset className="safe-bottom"><main id="main-content">{children}</main></SidebarInset>
-        <CopilotChat />
+        <SidebarInset className="safe-bottom safe-top"><main id="main-content">{children}</main></SidebarInset>
       </SidebarProvider>
     );
   }
@@ -99,8 +95,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return (
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset><main id="main-content">{children}</main></SidebarInset>
-        <CopilotChat />
+        <SidebarInset className="safe-top"><main id="main-content">{children}</main></SidebarInset>
       </SidebarProvider>
     );
   }

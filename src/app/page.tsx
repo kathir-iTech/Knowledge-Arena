@@ -23,7 +23,7 @@ function PageContent() {
   if (user) return null;
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen bg-background animate-in px-4">
+    <main className="flex flex-col items-center justify-center min-h-screen bg-background animate-in px-4 safe-top safe-bottom">
       <div className="w-full max-w-md space-y-10">
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-primary/10 mx-auto">

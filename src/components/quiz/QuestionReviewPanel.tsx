@@ -108,7 +108,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   const handleCreateRoom = async () => {
     if (!user || !quizTitle) return;
     if (user.role !== 'teacher') {
-        toast({ variant: 'destructive', title: "Deployment Error", description: "Only teachers can deploy arenas. Sign up with an email ending in @staffs.com to create a teacher account." });
+        toast({ variant: 'destructive', title: "Arena Error", description: "Only teachers can create arenas. Sign up with an email ending in @staffs.com to create a teacher account." });
         return;
     }
     setIsSubmitting(true);
@@ -145,10 +145,10 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
 
         await questionService.createAnswerKeys(answerKeys);
 
-        toast({ title: "Arena Constructed", description: `Mission Code: ${roomCode}` });
+        toast({ title: "Arena Created", description: `Room Code: ${roomCode}` });
         router.push(`/battle/${roomCode}`);
     } catch (e: unknown) {
-        toast({ variant: 'destructive', title: "Deployment Error", description: e instanceof Error ? e.message : "Unknown error" });
+        toast({ variant: 'destructive', title: "Arena Error", description: e instanceof Error ? e.message : "Unknown error" });
     } finally {
         setIsSubmitting(false);
     }
@@ -176,13 +176,13 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             <Sparkles className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="font-headline font-bold text-lg">{questions.length} Rounds Prepared</h2>
+            <h2 className="font-headline font-bold text-lg">{questions.length} Questions Prepared</h2>
             <Badge variant="outline" className="uppercase tracking-widest text-[10px]">Level: {difficulty}</Badge>
           </div>
         </div>
         <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={onEditSettings}>Edit Parameters</Button>
-            <Button variant="outline" size="sm" onClick={onRegenerate} className="text-primary">Regenerate Intel</Button>
+            <Button variant="outline" size="sm" onClick={onRegenerate} className="text-primary">Regenerate Questions</Button>
         </div>
       </div>
 
@@ -194,7 +194,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             {editingId === q.id && editForm ? (
               <CardContent className="pt-6 space-y-4">
                 <div className="space-y-2">
-                  <Label>Tactical Objective (Question)</Label>
+                  <Label>Question Objective</Label>
                   <Textarea 
                     value={editForm.text} 
                     onChange={e => setEditForm({...editForm, text: e.target.value})} 
@@ -241,7 +241,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
               <>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-primary font-bold">R{index + 1}</span>
+                    <span className="font-mono text-primary font-bold">Q{index + 1}</span>
                     <CardTitle className="text-lg font-medium">{q.text}</CardTitle>
                   </div>
                   <div className="flex gap-1">
@@ -287,7 +287,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                     className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors"
                   >
                     {expandedId === q.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                    {expandedId === q.id ? "Hide tactical notes" : "Show tactical notes"}
+                    {expandedId === q.id ? "Hide notes" : "Show notes"}
                   </button>
                   {expandedId === q.id && (
                     <div className="p-3 bg-primary/5 rounded-lg border border-primary/10 text-xs text-muted-foreground italic leading-relaxed">
@@ -307,11 +307,11 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                "w-3 h-3 rounded-full",
                questions.length < 3 ? "bg-destructive" : "bg-primary"
            )} />
-           <span className="font-bold">{questions.length} Rounds Ready</span>
+           <span className="font-bold">{questions.length} Questions Ready</span>
            {questions.length < 3 && (
-               <div className="flex items-center gap-2 text-destructive font-bold text-xs">
-                   <AlertTriangle className="w-4 h-4" /> Insufficient rounds. (Min 3)
-               </div>
+<div className="flex items-center gap-2 text-destructive font-bold text-xs">
+                    <AlertTriangle className="w-4 h-4" /> Minimum 3 questions required.
+                </div>
            )}
         </div>
         <Button 
@@ -320,29 +320,29 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             onClick={() => setIsModalOpen(true)}
             className="h-14 px-12 text-xl font-headline"
         >
-          DEPLOY ARENA <ChevronUp className="ml-2" />
+          CREATE ARENA <ChevronUp className="ml-2" />
         </Button>
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-md">
             <DialogHeader>
-                <DialogTitle className="text-2xl font-headline text-primary uppercase">Arena Mission Profile</DialogTitle>
-                <DialogDescription>Finalize the parameters for this combat deployment.</DialogDescription>
+                <DialogTitle className="text-2xl font-headline text-primary uppercase">Create Arena</DialogTitle>
+                <DialogDescription>Finalize the parameters for this arena.</DialogDescription>
             </DialogHeader>
             <div className="space-y-6 py-4">
                 <div className="space-y-2">
                     <Label htmlFor="quiz-title">Arena Designation (Title)</Label>
                     <Input 
                         id="quiz-title" 
-                        placeholder="Tactical Operations Audit" 
+                        placeholder="Arena Operations" 
                         maxLength={60}
                         value={quizTitle}
                         onChange={e => setQuizTitle(e.target.value)}
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="global-timer">Round Engagement Window (Seconds)</Label>
+                    <Label htmlFor="global-timer">Timer (Seconds)</Label>
                     <Input 
                         id="global-timer" 
                         type="number" 
@@ -351,12 +351,12 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                         value={globalTimer}
                         onChange={e => setGlobalTimer(parseInt(e.target.value))}
                     />
-                    <p className="text-xs text-muted-foreground">Standard window: 30s</p>
+                    <p className="text-xs text-muted-foreground">Default: 30s</p>
                 </div>
                 <div className="space-y-4 pt-2">
                     <div className="flex items-center space-x-3">
                         <Checkbox id="shuffle-q" checked={shuffleQuestions} onCheckedChange={(val) => setShuffleQuestions(!!val)} />
-                        <label htmlFor="shuffle-q" className="text-sm font-medium leading-none cursor-pointer">Randomize Round Sequence</label>
+                        <label htmlFor="shuffle-q" className="text-sm font-medium leading-none cursor-pointer">Randomize Question Sequence</label>
                     </div>
                 </div>
             </div>
@@ -367,7 +367,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                     onClick={handleCreateRoom}
                 >
                     {isSubmitting ? <Loader2 className="animate-spin" /> : <Sparkles className="mr-2" />}
-                    INITIATE DEPLOYMENT
+                    CREATE ARENA
                 </Button>
             </DialogFooter>
         </DialogContent>

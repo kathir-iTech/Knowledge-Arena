@@ -14,7 +14,7 @@ import { Card, CardContent } from '@/components/ui/card';
 
 const AIInsightCards = dynamic(() => import('@/components/dashboard/AIInsightCards').then(m => m.AIInsightCards), { ssr: false });
 
-import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle, Pencil, Copy, Archive, ArchiveRestore, Download, FileText, Search as SearchIcon, BarChart3, BookOpen, TrendingUp, MoreHorizontal, Zap, Sparkles, Calendar } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle, Pencil, Copy, Archive, ArchiveRestore, Download, FileText, Search as SearchIcon, BarChart3, BookOpen, TrendingUp, MoreHorizontal, Calendar, Swords } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
@@ -68,9 +68,9 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     const handleResetStudent = async (sid: string) => {
         try {
             await participantService.unblockParticipant(quiz.id, sid);
-            toast({ title: 'Student Reset', description: 'Malpractice block has been cleared.' });
+            toast({ title: 'Gladiator Reset', description: 'Malpractice block has been cleared.' });
         } catch (e) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to reset student.' });
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to reset gladiator.' });
         }
     };
 
@@ -175,7 +175,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                     <span className="font-mono text-[11px] bg-muted/50 px-2 py-0.5 rounded-[6px]">{quiz.id}</span>
                     <span className="flex items-center gap-1">
                       <Users className="w-3 h-3" />
-                      {participantCount} student{participantCount !== 1 ? 's' : ''}
+                      {participantCount} gladiator{participantCount !== 1 ? 's' : ''}
                     </span>
                     {!!quiz.created_at && quiz.created_at > 0 && (
                       <span className="flex items-center gap-1">
@@ -198,14 +198,14 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="More actions">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 md:h-8 md:w-8 touch-target" aria-label="More actions">
                         <MoreHorizontal className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
                       {!quiz.archived && quiz.status === 'waiting' && (
                         <DropdownMenuItem asChild>
-                          <Link href={`/teacher/edit-quiz/${quiz.id}`}>
+                          <Link href={`/commander/edit-arena/${quiz.id}`}>
                             <Pencil className="w-4 h-4 mr-2" /> Edit
                           </Link>
                         </DropdownMenuItem>
@@ -250,15 +250,15 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
 
               {participants?.some(p => p.status === 'blocked') && (
                 <div className="mt-4 pt-4 border-t border-border/40">
-                  <div className="p-3 bg-destructive/5 rounded-[12px] border border-destructive/10 space-y-2">
-                    <p className="text-[11px] font-semibold text-destructive uppercase tracking-wider">Blocked Students:</p>
+                    <div className="p-3 bg-destructive/5 rounded-[12px] border border-destructive/10 space-y-2">
+                    <p className="text-[11px] font-semibold text-destructive uppercase tracking-wider">Blocked Gladiators:</p>
                     {participants.filter(p => p.status === 'blocked').map(p => (
                       <div key={p.user_id} className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
                           <Avatar className="h-7 w-7"><AvatarFallback className="text-[10px]">B</AvatarFallback></Avatar>
                           <span className="text-sm">{p.user_id.slice(0, 12)}</span>
                         </div>
-                        <Button size="sm" variant="ghost" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10" onClick={() => handleResetStudent(p.user_id)}>Unblock</Button>
+                        <Button size="sm" variant="ghost" className="h-8 px-3 touch-target text-xs text-destructive hover:bg-destructive/10" onClick={() => handleResetStudent(p.user_id)}>Unblock</Button>
                       </div>
                     ))}
                   </div>
@@ -271,7 +271,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                 <AlertDialogHeader>
                   <AlertDialogTitle>Reset Quiz?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will purge all scores and student entries. The room will return to the 'Waiting' state.
+                    This will purge all scores and gladiator entries. The room will return to the 'Waiting' state.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -310,7 +310,7 @@ function OverviewCards({ quizzes, participants }: { quizzes: ValidatedQuiz[]; pa
   const cards = [
     { icon: BookOpen, label: 'Total Quizzes', value: total, color: 'text-primary' },
     { icon: TrendingUp, label: 'Running', value: running, color: 'text-success' },
-    { icon: Users, label: 'Students', value: uniqueStudents, color: 'text-primary' },
+    { icon: Users, label: 'Gladiators', value: uniqueStudents, color: 'text-primary' },
     { icon: BarChart3, label: 'Avg Score', value: avgScore + '%', color: 'text-warning' },
   ];
 
@@ -393,7 +393,7 @@ export default function TeacherDashboard() {
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 page-section">
         <div className="space-y-1.5">
           <h1 className="text-page-title font-headline tracking-tight">Dashboard</h1>
-          <p className="text-base text-muted-foreground">Welcome back, {user?.name || 'Commander'}.</p>
+          <p className="text-base text-muted-foreground">Welcome back, {user?.name || 'Executive'}.</p>
         </div>
         <Button asChild>
             <Link href="/create-quiz"><PlusCircle className="mr-2 h-4 w-4" />New Arena</Link>
@@ -403,61 +403,6 @@ export default function TeacherDashboard() {
       <div className="page-section">
         <OverviewCards quizzes={quizzes} participants={allParticipants} />
       </div>
-
-      <section className="page-section">
-        <div className="flex items-center gap-2.5 mb-4">
-          <Zap className="w-5 h-5 text-primary" />
-          <h2 className="text-section-title tracking-tight">Quick Actions</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link href="/create-quiz" className="flex flex-col gap-2 p-4 rounded-[18px] border border-border/50 bg-card hover:border-primary/20 hover:bg-primary/[0.02] transition-all duration-150 group">
-            <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors">
-              <PlusCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">Create Arena</p>
-              <p className="text-xs text-muted-foreground">Build a new quiz battle</p>
-            </div>
-          </Link>
-          <Link href="/teacher/dashboard" className="flex flex-col gap-2 p-4 rounded-[18px] border border-border/50 bg-card hover:border-primary/20 hover:bg-primary/[0.02] transition-all duration-150 group">
-            <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-warning/10 text-warning group-hover:bg-warning/20 transition-colors">
-              <BarChart3 className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">Analytics</p>
-              <p className="text-xs text-muted-foreground">View class performance</p>
-            </div>
-          </Link>
-          <Link href="/teacher/dashboard" className="flex flex-col gap-2 p-4 rounded-[18px] border border-border/50 bg-card hover:border-primary/20 hover:bg-primary/[0.02] transition-all duration-150 group">
-            <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-success/10 text-success group-hover:bg-success/20 transition-colors">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">Students</p>
-              <p className="text-xs text-muted-foreground">Manage participants</p>
-            </div>
-          </Link>
-          <Link href="/teacher/dashboard" className="flex flex-col gap-2 p-4 rounded-[18px] border border-border/50 bg-card hover:border-primary/20 hover:bg-primary/[0.02] transition-all duration-150 group">
-            <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">AI Insights</p>
-              <p className="text-xs text-muted-foreground">Smart recommendations</p>
-            </div>
-          </Link>
-        </div>
-      </section>
-
-      <section className="page-section">
-        <div className="flex items-center gap-2.5 mb-4">
-          <Sparkles className="w-5 h-5 text-primary" />
-          <h2 className="text-section-title tracking-tight">AI Workspace</h2>
-        </div>
-        <Suspense fallback={<div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="h-32 bg-muted/50 rounded-[18px] animate-pulse" /><div className="h-32 bg-muted/50 rounded-[18px] animate-pulse" /><div className="h-32 bg-muted/50 rounded-[18px] animate-pulse" /></div>}>
-          <AIInsightCards />
-        </Suspense>
-      </section>
 
       <section className="page-section">
         <div className="flex items-center gap-2.5 mb-4">
@@ -471,8 +416,8 @@ export default function TeacherDashboard() {
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by name or room code..."
-            className="pl-10"
+            placeholder="Search arenas by name or room code..."
+            className="pl-10 h-11"
             aria-label="Search arenas"
           />
         </div>
@@ -514,12 +459,12 @@ export default function TeacherDashboard() {
         {filteredAndSorted.map(q => <QuizCard key={q.id} quiz={q} onUpdate={fetchQuizzes} />)}
         {filteredAndSorted.length === 0 && (
             <div className="py-16 text-center border-2 border-dashed border-border/50 rounded-[18px]">
-              <BookOpen className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
+              <Swords className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
               <p className="text-base text-muted-foreground mb-4">
-                {searchQuery ? 'No arenas match your search.' : filterKey === 'archived' ? 'No archived arenas.' : filterKey === 'draft' ? 'No draft quizzes.' : filterKey === 'completed' ? 'No completed quizzes.' : filterKey === 'active' ? 'No active quizzes.' : 'No arenas have been created yet.'}
+                {searchQuery ? 'No arenas match your search.' : 'No arenas have been created yet.'}
               </p>
               {!searchQuery && (
-                <Button asChild variant="outline"><Link href="/create-quiz">Create Your First Quiz</Link></Button>
+                <Button asChild><Link href="/create-quiz">Create Your First Arena</Link></Button>
               )}
             </div>
         )}
@@ -529,7 +474,7 @@ export default function TeacherDashboard() {
       <section className="page-section">
         <div className="flex items-center gap-2.5 mb-4">
           <TrendingUp className="w-5 h-5 text-primary" />
-          <h2 className="text-section-title tracking-tight">Student Activity</h2>
+          <h2 className="text-section-title tracking-tight">Gladiator Activity</h2>
         </div>
         <StudentActivity quizzes={quizzes} teacherId={user?.id} />
       </section>
@@ -571,12 +516,12 @@ function StudentActivity({ quizzes, teacherId }: { quizzes: ValidatedQuiz[]; tea
     <section className="space-y-4">
       <div className="flex items-center gap-2.5">
         <Users className="w-5 h-5 text-primary" />
-        <h2 className="text-section-title tracking-tight">Student Activity</h2>
-        <span className="text-sm text-muted-foreground ml-auto">{students.length} student{students.length !== 1 ? 's' : ''}</span>
+        <h2 className="text-section-title tracking-tight">Gladiator Activity</h2>
+        <span className="text-sm text-muted-foreground ml-auto">{students.length} gladiator{students.length !== 1 ? 's' : ''}</span>
       </div>
       <div className="overflow-x-auto rounded-[14px] border border-border/50">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr className="bg-muted/30 border-b border-border/50">
               <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs">Name</th>
               <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs">User ID</th>
