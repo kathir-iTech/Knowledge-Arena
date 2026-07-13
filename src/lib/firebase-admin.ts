@@ -6,12 +6,7 @@ function initAdmin() {
   if (getApps().length) return getApp();
 
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  console.log("[firebase-admin] FIREBASE_SERVICE_ACCOUNT_KEY exists:", !!raw);
   if (raw) {
-    console.log("[firebase-admin] key length:", raw.length);
-    console.log("[firebase-admin] starts with:", raw.substring(0, 40));
-    console.log("[firebase-admin] ends with:", raw.substring(raw.length - 40));
-
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(raw);

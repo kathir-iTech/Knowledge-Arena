@@ -11,11 +11,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 
-import { PlusCircle, Loader2, Trash2, Users, RefreshCw, PlayCircle, Pencil, Copy, Archive, ArchiveRestore, Download, FileText, Search as SearchIcon, Swords, MoreHorizontal, Calendar, Shield } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Users, PlayCircle, Pencil, Copy, Download, FileText, Search as SearchIcon, Swords, MoreHorizontal, Calendar, Shield, HelpCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '../ui/avatar';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -24,7 +23,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Progress } from '@/components/ui/progress';
 
 type SortKey = 'newest' | 'oldest' | 'title' | 'status';
 type FilterKey = 'all' | 'active' | 'completed' | 'draft' | 'archived';
@@ -50,26 +48,16 @@ function exportQuizCSV(quiz: ValidatedQuiz, participants: ValidatedParticipant[]
   URL.revokeObjectURL(url);
 }
 
-const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => void }) => {
+const QuizCard = ({ quiz, onUpdate, questionCount }: { quiz: ValidatedQuiz; onUpdate: () => void; questionCount: number }) => {
     const { toast } = useToast();
     const [isProcessing, setIsProcessing] = useState(false);
     const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-    const [showResetDialog, setShowResetDialog] = useState(false);
 
     useEffect(() => {
         const sub = participantService.subscribeToParticipants(quiz.id, setParticipants);
         return () => { sub(); };
     }, [quiz.id]);
-
-    const handleResetStudent = async (sid: string) => {
-        try {
-            await participantService.unblockParticipant(quiz.id, sid);
-            toast({ title: 'Gladiator Reset', description: 'Malpractice block has been cleared.' });
-        } catch (e) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to reset gladiator.' });
-        }
-    };
 
     const handleDelete = async () => {
         setIsProcessing(true);
@@ -85,19 +73,6 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
         }
     };
 
-    const handleResetQuiz = async () => {
-        setIsProcessing(true);
-        try {
-            await quizService.resetQuiz(quiz.id);
-            toast({ title: 'Arena Reset', description: 'Room returned to waiting state.' });
-        } catch (e) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not reset arena.' });
-        } finally {
-            setIsProcessing(false);
-            setShowResetDialog(false);
-        }
-    };
-
     const handleDuplicate = async () => {
       setIsProcessing(true);
       try {
@@ -106,19 +81,6 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
         onUpdate();
       } catch (e) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not duplicate arena.' });
-      } finally {
-        setIsProcessing(false);
-      }
-    };
-
-    const handleArchiveToggle = async () => {
-      setIsProcessing(true);
-      try {
-        await quizService.updateQuiz(quiz.id, { archived: !quiz.archived });
-        toast({ title: quiz.archived ? 'Arena Restored' : 'Arena Archived', description: quiz.archived ? 'Arena is visible again.' : 'Arena moved to archive.' });
-        onUpdate();
-      } catch (e) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not update arena.' });
       } finally {
         setIsProcessing(false);
       }
@@ -144,7 +106,6 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     };
 
     const participantCount = participants?.filter(p => p.user_id !== quiz.created_by).length || 0;
-    const completedCount = participants?.filter(p => p.status === 'finished' && p.user_id !== quiz.created_by).length || 0;
 
     return (
         <Card className={cn(
@@ -162,9 +123,9 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3 mb-3">
-                      <Link href={`/battle/${quiz.id}`} className="text-xl md:text-2xl font-headline font-bold tracking-tight hover:text-primary transition-colors truncate">
+                      <span className="text-xl md:text-2xl font-headline font-bold tracking-tight truncate">
                         {quiz.title}
-                      </Link>
+                      </span>
                       <Badge className={cn(
                           "shrink-0 h-7 px-3 text-xs font-semibold",
                           quiz.archived ? "bg-muted/50 text-muted-foreground" :
@@ -176,8 +137,12 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                           {quiz.archived ? 'Archived' : quiz.status === 'live' ? 'LIVE' : quiz.status === 'finished' ? 'Completed' : 'Waiting'}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                       <span className="font-mono text-xs bg-muted/50 px-2.5 py-1 rounded-[6px] tracking-wider">{quiz.id}</span>
+                      <span className="flex items-center gap-1.5">
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        {questionCount} question{questionCount !== 1 ? 's' : ''}
+                      </span>
                       <span className="flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5" />
                         {participantCount} gladiator{participantCount !== 1 ? 's' : ''}
@@ -231,16 +196,6 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                           </>
                         )}
                         <DropdownMenuSeparator />
-                        {quiz.status === 'finished' && !quiz.archived && (
-                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowResetDialog(true); }}>
-                            <RefreshCw className="w-4 h-4 mr-2" /> Reset
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem onClick={handleArchiveToggle} disabled={isProcessing}>
-                          {quiz.archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
-                          {quiz.archived ? 'Restore' : 'Archive'}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowDeleteDialog(true); }} className="text-destructive focus:text-destructive">
                           <Trash2 className="w-4 h-4 mr-2" /> Delete
                         </DropdownMenuItem>
@@ -248,47 +203,8 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                     </DropdownMenu>
                   </div>
                 </div>
-
-                {!quiz.archived && participantCount > 0 && (
-                  <div className="flex items-center gap-3 mt-5 pt-4 border-t border-border/40">
-                    <Progress value={(completedCount / participantCount) * 100} className="h-1.5 flex-1" />
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{completedCount}/{participantCount} gladiators finished</span>
-                  </div>
-                )}
-
-                {participants?.some(p => p.status === 'blocked') && (
-                  <div className="mt-4 pt-4 border-t border-border/40">
-                    <div className="p-3 bg-destructive/5 rounded-[12px] border border-destructive/10 space-y-2">
-                      <p className="text-[11px] font-semibold text-destructive uppercase tracking-wider">Blocked Gladiators:</p>
-                      {participants.filter(p => p.status === 'blocked').map(p => (
-                        <div key={p.user_id} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <Avatar className="h-7 w-7"><AvatarFallback className="text-[10px]">B</AvatarFallback></Avatar>
-                            <span className="text-sm">{p.user_id.slice(0, 12)}</span>
-                          </div>
-                          <Button size="sm" variant="ghost" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10" onClick={() => handleResetStudent(p.user_id)}>Unblock</Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
-
-            <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Reset Arena?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will purge all scores and gladiator entries. The room will return to the 'Waiting' state.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Keep results</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleResetQuiz}>Reset Room</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
 
             <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
               <AlertDialogContent>
@@ -311,7 +227,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
 export default function CommanderDashboard() {
   const { user } = useAuth();
   const [quizzes, setQuizzes] = useState<ValidatedQuiz[]>([]);
-  const [allParticipants, setAllParticipants] = useState<ValidatedParticipant[]>([]);
+  const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
@@ -319,15 +235,20 @@ export default function CommanderDashboard() {
 
   const fetchQuizzes = useCallback(() => {
     if (!user) return;
-    Promise.all([
-      quizService.getQuizzesByCreator(user.id),
-      participantService.getAllParticipantsBulk([]).catch(() => [] as ValidatedParticipant[]),
-    ])
-      .then(([qs, parts]) => {
+    const qsService = quizService;
+    qsService.getQuizzesByCreator(user.id)
+      .then(async (qs) => {
         setQuizzes(qs);
-        setAllParticipants(parts);
+        const counts: Record<string, number> = {};
+        await Promise.all(qs.map(async (q) => {
+          try {
+            const qsList = await import('@/services/game.service').then(m => m.questionService.getQuestionsByQuizId(q.id));
+            counts[q.id] = qsList.length;
+          } catch { counts[q.id] = 0; }
+        }));
+        setQuestionCounts(counts);
       })
-      .catch(e => console.error(e))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [user]);
 
@@ -382,6 +303,12 @@ export default function CommanderDashboard() {
         </Button>
       </header>
 
+      <div className="flex items-center gap-2.5 px-6 mb-4">
+        <Swords className="w-5 h-5 text-primary" />
+        <h2 className="text-section-title tracking-tight">Arena Library</h2>
+        <span className="text-sm text-muted-foreground ml-auto">{filteredAndSorted.length} arena{filteredAndSorted.length !== 1 ? 's' : ''}</span>
+      </div>
+
       <section className="page-section">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mb-6">
         <div className="relative flex-1 max-w-md">
@@ -411,7 +338,6 @@ export default function CommanderDashboard() {
             { key: 'active', label: 'Running' },
             { key: 'completed', label: 'Completed' },
             { key: 'draft', label: 'Draft' },
-            { key: 'archived', label: 'Archived' }
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -431,7 +357,7 @@ export default function CommanderDashboard() {
       <div className="space-y-4">
         {filteredAndSorted.map((q, i) => (
           <div key={q.id} className="animate-in" style={{ animationDelay: `${i * 50}ms` }}>
-            <QuizCard quiz={q} onUpdate={fetchQuizzes} />
+            <QuizCard quiz={q} onUpdate={fetchQuizzes} questionCount={questionCounts[q.id] ?? 0} />
           </div>
         ))}
         {filteredAndSorted.length === 0 && (
@@ -447,89 +373,10 @@ export default function CommanderDashboard() {
         )}
       </div>
       </section>
-
-      <section className="page-section">
-        <StudentActivity quizzes={quizzes} commanderId={user?.id} />
-      </section>
     </div>
   );
 }
 
-interface StudentSummary {
-  userId: string;
-  name: string;
-  quizCount: number;
-  totalScore: number;
-}
 
-function StudentActivity({ quizzes, commanderId }: { quizzes: ValidatedQuiz[]; commanderId?: string }) {
-  const [students, setStudents] = useState<StudentSummary[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!quizzes.length || !commanderId) { setLoading(false); return; }
-    let cancelled = false;
-    participantService.getAllParticipantsBulk(quizzes.map(q => q.id)).then(all => {
-      if (cancelled) return;
-      const grouped = new Map<string, { name: string; quizCount: number; totalScore: number }>();
-      for (const p of all) {
-        if (p.user_id === commanderId) continue;
-        const key = p.user_id;
-        const cur = grouped.get(key);
-        if (cur) {
-          cur.quizCount++;
-          cur.totalScore += p.score || 0;
-        } else {
-          grouped.set(key, { name: p.name || p.user_id.slice(0, 8), quizCount: 1, totalScore: p.score || 0 });
-        }
-      }
-      setStudents(Array.from(grouped.entries()).map(([userId, s]) => ({ userId, ...s })).sort((a, b) => b.totalScore - a.totalScore));
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [quizzes, commanderId]);
 
-  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
-  if (!students.length) return null;
-
-  return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-2.5">
-        <Users className="w-5 h-5 text-primary" />
-        <h2 className="text-section-title tracking-tight">Gladiator Activity</h2>
-        <span className="text-sm text-muted-foreground ml-auto">{students.length} gladiator{students.length !== 1 ? 's' : ''}</span>
-      </div>
-      <div className="overflow-x-auto rounded-[14px] border border-border/50">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-muted/30 border-b border-border/50">
-              <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs">Name</th>
-              <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs">User ID</th>
-              <th scope="col" className="text-center p-3 font-medium text-muted-foreground text-xs">Battles</th>
-              <th scope="col" className="text-right p-3 font-medium text-muted-foreground text-xs">Total</th>
-              <th scope="col" className="text-right p-3 font-medium text-muted-foreground text-xs">Avg</th>
-            </tr>
-          </thead>
-          <tbody>
-            {students.map((s, i) => (
-              <tr key={s.userId} className={cn("border-b border-border/30 transition-colors hover:bg-muted/20", i % 2 === 0 ? "bg-card" : "bg-muted/[0.03]")}>
-                <td className="p-3">
-                  <div className="flex items-center gap-2.5">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs bg-primary/10 text-primary">{s.name.charAt(0).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <span className="font-medium text-sm">{s.name}</span>
-                  </div>
-                </td>
-                <td className="p-3 font-mono text-xs text-muted-foreground">{s.userId.slice(0, 12)}...</td>
-                <td className="p-3 text-center"><Badge variant="secondary" className="h-6">{s.quizCount}</Badge></td>
-                <td className="p-3 text-right font-semibold text-sm">{s.totalScore}</td>
-                <td className="p-3 text-right text-muted-foreground text-sm">{s.quizCount ? Math.round(s.totalScore / s.quizCount) : 0}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}

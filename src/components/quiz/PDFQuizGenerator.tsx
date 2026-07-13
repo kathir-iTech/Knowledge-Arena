@@ -105,7 +105,6 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         throw new Error("AI_FAILED");
       }
     } catch (err: unknown) {
-      console.error(err);
       let msg = err instanceof Error ? err.message : "Unable to generate questions. Please retry.";
       
       if (msg.includes("AI_FAILED")) {

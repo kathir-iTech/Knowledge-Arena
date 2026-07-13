@@ -71,22 +71,25 @@ function BattleHistoryCard({ quiz }: { quiz: ValidatedQuiz }) {
 
   const studentParticipants = participants.filter(p => p.user_id !== quiz.created_by);
   const participantCount = studentParticipants.length;
-  const completedCount = studentParticipants.filter(p => p.status === 'finished').length;
+  const sorted = [...studentParticipants].sort((a, b) => b.score - a.score);
+  const winner = sorted[0];
 
   return (
     <Card>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <Link href={`/battle/${quiz.id}`} className="text-card-title font-headline tracking-tight hover:text-primary transition-colors truncate">
+            <span className="text-card-title font-headline tracking-tight truncate block">
               {quiz.title}
-            </Link>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5">
+            </span>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5 flex-wrap">
               <span className="font-mono text-[11px] bg-muted/50 px-2 py-0.5 rounded-[6px]">{quiz.id}</span>
               <span className="flex items-center gap-1">
                 <Users className="w-3 h-3" />
-                {participantCount} gladiator{participantCount !== 1 ? 's' : ''}
+                {participantCount}
               </span>
+              <span>{quiz.question_count ?? '?'} questions</span>
+              {winner && <span>Winner: {winner.name || winner.user_id.slice(0, 8)} ({winner.score} pts)</span>}
               {!!quiz.created_at && (
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
@@ -96,7 +99,7 @@ function BattleHistoryCard({ quiz }: { quiz: ValidatedQuiz }) {
             </div>
           </div>
           <Button asChild size="sm" variant="outline">
-            <Link href={`/battle/${quiz.id}`}>View Results</Link>
+            <Link href={`/battle/${quiz.id}`}>View</Link>
           </Button>
         </div>
       </CardContent>

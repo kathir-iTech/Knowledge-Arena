@@ -1,8 +1,10 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
-import { Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Shield } from 'lucide-react';
 
 export default function CommanderManagementPage() {
   return (
@@ -13,8 +15,9 @@ export default function CommanderManagementPage() {
       </div>
       <Card>
         <CardContent className="py-16 text-center">
-          <Users className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-          <p className="text-base text-muted-foreground">Commander management coming soon.</p>
+          <Shield className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
+          <p className="text-base text-muted-foreground mb-4">No commanders to manage yet.</p>
+          <Button asChild variant="outline"><Link href="/executive/dashboard">Back to Dashboard</Link></Button>
         </CardContent>
       </Card>
     </div>

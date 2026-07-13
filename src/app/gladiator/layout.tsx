@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import GladiatorSidebar from '@/components/GladiatorSidebar';
 
 export default function GladiatorLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -20,5 +22,10 @@ export default function GladiatorLayout({ children }: { children: React.ReactNod
     }
   }, [user, isLoading, router]);
 
-  return <>{children}</>;
+  return (
+    <SidebarProvider>
+      <GladiatorSidebar />
+      <SidebarInset className="safe-top"><main id="main-content">{children}</main></SidebarInset>
+    </SidebarProvider>
+  );
 }

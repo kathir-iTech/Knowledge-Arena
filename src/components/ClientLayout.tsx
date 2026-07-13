@@ -3,26 +3,23 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { usePathname, useRouter } from 'next/navigation';
-import AppSidebar from '@/components/AppSidebar';
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LoadingScreen } from '@/components/LoadingScreen';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const redirecting = useRef<string | null>(null);
-  
-  const isPublicPage = pathname === '/';
+
   const specialPages = ['/kicked', '/cheating-detected'];
 
   useEffect(() => {
     if (isLoading) return;
 
     const currentPath = pathname;
-    const skipPages = ['/kicked', '/cheating-detected'];
-    if (skipPages.includes(currentPath)) {
+    if (specialPages.includes(currentPath)) {
       redirecting.current = null;
       return;
     }
@@ -46,12 +43,14 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
 
     let target: string | null = null;
+    const roomCode = searchParams.get('roomCode');
+    const roomParam = roomCode ? `?roomCode=${roomCode}` : '';
 
     if (currentPath === '/') {
-      target = user.role === 'teacher' ? '/commander/dashboard' : '/gladiator/dashboard';
+      target = user.role === 'teacher' ? '/commander/dashboard' : `/gladiator/dashboard${roomParam}`;
     } else {
-      const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/executive') || currentPath.startsWith('/create-quiz') || currentPath.startsWith('/teacher');
-      const isGladiatorPage = currentPath.startsWith('/gladiator') || currentPath.startsWith('/student');
+      const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/executive') || currentPath.startsWith('/create-quiz');
+      const isGladiatorPage = currentPath.startsWith('/gladiator');
 
       if (user.role === 'teacher' && isGladiatorPage) target = '/commander/dashboard';
       else if (user.role === 'student' && isCommanderPage) target = '/gladiator/dashboard';
@@ -66,7 +65,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
 
     redirecting.current = null;
-  }, [user, isLoading, pathname, router]);
+  }, [user, isLoading, pathname, searchParams, router]);
 
   if (isLoading) {
     return <LoadingScreen message="Authenticating..." />;
@@ -78,26 +77,16 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return <>{skipNav}<main id="main-content">{children}</main></>;
   }
 
-  if (!user && isPublicPage) {
+  if (!user && pathname === '/') {
     return <>{skipNav}<main id="main-content">{children}</main></>;
   }
 
   if (user && pathname.startsWith('/battle')) {
-    return (
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset className="safe-bottom safe-top"><main id="main-content">{children}</main></SidebarInset>
-      </SidebarProvider>
-    );
+    return <>{skipNav}<main id="main-content">{children}</main></>;
   }
 
   if (user) {
-    return (
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset className="safe-top"><main id="main-content">{children}</main></SidebarInset>
-      </SidebarProvider>
-    );
+    return <>{skipNav}<main id="main-content">{children}</main></>;
   }
 
   return <>{skipNav}<main id="main-content">{children}</main></>;

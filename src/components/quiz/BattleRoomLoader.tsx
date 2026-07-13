@@ -30,7 +30,11 @@ export default function BattleRoomLoader() {
   const quizId = roomCode as string;
 
   useEffect(() => {
-    if (!quizId || !user) return;
+    if (!quizId) return;
+    if (!user) {
+      router.replace(`/?roomCode=${quizId}`);
+      return;
+    }
 
     let mounted = true;
 
