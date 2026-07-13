@@ -32,8 +32,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const url = new URL(window.location.origin + '/gladiator/dashboard');
-      url.searchParams.set('roomCode', quiz.id);
+      const url = new URL(window.location.origin + `/battle/${quiz.id}`);
       setShareableLink(url.toString());
     }
   }, [quiz.id]);
@@ -95,7 +94,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   };
 
   const handleStartQuiz = async () => {
-    if (!isTeacher || !user || user.role !== 'teacher') return;
+    if (!isTeacher || !user || user.role !== 'teacher' || quiz.created_by !== user.id) return;
     try {
         await quizService.startQuiz(quiz.id);
     } catch {

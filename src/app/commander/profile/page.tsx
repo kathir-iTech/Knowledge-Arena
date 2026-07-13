@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Loader2, Save, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -60,7 +59,6 @@ export default function CommanderProfilePage() {
           </div>
           <CardTitle className="text-xl font-headline">{user?.name || 'Anonymous'}</CardTitle>
           <CardDescription className="text-sm">{user?.email}</CardDescription>
-          <div className="mt-2"><Badge variant="outline" className="h-6">COMMANDER</Badge></div>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-1.5">

@@ -125,8 +125,9 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
           <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
         ) : history.length === 0 ? (
           <div className="py-10 text-center border border-dashed border-border/50 rounded-[12px]">
-            <Swords className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">No battles yet.</p>
+            <Swords className="w-6 h-6 text-muted-foreground mx-auto mb-4" />
+            <p className="text-base text-muted-foreground mb-4">No battles fought yet.</p>
+            <Button variant="outline" size="sm" asChild><Link href="/gladiator/dashboard">Join a Battle</Link></Button>
           </div>
         ) : (
           <div className="space-y-1">

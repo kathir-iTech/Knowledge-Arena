@@ -47,7 +47,6 @@ const AppSidebar = () => {
     { href: '/commander/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/create-quiz', label: 'Create Arena', icon: PencilRuler },
     { href: '/commander/history', label: 'Battle History', icon: History },
-    { href: '/commander/requests', label: 'Requests', icon: Inbox },
     { href: '/commander/profile', label: 'Profile', icon: UserCircle },
   ];
 

@@ -43,7 +43,7 @@ export default function KickedPage() {
           </div>
         )}
       </div>
-      <Link href="/student/dashboard" passHref>
+      <Link href="/gladiator/dashboard" passHref>
         <Button variant="outline">
           Return to Dashboard
         </Button>

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Loader2, Save, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -60,10 +59,6 @@ export default function GladiatorProfile() {
           </div>
           <CardTitle className="text-xl font-headline">{user?.name || 'Anonymous'}</CardTitle>
           <CardDescription className="text-sm">{user?.email}</CardDescription>
-          <div className="mt-2">
-            <Badge variant="outline" className="h-6 font-mono text-[10px]">ID: {user?.id?.slice(0, 12) || '—'}</Badge>
-          </div>
-          <div className="mt-2"><Badge variant="outline" className="h-6">GLADIATOR</Badge></div>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
           <div className="space-y-2">

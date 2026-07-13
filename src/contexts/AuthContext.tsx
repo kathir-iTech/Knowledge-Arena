@@ -57,11 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (userDoc.exists()) {
             setUser({ id: userDoc.id, ...userDoc.data() } as User);
         } else {
-            console.warn(`User document not found for uid: ${uid}. This may happen if creation is pending.`);
             setUser(null);
         }
-    } catch (error) {
-        console.error("Error fetching user document:", error);
+    } catch {
     } finally {
         setIsLoading(false);
     }
