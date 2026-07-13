@@ -1,12 +1,12 @@
 
 "use client";
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, Suspense } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LoadingScreen } from '@/components/LoadingScreen';
 
-export function ClientLayout({ children }: { children: React.ReactNode }) {
+function ClientLayoutInner({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -90,4 +90,12 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   }
 
   return <>{skipNav}<main id="main-content">{children}</main></>;
+}
+
+export function ClientLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense>
+      <ClientLayoutInner>{children}</ClientLayoutInner>
+    </Suspense>
+  );
 }
