@@ -13,7 +13,6 @@ import LiveQuiz from '@/components/quiz/LiveQuiz';
 import QuizResults from '@/components/quiz/QuizResults';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import { Button } from '../ui/button';
-import type { Unsubscribe } from 'firebase/firestore';
 
 export default function BattleRoomLoader() {
   const { roomCode } = useParams();
@@ -120,7 +119,7 @@ export default function BattleRoomLoader() {
     return (
       <WaitingRoom
         quiz={quiz}
-        isTeacher={user?.role === 'teacher' && quiz.created_by === participant?.user_id}
+        isTeacher={user?.role === 'teacher' && quiz.created_by === user.id}
       />
     );
   }
@@ -137,7 +136,7 @@ export default function BattleRoomLoader() {
         <LiveQuiz
             quiz={quiz}
             participant={participant}
-            isTeacher={user?.role === 'teacher' && quiz.created_by === participant.user_id}
+            isTeacher={user?.role === 'teacher' && quiz.created_by === user.id}
             allParticipants={allParticipants}
         />
     );

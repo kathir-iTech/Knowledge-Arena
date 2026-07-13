@@ -84,7 +84,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   }, [quiz.id, quiz.created_by]);
 
   const studentParticipants = useMemo(() => {
-      return participants.filter(p => p.user_id !== quiz.created_by) || [];
+      return participants.filter(p => p.user_id !== quiz.created_by);
   }, [participants, quiz.created_by]);
 
   const copyToClipboard = (text: string) => {
@@ -94,7 +94,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   };
 
   const handleStartQuiz = async () => {
-    if (!isTeacher || !user || user.role !== 'teacher' || quiz.created_by !== user.id) return;
+    if (!isTeacher || !user) return;
     try {
         await quizService.startQuiz(quiz.id);
     } catch {

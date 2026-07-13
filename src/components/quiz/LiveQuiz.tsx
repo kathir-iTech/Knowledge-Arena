@@ -17,7 +17,6 @@ import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useToast } from '@/hooks/use-toast';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import type { Unsubscribe } from 'firebase/firestore';
 
 interface LiveQuizQuestion {
   id: string;
@@ -129,7 +128,6 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const prevViolationsRef = useRef<Record<string, number>>({});
   const advancingRef = useRef(false);
   const submittingRef = useRef(false);
-  const currentQuestionIdRef = useRef<string | null>(null);
   const { firestore } = useFirebase();
 
   useEffect(() => {
@@ -203,25 +201,26 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   }, [currentQuestion, quiz.current_question_index, quiz.question_start_at]);
 
   useEffect(() => {
+    let mounted = true;
     setSelectedAnswer(null);
     setHasAnswered(false);
     if (isTeacher || !currentQuestion || !user || !firestore) return;
     const subDocRef = doc(firestore, 'quizzes', quiz.id, 'questions', currentQuestion.id, 'submissions', user.id);
     getDoc(subDocRef).then(snap => {
+      if (!mounted) return;
       if (snap.exists()) {
         const data = snap.data() as { selected_option: number };
         setSelectedAnswer(data.selected_option);
         setHasAnswered(true);
       }
     }).catch(() => {});
+    return () => { mounted = false; };
   }, [quiz.current_question_index, isTeacher, currentQuestion?.id, user?.id, firestore, quiz.id]);
 
   useEffect(() => {
     if (!isTeacher || !firestore) return;
     const qId = currentQuestion?.id;
     if (!qId || !quiz.id) return;
-    currentQuestionIdRef.current = qId;
-
     const subsRef = collection(firestore, 'quizzes', quiz.id, 'questions', qId, 'submissions');
     const unsub = onSnapshot(subsRef, (snap) => {
       setSubmittedCount(snap.docs.filter(d => d.data()?.selected_option !== undefined).length);

@@ -13,7 +13,6 @@ interface GeneratedQuestion {
   correctAnswerIndex: number;
   explanation: string;
 }
-import type { GenerateQuizFromPDFOutput } from '@/ai/flows/generate-quiz-pdf-flow';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PencilRuler, Sparkles, ChevronLeft } from "lucide-react";
 import { Button } from '@/components/ui/button';

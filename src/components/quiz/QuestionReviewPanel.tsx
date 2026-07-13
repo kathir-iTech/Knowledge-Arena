@@ -15,11 +15,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { questionService } from '@/services/game.service';
-import { validateQuiz, type QuizValidationIssue, groupIssuesByQuestion } from '@/lib/quiz-validator';
+import { validateQuiz, type QuizValidationIssue } from '@/lib/quiz-validator';
 
 interface Question {
   id: string;
@@ -82,7 +81,6 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   // Modal State
   const [quizTitle, setQuizTitle] = useState('');
   const [globalTimer, setGlobalTimer] = useState(30);
-  const [shuffleQuestions, setShuffleQuestions] = useState(true);
 
   const handleDelete = (id: string) => {
     setQuestions(questions.filter(q => q.id !== id));
@@ -353,12 +351,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                     />
                     <p className="text-xs text-muted-foreground">Default: 30s</p>
                 </div>
-                <div className="space-y-4 pt-2">
-                    <div className="flex items-center space-x-3">
-                        <Checkbox id="shuffle-q" checked={shuffleQuestions} onCheckedChange={(val) => setShuffleQuestions(!!val)} />
-                        <label htmlFor="shuffle-q" className="text-sm font-medium leading-none cursor-pointer">Randomize Question Sequence</label>
-                    </div>
-                </div>
+
             </div>
             <DialogFooter className="sm:justify-start">
                 <Button 

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 
-import { PlusCircle, Loader2, Trash2, Users, PlayCircle, Pencil, Copy, Download, FileText, Search as SearchIcon, Swords, MoreHorizontal, Calendar, Shield, HelpCircle } from 'lucide-react';
+import { PlusCircle, Trash2, Users, PlayCircle, Pencil, Copy, Download, FileText, Search as SearchIcon, Swords, MoreHorizontal, Calendar, Shield, HelpCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';

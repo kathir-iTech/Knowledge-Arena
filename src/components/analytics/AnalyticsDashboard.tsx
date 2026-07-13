@@ -10,7 +10,7 @@ import { QuizAnalyticsSection } from './QuizAnalyticsSection';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { RefreshCw, Download, FileText, MoreHorizontal } from 'lucide-react';
+import { RefreshCw, Download, FileText } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,

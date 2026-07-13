@@ -151,6 +151,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
         await questionService.createAnswerKeys(answerKeys);
 
         toast({ title: 'Arena Created', description: `Room Code: ${quizId}` });
+        setIsSubmitting(false);
         router.push(`/battle/${quizId}`);
     } catch (error: unknown) {
         toast({ variant: 'destructive', title: 'Creation Failed', description: error instanceof Error ? error.message : "Unknown error" });
