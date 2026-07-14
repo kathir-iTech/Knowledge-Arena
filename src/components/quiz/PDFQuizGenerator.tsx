@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -22,14 +22,17 @@ interface PDFQuizGeneratorProps {
   onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string, dataUri?: string, questionCount?: number) => void;
 }
 
-const STATUS_MESSAGES = [
-  "Uploading intelligence report...",
-  "Parsing strategic data...",
-  "Forging elite challenges...",
-  "Analyzing content...",
-  "Optimizing questions...",
-  "Finalizing arena parameters..."
-];
+type GenerationStage = 'idle' | 'reading' | 'generating' | 'complete' | 'error';
+
+const STAGE_LABELS: Record<GenerationStage, string> = {
+  idle: 'Ready',
+  reading: 'Reading PDF file...',
+  generating: 'Processing with AI forge...',
+  complete: 'Generation complete!',
+  error: 'Generation failed',
+};
+
+const CLIENT_TIMEOUT_MS = 120000;
 
 export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps) {
   const { toast } = useToast();
@@ -38,18 +41,8 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
   const [difficulty, setDifficulty] = useState<'easy' | 'moderate' | 'hard' | null>(null);
   const [questionCount, setQuestionCount] = useState(10);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [statusIndex, setStatusIndex] = useState(0);
+  const [stage, setStage] = useState<GenerationStage>('idle');
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isGenerating) {
-      interval = setInterval(() => {
-        setStatusIndex((prev) => (prev + 1) % STATUS_MESSAGES.length);
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [isGenerating]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -78,10 +71,17 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
     
     setIsGenerating(true);
     setError(null);
-    setStatusIndex(0);
+    setStage('reading');
+
+    const timerId = setTimeout(() => {
+      setIsGenerating(false);
+      setStage('error');
+      setError("Generation timed out after 2 minutes. Try with fewer questions or a smaller PDF.");
+    }, CLIENT_TIMEOUT_MS);
 
     try {
       const reader = new FileReader();
+      setStage('reading');
       const dataUri = await new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
@@ -91,6 +91,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!idToken) throw new Error("UNAUTHORIZED");
 
+      setStage('generating');
       const result = await generateQuizFromPDF({
         pdfDataUri: dataUri,
         difficulty,
@@ -98,36 +99,58 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
         idToken,
       });
 
+      // Check if server returned an error message
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
       if (result.questions && result.questions.length > 0) {
+        clearTimeout(timerId);
+        setStage('complete');
         toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions.` });
         onQuestionsGenerated(result.questions, result.difficulty, dataUri, questionCount);
       } else {
         throw new Error("AI_FAILED");
       }
     } catch (err: unknown) {
+      clearTimeout(timerId);
+      setStage('error');
       let msg = err instanceof Error ? err.message : "Unable to generate questions. Please retry.";
       
       if (msg.includes("AI_FAILED")) {
         msg = "Unable to generate questions. Please retry.";
-      } else if (msg.includes("MISSING_ANTHROPIC_API_KEY")) {
-        msg = "The generator requires an API key. Please set 'ANTHROPIC_API_KEY' in your .env file and restart the server.";
+      } else if (msg.includes("PDF_IMAGE_ONLY")) {
+        msg = "This PDF contains scanned images and no selectable text. Please upload a text-based PDF.";
       } else if (msg.includes("PDF_CONTENT_TOO_SHORT")) {
         msg = "No extractable text was found in the PDF. This usually happens with scanned documents. Please upload a text-based PDF.";
-      } else if (msg.includes("ANTHROPIC_API_ERROR")) {
-        msg = "The AI service is temporarily unavailable. Please try again.";
+      } else if (msg.includes("PDF_EXTRACTION_TIMEOUT")) {
+        msg = "PDF extraction timed out. Try a smaller or simpler PDF.";
+      } else if (msg.includes("PDF_EXTRACTION_FAILED")) {
+        msg = "Unable to read the PDF. The file may be corrupted or uses an unsupported format. Please try a different PDF.";
+      } else if (msg.includes("PDF_ENCRYPTED")) {
+        msg = "This PDF is encrypted or password-protected. Please upload an unencrypted PDF.";
+      } else if (msg.includes("PDF_CORRUPTED")) {
+        msg = "This PDF appears to be corrupted. Please try a different file.";
+      } else if (msg.includes("PDF_UNSUPPORTED")) {
+        msg = "This file does not appear to be a valid PDF. Please check the file and try again.";
       } else if (msg.includes("UNAUTHORIZED")) {
         msg = "Your session has expired. Please log out and log back in.";
       } else if (msg.includes("PDF_TOO_LARGE")) {
         msg = "The uploaded PDF exceeds the maximum size limit on the server.";
       } else if (msg.includes("PDF_FORGE_RATE_LIMITED")) {
         msg = "Rate limit reached (5 per minute). Please wait before trying again.";
-      } else if (msg.includes("quota_exceeded") || msg.includes("all_models_failed")) {
+      } else if (msg.includes("INVALID_PDF_DATA")) {
+        msg = "Invalid PDF data. Please try uploading the file again.";
+      } else if (msg.includes("quota_exceeded")) {
+        msg = "AI generation quota temporarily exhausted. Please wait a few minutes before retrying.";
+      } else if (msg.includes("all_models_failed") || msg.includes("AI generation") || msg.includes("temporarily unavailable")) {
         msg = "Unable to generate questions. Please retry.";
       }
       
       setError(msg);
-      toast({ variant: 'destructive', title: "Generation Failed", description: "Could not generate questions." });
+      toast({ variant: 'destructive', title: "Generation Failed", description: msg });
     } finally {
+      clearTimeout(timerId);
       setIsGenerating(false);
     }
   };
@@ -151,12 +174,12 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
                     <h3 className="text-lg font-bold uppercase tracking-tight">API Key Missing</h3>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                    To use the AI Forge, you must add your <strong>Anthropic API Key</strong> to the <code className="bg-background/50 px-1 rounded">.env</code> file in your project root.
+                    To use the AI Forge, you must add your <strong>Google AI API Key</strong> to the <code className="bg-background/50 px-1 rounded">.env</code> file in your project root.
                 </p>
                 <div className="bg-background/50 p-3 rounded font-mono text-xs border border-destructive/10 select-all">
-                    ANTHROPIC_API_KEY=your_key_here
+                    GOOGLE_GENERATIVE_AI_API_KEY=your_key_here
                 </div>
-                <Button variant="outline" size="sm" className="w-fit" onClick={() => window.open('https://console.anthropic.com/', '_blank')}>
+                <Button variant="outline" size="sm" className="w-fit" onClick={() => window.open('https://aistudio.google.com/apikey', '_blank')}>
                     Get API Key
                 </Button>
             </div>
@@ -263,7 +286,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
               <div className="flex flex-col items-center">
                 <Loader2 className="animate-spin mb-1" />
                 <span className="text-xs tracking-widest uppercase">
-                  {STATUS_MESSAGES[statusIndex]}
+                  {STAGE_LABELS[stage]}
                 </span>
               </div>
             ) : (
@@ -274,7 +297,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
             )}
           </Button>
           
-          {error && !error.includes("API key") && (
+          {error && !error.includes("API key") && !error.includes("INVALID_PDF_DATA") && (
             <div className="mt-4 flex flex-col gap-3 bg-destructive/5 p-4 rounded-lg border border-destructive/10 animate-in">
               <div className="flex items-center gap-2 text-destructive font-bold text-sm">
                 <AlertCircle className="w-4 h-4 shrink-0" />

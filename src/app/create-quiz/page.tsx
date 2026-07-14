@@ -52,12 +52,15 @@ export default function CreateQuizPage() {
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!idToken) throw new Error('UNAUTHORIZED');
       const { generateQuizFromPDF } = await import('@/ai/flows/generate-quiz-pdf-flow');
-      const result = await generateQuizFromPDF({
-        pdfDataUri: forgeParams.current.pdfDataUri,
-        difficulty: forgeParams.current.diff,
-        questionCount: 1,
-        idToken,
-      });
+      const result = await Promise.race([
+        generateQuizFromPDF({
+          pdfDataUri: forgeParams.current.pdfDataUri,
+          difficulty: forgeParams.current.diff,
+          questionCount: 1,
+          idToken,
+        }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 120000)),
+      ]);
       if (result.questions && result.questions.length > 0) {
         const updated = [...generatedQuestions];
         updated[index] = result.questions[0];
