@@ -141,11 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw err;
     }
 
-    // Teacher role is determined by email domain. Set NEXT_PUBLIC_TEACHER_DOMAIN env var
-    // to configure (default: @staffs.com). The check is case-insensitive.
-    const teacherDomain = (process.env.NEXT_PUBLIC_TEACHER_DOMAIN || '@staffs.com').toLowerCase();
-    const normalizedEmail = credentials.email.toLowerCase();
-    const role = normalizedEmail.endsWith(teacherDomain) ? 'teacher' : 'student';
+    const role = 'gladiator';
 
     try {
       setIsLoading(true);

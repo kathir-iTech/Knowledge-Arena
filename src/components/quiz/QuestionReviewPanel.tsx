@@ -105,8 +105,8 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
 
   const handleCreateRoom = async () => {
     if (!user || !quizTitle) return;
-    if (user.role !== 'teacher') {
-        toast({ variant: 'destructive', title: "Arena Error", description: "Only teachers can create arenas. Sign up with an email ending in @staffs.com to create a teacher account." });
+    if (user.role !== 'commander') {
+        toast({ variant: 'destructive', title: "Arena Error", description: "Only Commanders can create arenas." });
         return;
     }
     setIsSubmitting(true);

@@ -6,7 +6,7 @@ import { rateLimiter, Limits, buildRateLimitHeaders } from '@/lib/rate-limiter';
 
 export async function GET(req: Request) {
   try {
-    const auth = await verifyFirebaseTokenWithRole(req, 'teacher');
+    const auth = await verifyFirebaseTokenWithRole(req, 'commander');
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

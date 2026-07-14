@@ -85,7 +85,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
   });
 
   const onSubmit = async (data: EditFormData) => {
-    if (!user || user.role !== 'teacher') {
+    if (!user || user.role !== 'commander') {
       toast({ variant: 'destructive', title: 'Error', description: 'Unauthorized.' });
       return;
     }

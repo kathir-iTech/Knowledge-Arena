@@ -119,7 +119,7 @@ export default function BattleRoomLoader() {
     return (
       <WaitingRoom
         quiz={quiz}
-        isTeacher={user?.role === 'teacher' && quiz.created_by === user.id}
+        isTeacher={(user?.role === 'commander' || user?.role === 'executive') && quiz.created_by === user.id}
       />
     );
   }
@@ -136,7 +136,7 @@ export default function BattleRoomLoader() {
         <LiveQuiz
             quiz={quiz}
             participant={participant}
-            isTeacher={user?.role === 'teacher' && quiz.created_by === user.id}
+        isTeacher={(user?.role === 'commander' || user?.role === 'executive') && quiz.created_by === user.id}
             allParticipants={allParticipants}
         />
     );

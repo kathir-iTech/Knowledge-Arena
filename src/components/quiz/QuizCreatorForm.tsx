@@ -87,7 +87,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
   });
 
   const onSubmit = async (data: QuizFormData) => {
-    if (!user || user.role !== 'teacher') {
+    if (!user || user.role !== 'commander') {
         toast({ variant: 'destructive', title: 'Error', description: 'Unauthorized.' });
         return;
     }

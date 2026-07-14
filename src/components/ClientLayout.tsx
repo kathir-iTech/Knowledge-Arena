@@ -32,7 +32,7 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!user.role || (user.role !== 'teacher' && user.role !== 'student')) {
+    if (!user.role || !['executive', 'commander', 'gladiator'].includes(user.role)) {
       redirecting.current = null;
       return;
     }
@@ -43,17 +43,22 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     }
 
     let target: string | null = null;
-    const roomCode = searchParams.get('roomCode');
-    const roomParam = roomCode ? `?roomCode=${roomCode}` : '';
 
     if (currentPath === '/') {
-      target = user.role === 'teacher' ? '/commander/dashboard' : `/gladiator/dashboard${roomParam}`;
+      const dashboardMap: Record<string, string> = {
+        executive: '/executive/dashboard',
+        commander: '/commander/dashboard',
+        gladiator: '/gladiator/dashboard',
+      };
+      target = dashboardMap[user.role] || '/gladiator/dashboard';
     } else {
-      const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/executive') || currentPath.startsWith('/create-quiz');
+      const isExecutivePage = currentPath.startsWith('/executive');
+      const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/create-quiz');
       const isGladiatorPage = currentPath.startsWith('/gladiator');
 
-      if (user.role === 'teacher' && isGladiatorPage) target = '/commander/dashboard';
-      else if (user.role === 'student' && isCommanderPage) target = '/gladiator/dashboard';
+      if (user.role === 'executive' && (isCommanderPage || isGladiatorPage)) target = '/executive/dashboard';
+      else if (user.role === 'commander' && (isExecutivePage || isGladiatorPage)) target = '/commander/dashboard';
+      else if (user.role === 'gladiator' && (isExecutivePage || isCommanderPage)) target = '/gladiator/dashboard';
     }
 
     if (target) {

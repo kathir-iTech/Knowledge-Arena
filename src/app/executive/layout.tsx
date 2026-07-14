@@ -16,8 +16,8 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
       router.replace('/');
       return;
     }
-    if (user.role !== 'teacher') {
-      router.replace('/gladiator/dashboard');
+    if (user.role !== 'executive') {
+      router.replace('/');
       return;
     }
   }, [user, isLoading, router]);

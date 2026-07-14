@@ -121,7 +121,7 @@ export function LoginForm() {
           <Form {...signupForm}>
             <form onSubmit={signupForm.handleSubmit(onSignupSubmit)}>
               <CardContent className="space-y-5 pt-6">
-                <p className="text-sm text-muted-foreground text-center">Use an email ending in <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{process.env.NEXT_PUBLIC_TEACHER_DOMAIN || '@staffs.com'}</code> to create a Commander account.</p>
+                <p className="text-sm text-muted-foreground text-center">Sign up as a Gladiator to join battles and compete in the arena.</p>
                 <FormField
                   control={signupForm.control}
                   name="name"
