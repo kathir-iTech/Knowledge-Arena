@@ -136,7 +136,8 @@ export const questionService = {
 
       let scoreToAdd = 0;
       if (isCorrect) {
-        const elapsed = subData.submittedAt - startTime;
+        const clampedSubmittedAt = Math.max(subData.submittedAt, startTime);
+        const elapsed = clampedSubmittedAt - startTime;
         const timeFraction = Math.max(0, 1 - elapsed / timeLimit);
         scoreToAdd = Math.round(500 + timeFraction * 500);
       }

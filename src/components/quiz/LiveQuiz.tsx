@@ -187,7 +187,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   }, [questions, quiz.current_question_index]);
 
   useEffect(() => {
-    if (!currentQuestion || !quiz.question_start_at) return;
+    if (!currentQuestion) return;
     const start = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
     const limit = currentQuestion.timer * 1000;
     const end = start + limit;
@@ -195,15 +195,25 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000));
       setTimeLeft(remaining);
-      if (remaining === 0) clearInterval(interval);
+      if (remaining <= 0) clearInterval(interval);
     }, 200);
     return () => clearInterval(interval);
   }, [currentQuestion, quiz.current_question_index, quiz.question_start_at]);
 
+  // Reset submission state when question advances
+  const prevQuestionRef = useRef<string | null>(null);
+  useEffect(() => {
+    const qId = currentQuestion?.id ?? null;
+    if (qId && qId !== prevQuestionRef.current) {
+      prevQuestionRef.current = qId;
+      setSelectedAnswer(null);
+      setHasAnswered(false);
+      setShowViolationWarning(false);
+    }
+  }, [currentQuestion?.id]);
+
   useEffect(() => {
     let mounted = true;
-    setSelectedAnswer(null);
-    setHasAnswered(false);
     if (isTeacher || !currentQuestion || !user || !firestore) return;
     const subDocRef = doc(firestore, 'quizzes', quiz.id, 'questions', currentQuestion.id, 'submissions', user.id);
     getDoc(subDocRef).then(snap => {
@@ -262,7 +272,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   }, [quiz.status, isTeacher, onMalpractice]);
 
   const handleAnswerSubmit = async (idx: number) => {
-    if (hasAnswered || submittingRef.current || isTeacher || !currentQuestion || !user || timeLeft === 0 || participant.status === 'blocked') return;
+    if (hasAnswered || submittingRef.current || isTeacher || !currentQuestion || !user || timeLeft === 0 || participant.status === 'blocked' || isAdvancing) return;
     submittingRef.current = true;
     setHasAnswered(true);
     setSelectedAnswer(idx);
