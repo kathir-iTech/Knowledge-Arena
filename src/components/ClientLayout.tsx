@@ -46,11 +46,13 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
 
     if (currentPath === '/') {
       const dashboardMap: Record<string, string> = {
-        executive: '/executive/dashboard',
+        executive: '/executive/analytics',
         commander: '/commander/dashboard',
         gladiator: '/gladiator/dashboard',
       };
-      target = dashboardMap[user.role] || '/gladiator/dashboard';
+      const base = dashboardMap[user.role] || '/gladiator/dashboard';
+      const qs = searchParams.toString();
+      target = qs ? `${base}?${qs}` : base;
     } else {
       const isExecutivePage = currentPath.startsWith('/executive');
       const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/create-quiz');

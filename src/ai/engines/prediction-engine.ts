@@ -19,7 +19,7 @@ export async function getPredictionSummary(uid: string) {
     orderBy: 'created_at', direction: 'desc', limit: 5
   });
 
-  const stats = docs.map(d => ({
+  const stats = docs.map((d: Record<string, unknown>) => ({
     title: String(d.title || ''),
     count: Number(d.question_count || 0)
   }));
