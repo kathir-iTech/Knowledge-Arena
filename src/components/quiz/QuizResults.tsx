@@ -152,7 +152,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
                 <Eye className="mr-2 h-4 w-4" /> Review Answers
               </Button>
             )}
-            <Link href={user?.role === 'teacher' ? '/commander/dashboard' : user ? '/gladiator/dashboard' : '/'}>
+            <Link href={user?.role === 'commander' || user?.role === 'executive' ? `/${user.role}/dashboard` : user ? '/gladiator/dashboard' : '/'}>
               <Button size="lg">
                 <Home className="mr-2 h-4 w-4" />
                 Dashboard

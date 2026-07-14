@@ -55,7 +55,7 @@ export async function verifyFirebaseToken(tokenOrRequest: string | Request): Pro
 
 export async function verifyFirebaseTokenWithRole(
   tokenOrRequest: string | Request,
-  requiredRole: 'teacher' | 'student',
+  requiredRole: 'executive' | 'commander' | 'gladiator',
 ): Promise<AuthResult | null> {
   let idToken: string | null = null;
 

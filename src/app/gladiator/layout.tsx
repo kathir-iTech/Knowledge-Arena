@@ -16,8 +16,8 @@ export default function GladiatorLayout({ children }: { children: React.ReactNod
       router.replace('/');
       return;
     }
-    if (user.role !== 'student') {
-      router.replace('/commander/dashboard');
+    if (user.role !== 'gladiator') {
+      router.replace('/');
       return;
     }
   }, [user, isLoading, router]);
