@@ -29,6 +29,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [teacherOnline, setTeacherOnline] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -94,11 +95,13 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   };
 
   const handleStartQuiz = async () => {
-    if (!isTeacher || !user) return;
+    if (!isTeacher || !user || isStarting) return;
+    setIsStarting(true);
     try {
         await quizService.startQuiz(quiz.id);
     } catch {
         toast({ variant: 'destructive', title: 'Error', description: 'Failed to start quiz.' });
+        setIsStarting(false);
     }
   };
 
@@ -199,10 +202,12 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
             size="lg" 
             className="w-full text-base font-headline font-semibold touch-target" 
             onClick={handleStartQuiz}
-            disabled={studentCount === 0 || areParticipantsLoading}
+            disabled={studentCount === 0 || areParticipantsLoading || isStarting}
           >
-            <ShieldCheck className="mr-2.5 h-5 w-5" />
-             {areParticipantsLoading && studentCount === 0
+            {isStarting ? <Loader2 className="mr-2.5 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2.5 h-5 w-5" />}
+             {isStarting
+              ? 'Starting battle...'
+              : areParticipantsLoading && studentCount === 0
               ? 'Loading participants...'
               : studentCount === 0 
               ? 'Waiting for gladiators to join...'

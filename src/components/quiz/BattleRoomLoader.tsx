@@ -36,9 +36,16 @@ export default function BattleRoomLoader() {
     }
 
     let mounted = true;
+    let initialJoinDone = false;
 
     const quizSub = quizService.subscribeToQuiz(quizId, (q) => {
-      if (mounted) setQuiz(q);
+      if (!mounted) return;
+      setQuiz(q);
+      if (!initialJoinDone && q.status === 'waiting' && user.id !== q.created_by) {
+        initialJoinDone = true;
+        participantService.joinQuiz(quizId, user.id, user.name).catch(() => {});
+      }
+      if (mounted) setIsLoading(false);
     });
     const partSub = participantService.subscribeToParticipants(quizId, (parts) => {
       if (!mounted) return;
@@ -46,33 +53,6 @@ export default function BattleRoomLoader() {
       const self = parts.find(p => p.user_id === user.id);
       if (self) setParticipant(self);
     });
-
-    const init = async () => {
-      try {
-        const q = await quizService.getQuizById(quizId);
-        if (!mounted) return;
-        setQuiz(q);
-
-        // Block joining mid-quiz: only allow joins during waiting phase
-        const initialParts = await participantService.getAllParticipants(quizId);
-        if (!mounted) return;
-        const self = initialParts.find(p => p.user_id === user.id);
-        if (!self && user.id !== q.created_by) {
-          if (q.status === 'waiting') {
-            await participantService.joinQuiz(quizId, user.id, user.name);
-          } else {
-            setError('This battle is already in progress. You cannot join mid-quiz.');
-            return;
-          }
-        }
-      } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : 'Failed to load quiz');
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    };
-
-    init();
 
     return () => {
       mounted = false;
