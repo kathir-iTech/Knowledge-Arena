@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp, cert, applicationDefault } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { firebaseConfig } from '@/firebase/config';
 
@@ -33,9 +34,14 @@ function initAdmin() {
   return initializeApp({ credential: applicationDefault(), projectId: firebaseConfig.projectId });
 }
 
-export function getAdminFirestore() {
+export function getAdminDb() {
   initAdmin();
   return getFirestore();
+}
+
+export function getAdminAuth() {
+  initAdmin();
+  return getAuth();
 }
 
 export async function fetchDocsWithToken(
@@ -43,7 +49,7 @@ export async function fetchDocsWithToken(
   uid: string,
   options?: { orderBy?: string; direction?: 'asc' | 'desc'; limit?: number }
 ): Promise<Record<string, unknown>[]> {
-  let query = getAdminFirestore().collection(collectionPath)
+  let query = getAdminDb().collection(collectionPath)
     .where('created_by', '==', uid);
 
   if (options?.orderBy) {

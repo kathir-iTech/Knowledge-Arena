@@ -28,11 +28,10 @@ const ExecutiveSidebar = () => {
   if (!user) return null;
 
   const nav = [
-    { href: '/executive/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/executive/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/executive/commanders', label: 'Commanders', icon: Shield },
     { href: '/executive/students', label: 'Students', icon: Users },
     { href: '/executive/question-bank', label: 'Question Bank', icon: BookOpen },
-    { href: '/executive/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/executive/requests', label: 'Requests', icon: Inbox },
     { href: '/executive/settings', label: 'Settings', icon: Settings },
   ];

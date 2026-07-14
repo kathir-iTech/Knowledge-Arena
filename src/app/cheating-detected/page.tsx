@@ -19,7 +19,7 @@ export default function CheatingDetectedPage() {
       <p className="text-base text-muted-foreground max-w-sm">
         Please contact your teacher if you believe this is an error.
       </p>
-      <Link href="/" passHref>
+      <Link href="/gladiator/dashboard" passHref>
         <Button variant="outline">
           Return to Dashboard
         </Button>
