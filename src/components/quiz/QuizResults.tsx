@@ -25,11 +25,12 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
 
   useEffect(() => {
     setIsLoading(true);
-    participantService.getAllParticipants(quiz.id)
-      .then(setParticipants)
-      .catch(() => toast({ variant: 'destructive', title: 'Error', description: 'Failed to load results.' }))
-      .finally(() => setIsLoading(false));
-  }, [quiz.id, toast]);
+    const unsub = participantService.subscribeToParticipants(quiz.id, (parts) => {
+      setParticipants(parts);
+      setIsLoading(false);
+    });
+    return () => { unsub(); };
+  }, [quiz.id]);
 
   const uid = currentUserId || user?.id || '';
 

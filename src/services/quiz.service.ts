@@ -12,6 +12,7 @@ import {
   query,
   where,
   onSnapshot,
+  runTransaction,
 } from 'firebase/firestore';
 import type { ValidatedQuiz } from '@/lib/schemas';
 import { generateRoomCode } from '@/lib/utils';
@@ -77,10 +78,16 @@ export const quizService = {
 
   async startQuiz(id: string): Promise<void> {
     const db = getFirestore();
-    await updateDoc(doc(db, 'quizzes', id), {
-      status: 'live',
-      current_question_index: 0,
-      question_start_at: Date.now(),
+    const quizRef = doc(db, 'quizzes', id);
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(quizRef);
+      if (!snap.exists()) throw new Error('Quiz not found');
+      if (snap.data().status !== 'waiting') throw new Error('Quiz is not in waiting state');
+      transaction.update(quizRef, {
+        status: 'live',
+        current_question_index: 0,
+        question_start_at: Date.now(),
+      });
     });
   },
 
@@ -170,11 +177,13 @@ export const quizService = {
     }
   },
 
-  subscribeToQuiz(id: string, callback: (quiz: ValidatedQuiz) => void) {
+  subscribeToQuiz(id: string, callback: (quiz: ValidatedQuiz | null) => void) {
     const db = getFirestore();
     return onSnapshot(doc(db, 'quizzes', id), (snap) => {
       if (snap.exists()) {
         callback({ id: snap.id, ...snap.data() } as ValidatedQuiz);
+      } else {
+        callback(null);
       }
     });
   },

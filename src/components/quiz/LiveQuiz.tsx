@@ -127,7 +127,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const lastViolationRef = useRef(0);
   const prevViolationsRef = useRef<Record<string, number>>({});
   const advancingRef = useRef(false);
-  const submittingRef = useRef(false);
+  const confirmedQuestionIds = useRef(new Set<string>());
   const { firestore } = useFirebase();
 
   useEffect(() => {
@@ -190,42 +190,43 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     if (!currentQuestion) return;
     const start = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
     const limit = currentQuestion.timer * 1000;
+    const totalSec = currentQuestion.timer;
     const end = start + limit;
 
     const interval = setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000));
-      setTimeLeft(remaining);
-      if (remaining <= 0) clearInterval(interval);
+      const elapsed = Math.max(0, Date.now() - start);
+      const remaining = Math.max(0, Math.ceil((limit - elapsed) / 1000));
+      const clamped = Math.min(remaining, totalSec);
+      setTimeLeft(clamped);
+      if (clamped <= 0) clearInterval(interval);
     }, 200);
     return () => clearInterval(interval);
-  }, [currentQuestion, quiz.current_question_index, quiz.question_start_at]);
+  }, [quiz.current_question_index, quiz.question_start_at, currentQuestion?.timer]);
 
-  // Reset submission state when question advances
-  const prevQuestionRef = useRef<string | null>(null);
+  const prevQuestionIdxRef = useRef<number | null>(null);
   useEffect(() => {
-    const qId = currentQuestion?.id ?? null;
-    if (qId && qId !== prevQuestionRef.current) {
-      prevQuestionRef.current = qId;
+    const idx = quiz.current_question_index ?? -1;
+    if (idx >= 0 && idx !== prevQuestionIdxRef.current) {
+      prevQuestionIdxRef.current = idx;
       setSelectedAnswer(null);
       setHasAnswered(false);
       setShowViolationWarning(false);
     }
-  }, [currentQuestion?.id]);
+  }, [quiz.current_question_index]);
 
   useEffect(() => {
-    let mounted = true;
     if (isTeacher || !currentQuestion || !user || !firestore) return;
     const subDocRef = doc(firestore, 'quizzes', quiz.id, 'questions', currentQuestion.id, 'submissions', user.id);
-    getDoc(subDocRef).then(snap => {
-      if (!mounted) return;
+    const unsub = onSnapshot(subDocRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data() as { selected_option: number };
         setSelectedAnswer(data.selected_option);
         setHasAnswered(true);
+        confirmedQuestionIds.current.add(currentQuestion.id);
       }
-    }).catch(() => {});
-    return () => { mounted = false; };
-  }, [quiz.current_question_index, isTeacher, currentQuestion?.id, user?.id, firestore, quiz.id]);
+    });
+    return () => { unsub(); };
+  }, [quiz.current_question_index, isTeacher, user?.id, firestore, quiz.id]);
 
   useEffect(() => {
     if (!isTeacher || !firestore) return;
@@ -272,26 +273,27 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   }, [quiz.status, isTeacher, onMalpractice]);
 
   const handleAnswerSubmit = async (idx: number) => {
-    if (hasAnswered || submittingRef.current || isTeacher || !currentQuestion || !user || timeLeft === 0 || participant.status === 'blocked' || isAdvancing) return;
-    submittingRef.current = true;
+    const qId = currentQuestion?.id;
+    if (!qId || hasAnswered || isTeacher || !user || timeLeft === 0 || participant.status === 'blocked' || isAdvancing) return;
+    if (confirmedQuestionIds.current.has(qId)) return;
     setHasAnswered(true);
     setSelectedAnswer(idx);
     try {
       await submissionService.submitAnswer({
         quiz_id: quiz.id,
-        question_id: currentQuestion.id,
+        question_id: qId,
         user_id: user.id,
         selected_option: idx
       });
+      confirmedQuestionIds.current.add(qId);
     } catch (e) {
       if (e instanceof Error && e.message.includes('permission')) {
-        setSelectedAnswer(idx);
-        setHasAnswered(true);
+        confirmedQuestionIds.current.add(qId);
       } else {
         setHasAnswered(false);
         toast({ variant: 'destructive', title: 'Error', description: 'Failed to submit answer. Please try again.' });
       }
-    } finally { submittingRef.current = false; }
+    }
   };
 
   const handleNext = async () => {
