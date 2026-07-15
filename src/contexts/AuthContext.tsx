@@ -47,42 +47,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
   }, []);
 
+  const normalizeRole = useCallback((raw: string | undefined): 'executive' | 'commander' | 'gladiator' => {
+    if (raw === 'teacher') return 'commander';
+    if (raw === 'student') return 'gladiator';
+    if (raw === 'executive' || raw === 'commander' || raw === 'gladiator') return raw;
+    return 'gladiator';
+  }, []);
+
+  const ensureGladiatorProfile = useCallback(async (uid: string, defaults?: { name?: string; email?: string }): Promise<User | null> => {
+    if (!firestore || !auth) return null;
+    const userRef = doc(firestore, 'users', uid);
+    try {
+      const existing = await getDoc(userRef);
+      if (existing.exists()) {
+        const data = existing.data() as Record<string, unknown>;
+        const normalized: User = {
+          id: existing.id,
+          name: (data.name as string) || 'Gladiator',
+          email: (data.email as string) || '',
+          avatar: (data.avatar as string) || getRandomAvatar(),
+          role: normalizeRole(data.role as string | undefined),
+        };
+        return normalized;
+      }
+      const newUser: User = {
+        id: uid,
+        name: defaults?.name || auth.currentUser?.displayName || 'Gladiator',
+        email: defaults?.email || auth.currentUser?.email || '',
+        avatar: getRandomAvatar(),
+        role: 'gladiator',
+      };
+      await setDoc(userRef, {
+        name: newUser.name,
+        email: newUser.email,
+        avatar: newUser.avatar,
+        role: 'gladiator',
+      });
+      return newUser;
+    } catch {
+      return null;
+    }
+  }, [firestore, auth, getRandomAvatar, normalizeRole]);
+
   const fetchUserDocument = useCallback(async (uid: string) => {
     if (!firestore) return;
     if (lastFetchedUid.current === uid && user) return;
     lastFetchedUid.current = uid;
     try {
-        const userRef = doc(firestore, 'users', uid);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-            setUser({ id: userDoc.id, ...userDoc.data() } as User);
-        } else {
-            const recovered: User = {
-              id: uid,
-              name: auth?.currentUser?.displayName || 'Gladiator',
-              email: auth?.currentUser?.email || '',
-              avatar: getRandomAvatar(),
-              role: 'gladiator',
-            };
-            try {
-              await setDoc(userRef, {
-                name: recovered.name,
-                email: recovered.email,
-                avatar: recovered.avatar,
-                role: 'gladiator',
-              });
-              setUser(recovered);
-            } catch {
-              setUser(null);
-            }
-        }
+        const profile = await ensureGladiatorProfile(uid);
+        setUser(profile);
     } catch (err) {
         console.error('AuthContext: fetchUserDocument error', err);
         setUser(null);
     } finally {
         setIsLoading(false);
     }
-  }, [firestore, user, auth, getRandomAvatar]);
+  }, [firestore, user, ensureGladiatorProfile]);
 
   useEffect(() => {
     if (isUserLoading) {
@@ -161,34 +181,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const role = 'gladiator';
-
     try {
       setIsLoading(true);
       signupInProgress.current = true;
       const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, credentials.password);
-      signupUserId.current = userCredential.user.uid;
+      const uid = userCredential.user.uid;
+      signupUserId.current = uid;
 
-      const newUser: Omit<User, 'id'> = {
+      const profile = await ensureGladiatorProfile(uid, {
         name: credentials.name,
         email: credentials.email,
-        avatar: getRandomAvatar(),
-        role,
-      };
-
-      const userRef = doc(firestore, "users", userCredential.user.uid);
-
-      await setDoc(userRef, newUser).catch(error => {
-        const permissionError = new FirestorePermissionError({
-          path: userRef.path,
-          operation: 'create',
-          requestResourceData: newUser,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw error;
       });
 
-      setUser({ ...newUser, id: userCredential.user.uid });
+      if (profile) {
+        setUser(profile);
+      } else {
+        throw Object.assign(new Error('Failed to create profile'), { code: 'unavailable' });
+      }
       signupInProgress.current = false;
       signupUserId.current = null;
 
@@ -222,12 +231,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
          case 'auth/wrong-password':
            description = 'Incorrect password.';
            break;
+         case 'permission-denied':
+           description = 'Account creation is currently unavailable. Please try again.';
+           break;
+         case 'unavailable':
+           description = 'Account creation is currently unavailable. Please try again.';
+           break;
+         case 'failed-precondition':
+           description = 'Account creation is currently unavailable. Please try again.';
+           break;
          default:
-           if (err.code === 'permission-denied' || err.code === 'unavailable' || err.code === 'failed-precondition') {
-             description = 'Account creation is currently unavailable. Please try again.';
-           } else {
-             description = 'An unexpected error occurred. Please try again.';
-           }
+           description = 'An unexpected error occurred. Please try again.';
        }
        toast({ variant: "destructive", title: "Signup Failed", description });
        throw error;
