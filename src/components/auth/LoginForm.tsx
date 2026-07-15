@@ -74,7 +74,7 @@ export function LoginForm() {
         <TabsContent value="login">
           <Form {...loginForm}>
             <form onSubmit={loginForm.handleSubmit(onLoginSubmit)}>
-              <CardContent className="space-y-5 pt-6">
+              <CardContent className="space-y-4 sm:space-y-5 pt-6 px-4 sm:px-6">
                 <FormField
                   control={loginForm.control}
                   name="email"
@@ -102,7 +102,7 @@ export function LoginForm() {
                   )}
                 />
               </CardContent>
-              <CardFooter className="flex flex-col gap-3 pt-1 pb-6">
+              <CardFooter className="flex flex-col gap-3 pt-1 pb-6 px-4 sm:px-6">
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Sign In
@@ -110,7 +110,7 @@ export function LoginForm() {
               </CardFooter>
             </form>
           </Form>
-          <div className="px-6 pb-6">
+          <div className="px-4 sm:px-6 pb-6">
             <div className="relative mb-4">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-border" />
@@ -133,7 +133,7 @@ export function LoginForm() {
         <TabsContent value="signup">
           <Form {...signupForm}>
             <form onSubmit={signupForm.handleSubmit(onSignupSubmit)}>
-              <CardContent className="space-y-5 pt-6">
+              <CardContent className="space-y-4 sm:space-y-5 pt-6 px-4 sm:px-6">
                 <p className="text-sm text-muted-foreground text-center">Sign up as a Gladiator to join battles and compete in the arena.</p>
                 <FormField
                   control={signupForm.control}
@@ -188,7 +188,7 @@ export function LoginForm() {
                   )}
                 />
               </CardContent>
-              <CardFooter className="flex flex-col gap-3 pt-1 pb-6">
+              <CardFooter className="flex flex-col gap-3 pt-1 pb-6 px-4 sm:px-6">
                 <Button type="submit" className="w-full" disabled={isLoading}>
                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create Account
@@ -196,7 +196,7 @@ export function LoginForm() {
               </CardFooter>
             </form>
           </Form>
-          <div className="px-6 pb-6">
+          <div className="px-4 sm:px-6 pb-6">
             <div className="relative mb-4">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-border" />

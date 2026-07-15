@@ -47,3 +47,7 @@ firestore-debug.log
 # audit reports
 result.html
 results.txt
+
+# Firebase service account credentials — NEVER COMMIT
+service-account.json
+*-firebase-adminsdk-*.json

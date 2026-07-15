@@ -10,6 +10,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
 } from 'firebase/auth';
@@ -233,12 +234,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  useEffect(() => {
+    if (!auth) return;
+    getRedirectResult(auth).catch((error: unknown) => {
+      const mapped = mapFirebaseAuthError(error, 'google');
+      if (!mapped.isSilent) {
+        toast({ variant: "destructive", title: mapped.title, description: mapped.message });
+      }
+    });
+  }, [auth, toast]);
+
   const signInWithGoogle = useCallback(async () => {
     if (!auth) throw new Error("Auth service not available");
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      await signInWithPopup(auth, provider);
+      await signInWithRedirect(auth, provider);
     } catch (error: unknown) {
       const mapped = mapFirebaseAuthError(error, 'google');
       if (!mapped.isSilent) {

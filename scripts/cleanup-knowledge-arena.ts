@@ -1,4 +1,4 @@
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { initializeApp, getApps, cert, type ServiceAccount } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { readFileSync, existsSync } from 'fs';
@@ -55,7 +55,7 @@ function initAdmin(): void {
   parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
 
   try {
-    initializeApp({ credential: cert(parsed as { projectId?: string; clientEmail?: string; privateKey?: string }) });
+    initializeApp({ credential: cert(parsed as ServiceAccount) });
   } catch (e) {
     console.error('\nFATAL: Admin SDK initialization failed:', (e as Error).message, '\n');
     process.exit(1);
@@ -65,8 +65,10 @@ function initAdmin(): void {
   auth = getAuth();
 }
 
-async function getAllAuthUsers(): Promise<admin.auth.UserRecord[]> {
-  const users: admin.auth.UserRecord[] = [];
+import type { UserRecord } from 'firebase-admin/auth';
+
+async function getAllAuthUsers(): Promise<UserRecord[]> {
+  const users: UserRecord[] = [];
   let nextPageToken: string | undefined;
   do {
     const result = await auth.listUsers(AUTH_DELETE_CHUNK, nextPageToken);
