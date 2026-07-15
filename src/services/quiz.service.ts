@@ -214,8 +214,9 @@ export const quizService = {
 
     // Generate new room code with collision check
     let newId = generateRoomCode();
-    const existing = await getDoc(doc(db, 'quizzes', newId));
-    if (existing.exists()) {
+    for (let attempts = 0; attempts < 5; attempts++) {
+      const existing = await getDoc(doc(db, 'quizzes', newId));
+      if (!existing.exists()) break;
       newId = generateRoomCode();
     }
 

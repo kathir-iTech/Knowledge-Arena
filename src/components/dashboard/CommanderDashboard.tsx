@@ -7,7 +7,6 @@ import { LoadingScreen } from '@/components/LoadingScreen';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { questionService } from '@/services/game.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -49,9 +48,10 @@ function exportQuizCSV(quiz: ValidatedQuiz, participants: ValidatedParticipant[]
   URL.revokeObjectURL(url);
 }
 
-const QuizCard = ({ quiz, onUpdate, questionCount }: { quiz: ValidatedQuiz; onUpdate: () => void; questionCount: number }) => {
+const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => void }) => {
     const { toast } = useToast();
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isExporting, setIsExporting] = useState<'csv' | 'pdf' | null>(null);
     const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -61,6 +61,7 @@ const QuizCard = ({ quiz, onUpdate, questionCount }: { quiz: ValidatedQuiz; onUp
     }, [quiz.id]);
 
     const handleDelete = async () => {
+        if (isProcessing) return;
         setIsProcessing(true);
         try {
             await quizService.deleteQuiz(quiz.id);
@@ -75,6 +76,7 @@ const QuizCard = ({ quiz, onUpdate, questionCount }: { quiz: ValidatedQuiz; onUp
     };
 
     const handleDuplicate = async () => {
+      if (isProcessing) return;
       setIsProcessing(true);
       try {
         const newId = await quizService.duplicateQuiz(quiz.id, quiz.created_by);
@@ -88,21 +90,38 @@ const QuizCard = ({ quiz, onUpdate, questionCount }: { quiz: ValidatedQuiz; onUp
     };
 
     const handleExportCSV = () => {
-      exportQuizCSV(quiz, participants);
+      if (isExporting) return;
+      setIsExporting('csv');
+      try {
+        exportQuizCSV(quiz, participants);
+        toast({ title: 'CSV Exported', description: `Results for ${quiz.title} downloaded.` });
+      } catch {
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to export CSV.' });
+      } finally {
+        setIsExporting(null);
+      }
     };
 
     const escHtml = (v: string | number): string => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const handleExportPDF = () => {
-      const students = participants.filter(p => p.user_id !== quiz.created_by);
-      const sorted = [...students].sort((a, b) => b.score - a.score);
-      const rows = sorted.map((p, i) => `<tr><td>${i + 1}</td><td>${escHtml(p.name || p.user_id.slice(0, 8))}</td><td>${p.score}</td><td>${escHtml(p.status)}</td></tr>`).join('');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Arena Results - ${escHtml(quiz.title)}</title><style>body{font-family:system-ui,sans-serif;padding:40px;max-width:800px;margin:auto}h1{font-size:24px;margin-bottom:4px}.sub{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}.rank{font-weight:bold;font-size:18px;color:#333}</style></head><body><h1>${escHtml(quiz.title)}</h1><p class="sub">Room: ${escHtml(quiz.id)} &mdash; ${sorted.length} gladiator(s)</p><table><thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
-      const win = window.open('', '_blank');
-      if (win) {
-        win.document.write(html);
-        win.document.close();
-        win.focus();
-        setTimeout(() => win.print(), 500);
+      if (isExporting) return;
+      setIsExporting('pdf');
+      try {
+        const students = participants.filter(p => p.user_id !== quiz.created_by);
+        const sorted = [...students].sort((a, b) => b.score - a.score);
+        const rows = sorted.map((p, i) => `<tr><td>${i + 1}</td><td>${escHtml(p.name || p.user_id.slice(0, 8))}</td><td>${p.score}</td><td>${escHtml(p.status)}</td></tr>`).join('');
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Arena Results - ${escHtml(quiz.title)}</title><style>body{font-family:system-ui,sans-serif;padding:40px;max-width:800px;margin:auto}h1{font-size:24px;margin-bottom:4px}.sub{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}.rank{font-weight:bold;font-size:18px;color:#333}</style></head><body><h1>${escHtml(quiz.title)}</h1><p class="sub">Room: ${escHtml(quiz.id)} &mdash; ${sorted.length} gladiator(s)</p><table><thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(html);
+          win.document.close();
+          win.focus();
+          setTimeout(() => win.print(), 500);
+        }
+      } catch {
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to export PDF.' });
+      } finally {
+        setIsExporting(null);
       }
     };
 
@@ -142,7 +161,7 @@ const QuizCard = ({ quiz, onUpdate, questionCount }: { quiz: ValidatedQuiz; onUp
                       <span className="font-mono text-xs bg-muted/50 px-2.5 py-1 rounded-[6px] tracking-wider">{quiz.id}</span>
                       <span className="flex items-center gap-1.5">
                         <HelpCircle className="w-3.5 h-3.5" />
-                        {questionCount} question{questionCount !== 1 ? 's' : ''}
+                        {quiz.question_count ?? 0} question{(quiz.question_count ?? 0) !== 1 ? 's' : ''}
                       </span>
                       <span className="flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5" />
@@ -183,21 +202,27 @@ const QuizCard = ({ quiz, onUpdate, questionCount }: { quiz: ValidatedQuiz; onUp
                             </Link>
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(quiz.id); toast({ title: 'Copied', description: `Room code ${quiz.id} copied.` }); }}>
+                          <Copy className="w-4 h-4 mr-2" /> Copy Room Code
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={handleDuplicate} disabled={isProcessing}>
-                          <Copy className="w-4 h-4 mr-2" /> Duplicate
+                          {isProcessing ? <span className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Copy className="w-4 h-4 mr-2" />}
+                           Duplicate
                         </DropdownMenuItem>
                         {quiz.status === 'finished' && !quiz.archived && (
                           <>
-                            <DropdownMenuItem onClick={handleExportCSV}>
-                              <Download className="w-4 h-4 mr-2" /> Export CSV
+                            <DropdownMenuItem onClick={handleExportCSV} disabled={!!isExporting}>
+                              {isExporting === 'csv' ? <span className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Download className="w-4 h-4 mr-2" />}
+                              Export CSV
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleExportPDF}>
-                              <FileText className="w-4 h-4 mr-2" /> Export PDF
+                            <DropdownMenuItem onClick={handleExportPDF} disabled={!!isExporting}>
+                              {isExporting === 'pdf' ? <span className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <FileText className="w-4 h-4 mr-2" />}
+                              Export PDF
                             </DropdownMenuItem>
                           </>
                         )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowDeleteDialog(true); }} className="text-destructive focus:text-destructive">
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowDeleteDialog(true); }} className="text-destructive focus:text-destructive" disabled={isProcessing}>
                           <Trash2 className="w-4 h-4 mr-2" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -207,17 +232,23 @@ const QuizCard = ({ quiz, onUpdate, questionCount }: { quiz: ValidatedQuiz; onUp
               </div>
             </div>
 
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialog open={showDeleteDialog} onOpenChange={(open) => { if (!isProcessing) setShowDeleteDialog(open); }}>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Arena?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action is permanent. The arena and all gladiator history will be destroyed forever.
+                  <AlertDialogDescription className="space-y-2">
+                    <p>You are about to delete <strong className="text-foreground">{quiz.title}</strong>.</p>
+                    {participantCount > 0 && (
+                      <p className="text-destructive font-medium">{participantCount} gladiator{participantCount !== 1 ? 's' : ''} have joined this arena. All participant data will be lost.</p>
+                    )}
+                    <p>This action is permanent and cannot be undone.</p>
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Destroy Forever</AlertDialogAction>
+                  <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} disabled={isProcessing} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                    {isProcessing ? 'Deleting...' : 'Destroy Forever'}
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -228,26 +259,22 @@ const QuizCard = ({ quiz, onUpdate, questionCount }: { quiz: ValidatedQuiz; onUp
 export default function CommanderDashboard() {
   const { user } = useAuth();
   const [quizzes, setQuizzes] = useState<ValidatedQuiz[]>([]);
-  const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [filterKey, setFilterKey] = useState<FilterKey>('all');
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const fetchQuizzes = useCallback(() => {
     if (!user) return;
+    setLoading(true);
     quizService.getQuizzesByCreator(user.id)
-      .then(async (qs) => {
-        setQuizzes(qs);
-        const counts: Record<string, number> = {};
-        await Promise.all(qs.map(async (q) => {
-          try {
-            const qsList = await questionService.getQuestionsByQuizId(q.id);
-            counts[q.id] = qsList.length;
-          } catch { counts[q.id] = 0; }
-        }));
-        setQuestionCounts(counts);
-      })
+      .then(setQuizzes)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [user]);
@@ -269,8 +296,8 @@ export default function CommanderDashboard() {
       result = result.filter(q => !q.archived);
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
+    if (debouncedQuery.trim()) {
+      const q = debouncedQuery.trim().toLowerCase();
       result = result.filter(quiz =>
         quiz.title.toLowerCase().includes(q) || quiz.id.toLowerCase().includes(q)
       );
@@ -282,7 +309,7 @@ export default function CommanderDashboard() {
     else if (sortKey === 'status') result.sort((a, b) => a.status.localeCompare(b.status));
 
     return result;
-  }, [quizzes, searchQuery, sortKey, filterKey]);
+  }, [quizzes, debouncedQuery, sortKey, filterKey]);
 
   if (loading) return <LoadingScreen message="Loading arenas..." />;
 
@@ -338,6 +365,7 @@ export default function CommanderDashboard() {
             { key: 'active', label: 'Running' },
             { key: 'completed', label: 'Completed' },
             { key: 'draft', label: 'Draft' },
+            { key: 'archived', label: 'Archived' },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -357,16 +385,27 @@ export default function CommanderDashboard() {
       <div className="space-y-4">
         {filteredAndSorted.map((q, i) => (
           <div key={q.id} className="animate-in" style={{ animationDelay: `${i * 50}ms` }}>
-            <QuizCard quiz={q} onUpdate={fetchQuizzes} questionCount={questionCounts[q.id] ?? 0} />
+            <QuizCard quiz={q} onUpdate={fetchQuizzes} />
           </div>
         ))}
         {filteredAndSorted.length === 0 && (
             <div className="py-16 text-center border-2 border-dashed border-border/50 rounded-[18px]">
               <Swords className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
               <p className="text-base text-muted-foreground mb-4">
-                {searchQuery ? 'No arenas match your search.' : 'No arenas have been created yet.'}
+                {debouncedQuery
+                  ? 'No arenas match your search.'
+                  : filterKey === 'active'
+                    ? 'No arenas are currently running.'
+                    : filterKey === 'completed'
+                      ? 'No completed arenas yet.'
+                      : filterKey === 'draft'
+                        ? 'No draft arenas yet.'
+                        : filterKey === 'archived'
+                          ? 'No archived arenas.'
+                          : 'No arenas have been created yet.'
+                }
               </p>
-              {!searchQuery && (
+              {!debouncedQuery && filterKey === 'all' && (
                 <Button asChild><Link href="/create-quiz"><PlusCircle className="mr-2 h-4 w-4" />Create Your First Arena</Link></Button>
               )}
             </div>
