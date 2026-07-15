@@ -114,7 +114,7 @@ export default function StudentManagementPage() {
         <p className="text-base text-muted-foreground">Manage gladiator accounts and view activity stats.</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card>
           <CardContent className="py-4 text-center">
             <p className="text-2xl font-bold">{summary.total}</p>

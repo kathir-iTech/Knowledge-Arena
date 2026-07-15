@@ -291,7 +291,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
             ))}
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] w-full max-w-4xl mx-auto flex flex-col md:flex-row gap-4 z-50 md:bottom-6 md:left-1/2 md:-translate-x-1/2 md:p-0 md:pb-0">
+        <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] w-full max-w-4xl mx-auto flex flex-col md:flex-row gap-4 z-50 bg-background/80 backdrop-blur-xl border-t border-border/20 md:bg-transparent md:backdrop-blur-none md:border-t-0 md:bottom-6 md:left-1/2 md:-translate-x-1/2 md:p-0 md:pb-0">
             <Button 
                 type="button" 
                 variant="secondary" 
