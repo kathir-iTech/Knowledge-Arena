@@ -24,6 +24,11 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    if (currentPath.startsWith('/battle')) {
+      redirecting.current = null;
+      return;
+    }
+
     if (!user) {
       if (currentPath !== '/') {
         router.replace('/');
