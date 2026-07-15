@@ -84,10 +84,17 @@ export function mapFirebaseAuthError(
         isSilent: false,
       };
 
+    case 'auth/unauthorized-domain':
+      return {
+        title: 'Google Sign-In Failed',
+        message: 'Google Sign-In is not configured for this website. Please contact support.',
+        isSilent: false,
+      };
+
     case 'auth/operation-not-allowed':
       return {
-        title: baseTitle,
-        message: 'Account creation is currently unavailable.',
+        title: context === 'google' ? 'Google Sign-In Failed' : baseTitle,
+        message: context === 'google' ? 'Google Sign-In is currently unavailable.' : 'Account creation is currently unavailable.',
         isSilent: false,
       };
 
