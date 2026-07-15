@@ -1,5 +1,7 @@
 import type {NextConfig} from 'next';
 
+const FIREBASE_AUTH_BACKEND = 'studio-4092189688-c74a7.firebaseapp.com';
+
 const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: __dirname,
@@ -35,6 +37,14 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/__/:path*',
+        destination: `https://${FIREBASE_AUTH_BACKEND}/__/:path*`,
+      },
+    ];
   },
 };
 
