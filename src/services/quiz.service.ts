@@ -203,8 +203,12 @@ export const quizService = {
     const answerKeys: Record<string, { correct_option_index: number }> = {};
     answerKeysSnap.docs.forEach(d => { answerKeys[d.id] = d.data() as { correct_option_index: number }; });
 
-    // Generate new room code
-    const newId = generateRoomCode();
+    // Generate new room code with collision check
+    let newId = generateRoomCode();
+    const existing = await getDoc(doc(db, 'quizzes', newId));
+    if (existing.exists()) {
+      newId = generateRoomCode();
+    }
 
     // Create new quiz
     const quizData = quizSnap.data();

@@ -99,6 +99,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     setIsStarting(true);
     try {
         await quizService.startQuiz(quiz.id);
+        setIsStarting(false);
     } catch {
         toast({ variant: 'destructive', title: 'Error', description: 'Failed to start quiz.' });
         setIsStarting(false);

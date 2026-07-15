@@ -83,39 +83,67 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const enriched = await Promise.all(users.map(async (u) => {
-      if (role === 'commander') {
-        const qSnap = await getAdminDb()
-          .collection('quizzes')
-          .where('created_by', '==', u.uid)
-          .get();
-        const arenaCount = qSnap.docs.length;
-        let lastActive: number | null = null;
-        for (const qDoc of qSnap.docs) {
-          const qData = qDoc.data();
-          if (qData.created_at && (!lastActive || qData.created_at > lastActive)) {
-            lastActive = qData.created_at;
-          }
+    const enriched = users.map(u => ({ ...u }));
+
+    if (role === 'commander' && users.length > 0) {
+      const uids = users.map(u => u.uid);
+      const quizzesSnap = await getAdminDb()
+        .collection('quizzes')
+        .where('created_by', 'in', uids.slice(0, 30))
+        .get();
+
+      const arenaCounts: Record<string, number> = {};
+      const lastActiveMap: Record<string, number | null> = {};
+      for (const qDoc of quizzesSnap.docs) {
+        const qData = qDoc.data();
+        const creator = qData.created_by;
+        arenaCounts[creator] = (arenaCounts[creator] || 0) + 1;
+        if (qData.created_at && (!lastActiveMap[creator] || qData.created_at > lastActiveMap[creator]!)) {
+          lastActiveMap[creator] = qData.created_at;
         }
-        return { ...u, arenaCount, lastActive };
       }
-      if (role === 'gladiator') {
-        const userDoc = await getAdminDb().collection('users').doc(u.uid).get();
-        const userData = userDoc.data() || {};
-        const lastActive = userData.lastActive || null;
 
-        const partSnap = await getAdminDb()
-          .collectionGroup('participants')
-          .where('user_id', '==', u.uid)
-          .get();
-        const totalBattles = partSnap.docs.length;
-        const scores = partSnap.docs.map(d => (d.data().score || 0));
-        const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-
-        return { ...u, totalBattles, avgScore, lastActive };
+      for (const u of enriched) {
+        (u as any).arenaCount = arenaCounts[u.uid] || 0;
+        (u as any).lastActive = lastActiveMap[u.uid] || null;
       }
-      return u;
-    }));
+    }
+
+    if (role === 'gladiator' && users.length > 0) {
+      const uids = users.map(u => u.uid);
+      const partSnapshot = await getAdminDb()
+        .collectionGroup('participants')
+        .where('user_id', 'in', uids.slice(0, 30))
+        .get();
+
+      const battleCounts: Record<string, number> = {};
+      const scoreSums: Record<string, number> = {};
+      const userDataMap: Record<string, any> = {};
+
+      const userDocs = await Promise.all(
+        uids.slice(0, 30).map(uid =>
+          getAdminDb().collection('users').doc(uid).get().then(d => ({ uid, data: d.data() }))
+        )
+      );
+      for (const { uid, data } of userDocs) {
+        userDataMap[uid] = data || {};
+      }
+
+      for (const pDoc of partSnapshot.docs) {
+        const pData = pDoc.data();
+        const userId = pData.user_id;
+        battleCounts[userId] = (battleCounts[userId] || 0) + 1;
+        scoreSums[userId] = (scoreSums[userId] || 0) + (pData.score || 0);
+      }
+
+      for (const u of enriched) {
+        (u as any).totalBattles = battleCounts[u.uid] || 0;
+        const totalScore = scoreSums[u.uid] || 0;
+        const totalCount = battleCounts[u.uid] || 0;
+        (u as any).avgScore = totalCount > 0 ? Math.round(totalScore / totalCount) : 0;
+        (u as any).lastActive = userDataMap[u.uid]?.lastActive || null;
+      }
+    }
 
     return NextResponse.json({ users: enriched });
   } catch (err: any) {

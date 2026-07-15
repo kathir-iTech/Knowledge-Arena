@@ -58,7 +58,7 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/create-quiz');
       const isGladiatorPage = currentPath.startsWith('/gladiator');
 
-      if (user.role === 'executive' && (isCommanderPage || isGladiatorPage)) target = '/executive/dashboard';
+      if (user.role === 'executive' && (isCommanderPage || isGladiatorPage)) target = '/executive/analytics';
       else if (user.role === 'commander' && (isExecutivePage || isGladiatorPage)) target = '/commander/dashboard';
       else if (user.role === 'gladiator' && (isExecutivePage || isCommanderPage)) target = '/gladiator/dashboard';
     }

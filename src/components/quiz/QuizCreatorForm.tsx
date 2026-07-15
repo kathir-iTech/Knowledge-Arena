@@ -98,7 +98,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
         let existing: ValidatedQuiz | null = null;
         try {
             existing = await quizService.getQuizById(quizId);
-        } catch (e) {
+        } catch {
             // NotFound is expected
         }
 
@@ -107,7 +107,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
             quizId = generateRoomCode();
             try {
                 existing = await quizService.getQuizById(quizId);
-            } catch (e) {
+            } catch {
                 existing = null;
             }
             attempts++;

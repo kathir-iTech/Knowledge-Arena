@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
         setIsLoading(false);
     }
-  }, [firestore, auth, toast]);
+  }, [firestore, user]);
 
   useEffect(() => {
     if (isUserLoading) {
