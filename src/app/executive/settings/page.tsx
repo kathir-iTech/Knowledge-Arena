@@ -137,12 +137,12 @@ export default function ExecutiveSettingsPage() {
 
   return (
     <div className="page-container animate-in space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="space-y-1.5">
           <h1 className="text-page-title font-headline tracking-tight">Settings</h1>
           <p className="text-base text-muted-foreground">Platform configuration and preferences.</p>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto">
           <Save className="w-4 h-4 mr-2" />
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
@@ -185,7 +185,7 @@ export default function ExecutiveSettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="questionTimer">Question Timer (seconds)</Label>
               <Input

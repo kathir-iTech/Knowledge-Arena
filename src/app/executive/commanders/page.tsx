@@ -137,12 +137,12 @@ export default function CommanderManagementPage() {
 
   return (
     <div className="page-container animate-in">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
         <div className="space-y-1.5">
           <h1 className="text-page-title font-headline tracking-tight">Commanders</h1>
           <p className="text-base text-muted-foreground">Manage platform commanders and their permissions.</p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
+        <Button onClick={() => setShowCreateDialog(true)} className="w-full sm:w-auto">
           <Plus className="w-4 h-4 mr-2" />
           Add Commander
         </Button>

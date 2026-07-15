@@ -45,7 +45,7 @@ export default function GladiatorHistoryPage() {
         </div>
       ) : (
         <div className="-mx-4 md:mx-0 overflow-x-auto rounded-none md:rounded-[14px] border-x-0 md:border border-border/50 mobile-hide-overflow">
-          <table className="w-full text-sm min-w-[500px] md:min-w-0">
+          <table className="w-full text-sm min-w-[360px] md:min-w-0">
             <thead className="sticky top-0 z-10">
               <tr className="bg-muted/30 border-b border-border/50">
                 <th scope="col" className="text-left p-3 font-medium text-muted-foreground text-xs">#</th>
