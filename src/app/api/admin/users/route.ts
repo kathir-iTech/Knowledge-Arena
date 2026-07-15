@@ -83,7 +83,41 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ users });
+    const enriched = await Promise.all(users.map(async (u) => {
+      if (role === 'commander') {
+        const qSnap = await getAdminDb()
+          .collection('quizzes')
+          .where('created_by', '==', u.uid)
+          .get();
+        const arenaCount = qSnap.docs.length;
+        let lastActive: number | null = null;
+        for (const qDoc of qSnap.docs) {
+          const qData = qDoc.data();
+          if (qData.created_at && (!lastActive || qData.created_at > lastActive)) {
+            lastActive = qData.created_at;
+          }
+        }
+        return { ...u, arenaCount, lastActive };
+      }
+      if (role === 'gladiator') {
+        const userDoc = await getAdminDb().collection('users').doc(u.uid).get();
+        const userData = userDoc.data() || {};
+        const lastActive = userData.lastActive || null;
+
+        const partSnap = await getAdminDb()
+          .collectionGroup('participants')
+          .where('user_id', '==', u.uid)
+          .get();
+        const totalBattles = partSnap.docs.length;
+        const scores = partSnap.docs.map(d => (d.data().score || 0));
+        const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
+        return { ...u, totalBattles, avgScore, lastActive };
+      }
+      return u;
+    }));
+
+    return NextResponse.json({ users: enriched });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Failed to list users' }, { status: 500 });
   }

@@ -4,7 +4,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Inbox, Check, X, MessageSquare, Search } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Inbox, Plus, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -16,9 +18,16 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface RequestItem {
   id: string;
@@ -26,11 +35,8 @@ interface RequestItem {
   type: string;
   description: string;
   status: 'pending' | 'approved' | 'rejected' | 'completed';
-  commanderId: string;
-  commanderEmail: string;
   createdAt: number;
   handledAt: number | null;
-  handledBy: string | null;
   executiveComment: string | null;
 }
 
@@ -48,24 +54,25 @@ const typeLabels: Record<string, string> = {
   other: 'Other',
 };
 
-export default function ExecutiveRequestsPage() {
+export default function CommanderRequestsPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const { toast } = useToast();
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<RequestItem | null>(null);
-  const [comment, setComment] = useState('');
-  const [processing, setProcessing] = useState(false);
+
+  const [formTitle, setFormTitle] = useState('');
+  const [formType, setFormType] = useState('question_bank');
+  const [formDescription, setFormDescription] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const fetchRequests = useCallback(async () => {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      const params = statusFilter !== 'all' && statusFilter !== '' ? `?status=${statusFilter}` : '';
-      const res = await fetch(`/api/executive/requests${params}`, {
+      const res = await fetch('/api/commander/requests', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Failed to fetch');
@@ -76,40 +83,38 @@ export default function ExecutiveRequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast, statusFilter]);
+  }, [user, toast]);
 
   useEffect(() => {
     if (user) fetchRequests();
   }, [user, fetchRequests]);
 
-  const handleStatusUpdate = async (id: string, newStatus: string) => {
-    setProcessing(true);
+  const handleCreate = async () => {
+    if (!formTitle || !formType) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Title and type are required.' });
+      return;
+    }
+    setCreating(true);
     try {
       const token = await auth.currentUser!.getIdToken();
-      const res = await fetch('/api/executive/requests', {
-        method: 'PATCH',
+      const res = await fetch('/api/commander/requests', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id, status: newStatus, comment }),
+        body: JSON.stringify({ title: formTitle, type: formType, description: formDescription }),
       });
-      if (!res.ok) throw new Error('Failed to update');
-      toast({ title: 'Request Updated', description: `Request marked as ${newStatus}.` });
-      setSelectedRequest(null);
-      setComment('');
+      if (!res.ok) throw new Error('Failed to create');
+      toast({ title: 'Request Submitted', description: 'Your request has been sent to the executive.' });
+      setShowCreateDialog(false);
+      setFormTitle('');
+      setFormType('question_bank');
+      setFormDescription('');
       fetchRequests();
     } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update request.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to submit request.' });
     } finally {
-      setProcessing(false);
+      setCreating(false);
     }
   };
-
-  const filtered = requests.filter(r => {
-    if (search) {
-      const lower = search.toLowerCase();
-      return r.title.toLowerCase().includes(lower) || r.commanderEmail.toLowerCase().includes(lower);
-    }
-    return true;
-  });
 
   const formatDate = (ts: number) => {
     if (!ts) return 'N/A';
@@ -127,51 +132,30 @@ export default function ExecutiveRequestsPage() {
 
   return (
     <div className="page-container animate-in">
-      <div className="space-y-1.5 mb-6">
-        <h1 className="text-page-title font-headline tracking-tight">Requests</h1>
-        <p className="text-base text-muted-foreground">Review and manage platform requests from commanders.</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="space-y-1.5">
+          <h1 className="text-page-title font-headline tracking-tight">My Requests</h1>
+          <p className="text-base text-muted-foreground">Submit and track requests to the executive.</p>
+        </div>
+        <Button onClick={() => setShowCreateDialog(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          New Request
+        </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search requests..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex gap-1.5">
-          {['all', 'pending', 'approved', 'rejected', 'completed'].map(status => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={cn(
-                'px-3 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-150',
-                statusFilter === status
-                  ? 'bg-primary text-primary-foreground shadow-elevation-small'
-                  : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-              )}
-            >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {filtered.length === 0 ? (
+      {requests.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <Inbox className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-            <p className="text-base text-muted-foreground">
-              {search ? 'No requests match your search.' : 'No requests have been submitted yet.'}
-            </p>
+            <p className="text-base text-muted-foreground mb-4">You haven't submitted any requests yet.</p>
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="w-4 h-4 mr-2" />Submit Your First Request
+            </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-2">
-          {filtered.map(r => (
+          {requests.map(r => (
             <Card key={r.id} className="cursor-pointer hover:bg-accent/30 transition-colors" onClick={() => setSelectedRequest(r)}>
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -180,14 +164,12 @@ export default function ExecutiveRequestsPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="font-medium truncate">{r.title}</p>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {typeLabels[r.type] || r.type} &middot; {r.commanderEmail}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{typeLabels[r.type] || r.type}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-xs text-muted-foreground hidden sm:block">{formatDate(r.createdAt)}</span>
-                  <Badge className={cn(statusColors[r.status] || '')}>
+                  <Badge className={cn(statusColors[r.status])}>
                     {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                   </Badge>
                 </div>
@@ -197,8 +179,63 @@ export default function ExecutiveRequestsPage() {
         </div>
       )}
 
-      <Dialog open={!!selectedRequest} onOpenChange={(open) => { if (!open) { setSelectedRequest(null); setComment(''); } }}>
-        <DialogContent className="sm:max-w-lg">
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Request</DialogTitle>
+            <DialogDescription>
+              Submit a request to the executive for review.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="reqType">Request Type</Label>
+              <Select value={formType} onValueChange={setFormType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="question_bank">Question Bank</SelectItem>
+                  <SelectItem value="student_report">Student Report</SelectItem>
+                  <SelectItem value="arena_approval">Arena Approval</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reqTitle">Title *</Label>
+              <Input
+                id="reqTitle"
+                value={formTitle}
+                onChange={e => setFormTitle(e.target.value)}
+                placeholder="Brief title for your request"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reqDesc">Description</Label>
+              <Textarea
+                id="reqDesc"
+                value={formDescription}
+                onChange={e => setFormDescription(e.target.value)}
+                placeholder="Provide details about your request..."
+                className="min-h-[100px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={creating}>
+              {creating ? 'Submitting...' : 'Submit Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedRequest} onOpenChange={(open) => { if (!open) setSelectedRequest(null); }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Request Details</DialogTitle>
           </DialogHeader>
@@ -216,12 +253,12 @@ export default function ExecutiveRequestsPage() {
                   <p className="font-medium">{typeLabels[selectedRequest.type] || selectedRequest.type}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">From</p>
-                  <p className="font-medium">{selectedRequest.commanderEmail}</p>
-                </div>
-                <div>
                   <p className="text-muted-foreground">Submitted</p>
                   <p className="font-medium">{formatDate(selectedRequest.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Status</p>
+                  <p className="font-medium capitalize">{selectedRequest.status}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Handled</p>
@@ -236,35 +273,9 @@ export default function ExecutiveRequestsPage() {
               )}
               {selectedRequest.executiveComment && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Executive Note</p>
-                  <p className="text-sm bg-muted/50 p-3 rounded-lg">{selectedRequest.executiveComment}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Executive Response</p>
+                  <p className="text-sm bg-muted/50 p-3 rounded-lg border-l-2 border-primary">{selectedRequest.executiveComment}</p>
                 </div>
-              )}
-
-              {selectedRequest.status === 'pending' && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="comment">Executive Note (optional)</Label>
-                    <Textarea
-                      id="comment"
-                      value={comment}
-                      onChange={e => setComment(e.target.value)}
-                      placeholder="Add a note about your decision..."
-                      className="min-h-[80px]"
-                    />
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <Button variant="destructive" onClick={() => handleStatusUpdate(selectedRequest.id, 'rejected')} disabled={processing}>
-                      <X className="w-4 h-4 mr-2" /> Reject
-                    </Button>
-                    <Button variant="outline" onClick={() => handleStatusUpdate(selectedRequest.id, 'completed')} disabled={processing}>
-                      <Check className="w-4 h-4 mr-2" /> Mark Complete
-                    </Button>
-                    <Button onClick={() => handleStatusUpdate(selectedRequest.id, 'approved')} disabled={processing}>
-                      <Check className="w-4 h-4 mr-2" /> Approve
-                    </Button>
-                  </div>
-                </>
               )}
             </div>
           )}

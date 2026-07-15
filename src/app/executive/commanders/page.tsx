@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Shield, Plus, Search, X, Check, Ban } from 'lucide-react';
+import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface Commander {
   uid: string;
@@ -26,6 +27,8 @@ interface Commander {
   displayName: string;
   disabled: boolean;
   createdAt: number;
+  arenaCount: number;
+  lastActive: number | null;
 }
 
 export default function CommanderManagementPage() {
@@ -35,6 +38,7 @@ export default function CommanderManagementPage() {
   const [commanders, setCommanders] = useState<Commander[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createEmail, setCreateEmail] = useState('');
   const [createPassword, setCreatePassword] = useState('');
@@ -108,11 +112,19 @@ export default function CommanderManagementPage() {
     }
   };
 
-  const filtered = commanders.filter(
-    c =>
-      c.email.toLowerCase().includes(search.toLowerCase()) ||
-      c.displayName.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = commanders.filter(c => {
+    const matchesSearch = c.email.toLowerCase().includes(search.toLowerCase()) ||
+      c.displayName.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'all' ||
+      (statusFilter === 'active' && !c.disabled) ||
+      (statusFilter === 'disabled' && c.disabled);
+    return matchesSearch && matchesStatus;
+  });
+
+  const formatDate = (ts: number) => {
+    if (!ts) return 'N/A';
+    return new Date(ts).toLocaleDateString();
+  };
 
   if (loading) {
     return (
@@ -136,14 +148,32 @@ export default function CommanderManagementPage() {
         </Button>
       </div>
 
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by name or email..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or email..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="flex gap-1.5">
+          {(['all', 'active', 'disabled'] as const).map(status => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={cn(
+                'px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-150',
+                statusFilter === status
+                  ? 'bg-primary text-primary-foreground shadow-elevation-small'
+                  : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+              )}
+            >
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -160,16 +190,30 @@ export default function CommanderManagementPage() {
           {filtered.map(c => (
             <Card key={c.uid}>
               <CardContent className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 shrink-0">
                     <Shield className="w-5 h-5 text-primary" />
                   </div>
-                  <div>
-                    <p className="font-medium">{c.displayName}</p>
-                    <p className="text-sm text-muted-foreground">{c.email}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{c.displayName}</p>
+                    <p className="text-sm text-muted-foreground truncate">{c.email}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground mx-4">
+                  <span className="flex items-center gap-1">
+                    <Swords className="w-3.5 h-3.5" />
+                    {c.arenaCount ?? 0} arenas
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {formatDate(c.createdAt)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    {c.lastActive ? formatDate(c.lastActive) : 'Never'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
                   <Badge variant={c.disabled ? 'secondary' : 'default'}>
                     {c.disabled ? 'Disabled' : 'Active'}
                   </Badge>

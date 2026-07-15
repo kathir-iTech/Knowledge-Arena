@@ -3,13 +3,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Search, Users, User, Shield } from 'lucide-react';
+import { Search, Users, User, Ban, Check, Swords, Star, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface Gladiator {
   uid: string;
@@ -17,6 +25,9 @@ interface Gladiator {
   displayName: string;
   disabled: boolean;
   createdAt: number;
+  totalBattles: number;
+  avgScore: number;
+  lastActive: number | null;
 }
 
 export default function StudentManagementPage() {
@@ -26,7 +37,9 @@ export default function StudentManagementPage() {
   const [gladiators, setGladiators] = useState<Gladiator[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const [summary, setSummary] = useState({ total: 0, active: 0, disabled: 0 });
+  const [selectedGladiator, setSelectedGladiator] = useState<Gladiator | null>(null);
 
   const fetchGladiators = useCallback(async () => {
     try {
@@ -55,11 +68,35 @@ export default function StudentManagementPage() {
     if (user) fetchGladiators();
   }, [user, fetchGladiators]);
 
-  const filtered = gladiators.filter(
-    g =>
-      g.email.toLowerCase().includes(search.toLowerCase()) ||
-      g.displayName.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleToggleDisable = async (gladiator: Gladiator) => {
+    try {
+      const token = await auth.currentUser!.getIdToken();
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid: gladiator.uid, disabled: !gladiator.disabled }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      toast({ title: gladiator.disabled ? 'Account Enabled' : 'Account Disabled' });
+      fetchGladiators();
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update gladiator.' });
+    }
+  };
+
+  const filtered = gladiators.filter(g => {
+    const matchesSearch = g.email.toLowerCase().includes(search.toLowerCase()) ||
+      g.displayName.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'all' ||
+      (statusFilter === 'active' && !g.disabled) ||
+      (statusFilter === 'disabled' && g.disabled);
+    return matchesSearch && matchesStatus;
+  });
+
+  const formatDate = (ts: number) => {
+    if (!ts) return 'N/A';
+    return new Date(ts).toLocaleDateString();
+  };
 
   if (loading) {
     return (
@@ -74,7 +111,7 @@ export default function StudentManagementPage() {
     <div className="page-container animate-in">
       <div className="space-y-1.5 mb-6">
         <h1 className="text-page-title font-headline tracking-tight">Gladiators</h1>
-        <p className="text-base text-muted-foreground">View registered gladiator accounts and activity.</p>
+        <p className="text-base text-muted-foreground">Manage gladiator accounts and view activity stats.</p>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -98,14 +135,32 @@ export default function StudentManagementPage() {
         </Card>
       </div>
 
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by name or email..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or email..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="flex gap-1.5">
+          {(['all', 'active', 'disabled'] as const).map(status => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={cn(
+                'px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-150',
+                statusFilter === status
+                  ? 'bg-primary text-primary-foreground shadow-elevation-small'
+                  : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+              )}
+            >
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -122,25 +177,100 @@ export default function StudentManagementPage() {
           {filtered.map(g => (
             <Card key={g.uid}>
               <CardContent className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <Avatar className="h-10 w-10 shrink-0">
                     <AvatarFallback className="bg-primary/10 text-sm font-medium">
                       {g.displayName.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <p className="font-medium">{g.displayName}</p>
-                    <p className="text-sm text-muted-foreground">{g.email}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{g.displayName}</p>
+                    <p className="text-sm text-muted-foreground truncate">{g.email}</p>
                   </div>
                 </div>
-                <Badge variant={g.disabled ? 'secondary' : 'default'}>
-                  {g.disabled ? 'Disabled' : 'Active'}
-                </Badge>
+                <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground mx-4">
+                  <span className="flex items-center gap-1">
+                    <Swords className="w-3.5 h-3.5" />
+                    {g.totalBattles ?? 0}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5" />
+                    {g.avgScore ?? 0}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    {g.lastActive ? formatDate(g.lastActive) : 'Never'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedGladiator(g)}
+                  >
+                    <User className="w-4 h-4" />
+                  </Button>
+                  <Badge variant={g.disabled ? 'secondary' : 'default'}>
+                    {g.disabled ? 'Disabled' : 'Active'}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleToggleDisable(g)}
+                    title={g.disabled ? 'Enable' : 'Disable'}
+                  >
+                    {g.disabled ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <Dialog open={!!selectedGladiator} onOpenChange={(open) => { if (!open) setSelectedGladiator(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gladiator Profile</DialogTitle>
+          </DialogHeader>
+          {selectedGladiator && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarFallback className="bg-primary/10 text-2xl font-medium">
+                    {selectedGladiator.displayName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-lg font-semibold">{selectedGladiator.displayName}</p>
+                  <p className="text-sm text-muted-foreground">{selectedGladiator.email}</p>
+                  <Badge variant={selectedGladiator.disabled ? 'secondary' : 'default'} className="mt-1">
+                    {selectedGladiator.disabled ? 'Disabled' : 'Active'}
+                  </Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-1">
+                  <p className="text-muted-foreground">Total Battles</p>
+                  <p className="font-semibold text-lg">{selectedGladiator.totalBattles ?? 0}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-muted-foreground">Average Score</p>
+                  <p className="font-semibold text-lg">{selectedGladiator.avgScore ?? 0}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-muted-foreground">Joined</p>
+                  <p className="font-semibold">{selectedGladiator.createdAt ? formatDate(selectedGladiator.createdAt) : 'N/A'}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-muted-foreground">Last Active</p>
+                  <p className="font-semibold">{selectedGladiator.lastActive ? formatDate(selectedGladiator.lastActive) : 'Never'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
