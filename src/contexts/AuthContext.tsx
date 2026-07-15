@@ -57,7 +57,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (userDoc.exists()) {
             setUser({ id: userDoc.id, ...userDoc.data() } as User);
         } else {
-            setUser(null);
+            const recovered: User = {
+              id: uid,
+              name: auth?.currentUser?.displayName || 'Gladiator',
+              email: auth?.currentUser?.email || '',
+              avatar: getRandomAvatar(),
+              role: 'gladiator',
+            };
+            try {
+              await setDoc(userRef, {
+                name: recovered.name,
+                email: recovered.email,
+                avatar: recovered.avatar,
+                role: 'gladiator',
+              });
+              setUser(recovered);
+            } catch {
+              setUser(null);
+            }
         }
     } catch (err) {
         console.error('AuthContext: fetchUserDocument error', err);
@@ -65,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
         setIsLoading(false);
     }
-  }, [firestore, user]);
+  }, [firestore, user, auth, getRandomAvatar]);
 
   useEffect(() => {
     if (isUserLoading) {
@@ -140,7 +157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Rate limit exceeded.';
       toast({ variant: "destructive", title: "Rate Limited", description: msg });
-      throw err;
+      setIsLoading(false);
+      return;
     }
 
     const role = 'gladiator';
@@ -150,16 +168,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signupInProgress.current = true;
       const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, credentials.password);
       signupUserId.current = userCredential.user.uid;
-      
+
       const newUser: Omit<User, 'id'> = {
         name: credentials.name,
         email: credentials.email,
         avatar: getRandomAvatar(),
         role,
       };
-      
+
       const userRef = doc(firestore, "users", userCredential.user.uid);
-      
+
       await setDoc(userRef, newUser).catch(error => {
         const permissionError = new FirestorePermissionError({
           path: userRef.path,
@@ -169,21 +187,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         errorEmitter.emit('permission-error', permissionError);
         throw error;
       });
-      
+
       setUser({ ...newUser, id: userCredential.user.uid });
       signupInProgress.current = false;
       signupUserId.current = null;
-      
+
     } catch (error: unknown) {
        signupInProgress.current = false;
        signupUserId.current = null;
-       const authError = error as { code?: string };
-       if (authError.code === 'auth/email-already-in-use') {
-         toast({ variant: "destructive", title: "Signup Failed", description: "An account with this email already exists." });
-       } else {
-         toast({ variant: "destructive", title: "Signup Failed", description: "An unexpected error occurred." });
+       const err = error as { code?: string; message?: string };
+       let description: string;
+       switch (err.code) {
+         case 'auth/email-already-in-use':
+           description = 'This email is already registered. Please sign in instead.';
+           break;
+         case 'auth/operation-not-allowed':
+           description = 'Account creation is currently unavailable.';
+           break;
+         case 'auth/network-request-failed':
+           description = 'Network error. Please check your connection.';
+           break;
+         case 'auth/too-many-requests':
+           description = 'Too many attempts. Please wait.';
+           break;
+         case 'auth/weak-password':
+           description = 'Password is too weak.';
+           break;
+         case 'auth/invalid-email':
+           description = 'Invalid email address.';
+           break;
+         case 'auth/user-not-found':
+           description = 'No account found with this email.';
+           break;
+         case 'auth/wrong-password':
+           description = 'Incorrect password.';
+           break;
+         default:
+           if (err.code === 'permission-denied' || err.code === 'unavailable' || err.code === 'failed-precondition') {
+             description = 'Account creation is currently unavailable. Please try again.';
+           } else {
+             description = 'An unexpected error occurred. Please try again.';
+           }
        }
-      throw error;
+       toast({ variant: "destructive", title: "Signup Failed", description });
+       throw error;
     } finally {
         setIsLoading(false);
     }
