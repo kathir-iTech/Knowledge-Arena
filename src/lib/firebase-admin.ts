@@ -12,22 +12,39 @@ function initAdmin() {
     try {
       parsed = JSON.parse(raw);
     } catch (e) {
-      const hint = e instanceof SyntaxError
-        ? `Invalid JSON at position ${(e as unknown as { position?: number }).position ?? 'unknown'}. Expected the full service account JSON object (not the Node.js snippet).`
-        : `Parse failed: ${e}`;
-      throw new Error(`Firebase Admin SDK: ${hint}`);
-    }
-
-    if (!parsed.type || !parsed.project_id || !parsed.private_key || !parsed.client_email) {
+      const err = e as Error;
       throw new Error(
-        'Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY is missing required fields (type, project_id, private_key, client_email). Ensure the full service account JSON is provided, not a partial snippet.'
+        'Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY contains invalid JSON. ' +
+        'Ensure the value is a valid JSON object (not wrapped in extra quotes, not truncated). ' +
+        `Parse error: ${err.message}`
       );
     }
 
+    if (
+      typeof parsed.type !== 'string' ||
+      typeof parsed.project_id !== 'string' ||
+      typeof parsed.private_key !== 'string' ||
+      typeof parsed.client_email !== 'string'
+    ) {
+      throw new Error(
+        'Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY is missing required fields (type, project_id, private_key, client_email). ' +
+        'Ensure the full service account JSON is provided as a single-line (or multi-line) JSON object.'
+      );
+    }
+
+    if (parsed.project_id !== firebaseConfig.projectId) {
+      throw new Error(
+        `Firebase Admin SDK: Service account project "${parsed.project_id}" does not match client project "${firebaseConfig.projectId}". ` +
+        'Ensure FIREBASE_SERVICE_ACCOUNT_KEY belongs to the same Firebase project as the client config.'
+      );
+    }
+
+    (parsed as Record<string, string>).private_key = (parsed as Record<string, string>).private_key.replace(/\\n/g, '\n');
+
     try {
-      return initializeApp({ credential: cert(parsed) });
+      return initializeApp({ credential: cert(parsed as any) });
     } catch (e) {
-      throw new Error(`Firebase Admin SDK: Initialization failed. ${e}`);
+      throw new Error(`Firebase Admin SDK: Initialization with service account failed. ${(e as Error).message}`);
     }
   }
 
@@ -48,11 +65,13 @@ function initAdmin() {
 }
 
 export function getAdminDb() {
+  console.log('[FirebaseAdmin] getAdminDb');
   initAdmin();
   return getFirestore();
 }
 
 export function getAdminAuth() {
+  console.log('[FirebaseAdmin] getAdminAuth');
   initAdmin();
   return getAuth();
 }
