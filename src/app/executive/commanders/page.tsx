@@ -45,6 +45,15 @@ export default function CommanderManagementPage() {
   const [createDisplayName, setCreateDisplayName] = useState('');
   const [creating, setCreating] = useState(false);
 
+  async function safeParseJson(res: Response) {
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      const text = await res.text().catch(() => '');
+      throw new Error(text ? 'Server returned an invalid response. Check deployment configuration.' : 'Server unavailable.');
+    }
+    return res.json();
+  }
+
   const fetchCommanders = useCallback(async () => {
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -52,8 +61,11 @@ export default function CommanderManagementPage() {
       const res = await fetch('/api/admin/users?role=commander', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
+      if (!res.ok) {
+        const errBody = await safeParseJson(res).catch(() => null);
+        throw new Error(errBody?.error || 'Failed to load commanders.');
+      }
+      const data = await safeParseJson(res);
       setCommanders(data.users || []);
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to load commanders.' });
@@ -80,8 +92,8 @@ export default function CommanderManagementPage() {
         body: JSON.stringify({ email: createEmail, password: createPassword, displayName: createDisplayName }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to create');
+        const errBody = await safeParseJson(res).catch(() => null);
+        throw new Error(errBody?.error || 'Failed to create commander.');
       }
       toast({ title: 'Commander Created', description: `${createEmail} has been added.` });
       setShowCreateDialog(false);
