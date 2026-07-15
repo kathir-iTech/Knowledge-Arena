@@ -103,59 +103,58 @@ export const questionService = {
     const db = getFirestore();
     const questionRef = doc(db, 'quizzes', quizId, 'questions', questionId);
 
-    let timerSeconds = 30;
-
-    // Idempotency: atomically check if already scored, caching timer value
-    await runTransaction(db, async (transaction) => {
-      const qSnap = await transaction.get(questionRef);
-      if (!qSnap.exists()) return;
-      if (qSnap.data().scored) return;
-      timerSeconds = qSnap.data().timer || 30;
-      transaction.update(questionRef, { scored: true });
-    });
-
-    const timeLimit = timerSeconds * 1000;
-
-    // Read the answer key
+    // Read the answer key (static data — safe outside transaction)
     const answerKeySnap = await getDoc(
       doc(db, 'quizzes', quizId, 'answerKeys', questionId)
     );
     if (!answerKeySnap.exists()) return;
     const correctIndex = answerKeySnap.data().correct_option_index;
 
-    // Read all submissions
-    const submissionsSnap = await getDocs(
-      collection(db, 'quizzes', quizId, 'questions', questionId, 'submissions')
+    // Read participants to enumerate who may have submitted
+    const participantsSnap = await getDocs(
+      collection(db, 'quizzes', quizId, 'participants')
     );
 
-    // Score each submission atomically — no read-before-write race
-    const updates: Array<{ ref: ReturnType<typeof doc>; score: number }> = [];
-    for (const subDoc of submissionsSnap.docs) {
-      const subData = subDoc.data();
-      const isCorrect = subData.selected_option === correctIndex;
+    // Single atomic transaction: read question → read each submission → write scores
+    await runTransaction(db, async (transaction) => {
+      const qSnap = await transaction.get(questionRef);
+      if (!qSnap.exists()) return;
+      if (qSnap.data().scored) return;
 
-      let scoreToAdd = 0;
-      if (isCorrect) {
+      const timerSeconds = qSnap.data().timer || 30;
+      const timeLimit = timerSeconds * 1000;
+
+      for (const pDoc of participantsSnap.docs) {
+        const uid = pDoc.id;
+
+        const subRef = doc(
+          db,
+          'quizzes', quizId,
+          'questions', questionId,
+          'submissions', uid
+        );
+        const subSnap = await transaction.get(subRef);
+        if (!subSnap.exists()) continue;
+
+        const subData = subSnap.data();
+        const isCorrect = subData.selected_option === correctIndex;
+        if (!isCorrect) continue;
+
         const clampedSubmittedAt = Math.max(subData.submittedAt, startTime);
         const elapsed = clampedSubmittedAt - startTime;
         const timeFraction = Math.max(0, 1 - elapsed / timeLimit);
-        scoreToAdd = Math.round(500 + timeFraction * 500);
+        const scoreToAdd = Math.round(500 + timeFraction * 500);
+
+        if (scoreToAdd > 0) {
+          transaction.update(
+            doc(db, 'quizzes', quizId, 'participants', uid),
+            { score: increment(scoreToAdd) }
+          );
+        }
       }
 
-      if (scoreToAdd > 0) {
-        updates.push({
-          ref: doc(db, 'quizzes', quizId, 'participants', subDoc.id),
-          score: scoreToAdd,
-        });
-      }
-    }
-
-    // Batch writes to avoid bursting Firestore write limits
-    const CHUNK_SIZE = 100;
-    for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
-      const chunk = updates.slice(i, i + CHUNK_SIZE);
-      await Promise.all(chunk.map(u => updateDoc(u.ref, { score: increment(u.score) })));
-    }
+      transaction.update(questionRef, { scored: true });
+    });
   },
 
   async getAnswerKeys(quizId: string): Promise<Array<{ questionId: string; correct_option_index: number }>> {

@@ -72,7 +72,9 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     window.addEventListener('offline', handleOffline);
 
     const unsubQuiz = quizService.subscribeToQuiz(quiz.id, (q) => {
-      if (mountedRef.current) setTeacherOnline(q.status === 'waiting' || q.status === 'live');
+      if (!mountedRef.current) return;
+      if (!q) { setTeacherOnline(false); return; }
+      setTeacherOnline(q.status === 'waiting' || q.status === 'live');
     });
 
     return () => {
