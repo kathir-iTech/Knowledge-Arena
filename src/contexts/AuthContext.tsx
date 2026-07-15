@@ -8,6 +8,9 @@ import { doc, getDoc, setDoc, updateDoc, runTransaction } from 'firebase/firesto
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  GoogleAuthProvider,
   signOut,
 } from 'firebase/auth';
 import { useFirebase, useUser as useFirebaseUserHook } from '@/firebase';
@@ -20,6 +23,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: { email: string; password: string }) => Promise<void>;
   signup: (credentials: { name: string; email: string; password: string }) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateAvatar: (avatar: string) => Promise<void>;
   updateProfile: (data: { name?: string; avatar?: string }) => Promise<void>;
@@ -42,17 +46,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signupInProgress = useRef(false);
   const signupUserId = useRef<string | null>(null);
   const lastFetchedUid = useRef<string | null>(null);
+  const invalidProfileUids = useRef<Set<string>>(new Set());
 
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
   }, []);
 
-  const normalizeRole = useCallback((raw: string | undefined): 'executive' | 'commander' | 'gladiator' => {
+  const normalizeRole = useCallback((raw: string | undefined): 'executive' | 'commander' | 'gladiator' | null => {
     if (raw === 'teacher') return 'commander';
     if (raw === 'student') return 'gladiator';
     if (raw === 'executive' || raw === 'commander' || raw === 'gladiator') return raw;
-    console.warn('AuthContext: unknown role in Firestore user document', raw);
-    return 'gladiator';
+    console.warn('AuthContext: invalid role in Firestore user document', raw);
+    return null;
   }, []);
 
   const ensureGladiatorProfile = useCallback(async (uid: string, defaults?: { name?: string; email?: string }): Promise<User | null> => {
@@ -63,19 +68,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const existing = await transaction.get(userRef);
         if (existing.exists()) {
           const data = existing.data() as Record<string, unknown>;
+          const role = normalizeRole(data.role as string | undefined);
+          if (!role) {
+            return null;
+          }
           return {
             id: existing.id,
             name: (data.name as string) || 'Gladiator',
             email: (data.email as string) || '',
             avatar: (data.avatar as string) || getRandomAvatar(),
-            role: normalizeRole(data.role as string | undefined),
+            role,
           } as User;
         }
+        const googlePhoto = auth.currentUser?.photoURL;
         const newUser: User = {
           id: uid,
           name: defaults?.name || auth.currentUser?.displayName || 'Gladiator',
           email: defaults?.email || auth.currentUser?.email || '',
-          avatar: getRandomAvatar(),
+          avatar: googlePhoto || getRandomAvatar(),
           role: 'gladiator',
         };
         transaction.set(userRef, {
@@ -95,9 +105,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserDocument = useCallback(async (uid: string) => {
     if (!firestore) return;
     if (lastFetchedUid.current === uid && user) return;
+    if (invalidProfileUids.current.has(uid)) return;
     lastFetchedUid.current = uid;
     try {
         const profile = await ensureGladiatorProfile(uid);
+        if (!profile) {
+          invalidProfileUids.current.add(uid);
+          console.warn('AuthContext: invalid profile for uid', uid);
+          toast({
+            variant: "destructive",
+            title: "Account Configuration Error",
+            description: "Your account has an invalid configuration. Please contact support.",
+          });
+        }
         setUser(profile);
     } catch (err) {
         console.error('AuthContext: fetchUserDocument error', err);
@@ -105,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
         setIsLoading(false);
     }
-  }, [firestore, user, ensureGladiatorProfile]);
+  }, [firestore, user, ensureGladiatorProfile, toast]);
 
   useEffect(() => {
     if (isUserLoading) {
@@ -253,6 +273,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signInWithGoogle = useCallback(async () => {
+    if (!auth) throw new Error("Auth service not available");
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+      let description: string;
+      switch (err.code) {
+        case 'auth/popup-closed-by-user':
+        case 'auth/cancelled-popup-request':
+          return;
+        case 'auth/popup-blocked':
+          description = 'Popup was blocked by your browser. Please allow popups for this site.';
+          break;
+        case 'auth/account-exists-with-different-credential':
+          description = 'An account already exists with this email. Sign in using your existing method.';
+          break;
+        case 'auth/network-request-failed':
+          description = 'Network error. Please check your connection.';
+          break;
+        case 'auth/too-many-requests':
+          description = 'Too many attempts. Please wait.';
+          break;
+        default:
+          description = 'Google Sign-In failed. Please try again.';
+      }
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        toast({ variant: "destructive", title: "Google Sign-In Failed", description });
+      }
+      throw error;
+    }
+  }, [auth, toast]);
+
   const logout = async () => {
     if (!auth) return;
     await signOut(auth);
@@ -292,10 +347,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLoading,
     login,
     signup,
+    signInWithGoogle,
     logout,
     updateAvatar,
     updateProfile,
-  }), [user, isLoading]);
+  }), [user, isLoading, signInWithGoogle]);
 
   return (
     <AuthContext.Provider value={contextValue}>
