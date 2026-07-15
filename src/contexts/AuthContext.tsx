@@ -59,7 +59,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
             setUser(null);
         }
-    } catch {
+    } catch (err) {
+        console.error('AuthContext: fetchUserDocument error', err);
+        setUser(null);
     } finally {
         setIsLoading(false);
     }

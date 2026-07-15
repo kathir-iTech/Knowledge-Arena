@@ -19,8 +19,6 @@ function PageContent() {
     return <LoadingScreen message="Preparing the arena..." />;
   }
 
-  if (user) return null;
-
   return (
     <main className="flex flex-col items-center justify-center min-h-screen bg-background animate-in px-4 safe-top safe-bottom">
       <div className="w-full max-w-md space-y-10">
