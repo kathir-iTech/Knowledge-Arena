@@ -18,7 +18,22 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [roomCode, setRoomCode] = useState(initialRoomCode || '');
+  const codeSource = useRef<'url' | 'session' | 'none'>('none');
+  const [roomCode, setRoomCode] = useState(() => {
+    if (initialRoomCode) {
+      codeSource.current = 'url';
+      return initialRoomCode;
+    }
+    if (typeof window !== 'undefined') {
+      const pending = sessionStorage.getItem('pendingRoomCode');
+      if (pending) {
+        sessionStorage.removeItem('pendingRoomCode');
+        codeSource.current = 'session';
+        return pending;
+      }
+    }
+    return '';
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState<Array<{ quizId: string; title: string; score: number; status: string; created_at: number }>>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -33,28 +48,28 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
   }, [user]);
 
   useEffect(() => {
-    if (initialRoomCode && !autoJoinTriggered.current && user) {
-      autoJoinTriggered.current = true;
-      setRoomCode(initialRoomCode);
-      setIsLoading(true);
-      quizService.getQuizById(initialRoomCode.toUpperCase())
-        .then(async (quiz) => {
-          if (quiz.status === 'finished') throw new Error('Battle has ended');
-          const participants = await participantService.getAllParticipants(initialRoomCode.toUpperCase());
-          const existing = participants.find(p => p.user_id === user.id);
-          if (!existing) {
-            await participantService.joinQuiz(initialRoomCode.toUpperCase(), user.id, user.name);
-          } else if (existing.status === 'blocked') {
-            throw new Error('You are blocked from this arena');
-          }
-          router.push(`/battle/${initialRoomCode.toUpperCase()}`);
-        })
-        .catch((err) => {
-          toast({ variant: 'destructive', title: 'Join Failed', description: err instanceof Error ? err.message : 'Unknown error' });
-          setIsLoading(false);
-        });
-    }
-  }, [initialRoomCode, user]);
+    const code = roomCode.trim().toUpperCase();
+    if (!code || autoJoinTriggered.current || !user) return;
+    if (codeSource.current === 'none') return;
+    autoJoinTriggered.current = true;
+    setIsLoading(true);
+    quizService.getQuizById(code)
+      .then(async (quiz) => {
+        if (quiz.status === 'finished') throw new Error('Battle has ended');
+        const participants = await participantService.getAllParticipants(code);
+        const existing = participants.find(p => p.user_id === user.id);
+        if (!existing) {
+          await participantService.joinQuiz(code, user.id, user.name);
+        } else if (existing.status === 'blocked') {
+          throw new Error('You are blocked from this arena');
+        }
+        router.push(`/battle/${code}`);
+      })
+      .catch((err) => {
+        toast({ variant: 'destructive', title: 'Join Failed', description: err instanceof Error ? err.message : 'Unknown error' });
+        setIsLoading(false);
+      });
+  }, [roomCode, user, toast, router]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();

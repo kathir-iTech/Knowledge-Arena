@@ -33,6 +33,7 @@ export default function BattleRoomLoader() {
   useEffect(() => {
     if (!quizId) return;
     if (!user) {
+      sessionStorage.setItem('pendingRoomCode', quizId);
       router.replace(`/?roomCode=${quizId}`);
       return;
     }
