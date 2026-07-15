@@ -33,6 +33,9 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     }
 
     if (!user.role || !['executive', 'commander', 'gladiator'].includes(user.role)) {
+      if (currentPath !== '/') {
+        router.replace('/');
+      }
       redirecting.current = null;
       return;
     }
