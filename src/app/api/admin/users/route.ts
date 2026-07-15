@@ -32,14 +32,20 @@ export async function POST(req: NextRequest) {
       displayName: displayName || email.split('@')[0],
     });
 
-    await getAdminDb().collection('users').doc(userRecord.uid).set({
-      email,
-      displayName: displayName || email.split('@')[0],
-      role: 'commander',
-      createdAt: Date.now(),
-      createdBy: auth.uid,
-      disabled: false,
-    });
+    try {
+      await getAdminDb().collection('users').doc(userRecord.uid).set({
+        email,
+        displayName: displayName || email.split('@')[0],
+        role: 'commander',
+        createdAt: Date.now(),
+        createdBy: auth.uid,
+        disabled: false,
+      });
+    } catch (firestoreErr) {
+      // Auth user created but Firestore write failed — clean up the orphan
+      await getAdminAuth().deleteUser(userRecord.uid).catch(() => {});
+      return NextResponse.json({ error: 'Failed to create user profile. Please try again.' }, { status: 500 });
+    }
 
     return NextResponse.json({
       uid: userRecord.uid,
@@ -50,6 +56,9 @@ export async function POST(req: NextRequest) {
     const message = err?.message || 'Failed to create user';
     if (message.includes('EMAIL_EXISTS')) {
       return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
+    }
+    if (message.includes('WEAK_PASSWORD') || message.includes('password')) {
+      return NextResponse.json({ error: 'Password is too weak. Use at least 6 characters.' }, { status: 400 });
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }
