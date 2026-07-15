@@ -32,8 +32,6 @@ export function LoginForm() {
   const [activeTab, setActiveTab] = useState('login');
   const { login, signup, signInWithGoogle } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -47,11 +45,9 @@ export function LoginForm() {
 
   const onLoginSubmit = async (values: z.infer<typeof loginSchema>) => {
     setIsLoading(true);
-    setError(null);
     try {
       await login(values);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to login.");
+    } catch {
     } finally {
       setIsLoading(false);
     }
@@ -59,11 +55,9 @@ export function LoginForm() {
 
   const onSignupSubmit = async (values: z.infer<typeof signupSchema>) => {
     setIsLoading(true);
-    setError(null);
     try {
       await signup(values);
-    } catch (err: unknown) {
-       setError(err instanceof Error ? err.message : "Failed to sign up.");
+    } catch {
     } finally {
       setIsLoading(false);
     }
@@ -223,7 +217,6 @@ export function LoginForm() {
           </div>
         </TabsContent>
       </Tabs>
-      {error && <p className="text-destructive text-center text-sm p-4 border-t border-border/50" role="alert" aria-live="polite">{error}</p>}
     </Card>
   );
 }

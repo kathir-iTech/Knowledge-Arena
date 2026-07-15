@@ -16,6 +16,7 @@ import {
 import { useFirebase, useUser as useFirebaseUserHook } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { mapFirebaseAuthError } from '@/lib/firebase-auth-errors';
 
 interface AuthContextType {
   user: User | null;
@@ -166,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!credentials.password) {
         toast({
             variant: "destructive",
-            title: "Login Failed",
+            title: "Sign In Failed",
             description: "Password is required.",
         });
         throw new Error("Password is required.");
@@ -176,15 +177,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
     } catch (error: unknown) {
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
-        toast({ variant: "destructive", title: "Rate Limited", description: error.message });
+        toast({ variant: "destructive", title: "Too Many Attempts", description: "Too many attempts. Please wait a moment and try again." });
         throw error;
       }
-      toast({
-        variant: "destructive",
-        title: "Login Failed",
-        description: "Invalid email or password.",
-      });
-      throw error;
+      const mapped = mapFirebaseAuthError(error, 'login');
+      toast({ variant: "destructive", title: mapped.title, description: mapped.message });
+      throw new Error(mapped.message);
     }
   };
 
@@ -199,7 +197,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await checkRateLimit('signup');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Rate limit exceeded.';
-      toast({ variant: "destructive", title: "Rate Limited", description: msg });
+      toast({ variant: "destructive", title: "Too Many Attempts", description: "Too many attempts. Please wait a moment and try again." });
       setIsLoading(false);
       return;
     }
@@ -227,47 +225,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: unknown) {
        signupInProgress.current = false;
        signupUserId.current = null;
-       const err = error as { code?: string; message?: string };
-       let description: string;
-       switch (err.code) {
-         case 'auth/email-already-in-use':
-           description = 'This email is already registered. Please sign in instead.';
-           break;
-         case 'auth/operation-not-allowed':
-           description = 'Account creation is currently unavailable.';
-           break;
-         case 'auth/network-request-failed':
-           description = 'Network error. Please check your connection.';
-           break;
-         case 'auth/too-many-requests':
-           description = 'Too many attempts. Please wait.';
-           break;
-         case 'auth/weak-password':
-           description = 'Password is too weak.';
-           break;
-         case 'auth/invalid-email':
-           description = 'Invalid email address.';
-           break;
-         case 'auth/user-not-found':
-           description = 'No account found with this email.';
-           break;
-         case 'auth/wrong-password':
-           description = 'Incorrect password.';
-           break;
-         case 'permission-denied':
-           description = 'Account creation is currently unavailable. Please try again.';
-           break;
-         case 'unavailable':
-           description = 'Account creation is currently unavailable. Please try again.';
-           break;
-         case 'failed-precondition':
-           description = 'Account creation is currently unavailable. Please try again.';
-           break;
-         default:
-           description = 'An unexpected error occurred. Please try again.';
-       }
-       toast({ variant: "destructive", title: "Signup Failed", description });
-       throw error;
+       const mapped = mapFirebaseAuthError(error, 'signup');
+       toast({ variant: "destructive", title: mapped.title, description: mapped.message });
+       throw new Error(mapped.message);
     } finally {
         setIsLoading(false);
     }
@@ -280,31 +240,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signInWithPopup(auth, provider);
     } catch (error: unknown) {
-      const err = error as { code?: string; message?: string };
-      let description: string;
-      switch (err.code) {
-        case 'auth/popup-closed-by-user':
-        case 'auth/cancelled-popup-request':
-          return;
-        case 'auth/popup-blocked':
-          description = 'Popup was blocked by your browser. Please allow popups for this site.';
-          break;
-        case 'auth/account-exists-with-different-credential':
-          description = 'An account already exists with this email. Sign in using your existing method.';
-          break;
-        case 'auth/network-request-failed':
-          description = 'Network error. Please check your connection.';
-          break;
-        case 'auth/too-many-requests':
-          description = 'Too many attempts. Please wait.';
-          break;
-        default:
-          description = 'Google Sign-In failed. Please try again.';
+      const mapped = mapFirebaseAuthError(error, 'google');
+      if (!mapped.isSilent) {
+        toast({ variant: "destructive", title: mapped.title, description: mapped.message });
       }
-      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
-        toast({ variant: "destructive", title: "Google Sign-In Failed", description });
-      }
-      throw error;
+      throw new Error(mapped.message);
     }
   }, [auth, toast]);
 
