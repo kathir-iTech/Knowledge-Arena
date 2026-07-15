@@ -12,8 +12,16 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
     
+    function isCommander() {
+      return isSignedIn() && getRole() == 'commander';
+    }
+
+    function isExecutive() {
+      return isSignedIn() && getRole() == 'executive';
+    }
+
     function isTeacher() {
-      return isSignedIn() && getRole() == 'teacher';
+      return isSignedIn() && getRole() == 'commander';
     }
     
     function isOwner(userId) {
@@ -34,7 +42,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isOwner(userId) && request.resource.data.role in ['teacher', 'student'];
+      allow create: if isOwner(userId) && request.resource.data.role in ['executive', 'commander', 'gladiator'];
       allow update: if isOwner(userId)
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
     }
@@ -81,6 +89,26 @@ service cloud.firestore {
         allow delete: if isQuizCreator(quizId);
       }
     }
+  }
+
+  // --- Executive Requests ---
+  match /executive_requests/{requestId} {
+    allow read: if isSignedIn() && (getRole() == 'executive' || (getRole() == 'commander' && resource.data.commanderId == request.auth.uid));
+    allow create: if isSignedIn() && getRole() == 'commander';
+    allow update: if isSignedIn() && getRole() == 'executive';
+    allow delete: if false;
+  }
+
+  // --- Question Bank ---
+  match /question_bank/{questionId} {
+    allow read: if isSignedIn();
+    allow create, update, delete: if isSignedIn() && getRole() == 'executive';
+  }
+
+  // --- Platform Settings ---
+  match /platform_settings/{docId} {
+    allow read: if isSignedIn() && getRole() == 'executive';
+    allow write: if isSignedIn() && getRole() == 'executive';
   }
 
   // Collection group queries for student history

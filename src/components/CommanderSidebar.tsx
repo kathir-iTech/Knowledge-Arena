@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, LayoutDashboard, BrainCircuit, PencilRuler, History, UserCircle } from 'lucide-react';
+import { LogOut, LayoutDashboard, BrainCircuit, PencilRuler, History, UserCircle, Inbox } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -30,6 +30,7 @@ const CommanderSidebar = () => {
   const nav = [
     { href: '/commander/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/create-quiz', label: 'Create Arena', icon: PencilRuler },
+    { href: '/commander/requests', label: 'Requests', icon: Inbox },
     { href: '/commander/history', label: 'Battle History', icon: History },
     { href: '/commander/profile', label: 'Profile', icon: UserCircle },
   ];
