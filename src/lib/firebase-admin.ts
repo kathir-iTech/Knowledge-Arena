@@ -31,7 +31,20 @@ function initAdmin() {
     }
   }
 
-  return initializeApp({ credential: applicationDefault(), projectId: firebaseConfig.projectId });
+  try {
+    return initializeApp({ credential: applicationDefault(), projectId: firebaseConfig.projectId });
+  } catch (e: any) {
+    const msg = e?.message || '';
+    if (msg.includes('Could not load the default credentials') || msg.includes('Application Default Credentials')) {
+      throw new Error(
+        'Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY is not set and ADC is unavailable. ' +
+        'To use admin APIs in production, set FIREBASE_SERVICE_ACCOUNT_KEY in Vercel project settings. ' +
+        'Target project: ' + firebaseConfig.projectId + '. ' +
+        'To use locally, set FIREBASE_SERVICE_ACCOUNT_KEY in .env or configure gcloud ADC.'
+      );
+    }
+    throw new Error(`Firebase Admin SDK: Initialization failed - ${msg}`);
+  }
 }
 
 export function getAdminDb() {

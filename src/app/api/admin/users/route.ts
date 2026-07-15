@@ -65,7 +65,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+  let auth;
+  try {
+    auth = await verifyFirebaseTokenWithRole(req, 'executive');
+  } catch {
+    return NextResponse.json({ error: 'Authentication service unavailable' }, { status: 503 });
+  }
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -74,89 +79,106 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const role = searchParams.get('role') || 'commander';
 
-    const snapshot = await getAdminDb()
-      .collection('users')
-      .where('role', '==', role)
-      .orderBy('createdAt', 'desc')
-      .get();
+    if (!['commander', 'gladiator'].includes(role)) {
+      return NextResponse.json({ error: 'Invalid role filter' }, { status: 400 });
+    }
+
+    let snapshot;
+    try {
+      snapshot = await getAdminDb()
+        .collection('users')
+        .where('role', '==', role)
+        .get();
+    } catch (queryErr: any) {
+      console.error('GET /api/admin/users Firestore query failed', queryErr?.message || queryErr);
+      return NextResponse.json({ error: 'Database query failed', details: 'users' }, { status: 500 });
+    }
 
     const users = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         uid: doc.id,
-        email: data.email,
-        displayName: data.displayName,
-        role: data.role,
-        disabled: data.disabled ?? false,
-        createdAt: data.createdAt,
+        email: data.email || null,
+        displayName: data.displayName || data.name || null,
+        role: data.role || role,
+        disabled: typeof data.disabled === 'boolean' ? data.disabled : false,
+        createdAt: data.createdAt || null,
       };
+    });
+
+    users.sort((a, b) => {
+      if (!a.createdAt || !b.createdAt) return a.createdAt ? -1 : b.createdAt ? 1 : 0;
+      return b.createdAt - a.createdAt;
     });
 
     const enriched = users.map(u => ({ ...u }));
 
     if (role === 'commander' && users.length > 0) {
       const uids = users.map(u => u.uid);
-      const quizzesSnap = await getAdminDb()
-        .collection('quizzes')
-        .where('created_by', 'in', uids.slice(0, 30))
-        .get();
+      try {
+        const quizzesSnap = await getAdminDb()
+          .collection('quizzes')
+          .where('created_by', 'in', uids.slice(0, 30))
+          .get();
 
-      const arenaCounts: Record<string, number> = {};
-      const lastActiveMap: Record<string, number | null> = {};
-      for (const qDoc of quizzesSnap.docs) {
-        const qData = qDoc.data();
-        const creator = qData.created_by;
-        arenaCounts[creator] = (arenaCounts[creator] || 0) + 1;
-        if (qData.created_at && (!lastActiveMap[creator] || qData.created_at > lastActiveMap[creator]!)) {
-          lastActiveMap[creator] = qData.created_at;
+        const arenaCounts: Record<string, number> = {};
+        const lastActiveMap: Record<string, number | null> = {};
+        for (const qDoc of quizzesSnap.docs) {
+          const qData = qDoc.data();
+          const creator = qData.created_by;
+          if (creator) {
+            arenaCounts[creator] = (arenaCounts[creator] || 0) + 1;
+            if (qData.created_at && (!lastActiveMap[creator] || qData.created_at > lastActiveMap[creator]!)) {
+              lastActiveMap[creator] = qData.created_at;
+            }
+          }
         }
-      }
 
-      for (const u of enriched) {
-        (u as any).arenaCount = arenaCounts[u.uid] || 0;
-        (u as any).lastActive = lastActiveMap[u.uid] || null;
+        for (const u of enriched) {
+          (u as any).arenaCount = arenaCounts[u.uid] || 0;
+          (u as any).lastActive = lastActiveMap[u.uid] || null;
+        }
+      } catch (enrichErr: any) {
+        console.error('GET /api/admin/users commander enrichment failed', enrichErr?.message || enrichErr);
       }
     }
 
     if (role === 'gladiator' && users.length > 0) {
       const uids = users.map(u => u.uid);
-      const partSnapshot = await getAdminDb()
-        .collectionGroup('participants')
-        .where('user_id', 'in', uids.slice(0, 30))
-        .get();
+      try {
+        const partSnapshot = await getAdminDb()
+          .collectionGroup('participants')
+          .where('user_id', 'in', uids.slice(0, 30))
+          .get();
 
-      const battleCounts: Record<string, number> = {};
-      const scoreSums: Record<string, number> = {};
-      const userDataMap: Record<string, any> = {};
+        const battleCounts: Record<string, number> = {};
+        const scoreSums: Record<string, number> = {};
 
-      const userDocs = await Promise.all(
-        uids.slice(0, 30).map(uid =>
-          getAdminDb().collection('users').doc(uid).get().then(d => ({ uid, data: d.data() }))
-        )
-      );
-      for (const { uid, data } of userDocs) {
-        userDataMap[uid] = data || {};
-      }
+        for (const pDoc of partSnapshot.docs) {
+          const pData = pDoc.data();
+          const userId = pData.user_id;
+          if (userId) {
+            battleCounts[userId] = (battleCounts[userId] || 0) + 1;
+            scoreSums[userId] = (scoreSums[userId] || 0) + (pData.score || 0);
+          }
+        }
 
-      for (const pDoc of partSnapshot.docs) {
-        const pData = pDoc.data();
-        const userId = pData.user_id;
-        battleCounts[userId] = (battleCounts[userId] || 0) + 1;
-        scoreSums[userId] = (scoreSums[userId] || 0) + (pData.score || 0);
-      }
-
-      for (const u of enriched) {
-        (u as any).totalBattles = battleCounts[u.uid] || 0;
-        const totalScore = scoreSums[u.uid] || 0;
-        const totalCount = battleCounts[u.uid] || 0;
-        (u as any).avgScore = totalCount > 0 ? Math.round(totalScore / totalCount) : 0;
-        (u as any).lastActive = userDataMap[u.uid]?.lastActive || null;
+        for (const u of enriched) {
+          (u as any).totalBattles = battleCounts[u.uid] || 0;
+          const totalScore = scoreSums[u.uid] || 0;
+          const totalCount = battleCounts[u.uid] || 0;
+          (u as any).avgScore = totalCount > 0 ? Math.round(totalScore / totalCount) : 0;
+          (u as any).lastActive = null;
+        }
+      } catch (enrichErr: any) {
+        console.error('GET /api/admin/users gladiator enrichment failed', enrichErr?.message || enrichErr);
       }
     }
 
     return NextResponse.json({ users: enriched });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to list users' }, { status: 500 });
+    console.error('GET /api/admin/users unexpected error', err?.message || err);
+    return NextResponse.json({ error: 'Failed to list users' }, { status: 500 });
   }
 }
 
