@@ -63,6 +63,12 @@ export default function QuestionBankPage() {
   const [formDifficulty, setFormDifficulty] = useState('medium');
   const [formTags, setFormTags] = useState('');
   const [saving, setSaving] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const fetchQuestions = useCallback(async () => {
     try {
@@ -71,7 +77,7 @@ export default function QuestionBankPage() {
       const params = new URLSearchParams();
       if (difficultyFilter !== 'all') params.set('difficulty', difficultyFilter);
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
       const res = await fetch(`/api/executive/question-bank?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -83,7 +89,7 @@ export default function QuestionBankPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast, difficultyFilter, categoryFilter, search]);
+  }, [user, toast, difficultyFilter, categoryFilter, debouncedSearch]);
 
   useEffect(() => {
     if (user) fetchQuestions();

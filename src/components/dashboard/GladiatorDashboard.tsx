@@ -36,11 +36,23 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
     if (initialRoomCode && !autoJoinTriggered.current && user) {
       autoJoinTriggered.current = true;
       setRoomCode(initialRoomCode);
-      const timer = setTimeout(() => {
-        const form = document.querySelector('#join-form') as HTMLFormElement;
-        if (form) form.requestSubmit();
-      }, 300);
-      return () => clearTimeout(timer);
+      setIsLoading(true);
+      quizService.getQuizById(initialRoomCode.toUpperCase())
+        .then(async (quiz) => {
+          if (quiz.status === 'finished') throw new Error('Battle has ended');
+          const participants = await participantService.getAllParticipants(initialRoomCode.toUpperCase());
+          const existing = participants.find(p => p.user_id === user.id);
+          if (!existing) {
+            await participantService.joinQuiz(initialRoomCode.toUpperCase(), user.id, user.name);
+          } else if (existing.status === 'blocked') {
+            throw new Error('You are blocked from this arena');
+          }
+          router.push(`/battle/${initialRoomCode.toUpperCase()}`);
+        })
+        .catch((err) => {
+          toast({ variant: 'destructive', title: 'Join Failed', description: err instanceof Error ? err.message : 'Unknown error' });
+          setIsLoading(false);
+        });
     }
   }, [initialRoomCode, user]);
 
@@ -127,11 +139,11 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
           <div className="py-10 text-center border border-dashed border-border/50 rounded-[12px]">
             <Swords className="w-6 h-6 text-muted-foreground mx-auto mb-4" />
             <p className="text-base text-muted-foreground mb-4">No battles fought yet.</p>
-            <Button variant="outline" size="sm" asChild><Link href="/gladiator/dashboard">Join a Battle</Link></Button>
+            <Button variant="outline" size="sm" asChild><Link href="/gladiator/history">View Full History</Link></Button>
           </div>
         ) : (
           <div className="space-y-1">
-            {history.sort((a, b) => (b.created_at || 0) - (a.created_at || 0)).slice(0, 20).map((h) => (
+            {[...history].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)).slice(0, 20).map((h) => (
               <Link key={h.quizId} href={`/battle/${h.quizId}`} className="block">
                 <div className={cn(
                   "flex items-center gap-3 p-3 rounded-[10px] border transition-colors",

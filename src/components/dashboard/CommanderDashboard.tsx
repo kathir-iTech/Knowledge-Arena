@@ -7,6 +7,7 @@ import { LoadingScreen } from '@/components/LoadingScreen';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
+import { questionService } from '@/services/game.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -235,14 +236,13 @@ export default function CommanderDashboard() {
 
   const fetchQuizzes = useCallback(() => {
     if (!user) return;
-    const qsService = quizService;
-    qsService.getQuizzesByCreator(user.id)
+    quizService.getQuizzesByCreator(user.id)
       .then(async (qs) => {
         setQuizzes(qs);
         const counts: Record<string, number> = {};
         await Promise.all(qs.map(async (q) => {
           try {
-            const qsList = await import('@/services/game.service').then(m => m.questionService.getQuestionsByQuizId(q.id));
+            const qsList = await questionService.getQuestionsByQuizId(q.id);
             counts[q.id] = qsList.length;
           } catch { counts[q.id] = 0; }
         }));

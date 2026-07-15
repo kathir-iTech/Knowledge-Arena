@@ -67,7 +67,7 @@ export default function ExecutiveSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showDangerDialog, setShowDangerDialog] = useState(false);
-  const [dangerAction, setDangerAction] = useState<'clear' | 'reset' | null>(null);
+  const [dangerAction, setDangerAction] = useState<'reset' | null>(null);
 
   const fetchSettings = useCallback(async () => {
     try {

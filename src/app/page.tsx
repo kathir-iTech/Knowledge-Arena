@@ -14,7 +14,6 @@ const LoginForm = dynamic(() => import('@/components/auth/LoginForm').then(m => 
 function PageContent() {
   const { user, isLoading } = useAuth();
   const searchParams = useSearchParams();
-  const roomCode = searchParams.get('roomCode');
   
   if (isLoading) {
     return <LoadingScreen message="Preparing the arena..." />;

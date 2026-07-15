@@ -52,7 +52,7 @@ export default function EditArenaPage() {
       }
     };
     load();
-  }, [quizId, user, isAuthLoading, router, toast]);
+  }, [quizId, user, isAuthLoading, router]);
 
   if (isLoading || isAuthLoading) {
     return <LoadingScreen message="Loading arena editor..." />;
