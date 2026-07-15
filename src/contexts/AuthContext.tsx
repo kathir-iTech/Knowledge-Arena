@@ -4,7 +4,7 @@
 import React, { createContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -51,6 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (raw === 'teacher') return 'commander';
     if (raw === 'student') return 'gladiator';
     if (raw === 'executive' || raw === 'commander' || raw === 'gladiator') return raw;
+    console.warn('AuthContext: unknown role in Firestore user document', raw);
     return 'gladiator';
   }, []);
 
@@ -58,32 +59,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!firestore || !auth) return null;
     const userRef = doc(firestore, 'users', uid);
     try {
-      const existing = await getDoc(userRef);
-      if (existing.exists()) {
-        const data = existing.data() as Record<string, unknown>;
-        const normalized: User = {
-          id: existing.id,
-          name: (data.name as string) || 'Gladiator',
-          email: (data.email as string) || '',
-          avatar: (data.avatar as string) || getRandomAvatar(),
-          role: normalizeRole(data.role as string | undefined),
+      const result = await runTransaction(firestore, async (transaction) => {
+        const existing = await transaction.get(userRef);
+        if (existing.exists()) {
+          const data = existing.data() as Record<string, unknown>;
+          return {
+            id: existing.id,
+            name: (data.name as string) || 'Gladiator',
+            email: (data.email as string) || '',
+            avatar: (data.avatar as string) || getRandomAvatar(),
+            role: normalizeRole(data.role as string | undefined),
+          } as User;
+        }
+        const newUser: User = {
+          id: uid,
+          name: defaults?.name || auth.currentUser?.displayName || 'Gladiator',
+          email: defaults?.email || auth.currentUser?.email || '',
+          avatar: getRandomAvatar(),
+          role: 'gladiator',
         };
-        return normalized;
-      }
-      const newUser: User = {
-        id: uid,
-        name: defaults?.name || auth.currentUser?.displayName || 'Gladiator',
-        email: defaults?.email || auth.currentUser?.email || '',
-        avatar: getRandomAvatar(),
-        role: 'gladiator',
-      };
-      await setDoc(userRef, {
-        name: newUser.name,
-        email: newUser.email,
-        avatar: newUser.avatar,
-        role: 'gladiator',
+        transaction.set(userRef, {
+          name: newUser.name,
+          email: newUser.email,
+          avatar: newUser.avatar,
+          role: 'gladiator',
+        });
+        return newUser;
       });
-      return newUser;
+      return result;
     } catch {
       return null;
     }
