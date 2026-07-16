@@ -48,6 +48,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signupUserId = useRef<string | null>(null);
   const lastFetchedUid = useRef<string | null>(null);
   const redirectCheckComplete = useRef(false);
+  const fetchInProgress = useRef(false);
+  const fetchInProgressUid = useRef<string | null>(null);
   const timingRef = useRef<{ redirectReturn?: number; authResolved?: number; profileResolved?: number }>({});
 
   useEffect(() => {
@@ -130,8 +132,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [firestore, auth, getRandomAvatar, normalizeRole, buildFallbackProfile]);
 
   const fetchUserDocument = useCallback(async (uid: string) => {
-    if (!firestore) return;
+    if (!firestore) { setIsLoading(false); return; }
     if (lastFetchedUid.current === uid && user) return;
+    if (fetchInProgress.current && fetchInProgressUid.current === uid) return;
+    fetchInProgress.current = true;
+    fetchInProgressUid.current = uid;
     lastFetchedUid.current = uid;
     timingRef.current.authResolved = performance.now();
     try {
@@ -160,6 +165,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }));
     } finally {
         setIsLoading(false);
+        fetchInProgress.current = false;
+        fetchInProgressUid.current = null;
     }
   }, [firestore, auth, user, ensureGladiatorProfile, buildFallbackProfile]);
 
@@ -172,10 +179,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (signupInProgress.current && signupUserId.current === firebaseUser.uid) {
         return;
       }
+      sessionStorage.removeItem('oa_pending');
       fetchUserDocument(firebaseUser.uid);
     } else {
       console.log('[Auth] No Firebase user — clearing session');
       setUser(null);
+      fetchInProgress.current = false;
+      fetchInProgressUid.current = null;
+      sessionStorage.removeItem('oa_pending');
       if (redirectCheckComplete.current) {
         setIsLoading(false);
       }
@@ -275,17 +286,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         redirectCheckComplete.current = true;
         if (result) {
           timingRef.current.redirectReturn = performance.now();
+          sessionStorage.removeItem('oa_pending');
           console.log('[Auth] Redirect sign-in successful', result.user.email);
-          setIsLoading(false);
         } else {
           console.log('[Auth] getRedirectResult: null (no pending redirect)');
-          setIsLoading(false);
+          const oaMarker = sessionStorage.getItem('oa_pending');
+          let oaValid = false;
+          if (oaMarker) {
+            const ts = parseInt(oaMarker, 10);
+            if (!isNaN(ts) && Date.now() - ts < 180000) oaValid = true;
+            else sessionStorage.removeItem('oa_pending');
+          }
+          if (!oaValid && !auth?.currentUser) {
+            setIsLoading(false);
+          }
         }
       })
       .catch((error: unknown) => {
         redirectCheckComplete.current = true;
         console.error('[Auth] getRedirectResult ERROR:', error);
         setIsLoading(false);
+        sessionStorage.removeItem('oa_pending');
         const mapped = mapFirebaseAuthError(error, 'google');
         if (!mapped.isSilent) {
           toast({ variant: "destructive", title: mapped.title, description: mapped.message });
@@ -299,6 +320,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     setIsLoading(true);
+    sessionStorage.setItem('oa_pending', Date.now().toString());
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
@@ -306,6 +328,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signInWithRedirect(auth, provider);
     } catch (error: unknown) {
       console.error('[Auth] signInWithRedirect error', error);
+      sessionStorage.removeItem('oa_pending');
       setIsLoading(false);
       const mapped = mapFirebaseAuthError(error, 'google');
       if (!mapped.isSilent) {

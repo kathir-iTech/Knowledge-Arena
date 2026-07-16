@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Loader2, Save, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -54,7 +54,12 @@ export default function GladiatorProfile() {
         <CardHeader className="text-center pb-2 pt-8">
           <div className="flex justify-center mb-4">
             <Avatar className="h-24 w-24 ring-4 ring-primary/10 ring-offset-2 ring-offset-card">
-              <AvatarFallback className="text-5xl bg-secondary">{avatar}</AvatarFallback>
+              {avatar.startsWith('http') ? <AvatarImage src={avatar} alt={user?.name || 'Avatar'} className="object-cover" /> : null}
+              <AvatarFallback className="text-5xl bg-secondary">
+              {avatar.startsWith('http')
+                ? ((user?.name || '').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?')
+                : avatar}
+              </AvatarFallback>
             </Avatar>
           </div>
           <CardTitle className="text-xl font-headline">{user?.name || 'Anonymous'}</CardTitle>
