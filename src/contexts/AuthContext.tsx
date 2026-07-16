@@ -48,6 +48,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signupUserId = useRef<string | null>(null);
   const lastFetchedUid = useRef<string | null>(null);
 
+  useEffect(() => {
+    console.log('[AuthDebug] firebaseUser:', firebaseUser?.email || null, 'isUserLoading:', isUserLoading, 'auth.currentUser:', auth?.currentUser?.email || null);
+  }, [firebaseUser, isUserLoading, auth]);
+
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
   }, []);
@@ -243,14 +247,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth) { console.log('[AuthDebug] getRedirectResult: no auth'); return; }
     getRedirectResult(auth)
       .then((result) => {
         if (result) {
           console.log('[Google] Redirect sign-in successful', result.user.email);
+        } else {
+          console.log('[AuthDebug] getRedirectResult: null (no pending redirect)');
         }
       })
       .catch((error: unknown) => {
+        console.error('[AuthDebug] getRedirectResult ERROR:', error);
         const mapped = mapFirebaseAuthError(error, 'google');
         if (!mapped.isSilent) {
           toast({ variant: "destructive", title: mapped.title, description: mapped.message });
