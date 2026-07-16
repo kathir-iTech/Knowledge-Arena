@@ -15,9 +15,10 @@ const PORTAL_ROUTES: Record<string, string> = {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public routes, battle routes, and API routes
+  // Allow public routes, battle routes, API routes, and Firebase Auth handler paths
   if (
     PUBLIC_ROUTES.includes(pathname) ||
+    pathname.startsWith('/__/') ||
     pathname.startsWith(BATTLE_ROUTE_PREFIX) ||
     pathname.startsWith(API_ROUTE_PREFIX) ||
     pathname.startsWith('/_next/') ||
