@@ -64,14 +64,7 @@ export function LoginForm() {
   };
 
   const onGoogleSignIn = async () => {
-    setIsLoading(true);
-    try {
-      await signInWithGoogle();
-    } catch {
-      // Error already shown via toast in AuthContext
-    } finally {
-      setIsLoading(false);
-    }
+    await signInWithGoogle();
   };
 
 

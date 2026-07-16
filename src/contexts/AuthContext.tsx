@@ -131,6 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: googleUser?.email || undefined,
           photoURL: googleUser?.photoURL || undefined,
         });
+        console.log('[Auth] User resolved: uid=' + uid + ' role=' + profile.role + ' name=' + profile.name);
         setUser(profile);
     } catch (err) {
         console.error('AuthContext: fetchUserDocument error', err);
@@ -156,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       fetchUserDocument(firebaseUser.uid);
     } else {
+      console.log('[Auth] No Firebase user — clearing session');
       setUser(null);
       setIsLoading(false);
     }
@@ -247,17 +249,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    if (!auth) { console.log('[AuthDebug] getRedirectResult: no auth'); return; }
+    if (!auth) { console.log('[Auth] getRedirectResult: no auth'); return; }
     getRedirectResult(auth)
       .then((result) => {
         if (result) {
-          console.log('[Google] Redirect sign-in successful', result.user.email);
+          console.log('[Auth] Redirect sign-in successful', result.user.email);
+          setIsLoading(false);
         } else {
-          console.log('[AuthDebug] getRedirectResult: null (no pending redirect)');
+          console.log('[Auth] getRedirectResult: null (no pending redirect)');
         }
       })
       .catch((error: unknown) => {
-        console.error('[AuthDebug] getRedirectResult ERROR:', error);
+        console.error('[Auth] getRedirectResult ERROR:', error);
+        setIsLoading(false);
         const mapped = mapFirebaseAuthError(error, 'google');
         if (!mapped.isSilent) {
           toast({ variant: "destructive", title: mapped.title, description: mapped.message });
@@ -270,13 +274,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast({ variant: "destructive", title: "Google Sign-In Failed", description: "Auth service not available." });
       return;
     }
+    setIsLoading(true);
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      console.log('[Google] Starting redirect sign-in');
+      console.log('[Auth] Google sign-in: initiating redirect with prompt=select_account');
       await signInWithRedirect(auth, provider);
     } catch (error: unknown) {
-      console.error('[Google] signInWithRedirect error', error);
+      console.error('[Auth] signInWithRedirect error', error);
+      setIsLoading(false);
       const mapped = mapFirebaseAuthError(error, 'google');
       if (!mapped.isSilent) {
         toast({ variant: "destructive", title: mapped.title, description: mapped.message });
