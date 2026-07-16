@@ -47,6 +47,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signupInProgress = useRef(false);
   const signupUserId = useRef<string | null>(null);
   const lastFetchedUid = useRef<string | null>(null);
+  const redirectCheckComplete = useRef(false);
+  const timingRef = useRef<{ redirectReturn?: number; authResolved?: number; profileResolved?: number }>({});
 
   useEffect(() => {
     console.log('[AuthDebug] firebaseUser:', firebaseUser?.email || null, 'isUserLoading:', isUserLoading, 'auth.currentUser:', auth?.currentUser?.email || null);
@@ -85,11 +87,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('[Profile] Invalid role for user', uid, data.role);
             return buildFallbackProfile(uid, defaults);
           }
+          const storedAvatar = (data.avatar as string) || '';
+          const googlePhotoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
+          let finalAvatar = storedAvatar;
+          if (storedAvatar.startsWith('http') && googlePhotoURL && googlePhotoURL !== storedAvatar) {
+            finalAvatar = googlePhotoURL;
+            transaction.update(userRef, { avatar: finalAvatar });
+          }
           return {
             id: existing.id,
             name: (data.name as string) || 'Gladiator',
             email: (data.email as string) || '',
-            avatar: (data.avatar as string) || getRandomAvatar(),
+            avatar: finalAvatar || getRandomAvatar(),
             role,
           } as User;
         }
@@ -124,6 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!firestore) return;
     if (lastFetchedUid.current === uid && user) return;
     lastFetchedUid.current = uid;
+    timingRef.current.authResolved = performance.now();
     try {
         const googleUser = auth?.currentUser;
         const profile = await ensureGladiatorProfile(uid, {
@@ -131,6 +141,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: googleUser?.email || undefined,
           photoURL: googleUser?.photoURL || undefined,
         });
+        timingRef.current.profileResolved = performance.now();
+        const { redirectReturn, authResolved, profileResolved } = timingRef.current;
+        if (redirectReturn) {
+          console.log('[Timing] OAuth redirect→auth:', (authResolved - redirectReturn).toFixed(0) + 'ms',
+            'auth→profile:', (profileResolved - authResolved).toFixed(0) + 'ms',
+            'total:', (profileResolved - redirectReturn).toFixed(0) + 'ms');
+        }
         console.log('[Auth] User resolved: uid=' + uid + ' role=' + profile.role + ' name=' + profile.name);
         setUser(profile);
     } catch (err) {
@@ -159,7 +176,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       console.log('[Auth] No Firebase user — clearing session');
       setUser(null);
-      setIsLoading(false);
+      if (redirectCheckComplete.current) {
+        setIsLoading(false);
+      }
     }
   }, [firebaseUser, isUserLoading, fetchUserDocument]);
 
@@ -249,17 +268,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    if (!auth) { console.log('[Auth] getRedirectResult: no auth'); return; }
+    if (!auth) { console.log('[Auth] getRedirectResult: no auth'); redirectCheckComplete.current = true; return; }
+    redirectCheckComplete.current = false;
     getRedirectResult(auth)
       .then((result) => {
+        redirectCheckComplete.current = true;
         if (result) {
+          timingRef.current.redirectReturn = performance.now();
           console.log('[Auth] Redirect sign-in successful', result.user.email);
           setIsLoading(false);
         } else {
           console.log('[Auth] getRedirectResult: null (no pending redirect)');
+          setIsLoading(false);
         }
       })
       .catch((error: unknown) => {
+        redirectCheckComplete.current = true;
         console.error('[Auth] getRedirectResult ERROR:', error);
         setIsLoading(false);
         const mapped = mapFirebaseAuthError(error, 'google');
