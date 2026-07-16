@@ -16,7 +16,7 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { AvatarEditor } from './AvatarEditor';
 import { cn } from '@/lib/utils';
 
@@ -53,7 +53,12 @@ const CommanderSidebar = () => {
             <div className="mx-2 mb-2 pt-1">
               <button onClick={() => setAvatarEditorOpen(true)} className="flex items-center gap-3 w-full text-left rounded-[10px] p-2.5 transition-colors hover:bg-sidebar-accent group" aria-label="Change avatar">
                 <Avatar className="h-9 w-9 shrink-0 ring-2 ring-sidebar-border ring-offset-1 ring-offset-sidebar">
-                  <AvatarFallback className="bg-sidebar-accent text-sm font-medium">{user.avatar}</AvatarFallback>
+                  {user.avatar.startsWith('http') ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
+                  <AvatarFallback className="bg-sidebar-accent text-sm font-medium">
+                    {user.avatar.startsWith('http')
+                      ? (user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?')
+                      : user.avatar}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col overflow-hidden hidden group-data-[collapsed=false]:flex min-w-0">
                   <span className="font-medium text-sm truncate leading-tight text-sidebar-accent-foreground">{user.name}</span>
