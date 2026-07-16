@@ -4,7 +4,7 @@
 import React, { createContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
+import { doc, updateDoc, runTransaction } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -48,7 +48,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signupInProgress = useRef(false);
   const signupUserId = useRef<string | null>(null);
   const lastFetchedUid = useRef<string | null>(null);
-  const invalidProfileUids = useRef<Set<string>>(new Set());
 
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
@@ -62,8 +61,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   }, []);
 
-  const ensureGladiatorProfile = useCallback(async (uid: string, defaults?: { name?: string; email?: string }): Promise<User | null> => {
-    if (!firestore || !auth) return null;
+  const buildFallbackProfile = useCallback((uid: string, defaults?: { name?: string; email?: string; photoURL?: string }): User => ({
+    id: uid,
+    name: defaults?.name || auth?.currentUser?.displayName || 'Gladiator',
+    email: defaults?.email || auth?.currentUser?.email || '',
+    avatar: defaults?.photoURL || auth?.currentUser?.photoURL || getRandomAvatar(),
+    role: 'gladiator' as const,
+  }), [auth, getRandomAvatar]);
+
+  const ensureGladiatorProfile = useCallback(async (uid: string, defaults?: { name?: string; email?: string; photoURL?: string }): Promise<User> => {
+    if (!firestore || !auth) return buildFallbackProfile(uid, defaults);
     const userRef = doc(firestore, 'users', uid);
     try {
       const result = await runTransaction(firestore, async (transaction) => {
@@ -72,7 +79,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const data = existing.data() as Record<string, unknown>;
           const role = normalizeRole(data.role as string | undefined);
           if (!role) {
-            return null;
+            console.warn('[Profile] Invalid role for user', uid, data.role);
+            return buildFallbackProfile(uid, defaults);
           }
           return {
             id: existing.id,
@@ -82,12 +90,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role,
           } as User;
         }
-        const googlePhoto = auth.currentUser?.photoURL;
+        const displayName = defaults?.name || auth.currentUser?.displayName || 'Gladiator';
+        const email = defaults?.email || auth.currentUser?.email || '';
+        const photoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
+        const avatar = photoURL || getRandomAvatar();
+        console.log('[Profile] Creating Firestore profile for', uid, { displayName, email, hasPhoto: !!photoURL });
         const newUser: User = {
           id: uid,
-          name: defaults?.name || auth.currentUser?.displayName || 'Gladiator',
-          email: defaults?.email || auth.currentUser?.email || '',
-          avatar: googlePhoto || getRandomAvatar(),
+          name: displayName,
+          email,
+          avatar,
           role: 'gladiator',
         };
         transaction.set(userRef, {
@@ -99,35 +111,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return newUser;
       });
       return result;
-    } catch {
-      return null;
+    } catch (err) {
+      console.error('[Profile] Firestore profile creation failed for', uid, '- using local fallback', err);
+      return buildFallbackProfile(uid, defaults);
     }
-  }, [firestore, auth, getRandomAvatar, normalizeRole]);
+  }, [firestore, auth, getRandomAvatar, normalizeRole, buildFallbackProfile]);
 
   const fetchUserDocument = useCallback(async (uid: string) => {
     if (!firestore) return;
     if (lastFetchedUid.current === uid && user) return;
-    if (invalidProfileUids.current.has(uid)) return;
     lastFetchedUid.current = uid;
     try {
-        const profile = await ensureGladiatorProfile(uid);
-        if (!profile) {
-          invalidProfileUids.current.add(uid);
-          console.warn('AuthContext: invalid profile for uid', uid);
-          toast({
-            variant: "destructive",
-            title: "Account Configuration Error",
-            description: "Your account has an invalid configuration. Please contact support.",
-          });
-        }
+        const googleUser = auth?.currentUser;
+        const profile = await ensureGladiatorProfile(uid, {
+          name: googleUser?.displayName || undefined,
+          email: googleUser?.email || undefined,
+          photoURL: googleUser?.photoURL || undefined,
+        });
         setUser(profile);
     } catch (err) {
         console.error('AuthContext: fetchUserDocument error', err);
-        setUser(null);
+        const googleUser = auth?.currentUser;
+        setUser(buildFallbackProfile(uid, {
+          name: googleUser?.displayName || undefined,
+          email: googleUser?.email || undefined,
+          photoURL: googleUser?.photoURL || undefined,
+        }));
     } finally {
         setIsLoading(false);
     }
-  }, [firestore, user, ensureGladiatorProfile, toast]);
+  }, [firestore, auth, user, ensureGladiatorProfile, buildFallbackProfile]);
 
   useEffect(() => {
     if (isUserLoading) {
@@ -215,11 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: credentials.email,
       });
 
-      if (profile) {
-        setUser(profile);
-      } else {
-        throw Object.assign(new Error('Failed to create profile'), { code: 'unavailable' });
-      }
+      setUser(profile);
       signupInProgress.current = false;
       signupUserId.current = null;
 
@@ -236,26 +245,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (!auth) return;
-    getRedirectResult(auth).catch((error: unknown) => {
-      const mapped = mapFirebaseAuthError(error, 'google');
-      if (!mapped.isSilent) {
-        toast({ variant: "destructive", title: mapped.title, description: mapped.message });
-      }
-    });
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          console.log('[Google] Redirect sign-in successful', result.user.email);
+        }
+      })
+      .catch((error: unknown) => {
+        const mapped = mapFirebaseAuthError(error, 'google');
+        if (!mapped.isSilent) {
+          toast({ variant: "destructive", title: mapped.title, description: mapped.message });
+        }
+      });
   }, [auth, toast]);
 
   const signInWithGoogle = useCallback(async () => {
-    if (!auth) throw new Error("Auth service not available");
+    if (!auth) {
+      toast({ variant: "destructive", title: "Google Sign-In Failed", description: "Auth service not available." });
+      return;
+    }
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      await signInWithRedirect(auth, provider);
+      console.log('[Google] Attempting sign-in with popup');
+      const result = await signInWithPopup(auth, provider);
+      console.log('[Google] Popup sign-in successful', result.user.email);
+      return;
     } catch (error: unknown) {
+      const err = error as { code?: string };
+      if (err?.code === 'auth/popup-blocked') {
+        console.log('[Google] Popup blocked, falling back to redirect');
+        try {
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (redirectError: unknown) {
+          const mapped = mapFirebaseAuthError(redirectError, 'google');
+          if (!mapped.isSilent) {
+            toast({ variant: "destructive", title: mapped.title, description: mapped.message });
+          }
+          console.error('[Google] Redirect fallback also failed', redirectError);
+          return;
+        }
+      }
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        console.log('[Google] User cancelled popup');
+        return;
+      }
+      console.error('[Google] signInWithPopup error', err?.code, error);
       const mapped = mapFirebaseAuthError(error, 'google');
       if (!mapped.isSilent) {
         toast({ variant: "destructive", title: mapped.title, description: mapped.message });
       }
-      throw new Error(mapped.message);
     }
   }, [auth, toast]);
 
