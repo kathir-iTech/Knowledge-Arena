@@ -98,6 +98,35 @@ export function mapFirebaseAuthError(
         isSilent: false,
       };
 
+    case 'auth/user-disabled':
+      return {
+        title: baseTitle,
+        message: 'This account has been disabled. Please contact support.',
+        isSilent: false,
+      };
+
+    case 'auth/invalid-oauth-client-id':
+    case 'auth/oauth-client-not-found':
+      return {
+        title: 'Google Sign-In Failed',
+        message: 'Google Sign-In configuration error. Please contact support.',
+        isSilent: false,
+      };
+
+    case 'auth/admin-restricted-operation':
+      return {
+        title: baseTitle,
+        message: 'This operation is restricted. Please contact support.',
+        isSilent: false,
+      };
+
+    case 'auth/credential-already-in-use':
+      return {
+        title: 'Google Sign-In Failed',
+        message: 'This Google account is already linked to another account.',
+        isSilent: false,
+      };
+
     case 'permission-denied':
     case 'unavailable':
     case 'failed-precondition':
