@@ -8,7 +8,6 @@ import { doc, updateDoc, runTransaction } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
@@ -267,31 +266,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      console.log('[Google] Attempting sign-in with popup');
-      const result = await signInWithPopup(auth, provider);
-      console.log('[Google] Popup sign-in successful', result.user.email);
-      return;
+      console.log('[Google] Starting redirect sign-in');
+      await signInWithRedirect(auth, provider);
     } catch (error: unknown) {
-      const err = error as { code?: string };
-      if (err?.code === 'auth/popup-blocked') {
-        console.log('[Google] Popup blocked, falling back to redirect');
-        try {
-          await signInWithRedirect(auth, provider);
-          return;
-        } catch (redirectError: unknown) {
-          const mapped = mapFirebaseAuthError(redirectError, 'google');
-          if (!mapped.isSilent) {
-            toast({ variant: "destructive", title: mapped.title, description: mapped.message });
-          }
-          console.error('[Google] Redirect fallback also failed', redirectError);
-          return;
-        }
-      }
-      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
-        console.log('[Google] User cancelled popup');
-        return;
-      }
-      console.error('[Google] signInWithPopup error', err?.code, error);
+      console.error('[Google] signInWithRedirect error', error);
       const mapped = mapFirebaseAuthError(error, 'google');
       if (!mapped.isSilent) {
         toast({ variant: "destructive", title: mapped.title, description: mapped.message });
