@@ -4,9 +4,10 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2 } from 'lucide-react';
+import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -124,6 +125,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [submittedCount, setSubmittedCount] = useState(0);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
+  const endingRef = useRef(false);
   const lastViolationRef = useRef(0);
   const prevViolationsRef = useRef<Record<string, number>>({});
   const advancingRef = useRef(false);
@@ -189,13 +193,13 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   useEffect(() => {
     if (!currentQuestion) return;
     const start = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
-    const limit = currentQuestion.timer * 1000;
+    const durationMs = currentQuestion.timer * 1000;
     const totalSec = currentQuestion.timer;
-    const end = start + limit;
+    const deadline = start + durationMs;
 
     const interval = setInterval(() => {
-      const elapsed = Math.max(0, Date.now() - start);
-      const remaining = Math.max(0, Math.ceil((limit - elapsed) / 1000));
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
       const clamped = Math.min(remaining, totalSec);
       setTimeLeft(clamped);
       if (clamped <= 0) clearInterval(interval);
@@ -317,6 +321,25 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     } finally { advancingRef.current = false; setIsAdvancing(false); }
   };
 
+  const handleEndBattle = async () => {
+    if (!isTeacher || endingRef.current) return;
+    endingRef.current = true;
+    setIsEnding(true);
+    try {
+      if (currentQuestion) {
+        const startTime = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
+        await questionService.evaluateQuestion(quiz.id, currentQuestion.id, startTime);
+      }
+      await quizService.updateQuizStatus(quiz.id, 'finished');
+      await participantService.markAllFinished(quiz.id, quiz.created_by);
+      toast({ title: 'Battle Ended', description: 'The battle has been finalized.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to end battle. Please try again.' });
+      endingRef.current = false;
+      setIsEnding(false);
+    }
+  };
+
   if (isLoadingQuestions) return <LoadingScreen message="Loading questions..." />;
   if (!currentQuestion) return null;
 
@@ -411,10 +434,16 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           </div>
           {isTeacher && (
             <div className="flex flex-col items-center pt-6 md:pt-8 gap-2">
-              <Button onClick={handleNext} disabled={isAdvancing} size="lg" className="w-full md:w-auto min-w-[200px]" aria-busy={isAdvancing}>
-                {isAdvancing ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
-                {(quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Button onClick={handleNext} disabled={isAdvancing || isEnding} size="lg" className="w-full sm:w-auto min-w-[200px]" aria-busy={isAdvancing}>
+                  {isAdvancing ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
+                  {(quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
+                </Button>
+                <Button onClick={() => setShowEndConfirm(true)} variant="outline" disabled={isAdvancing || isEnding} size="lg" className="w-full sm:w-auto">
+                  {isEnding ? <Loader2 className="animate-spin mr-2" /> : <Flag className="mr-2 h-5 w-5" />}
+                  End Battle
+                </Button>
+              </div>
               <p className="text-sm text-muted-foreground">{submittedCount} / {studentCount} gladiators answered</p>
             </div>
           )}
@@ -428,6 +457,24 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         </CardContent>
       </Card>
       <LiveLeaderboard quizId={quiz.id} participants={participants} teacherId={quiz.created_by} currentUserId={user?.id || ''} />
+
+      <AlertDialog open={showEndConfirm} onOpenChange={(o) => { if (!o && !isEnding) setShowEndConfirm(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End Battle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The battle will end for all participants and current results will be finalized. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowEndConfirm(false)} disabled={isEnding}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowEndConfirm(false); handleEndBattle(); }} disabled={isEnding} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isEnding ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+              End Battle
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

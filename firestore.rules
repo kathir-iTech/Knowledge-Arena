@@ -61,7 +61,11 @@ service cloud.firestore {
 
         match /submissions/{userId} {
           allow read: if isQuizCreator(quizId) || isOwner(userId);
-          allow create: if isOwner(userId) && isNotBlocked(quizId, userId);
+          allow create: if isOwner(userId) && isNotBlocked(quizId, userId)
+            && request.resource.data.selected_option >= 0
+            && request.resource.data.selected_option <= 3
+            && request.resource.data.keys().hasOnly(['question_id', 'selected_option', 'submittedAt', 'clientTime']);
+          allow update: if false;
           allow delete: if isQuizCreator(quizId);
         }
       }
