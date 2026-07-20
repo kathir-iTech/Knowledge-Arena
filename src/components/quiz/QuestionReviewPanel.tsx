@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { questionService } from '@/services/game.service';
@@ -73,18 +74,88 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
     setValidationIssues(validateQuiz(mapped));
   }, [questions]);
 
+  const prevInitialRef = useRef<GeneratedQuestion[]>(initialQuestions);
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    const prev = prevInitialRef.current;
+    if (prev === initialQuestions) return;
+    if (prev.length === initialQuestions.length) {
+      setQuestions(prevQ => {
+        let changed = false;
+        const updated = prevQ.map((q, i) => {
+          if (i < initialQuestions.length) {
+            const oldGen = prev[i];
+            const newGen = initialQuestions[i];
+            if (oldGen.text !== newGen.text ||
+                JSON.stringify(oldGen.options) !== JSON.stringify(newGen.options) ||
+                oldGen.correctAnswerIndex !== newGen.correctAnswerIndex) {
+              changed = true;
+              return { ...q, text: newGen.text, options: newGen.options, correctAnswerIndex: newGen.correctAnswerIndex, explanation: newGen.explanation };
+            }
+          }
+          return q;
+        });
+        return changed ? updated : prevQ;
+      });
+    } else {
+      setQuestions(initialQuestions.map(q => ({
+        id: uuidv4(),
+        text: q.text,
+        options: q.options,
+        correctAnswerIndex: q.correctAnswerIndex,
+        explanation: q.explanation,
+        timer: 30,
+      })));
+    }
+    prevInitialRef.current = initialQuestions;
+  }, [initialQuestions]);
+
+  const handleShuffleOptions = (id: string) => {
+    setQuestions(prevQ => prevQ.map(q => {
+      if (q.id !== id) return q;
+      const correctText = q.options[q.correctAnswerIndex];
+      const shuffled = [...q.options];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const newCorrectIndex = shuffled.indexOf(correctText);
+      return { ...q, options: shuffled, correctAnswerIndex: newCorrectIndex };
+    }));
+  };
+
+  const handleRegenQuestion = async (index: number) => {
+    if (!onRegenerateQuestion || regeneratingIndex !== null) return;
+    setRegeneratingIndex(index);
+    try {
+      await onRegenerateQuestion(index);
+    } finally {
+      setRegeneratingIndex(null);
+    }
+  };
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Question | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const submittedRef = useRef(false);
 
   // Modal State
   const [quizTitle, setQuizTitle] = useState('');
   const [globalTimer, setGlobalTimer] = useState(30);
 
   const handleDelete = (id: string) => {
-    setQuestions(questions.filter(q => q.id !== id));
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDelete = () => {
+    if (deleteConfirmId) {
+      setQuestions(prev => prev.filter(q => q.id !== deleteConfirmId));
+      setDeleteConfirmId(null);
+    }
   };
 
   const startEditing = (q: Question) => {
@@ -106,6 +177,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
 
   const handleCreateRoom = async () => {
     if (!user || !quizTitle) return;
+    if (submittedRef.current) return;
     if (user.role !== 'commander') {
         toast({ variant: 'destructive', title: "Arena Error", description: "Only Commanders can create arenas." });
         return;
@@ -122,6 +194,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         return;
     }
 
+    submittedRef.current = true;
     setIsSubmitting(true);
     
     try {
@@ -183,6 +256,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         toast({ variant: 'destructive', title: "Arena Error", description: e instanceof Error ? e.message : "Unknown error" });
     } finally {
         setIsSubmitting(false);
+        submittedRef.current = false;
     }
   };
 
@@ -278,8 +352,11 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                   </div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => startEditing(q)}><Edit3 className="w-4 h-4" /></Button>
-                    {onRegenerateQuestion && (
-                      <Button variant="ghost" size="icon" onClick={() => onRegenerateQuestion(index)} className="text-primary"><RefreshCw className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleShuffleOptions(q.id)} className="text-muted-foreground" title="Shuffle answer options"><RefreshCw className="w-4 h-4 rotate-90" /></Button>
+                    {regeneratingIndex === index ? (
+                      <Button variant="ghost" size="icon" disabled className="text-primary"><Loader2 className="w-4 h-4 animate-spin" /></Button>
+                    ) : onRegenerateQuestion && (
+                      <Button variant="ghost" size="icon" onClick={() => handleRegenQuestion(index)} className="text-primary"><RefreshCw className="w-4 h-4" /></Button>
                     )}
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(q.id)} className="text-destructive"><Trash2 className="w-4 h-4" /></Button>
                   </div>
@@ -355,6 +432,21 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
           CREATE ARENA <ChevronUp className="ml-2" />
         </Button>
       </div>
+
+      <AlertDialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Question?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. The question will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-md">
