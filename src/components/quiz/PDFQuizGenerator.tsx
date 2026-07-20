@@ -50,14 +50,32 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
 
     if (selectedFile) {
       if (selectedFile.type !== 'application/pdf') {
-        setError("Only PDF files are supported.");
+        setError("Please upload a valid PDF file.");
         return;
       }
       if (selectedFile.size > 10 * 1024 * 1024) {
-        setError("PDF must be under 10MB.");
+        setError("The PDF is too large. Maximum size is 10MB.");
         return;
       }
-      setFile(selectedFile);
+      if (selectedFile.size === 0) {
+        setError("The PDF file is empty.");
+        return;
+      }
+      // Validate PDF magic bytes (%PDF)
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const arr = new Uint8Array(reader.result as ArrayBuffer);
+        const magic = String.fromCharCode(arr[0], arr[1], arr[2], arr[3]);
+        if (magic !== '%PDF') {
+          setError("This file does not appear to be a valid PDF. Please check the file and try again.");
+          return;
+        }
+        setFile(selectedFile);
+      };
+      reader.onerror = () => {
+        setError("Could not read the file. Please try again.");
+      };
+      reader.readAsArrayBuffer(selectedFile.slice(0, 4));
     }
   };
 

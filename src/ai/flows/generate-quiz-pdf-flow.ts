@@ -264,6 +264,7 @@ async function callGeminiWithFallback(promptText: string): Promise<GeminiResult>
 }
 
 export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Promise<GenerateQuizFromPDFOutput> {
+  console.log('[Forge] PDF generation requested, difficulty:', input.difficulty, 'questionCount:', input.questionCount);
   const auth = await verifyFirebaseToken(input.idToken);
   if (!auth) throw new Error('UNAUTHORIZED');
 
@@ -275,6 +276,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
   const rawBase64 = input.pdfDataUri.split(',')[1] || input.pdfDataUri;
   const decodedBytes = Buffer.from(rawBase64, 'base64').length;
   if (decodedBytes > MAX_PDF_SIZE_BYTES) throw new Error('PDF_TOO_LARGE');
+  console.log('[Forge] Authenticated, rate-limited, PDF size:', decodedBytes, 'bytes');
 
   return generateQuizFromPDFFlow(input);
 }
@@ -393,7 +395,9 @@ const generateQuizFromPDFFlow = ai.defineFlow(
 
     let extracted;
     try {
+      console.log('[Forge] Starting PDF extraction...');
       extracted = await extractTextFromPdfBuffer(buffer);
+      console.log('[Forge] PDF extraction complete:', extracted.numpages, 'pages, text length:', extracted.text.length);
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       const code = err.message;
@@ -428,6 +432,20 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       hard: 'Advanced (Critical Synthesis)',
     };
 
+    const MAX_INPUT_CHARS = 40000;
+    let truncated = text;
+    if (text.length > MAX_INPUT_CHARS) {
+      const target = text.lastIndexOf('. ', MAX_INPUT_CHARS);
+      const target2 = text.lastIndexOf('\n', MAX_INPUT_CHARS);
+      const breakAt = Math.max(target, target2);
+      if (breakAt > MAX_INPUT_CHARS * 0.5) {
+        truncated = text.slice(0, breakAt + 1);
+      } else {
+        truncated = text.slice(0, MAX_INPUT_CHARS);
+      }
+      console.log(`[PDF] Text truncated from ${text.length} to ${truncated.length} chars (sentence-boundary-aware)`);
+    }
+
     const promptText = `Generate exactly ${input.questionCount} high-quality multiple-choice questions based on the following content.
 
 Difficulty: ${difficultyMap[input.difficulty]}
@@ -449,9 +467,11 @@ Output format MUST be a JSON object with a "questions" array:
 }
 
 Content:
-${text.substring(0, 40000)}`;
+${truncated}`;
 
+    console.log('[Forge] Starting Gemini generation...');
     const result = await callGeminiWithFallback(promptText);
+    console.log('[Forge] Gemini result:', result.ok ? 'success' : 'failed', 'engine:', result.ok ? result.engine : result.reason);
     if (!result.ok) {
       let errorMsg: string;
       switch (result.reason) {
