@@ -19,6 +19,7 @@ import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { questionService } from '@/services/game.service';
 import { validateQuiz, type QuizValidationIssue } from '@/lib/quiz-validator';
+import type { ValidatedQuiz } from '@/lib/schemas';
 
 interface Question {
   id: string;
@@ -109,10 +110,43 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         toast({ variant: 'destructive', title: "Arena Error", description: "Only Commanders can create arenas." });
         return;
     }
+    if (questions.length < 3) {
+        toast({ variant: 'destructive', title: "Minimum Questions", description: "At least 3 questions are required to create an arena." });
+        return;
+    }
+
+    // Validate questions before saving
+    const hasInvalid = validationIssues.some(i => i.severity === 'error');
+    if (hasInvalid) {
+        toast({ variant: 'destructive', title: "Validation Error", description: "Fix all errors before creating the arena." });
+        return;
+    }
+
     setIsSubmitting(true);
     
     try {
-        const roomCode = generateRoomCode();
+        let roomCode = generateRoomCode();
+        let existing: ValidatedQuiz | null = null;
+        try {
+            existing = await quizService.getQuizById(roomCode);
+        } catch {
+            // NotFound is expected
+        }
+
+        let attempts = 0;
+        while (existing && attempts < 5) {
+            roomCode = generateRoomCode();
+            try {
+                existing = await quizService.getQuizById(roomCode);
+            } catch {
+                existing = null;
+            }
+            attempts++;
+        }
+
+        if (existing) {
+            throw new Error('Room code collision detected. Please try again.');
+        }
 
         await quizService.createQuiz({
             id: roomCode,
