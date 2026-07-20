@@ -13,6 +13,7 @@ import {
   where,
   onSnapshot,
   runTransaction,
+  serverTimestamp,
 } from 'firebase/firestore';
 import type { ValidatedQuiz } from '@/lib/schemas';
 import { generateRoomCode } from '@/lib/utils';
@@ -22,12 +23,21 @@ function getFirestore() {
   return initializeFirebase().firestore;
 }
 
+function normalizeQuiz(data: Record<string, unknown>): void {
+  const qsa = data.question_start_at;
+  if (qsa && typeof (qsa as any).toMillis === 'function') {
+    data.question_start_at = (qsa as any).toMillis();
+  }
+}
+
 export const quizService = {
   async getQuizById(id: string): Promise<ValidatedQuiz> {
     const db = getFirestore();
     const snap = await getDoc(doc(db, 'quizzes', id));
     if (!snap.exists()) throw new Error('Quiz not found');
-    return { id: snap.id, ...snap.data() } as ValidatedQuiz;
+    const data = snap.data() as Record<string, unknown>;
+    normalizeQuiz(data);
+    return { id: snap.id, ...data } as ValidatedQuiz;
   },
 
   async getQuizzesByCreator(creatorId: string): Promise<ValidatedQuiz[]> {
@@ -86,7 +96,7 @@ export const quizService = {
       transaction.update(quizRef, {
         status: 'live',
         current_question_index: 0,
-        question_start_at: Date.now(),
+        question_start_at: serverTimestamp(),
       });
     });
   },
@@ -95,7 +105,7 @@ export const quizService = {
     const db = getFirestore();
     await updateDoc(doc(db, 'quizzes', id), {
       current_question_index: index,
-      question_start_at: Date.now(),
+      question_start_at: serverTimestamp(),
     });
   },
 
@@ -181,7 +191,9 @@ export const quizService = {
     const db = getFirestore();
     return onSnapshot(doc(db, 'quizzes', id), (snap) => {
       if (snap.exists()) {
-        callback({ id: snap.id, ...snap.data() } as ValidatedQuiz);
+        const data = snap.data() as Record<string, unknown>;
+        normalizeQuiz(data);
+        callback({ id: snap.id, ...data } as ValidatedQuiz);
       } else {
         callback(null);
       }

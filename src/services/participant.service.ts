@@ -13,6 +13,7 @@ import {
   onSnapshot,
   query,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import type { ValidatedParticipant } from '@/lib/schemas';
 
@@ -71,10 +72,15 @@ export const participantService = {
   async markAllFinished(quizId: string, teacherId: string): Promise<void> {
     const db = getFirestore();
     const snap = await getDocs(collection(db, 'quizzes', quizId, 'participants'));
-    const updates = snap.docs
+    const batch = writeBatch(db);
+    let count = 0;
+    snap.docs
       .filter(d => d.id !== teacherId)
-      .map(d => updateDoc(d.ref, { status: 'finished' }));
-    await Promise.all(updates);
+      .forEach(d => { batch.update(d.ref, { status: 'finished' }); count++; });
+    if (count > 0) {
+      // Firestore batch limit is 500 operations — participant count should stay well below
+      await batch.commit();
+    }
   },
 
   async clearAllStudents(quizId: string): Promise<void> {

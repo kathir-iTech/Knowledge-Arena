@@ -14,8 +14,17 @@ import {
   onSnapshot,
   increment,
   runTransaction,
+  serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
+
+function toMillis(val: unknown): number {
+  if (typeof val === 'number') return val;
+  if (val instanceof Timestamp) return val.toMillis();
+  if (val && typeof (val as any).toMillis === 'function') return (val as any).toMillis();
+  return Date.now();
+}
 
 function getFirestore() {
   return initializeFirebase().firestore;
@@ -140,7 +149,8 @@ export const questionService = {
         const isCorrect = subData.selected_option === correctIndex;
         if (!isCorrect) continue;
 
-        const clampedSubmittedAt = Math.max(subData.submittedAt, startTime);
+        const submittedAt = toMillis(subData.submittedAt);
+        const clampedSubmittedAt = Math.max(submittedAt, startTime);
         const elapsed = clampedSubmittedAt - startTime;
         const timeFraction = Math.max(0, 1 - elapsed / timeLimit);
         const scoreToAdd = Math.round(500 + timeFraction * 500);
@@ -248,7 +258,8 @@ export const submissionService = {
       {
         question_id: submission.question_id,
         selected_option: submission.selected_option,
-        submittedAt: Date.now(),
+        submittedAt: serverTimestamp(),
+        clientTime: Date.now(),
       }
     );
   },
