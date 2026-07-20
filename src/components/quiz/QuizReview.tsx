@@ -54,14 +54,14 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
 
         const { initializeFirebase } = await import('@/firebase');
         const { firestore } = initializeFirebase();
-        const { getDocs, collection } = await import('firebase/firestore');
+        const { getDoc, doc } = await import('firebase/firestore');
 
         const subs: ReviewSubmission[] = [];
         for (const q of qs) {
-          const subSnap = await getDocs(collection(firestore, 'quizzes', quizId, 'questions', q.id, 'submissions'));
-          const mySub = subSnap.docs.find(d => d.id === user.id);
-          if (mySub) {
-            const d = mySub.data();
+          const subRef = doc(firestore, 'quizzes', quizId, 'questions', q.id, 'submissions', user.id);
+          const subSnap = await getDoc(subRef);
+          if (subSnap.exists()) {
+            const d = subSnap.data();
             subs.push({
               questionId: q.id,
               selected_option: d.selected_option,

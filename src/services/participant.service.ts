@@ -14,6 +14,7 @@ import {
   query,
   where,
   writeBatch,
+  serverTimestamp,
 } from 'firebase/firestore';
 import type { ValidatedParticipant } from '@/lib/schemas';
 
@@ -47,6 +48,7 @@ export const participantService = {
       score: 0,
       status: 'playing',
       violations_count: 0,
+      lastSeen: serverTimestamp(),
     };
     if (name) data.name = name;
     await setDoc(doc(db, participantPath(quizId, userId)), data);
@@ -88,6 +90,13 @@ export const participantService = {
     const snap = await getDocs(collection(db, 'quizzes', quizId, 'participants'));
     const deletes = snap.docs.map(d => deleteDoc(d.ref));
     await Promise.all(deletes);
+  },
+
+  async heartbeat(quizId: string, userId: string): Promise<void> {
+    const db = getFirestore();
+    await updateDoc(doc(db, participantPath(quizId, userId)), {
+      lastSeen: serverTimestamp(),
+    });
   },
 
   subscribeToParticipants(

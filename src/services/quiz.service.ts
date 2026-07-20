@@ -103,9 +103,15 @@ export const quizService = {
 
   async advanceToQuestion(id: string, index: number): Promise<void> {
     const db = getFirestore();
-    await updateDoc(doc(db, 'quizzes', id), {
-      current_question_index: index,
-      question_start_at: serverTimestamp(),
+    const quizRef = doc(db, 'quizzes', id);
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(quizRef);
+      if (!snap.exists()) throw new Error('Quiz not found');
+      if (snap.data().current_question_index >= index) return;
+      transaction.update(quizRef, {
+        current_question_index: index,
+        question_start_at: serverTimestamp(),
+      });
     });
   },
 

@@ -27,9 +27,20 @@ interface LiveQuizQuestion {
   sort_index: number;
 }
 
+const ONLINE_TIMEOUT_MS = 30000;
+
+function isParticipantOnline(p: ValidatedParticipant): boolean {
+  const lastSeen = p.lastSeen;
+  if (!lastSeen) return true;
+  const ts = typeof lastSeen === 'number' ? lastSeen : (lastSeen as any).toMillis?.();
+  if (!ts) return true;
+  return Date.now() - ts < ONLINE_TIMEOUT_MS;
+}
+
 const LiveLeaderboard = ({ quizId, participants, teacherId, currentUserId }: { quizId: string, participants: ValidatedParticipant[], teacherId: string, currentUserId: string }) => {
     const sortedParticipants = useMemo(() => [...participants].sort((a,b) => b.score - a.score), [participants]);
-    const total = sortedParticipants.filter(p => p.user_id !== teacherId).length;
+    const onlineParticipants = useMemo(() => sortedParticipants.filter(p => p.user_id === teacherId || isParticipantOnline(p)), [sortedParticipants, teacherId]);
+    const total = onlineParticipants.filter(p => p.user_id !== teacherId).length;
 
     return (
         <Card className="w-full max-w-4xl mt-4 md:mt-6">
@@ -38,7 +49,7 @@ const LiveLeaderboard = ({ quizId, participants, teacherId, currentUserId }: { q
             </CardHeader>
             <CardContent className="p-3 md:p-5">
                 <div className="flex flex-wrap gap-2.5 md:gap-3">
-                    {sortedParticipants.filter(p => p.user_id !== teacherId).map((p, idx) => {
+                    {onlineParticipants.filter(p => p.user_id !== teacherId).map((p, idx) => {
                       const rank = idx + 1;
                       const percentile = total > 0 ? Math.round(((total - rank) / total) * 100) : 0;
                       const isSelf = p.user_id === currentUserId;
@@ -132,7 +143,20 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const prevViolationsRef = useRef<Record<string, number>>({});
   const advancingRef = useRef(false);
   const confirmedQuestionIds = useRef(new Set<string>());
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { firestore } = useFirebase();
+
+  useEffect(() => {
+    if (isTeacher || !user) return;
+    const send = () => {
+      participantService.heartbeat(quiz.id, user.id).catch(() => {});
+    };
+    send();
+    heartbeatRef.current = setInterval(send, 15000);
+    return () => {
+      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+    };
+  }, [quiz.id, user, isTeacher]);
 
   useEffect(() => {
     if (participant.status === 'blocked') return;
