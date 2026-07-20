@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -48,6 +48,7 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittedRef = useRef(false);
 
   const form = useForm<QuizFormData>({
     resolver: zodResolver(quizSchema),
@@ -91,6 +92,8 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
         toast({ variant: 'destructive', title: 'Error', description: 'Unauthorized.' });
         return;
     }
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -151,11 +154,12 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
         await questionService.createAnswerKeys(answerKeys);
 
         toast({ title: 'Arena Created', description: `Room Code: ${quizId}` });
-        setIsSubmitting(false);
         router.push(`/battle/${quizId}`);
     } catch (error: unknown) {
         toast({ variant: 'destructive', title: 'Creation Failed', description: error instanceof Error ? error.message : "Unknown error" });
+    } finally {
         setIsSubmitting(false);
+        submittedRef.current = false;
     }
   };
 

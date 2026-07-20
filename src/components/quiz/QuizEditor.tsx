@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Trash2, PlusCircle, Loader2, PencilRuler, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -70,6 +71,8 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittedRef = useRef(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
   const form = useForm<EditFormData>({
     resolver: zodResolver(editSchema),
@@ -89,6 +92,8 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
       toast({ variant: 'destructive', title: 'Error', description: 'Unauthorized.' });
       return;
     }
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -109,11 +114,12 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
       await questionService.replaceQuizContent(quizId, questionPayload, answerKeyPayload);
 
       toast({ title: 'Arena Updated', description: 'Quiz changes have been saved.' });
-      setIsSubmitting(false);
       router.push('/commander/dashboard');
     } catch (error: unknown) {
       toast({ variant: 'destructive', title: 'Update Failed', description: error instanceof Error ? error.message : 'Unknown error' });
+    } finally {
       setIsSubmitting(false);
+      submittedRef.current = false;
     }
   };
 
@@ -168,7 +174,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
                   <span className="text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary px-3 py-1 rounded-full">QUESTION {index + 1}</span>
                 </div>
 
-                <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && remove(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5" disabled={fields.length <= 1}><Trash2 className="h-4 w-4" /></Button>
+                <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && setDeleteConfirm(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5" disabled={fields.length <= 1}><Trash2 className="h-4 w-4" /></Button>
 
                 <CardContent className="space-y-6">
                   <FormField control={form.control} name={`questions.${index}.text`} render={({ field }) => (
@@ -265,6 +271,21 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
           </div>
         </form>
       </Form>
+
+      <AlertDialog open={deleteConfirm !== null} onOpenChange={() => setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Question?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This question will be permanently removed from the arena. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirm(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (deleteConfirm !== null) remove(deleteConfirm); setDeleteConfirm(null); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

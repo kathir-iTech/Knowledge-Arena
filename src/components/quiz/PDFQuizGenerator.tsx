@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -43,6 +43,9 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
   const [isGenerating, setIsGenerating] = useState(false);
   const [stage, setStage] = useState<GenerationStage>('idle');
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -124,6 +127,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
 
       if (result.questions && result.questions.length > 0) {
         clearTimeout(timerId);
+        if (!mountedRef.current) return;
         setStage('complete');
         toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions.` });
         onQuestionsGenerated(result.questions, result.difficulty, dataUri, questionCount);
@@ -132,6 +136,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
       }
     } catch (err: unknown) {
       clearTimeout(timerId);
+      if (!mountedRef.current) return;
       setStage('error');
       let msg = err instanceof Error ? err.message : "Unable to generate questions. Please retry.";
       

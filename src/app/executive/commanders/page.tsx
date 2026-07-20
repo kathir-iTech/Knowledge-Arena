@@ -17,6 +17,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -44,6 +54,7 @@ export default function CommanderManagementPage() {
   const [createPassword, setCreatePassword] = useState('');
   const [createDisplayName, setCreateDisplayName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [toggleConfirmCommander, setToggleConfirmCommander] = useState<Commander | null>(null);
 
   async function safeParseJson(res: Response) {
     const ct = res.headers.get('content-type') || '';
@@ -232,7 +243,7 @@ export default function CommanderManagementPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleToggleDisable(c)}
+                    onClick={() => setToggleConfirmCommander(c)}
                     title={c.disabled ? 'Enable' : 'Disable'}
                   >
                     {c.disabled ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
@@ -295,6 +306,25 @@ export default function CommanderManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={toggleConfirmCommander !== null} onOpenChange={() => setToggleConfirmCommander(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{toggleConfirmCommander?.disabled ? 'Enable Commander?' : 'Disable Commander?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {toggleConfirmCommander?.disabled
+                ? 'This Commander will regain access to all Commander features.'
+                : 'This Commander will no longer be able to access Commander features until re-enabled.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setToggleConfirmCommander(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { const c = toggleConfirmCommander; setToggleConfirmCommander(null); if (c) handleToggleDisable(c); }} className={toggleConfirmCommander?.disabled ? '' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}>
+              {toggleConfirmCommander?.disabled ? 'Enable' : 'Disable'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

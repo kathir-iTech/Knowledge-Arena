@@ -18,6 +18,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 
 interface Gladiator {
   uid: string;
@@ -40,6 +50,7 @@ export default function StudentManagementPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
   const [summary, setSummary] = useState({ total: 0, active: 0, disabled: 0 });
   const [selectedGladiator, setSelectedGladiator] = useState<Gladiator | null>(null);
+  const [toggleConfirmGladiator, setToggleConfirmGladiator] = useState<Gladiator | null>(null);
 
   const fetchGladiators = useCallback(async () => {
     try {
@@ -216,7 +227,7 @@ export default function StudentManagementPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleToggleDisable(g)}
+                    onClick={() => setToggleConfirmGladiator(g)}
                     title={g.disabled ? 'Enable' : 'Disable'}
                   >
                     {g.disabled ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
@@ -271,6 +282,25 @@ export default function StudentManagementPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={toggleConfirmGladiator !== null} onOpenChange={() => setToggleConfirmGladiator(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{toggleConfirmGladiator?.disabled ? 'Enable Gladiator?' : 'Disable Gladiator?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {toggleConfirmGladiator?.disabled
+                ? 'This gladiator will regain access to all features.'
+                : 'This gladiator will no longer be able to participate in battles until re-enabled.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setToggleConfirmGladiator(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { const g = toggleConfirmGladiator; setToggleConfirmGladiator(null); if (g) handleToggleDisable(g); }} className={toggleConfirmGladiator?.disabled ? '' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}>
+              {toggleConfirmGladiator?.disabled ? 'Enable' : 'Disable'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
