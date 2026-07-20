@@ -14,13 +14,17 @@ interface GeneratedQuestion {
   explanation: string;
 }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PencilRuler, Sparkles, ChevronLeft } from "lucide-react";
+import { PencilRuler, Sparkles, ChevronLeft, ArrowLeft } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export default function CreateQuizPage() {
+  const router = useRouter();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('manual');
   const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestion[] | null>(null);
   const [difficulty, setDifficulty] = useState('');
@@ -71,6 +75,9 @@ export default function CreateQuizPage() {
         }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 120000)),
       ]);
+      if (result.error) {
+        throw new Error(result.error);
+      }
       if (result.questions && result.questions.length > 0) {
         const updated = [...generatedQuestions];
         updated[index] = result.questions[0];
@@ -125,9 +132,14 @@ export default function CreateQuizPage() {
 
   return (
     <div className="page-container safe-top safe-bottom animate-in">
-        <header className="page-section safe-top">
-          <h1 className="text-page-title font-headline tracking-tight text-primary">Arena Architect</h1>
-        <p className="text-sm text-muted-foreground mt-1">Design a new battleground. Construct challenges manually or forge them from data.</p>
+        <header className="page-section safe-top flex items-start gap-4">
+          <Button variant="ghost" onClick={() => router.push(user?.role === 'executive' ? '/executive/dashboard' : '/commander/dashboard')} className="h-9 shrink-0 mt-0.5">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Dashboard
+          </Button>
+          <div>
+            <h1 className="text-page-title font-headline tracking-tight text-primary">Arena Architect</h1>
+            <p className="text-sm text-muted-foreground mt-1">Design a new battleground. Construct challenges manually or forge them from data.</p>
+          </div>
       </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">

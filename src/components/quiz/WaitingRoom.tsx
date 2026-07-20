@@ -41,9 +41,18 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const unsubRef = useRef<(() => void) | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
+
+    if (!isTeacher && user) {
+      const send = () => {
+        participantService.heartbeat(quiz.id, user.id).catch(() => {});
+      };
+      send();
+      heartbeatRef.current = setInterval(send, 15000);
+    }
 
     const subscribe = () => {
       if (unsubRef.current) unsubRef.current();
@@ -81,14 +90,42 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       mountedRef.current = false;
       if (unsubRef.current) { unsubRef.current(); unsubRef.current = null; }
       if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
+      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
       window.removeEventListener('offline', handleOffline);
       unsubQuiz();
     };
-  }, [quiz.id, quiz.created_by]);
+  }, [quiz.id, quiz.created_by, isTeacher, user]);
 
   const studentParticipants = useMemo(() => {
-      return participants.filter(p => p.user_id !== quiz.created_by);
+    const now = Date.now();
+    return participants.filter(p => {
+      if (p.user_id === quiz.created_by) return false;
+      if (p.status === 'blocked') return false;
+      const lastSeen = p.lastSeen;
+      if (!lastSeen) return true;
+      const ts = typeof lastSeen === 'number' ? lastSeen : (lastSeen as any).toMillis?.();
+      if (!ts) return true;
+      return now - ts < 30000;
+    });
   }, [participants, quiz.created_by]);
+
+  const blockedParticipants = useMemo(() => {
+    return participants.filter(p => p.user_id !== quiz.created_by && p.status === 'blocked');
+  }, [participants, quiz.created_by]);
+
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+
+  const handleUnblock = async (userId: string) => {
+    setUnblockingId(userId);
+    try {
+      await participantService.unblockParticipant(quiz.id, userId);
+      toast({ title: 'Unblocked', description: 'Gladiator has been unblocked.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to unblock gladiator.' });
+    } finally {
+      setUnblockingId(null);
+    }
+  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -193,11 +230,36 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                       </div>
                       <span className="text-xs font-medium max-w-20 truncate">{p.name || p.user_id.slice(0, 8)}</span>
                     </div>
-                  )) : (
+                  )                  ) : (
                     <p className="text-sm text-muted-foreground">Waiting for participants to arrive...</p>
                   )}
                 </div>
           </CardContent>
+          {isTeacher && blockedParticipants.length > 0 && (
+            <CardContent className="border-t border-border/50 pt-4">
+              <h4 className="text-sm font-semibold text-destructive mb-3">Blocked Gladiators</h4>
+              <div className="space-y-2">
+                {blockedParticipants.map(p => (
+                  <div key={p.user_id} className="flex items-center justify-between py-2 px-3 rounded-[12px] bg-destructive/5 border border-destructive/10">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs bg-secondary">{p.avatar || '🎮'}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium">{p.name || p.user_id.slice(0, 8)}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleUnblock(p.user_id)}
+                      disabled={unblockingId === p.user_id}
+                    >
+                      {unblockingId === p.user_id ? <Loader2 className="animate-spin h-3 w-3" /> : 'Unblock'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          )}
         </Card>
 
         {isTeacher && (

@@ -136,6 +136,10 @@ export const questionService = {
       for (const pDoc of participantsSnap.docs) {
         const uid = pDoc.id;
 
+        const participantRef = doc(db, 'quizzes', quizId, 'participants', uid);
+        const pSnap = await transaction.get(participantRef);
+        if (!pSnap.exists()) continue;
+
         const subRef = doc(
           db,
           'quizzes', quizId,
@@ -156,10 +160,7 @@ export const questionService = {
         const scoreToAdd = Math.round(500 + timeFraction * 500);
 
         if (scoreToAdd > 0) {
-          transaction.update(
-            doc(db, 'quizzes', quizId, 'participants', uid),
-            { score: increment(scoreToAdd) }
-          );
+          transaction.update(participantRef, { score: increment(scoreToAdd) });
         }
       }
 

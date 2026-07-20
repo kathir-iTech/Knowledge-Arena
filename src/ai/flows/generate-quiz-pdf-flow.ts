@@ -264,21 +264,34 @@ async function callGeminiWithFallback(promptText: string): Promise<GeminiResult>
 }
 
 export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Promise<GenerateQuizFromPDFOutput> {
-  console.log('[Forge] PDF generation requested, difficulty:', input.difficulty, 'questionCount:', input.questionCount);
-  const auth = await verifyFirebaseToken(input.idToken);
-  if (!auth) throw new Error('UNAUTHORIZED');
+  try {
+    console.log('[Forge] PDF generation requested, difficulty:', input.difficulty, 'questionCount:', input.questionCount);
+    const auth = await verifyFirebaseToken(input.idToken);
+    if (!auth) {
+      console.error('[Forge] Unauthorized');
+      return { questions: [], difficulty: input.difficulty, error: 'UNAUTHORIZED' };
+    }
 
-  const rl = rateLimiter.check(`ai:pdf:${auth.uid}`, { maxRequests: 5, windowMs: 60000, message: 'PDF Forge rate limit exceeded (5/min).' });
-  if (!rl.allowed) {
-    throw new Error('PDF_FORGE_RATE_LIMITED');
+    const rl = rateLimiter.check(`ai:pdf:${auth.uid}`, { maxRequests: 5, windowMs: 60000, message: 'PDF Forge rate limit exceeded (5/min).' });
+    if (!rl.allowed) {
+      console.error('[Forge] Rate limited');
+      return { questions: [], difficulty: input.difficulty, error: 'PDF_FORGE_RATE_LIMITED' };
+    }
+
+    const rawBase64 = input.pdfDataUri.split(',')[1] || input.pdfDataUri;
+    const decodedBytes = Buffer.from(rawBase64, 'base64').length;
+    if (decodedBytes > MAX_PDF_SIZE_BYTES) {
+      console.error('[Forge] PDF too large:', decodedBytes);
+      return { questions: [], difficulty: input.difficulty, error: 'PDF_TOO_LARGE' };
+    }
+    console.log('[Forge] Authenticated, rate-limited, PDF size:', decodedBytes, 'bytes');
+
+    return await generateQuizFromPDFFlow(input);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Forge] Fatal error:', msg);
+    return { questions: [], difficulty: input.difficulty, error: msg };
   }
-
-  const rawBase64 = input.pdfDataUri.split(',')[1] || input.pdfDataUri;
-  const decodedBytes = Buffer.from(rawBase64, 'base64').length;
-  if (decodedBytes > MAX_PDF_SIZE_BYTES) throw new Error('PDF_TOO_LARGE');
-  console.log('[Forge] Authenticated, rate-limited, PDF size:', decodedBytes, 'bytes');
-
-  return generateQuizFromPDFFlow(input);
 }
 
 function detectPdfIssue(buffer: Buffer): string | null {

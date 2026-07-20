@@ -18,4 +18,5 @@ export interface ValidatedParticipant {
   name?: string;
   avatar?: string;
   violations_count?: number;
+  lastSeen?: unknown;
 }
