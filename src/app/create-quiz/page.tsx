@@ -18,6 +18,7 @@ import { PencilRuler, Sparkles, ChevronLeft } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export default function CreateQuizPage() {
   const [activeTab, setActiveTab] = useState('manual');
@@ -27,6 +28,15 @@ export default function CreateQuizPage() {
   const forgeParams = useRef<{ pdfDataUri: string; diff: 'easy' | 'moderate' | 'hard'; count: number } | null>(null);
   const { toast } = useToast();
   const { auth } = useFirebase();
+  const [showBackConfirm, setShowBackConfirm] = useState(false);
+
+  const handleBackClick = () => {
+    if (generatedQuestions) {
+      setShowBackConfirm(true);
+    } else {
+      handleRegenerate();
+    }
+  };
 
   const handleQuestionsGenerated = (questions: GeneratedQuestion[], diff: string, dataUri?: string, questionCount?: number) => {
     setGeneratedQuestions(questions);
@@ -69,18 +79,19 @@ export default function CreateQuizPage() {
       } else {
         throw new Error('AI returned empty result');
       }
-    } catch {
-      toast({ variant: 'destructive', title: 'Regeneration Failed', description: 'Could not regenerate question. Please try editing manually.' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      console.error('[Regenerate]', msg, e);
+      toast({ variant: 'destructive', title: 'Regeneration Failed', description: msg === 'UNAUTHORIZED' ? 'Session expired. Please reload.' : msg === 'TIMEOUT' ? 'Request timed out. Try again.' : `Server error: ${msg}` });
     }
   };
 
   if (generatedQuestions && !showForgeWithPreserved) {
-    return (
-      <div className="page-container safe-top safe-bottom animate-in">
+    return (<>
         <header className="page-section flex items-center justify-between">
-           <Button variant="ghost" onClick={handleRegenerate} className="h-9">
-             <ChevronLeft className="mr-2 h-4 w-4" /> Back to Architect
-           </Button>
+           <Button variant="ghost" onClick={handleBackClick} className="h-9">
+              <ChevronLeft className="mr-2 h-4 w-4" /> Back to Architect
+            </Button>
            <h1 className="text-xl font-headline text-primary tracking-tight">Question Review</h1>
         </header>
         <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
@@ -92,8 +103,24 @@ export default function CreateQuizPage() {
               onRegenerateQuestion={forgeParams.current ? handleRegenerateQuestion : undefined}
           />
         </Suspense>
-      </div>
-    );
+
+      <Dialog open={showBackConfirm} onOpenChange={setShowBackConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Leave Question Review?</DialogTitle>
+            <DialogDescription>
+              Any edits you made (text changes, deletions, shuffles) will be lost. Regenerated questions will be preserved.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowBackConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => { setShowBackConfirm(false); handleRegenerate(); }}>
+              Discard & Leave
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>);
   }
 
   return (
