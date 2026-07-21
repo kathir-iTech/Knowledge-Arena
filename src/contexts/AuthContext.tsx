@@ -4,9 +4,8 @@
 import React, { createContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, runTransaction } from 'firebase/firestore';
+import { doc, updateDoc, runTransaction, getDoc } from 'firebase/firestore';
 import {
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithRedirect,
   getRedirectResult,
@@ -17,13 +16,13 @@ import { useFirebase, useUser as useFirebaseUserHook } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { mapFirebaseAuthError } from '@/lib/firebase-auth-errors';
+import { mapStaffIdToEmail } from '@/lib/staff-login';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: { email: string; password: string }) => Promise<void>;
-  signup: (credentials: { name: string; email: string; password: string }) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateAvatar: (avatar: string) => Promise<void>;
@@ -50,6 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const redirectCheckComplete = useRef(false);
   const fetchInProgress = useRef(false);
   const fetchInProgressUid = useRef<string | null>(null);
+  const loginGuard = useRef(false);
 
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
@@ -97,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: (data.email as string) || '',
             avatar: finalAvatar || getRandomAvatar(),
             role,
+            mustChangePassword: data.mustChangePassword === true,
           } as User;
         }
         const displayName = defaults?.name || auth.currentUser?.displayName || 'Gladiator';
@@ -165,6 +166,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (signupInProgress.current && signupUserId.current === firebaseUser.uid) {
         return;
       }
+      if (loginGuard.current) {
+        return;
+      }
       sessionStorage.removeItem('oa_pending');
       fetchUserDocument(firebaseUser.uid);
     } else {
@@ -207,59 +211,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Password is required.");
     }
     try {
-      await checkRateLimit('login', credentials.email);
-      await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
+      const email = mapStaffIdToEmail(credentials.email);
+      await checkRateLimit('login', email);
+      await signInWithEmailAndPassword(auth, email, credentials.password);
+
+      loginGuard.current = true;
+
+      try {
+        const uid = auth.currentUser?.uid;
+        if (!uid) {
+          await signOut(auth);
+          loginGuard.current = false;
+          toast({ variant: "destructive", title: "Sign In Failed", description: "Unable to verify account." });
+          throw new Error("Unable to verify account.");
+        }
+
+        if (!firestore) {
+          await signOut(auth);
+          loginGuard.current = false;
+          toast({ variant: "destructive", title: "Sign In Failed", description: "Service not available." });
+          throw new Error("Service not available.");
+        }
+
+        const userDoc = await getDoc(doc(firestore, 'users', uid));
+
+        if (!userDoc.exists()) {
+          await signOut(auth);
+          loginGuard.current = false;
+          toast({ variant: "destructive", title: "Access Denied", description: "Staff account not found. Contact your Executive." });
+          throw new Error("Staff account not found.");
+        }
+
+        const role = userDoc.data()?.role;
+        if (!role || !['executive', 'commander'].includes(role)) {
+          await signOut(auth);
+          loginGuard.current = false;
+          toast({ variant: "destructive", title: "Access Denied", description: "Staff login is not available for this account. Gladiators must use Google Sign-In." });
+          throw new Error("Staff login is not available for this account.");
+        }
+      } finally {
+        loginGuard.current = false;
+      }
     } catch (error: unknown) {
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
         toast({ variant: "destructive", title: "Too Many Attempts", description: "Too many attempts. Please wait a moment and try again." });
         throw error;
       }
+      if (error instanceof Error && (
+        error.message.includes('Access Denied') ||
+        error.message.includes('Staff account not found') ||
+        error.message.includes('Staff login is not available')
+      )) {
+        throw error;
+      }
+      if (error instanceof Error && error.message.includes('Unable to verify')) {
+        throw error;
+      }
       const mapped = mapFirebaseAuthError(error, 'login');
       toast({ variant: "destructive", title: mapped.title, description: mapped.message });
       throw new Error(mapped.message);
-    }
-  };
-
-  const signup = async (credentials: { name: string; email: string; password?: string }) => {
-    if (!auth || !firestore) throw new Error("Firebase services not available");
-    if (!credentials.password) {
-        toast({ variant: "destructive", title: "Signup Failed", description: "Password is required." });
-        throw new Error("Password is required.");
-    }
-
-    try {
-      await checkRateLimit('signup');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Rate limit exceeded.';
-      toast({ variant: "destructive", title: "Too Many Attempts", description: "Too many attempts. Please wait a moment and try again." });
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      signupInProgress.current = true;
-      const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, credentials.password);
-      const uid = userCredential.user.uid;
-      signupUserId.current = uid;
-
-      const profile = await ensureGladiatorProfile(uid, {
-        name: credentials.name,
-        email: credentials.email,
-      });
-
-      setUser(profile);
-      signupInProgress.current = false;
-      signupUserId.current = null;
-
-    } catch (error: unknown) {
-       signupInProgress.current = false;
-       signupUserId.current = null;
-       const mapped = mapFirebaseAuthError(error, 'signup');
-       toast({ variant: "destructive", title: mapped.title, description: mapped.message });
-       throw new Error(mapped.message);
-    } finally {
-        setIsLoading(false);
     }
   };
 
@@ -356,7 +366,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: !!user,
     isLoading,
     login,
-    signup,
     signInWithGoogle,
     logout,
     updateAvatar,

@@ -4,4 +4,5 @@ export interface User {
   email: string;
   role: 'executive' | 'commander' | 'gladiator';
   avatar: string;
+  mustChangePassword?: boolean;
 }
