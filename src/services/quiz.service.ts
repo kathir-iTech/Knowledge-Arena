@@ -91,16 +91,21 @@ export const quizService = {
   async updateQuizStatus(id: string, status: 'waiting' | 'live' | 'finished'): Promise<void> {
     const db = getFirestore();
     const quizRef = doc(db, 'quizzes', id);
-    await runTransaction(db, async (transaction) => {
-      const snap = await transaction.get(quizRef);
-      if (!snap.exists()) throw new Error('Quiz not found');
-      const currentStatus = snap.data().status as string;
-      const allowed = ALLOWED_TRANSITIONS[currentStatus] || [];
-      if (!allowed.includes(status)) {
-        throw new Error(`Invalid status transition: ${currentStatus} → ${status}`);
-      }
-      transaction.update(quizRef, { status });
-    });
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(quizRef);
+        if (!snap.exists()) throw new Error('Quiz not found');
+        const currentStatus = snap.data().status as string;
+        const allowed = ALLOWED_TRANSITIONS[currentStatus] || [];
+        if (!allowed.includes(status)) {
+          throw new Error(`Invalid status transition: ${currentStatus} → ${status}`);
+        }
+        transaction.update(quizRef, { status });
+      });
+    } catch (e) {
+      console.error('[updateQuizStatus] Failed:', id, '→', status, e);
+      throw e;
+    }
   },
 
   async startQuiz(id: string): Promise<void> {
@@ -121,15 +126,23 @@ export const quizService = {
   async advanceToQuestion(id: string, index: number): Promise<void> {
     const db = getFirestore();
     const quizRef = doc(db, 'quizzes', id);
-    await runTransaction(db, async (transaction) => {
-      const snap = await transaction.get(quizRef);
-      if (!snap.exists()) throw new Error('Quiz not found');
-      if (snap.data().current_question_index >= index) return;
-      transaction.update(quizRef, {
-        current_question_index: index,
-        question_start_at: serverTimestamp(),
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(quizRef);
+        if (!snap.exists()) throw new Error('Quiz not found');
+        if (snap.data().current_question_index >= index) {
+          console.log('[advanceToQuestion] Already at/advanced, current:', snap.data().current_question_index, 'target:', index);
+          return;
+        }
+        transaction.update(quizRef, {
+          current_question_index: index,
+          question_start_at: serverTimestamp(),
+        });
       });
-    });
+    } catch (e) {
+      console.error('[advanceToQuestion] Failed:', id, 'index:', index, e);
+      throw e;
+    }
   },
 
   async deleteQuiz(id: string): Promise<void> {
