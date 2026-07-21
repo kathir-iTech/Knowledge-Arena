@@ -49,7 +49,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const redirectCheckComplete = useRef(false);
   const fetchInProgress = useRef(false);
   const fetchInProgressUid = useRef<string | null>(null);
-  const loginGuard = useRef(false);
 
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
@@ -128,9 +127,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [firestore, auth, getRandomAvatar, normalizeRole, buildFallbackProfile]);
 
   const fetchUserDocument = useCallback(async (uid: string) => {
-    if (!firestore) { setIsLoading(false); return; }
-    if (lastFetchedUid.current === uid && user) return;
-    if (fetchInProgress.current && fetchInProgressUid.current === uid) return;
+    console.log('[StaffLogin] fetchUserDocument called for uid:', uid);
+    if (!firestore) { console.log('[StaffLogin] fetchUserDocument: no firestore'); setIsLoading(false); return; }
+    if (lastFetchedUid.current === uid && user) { console.log('[StaffLogin] fetchUserDocument: already fetched', uid); return; }
+    if (fetchInProgress.current && fetchInProgressUid.current === uid) { console.log('[StaffLogin] fetchUserDocument: already in progress', uid); return; }
     fetchInProgress.current = true;
     fetchInProgressUid.current = uid;
     lastFetchedUid.current = uid;
@@ -166,9 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (signupInProgress.current && signupUserId.current === firebaseUser.uid) {
         return;
       }
-      if (loginGuard.current) {
-        return;
-      }
+      console.log('[StaffLogin] useEffect: firebaseUser set, uid:', firebaseUser.uid, '— calling fetchUserDocument');
       sessionStorage.removeItem('oa_pending');
       fetchUserDocument(firebaseUser.uid);
     } else {
@@ -212,46 +210,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       const email = mapStaffIdToEmail(credentials.email);
+      console.log('[StaffLogin] login(): mapped email', credentials.email, '→', email);
       await checkRateLimit('login', email);
       await signInWithEmailAndPassword(auth, email, credentials.password);
+      console.log('[StaffLogin] login(): signInWithEmailAndPassword OK, currentUser.uid:', auth.currentUser?.uid);
 
-      loginGuard.current = true;
-
-      try {
-        const uid = auth.currentUser?.uid;
-        if (!uid) {
-          await signOut(auth);
-          loginGuard.current = false;
-          toast({ variant: "destructive", title: "Sign In Failed", description: "Unable to verify account." });
-          throw new Error("Unable to verify account.");
-        }
-
-        if (!firestore) {
-          await signOut(auth);
-          loginGuard.current = false;
-          toast({ variant: "destructive", title: "Sign In Failed", description: "Service not available." });
-          throw new Error("Service not available.");
-        }
-
-        const userDoc = await getDoc(doc(firestore, 'users', uid));
-
-        if (!userDoc.exists()) {
-          await signOut(auth);
-          loginGuard.current = false;
-          toast({ variant: "destructive", title: "Access Denied", description: "Staff account not found. Contact your Executive." });
-          throw new Error("Staff account not found.");
-        }
-
-        const role = userDoc.data()?.role;
-        if (!role || !['executive', 'commander'].includes(role)) {
-          await signOut(auth);
-          loginGuard.current = false;
-          toast({ variant: "destructive", title: "Access Denied", description: "Staff login is not available for this account. Gladiators must use Google Sign-In." });
-          throw new Error("Staff login is not available for this account.");
-        }
-      } finally {
-        loginGuard.current = false;
+      const uid = auth.currentUser?.uid;
+      if (!uid) {
+        await signOut(auth);
+        toast({ variant: "destructive", title: "Sign In Failed", description: "Unable to verify account." });
+        throw new Error("Unable to verify account.");
       }
+
+      if (!firestore) {
+        await signOut(auth);
+        toast({ variant: "destructive", title: "Sign In Failed", description: "Service not available." });
+        throw new Error("Service not available.");
+      }
+
+      const userDoc = await getDoc(doc(firestore, 'users', uid));
+      console.log('[StaffLogin] login(): Firestore doc exists:', userDoc.exists(), 'role:', userDoc.data()?.role);
+
+      if (!userDoc.exists()) {
+        await signOut(auth);
+        toast({ variant: "destructive", title: "Access Denied", description: "Staff account not found. Contact your Executive." });
+        throw new Error("Staff account not found.");
+      }
+
+      const role = userDoc.data()?.role;
+      if (!role || !['executive', 'commander'].includes(role)) {
+        await signOut(auth);
+        toast({ variant: "destructive", title: "Access Denied", description: "Staff login is not available for this account. Gladiators must use Google Sign-In." });
+        throw new Error("Staff login is not available for this account.");
+      }
+      console.log('[StaffLogin] login(): role check passed —', role);
     } catch (error: unknown) {
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
         toast({ variant: "destructive", title: "Too Many Attempts", description: "Too many attempts. Please wait a moment and try again." });
