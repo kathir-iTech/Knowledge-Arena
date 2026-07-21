@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag } from 'lucide-react';
+import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag, Wifi, WifiOff, Volume2, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -17,7 +17,7 @@ import { participantService } from '@/services/participant.service';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useToast } from '@/hooks/use-toast';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc } from 'firebase/firestore';
 
 interface LiveQuizQuestion {
   id: string;
@@ -27,47 +27,161 @@ interface LiveQuizQuestion {
   sort_index: number;
 }
 
-const ONLINE_TIMEOUT_MS = 30000;
+const COMMANDER_TIMEOUT_MS = 45000;
+const PARTICIPANT_TIMEOUT_MS = 30000;
 
-function isParticipantOnline(p: ValidatedParticipant, now: number): boolean {
-  const lastSeen = p.lastSeen;
+function isOnline(lastSeen: unknown, now: number, timeout: number): boolean {
   if (!lastSeen) return true;
   const ts = typeof lastSeen === 'number' ? lastSeen : (lastSeen as any).toMillis?.();
   if (!ts) return true;
-  return now - ts < ONLINE_TIMEOUT_MS;
+  return now - ts < timeout;
 }
 
-const LiveLeaderboard = ({ quizId, participants, teacherId, currentUserId }: { quizId: string, participants: ValidatedParticipant[], teacherId: string, currentUserId: string }) => {
+function useCommanderPresence(quiz: ValidatedQuiz) {
+  const [commanderOnline, setCommanderOnline] = useState(true);
+  const [presenceNow, setPresenceNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setPresenceNow(Date.now()), 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const lastSeen = (quiz as any).commanderLastSeen;
+    const online = isOnline(lastSeen, presenceNow, COMMANDER_TIMEOUT_MS);
+    setCommanderOnline(online);
+  }, [quiz, presenceNow]);
+
+  return commanderOnline;
+}
+
+function useSound(url?: string) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [muted, setMuted] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('ka_sound_muted') !== 'false';
+  });
+
+  useEffect(() => {
+    if (!url) return;
+    audioRef.current = new Audio(url);
+    audioRef.current.preload = 'none';
+    return () => { audioRef.current = null; };
+  }, [url]);
+
+  const play = useCallback(() => {
+    if (muted || !audioRef.current) return;
+    const p = audioRef.current.play();
+    if (p) p.catch(() => {});
+  }, [muted]);
+
+  const toggleMute = useCallback(() => {
+    setMuted(prev => {
+      const next = !prev;
+      localStorage.setItem('ka_sound_muted', String(next));
+      return next;
+    });
+  }, []);
+
+  return { play, muted, toggleMute };
+}
+
+const CountdownTimer = ({ timeLeft, totalSec }: { timeLeft: number; totalSec: number }) => {
+  const progress = totalSec > 0 ? (timeLeft / totalSec) * 100 : 0;
+  const isUrgent = timeLeft <= 5;
+  const isCritical = timeLeft <= 3;
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 mb-4 px-4 py-2.5 rounded-[12px] border transition-all duration-300",
+        isCritical ? "bg-destructive/10 border-destructive/20" :
+        isUrgent ? "bg-warning/5 border-warning/15" :
+        "bg-card border-border/50"
+      )}
+      role="timer"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-label={`${timeLeft} seconds remaining`}
+    >
+      <Clock
+        className={cn(
+          "w-4 h-4 shrink-0 transition-colors duration-300",
+          isCritical ? "text-destructive" :
+          isUrgent ? "text-warning" :
+          "text-muted-foreground"
+        )}
+      />
+      <span
+        className={cn(
+          "font-mono text-lg font-bold tabular-nums transition-colors duration-300",
+          isCritical ? "text-destructive" :
+          isUrgent ? "text-warning" :
+          "text-foreground"
+        )}
+      >
+        {timeLeft}
+      </span>
+      <span className="text-sm text-muted-foreground">seconds remaining</span>
+      {isUrgent && (
+        <div className="flex gap-0.5 ml-auto" aria-hidden="true">
+          {Array.from({ length: Math.min(timeLeft, 5) }).map((_, i) => (
+            <div
+              key={i}
+              className={cn(
+                "w-1.5 h-4 rounded-full transition-all duration-200",
+                isCritical ? "bg-destructive" : "bg-warning"
+              )}
+              style={{
+                animation: timeLeft > 0 ? `pulse 0.5s ease-in-out ${i * 0.15}s infinite` : 'none',
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const LiveLeaderboard = ({ participants, teacherId, currentUserId }: { participants: ValidatedParticipant[], teacherId: string, currentUserId: string }) => {
     const sortedParticipants = useMemo(() => [...participants].sort((a,b) => b.score - a.score), [participants]);
     const [presenceNow, setPresenceNow] = useState(() => Date.now());
     useEffect(() => {
       const interval = setInterval(() => setPresenceNow(Date.now()), 5000);
       return () => clearInterval(interval);
     }, []);
-    const onlineParticipants = useMemo(() => sortedParticipants.filter(p => p.user_id === teacherId || isParticipantOnline(p, presenceNow)), [sortedParticipants, teacherId, presenceNow]);
-    const total = onlineParticipants.filter(p => p.user_id !== teacherId).length;
+    const onlineParticipants = useMemo(() => sortedParticipants.filter(p => p.user_id === teacherId || isOnline(p.lastSeen, presenceNow, PARTICIPANT_TIMEOUT_MS)), [sortedParticipants, teacherId, presenceNow]);
+    const students = onlineParticipants.filter(p => p.user_id !== teacherId);
+    const total = students.length;
 
     return (
         <Card className="w-full max-w-4xl mt-4 md:mt-6">
             <CardHeader className="py-3 md:py-4">
-              <CardTitle className="text-sm font-semibold text-muted-foreground">Standings ({total})</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-muted-foreground">Standings</CardTitle>
+                <span className="text-xs text-muted-foreground tabular-nums">{total} gladiator{total !== 1 ? 's' : ''}</span>
+              </div>
             </CardHeader>
             <CardContent className="p-3 md:p-5">
                 <div className="flex flex-wrap gap-2.5 md:gap-3">
-                    {onlineParticipants.filter(p => p.user_id !== teacherId).map((p, idx) => {
+                    {students.map((p, idx) => {
                       const rank = idx + 1;
                       const percentile = total > 0 ? Math.round(((total - rank) / total) * 100) : 0;
                       const isSelf = p.user_id === currentUserId;
+                      const showPodium = idx < 3 && total >= 3;
                       return (
                         <div key={p.user_id} className={cn(
                           "flex items-center gap-2 md:gap-3 p-2 md:p-2.5 rounded-[12px] border transition-all duration-150",
-                          isSelf ? "bg-primary/5 border-primary/20" : p.status === 'blocked' ? "bg-destructive/5 border-destructive/10 opacity-50" : "bg-card border-border/50 hover:border-primary/20"
+                          isSelf ? "bg-primary/5 border-primary/20" : p.status === 'blocked' ? "bg-destructive/5 border-destructive/10 opacity-50" : showPodium ? "bg-warning/[0.03] border-warning/10" : "bg-card border-border/50"
                         )}>
                             <div className="relative shrink-0">
-                              <Avatar className="h-8 w-8 md:h-9 md:w-9">
+                              <Avatar className={cn("h-8 w-8 md:h-9 md:w-9", showPodium && "ring-2 ring-warning/30 ring-offset-1 ring-offset-card")}>
                                   <AvatarFallback className="text-xs md:text-sm bg-secondary">{p.avatar || '🎮'}</AvatarFallback>
                               </Avatar>
-                              <span className={cn("absolute -bottom-1 -right-1 text-[9px] font-bold bg-background border border-border rounded-full w-4 h-4 flex items-center justify-center", rank <= 3 ? "text-primary" : "text-muted-foreground")}>{rank}</span>
+                              <span className={cn(
+                                "absolute -bottom-1 -right-1 text-[9px] font-bold bg-background border border-border rounded-full w-4 h-4 flex items-center justify-center",
+                                rank === 1 ? "text-warning" : rank === 2 ? "text-muted-foreground" : rank === 3 ? "text-amber-700" : "text-muted-foreground"
+                              )} aria-label={`Rank ${rank}`}>{rank}</span>
                             </div>
                             <div className="flex flex-col min-w-0">
                                 <span className="text-xs md:text-sm font-semibold truncate max-w-[60px] md:max-w-[80px]">{isSelf ? 'You' : p.name || p.user_id.slice(0, 6)}</span>
@@ -152,6 +266,8 @@ const ParticipantStats = ({ participants, teacherId, submittedCount, onUnblock, 
 export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants }: { quiz: ValidatedQuiz, participant: ValidatedParticipant, isTeacher: boolean, allParticipants: ValidatedParticipant[] }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const commanderOnline = useCommanderPresence(quiz);
+  const sound = useSound();
 
   const [questions, setQuestions] = useState<LiveQuizQuestion[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
@@ -159,8 +275,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
+  const [answerSynced, setAnswerSynced] = useState(false);
   const [showViolationWarning, setShowViolationWarning] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
+  const [advanceStage, setAdvanceStage] = useState<'idle' | 'evaluating' | 'advancing'>('idle');
   const [timeLeft, setTimeLeft] = useState(0);
   const [submittedCount, setSubmittedCount] = useState(0);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
@@ -172,12 +290,13 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const confirmedQuestionIds = useRef(new Set<string>());
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const { firestore } = useFirebase();
 
   useEffect(() => {
-    if (isTeacher || !user) return;
+    if (!isTeacher || !user) return;
     const send = () => {
-      participantService.heartbeat(quiz.id, user.id).catch(() => {});
+      quizService.commanderHeartbeat(quiz.id).catch(() => {});
     };
     send();
     heartbeatRef.current = setInterval(send, 15000);
@@ -194,6 +313,29 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
       window.removeEventListener('pageshow', handlePageShow);
     };
+  }, [quiz.id, user, isTeacher]);
+
+  useEffect(() => {
+    if (!isTeacher && user) {
+      const send = () => {
+        participantService.heartbeat(quiz.id, user.id).catch(() => {});
+      };
+      send();
+      heartbeatRef.current = setInterval(send, 15000);
+
+      const handlePageShow = () => {
+        send();
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        heartbeatRef.current = setInterval(send, 15000);
+      };
+
+      window.addEventListener('pageshow', handlePageShow);
+
+      return () => {
+        if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+        window.removeEventListener('pageshow', handlePageShow);
+      };
+    }
   }, [quiz.id, user, isTeacher]);
 
   useEffect(() => {
@@ -240,7 +382,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           if (curr > prev) {
             toast({
               title: p.status === 'blocked' ? 'Gladiator Blocked' : 'Malpractice Warning',
-              description: `${p.name || p.user_id.slice(0, 8)} — Violation #${curr} (${new Date().toLocaleTimeString()})`,
+              description: `${p.name || p.user_id.slice(0, 8)} — Violation #${curr}`,
               variant: p.status === 'blocked' ? 'destructive' : 'default',
             });
           }
@@ -282,9 +424,14 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     const idx = quiz.current_question_index ?? -1;
     if (idx >= 0 && idx !== prevQuestionIdxRef.current) {
       prevQuestionIdxRef.current = idx;
+      setIsTransitioning(true);
       setSelectedAnswer(null);
       setHasAnswered(false);
+      setAnswerSynced(false);
       setShowViolationWarning(false);
+      setAdvanceStage('idle');
+      const timer = setTimeout(() => setIsTransitioning(false), 300);
+      return () => clearTimeout(timer);
     }
   }, [quiz.current_question_index]);
 
@@ -296,6 +443,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         const data = snap.data() as { selected_option: number };
         setSelectedAnswer(data.selected_option);
         setHasAnswered(true);
+        setAnswerSynced(true);
         confirmedQuestionIds.current.add(currentQuestion.id);
       }
     }, () => {});
@@ -310,7 +458,6 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     const unsub = onSnapshot(subsRef, (snap) => {
       setSubmittedCount(snap.docs.filter(d => d.data()?.selected_option !== undefined).length);
     });
-
     return () => { unsub(); };
   }, [isTeacher, currentQuestion?.id, quiz.id, firestore]);
 
@@ -352,6 +499,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     if (confirmedQuestionIds.current.has(qId)) return;
     setHasAnswered(true);
     setSelectedAnswer(idx);
+    setAnswerSynced(false);
     try {
       await submissionService.submitAnswer({
         quiz_id: quiz.id,
@@ -359,12 +507,15 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         user_id: user.id,
         selected_option: idx
       });
+      setAnswerSynced(true);
       confirmedQuestionIds.current.add(qId);
     } catch (e) {
       if (e instanceof Error && e.message.includes('permission')) {
+        setAnswerSynced(true);
         confirmedQuestionIds.current.add(qId);
       } else {
         setHasAnswered(false);
+        setSelectedAnswer(null);
         toast({ variant: 'destructive', title: 'Error', description: 'Failed to submit answer. Please try again.' });
       }
     }
@@ -374,11 +525,13 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     if (!isTeacher || advancingRef.current) return;
     advancingRef.current = true;
     setIsAdvancing(true);
+    setAdvanceStage('evaluating');
     try {
       if (currentQuestion) {
         const startTime = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
         await questionService.evaluateQuestion(quiz.id, currentQuestion.id, startTime);
       }
+      setAdvanceStage('advancing');
       const nextIdx = (quiz.current_question_index ?? 0) + 1;
       if (nextIdx < (quiz.question_count ?? 0)) {
         await quizService.advanceToQuestion(quiz.id, nextIdx);
@@ -388,7 +541,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       }
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to advance. Please try again.' });
-    } finally { advancingRef.current = false; setIsAdvancing(false); }
+    } finally { advancingRef.current = false; setIsAdvancing(false); setAdvanceStage('idle'); }
   };
 
   const handleEndBattle = async () => {
@@ -427,7 +580,8 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   if (!currentQuestion) return null;
 
   const studentCount = participants.filter(p => p.user_id !== quiz.created_by).length;
-  const progressValue = Math.max(0, Math.min(100, (timeLeft / (currentQuestion.timer || 1)) * 100));
+  const showCommanderOffline = !isTeacher && !commanderOnline && quiz.status === 'live';
+  const showCommanderReconnected = !isTeacher && commanderOnline;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-3 md:p-4 bg-background overflow-x-hidden animate-in safe-top safe-bottom">
@@ -454,24 +608,49 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         </div>
       )}
 
-       {isTeacher && <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} onUnblock={handleUnblock} unblockingId={unblockingId} />}
-
-      {!isTeacher && (
-        <div className={cn(
-          "flex items-center gap-2 mb-4 px-4 py-2 rounded-[12px] border transition-all duration-150",
-          timeLeft <= 5 ? "bg-destructive/5 border-destructive/10" : "bg-card border-border/50"
-        )}>
-          <Clock className={cn("w-4 h-4", timeLeft <= 5 ? "text-destructive" : "text-muted-foreground")} />
-          <span className={cn("font-mono text-base font-bold tabular-nums", timeLeft <= 5 ? "text-destructive" : "text-foreground")} aria-live="polite" aria-atomic="true">{timeLeft}</span>
-          <span className="text-sm text-muted-foreground">seconds remaining</span>
+      {showCommanderOffline && (
+        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-[12px] bg-warning/5 border border-warning/10 w-full max-w-4xl" role="alert" aria-live="assertive">
+          <WifiOff className="w-4 h-4 text-warning shrink-0" />
+          <div className="text-sm">
+            <span className="font-medium text-warning">Commander connection interrupted</span>
+            <p className="text-xs text-muted-foreground">The battle is paused while we wait for the Commander to reconnect.</p>
+          </div>
         </div>
       )}
 
+      {isTeacher && (
+        <div className="flex items-center gap-2 mb-4 w-full max-w-4xl justify-between">
+          <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} onUnblock={handleUnblock} unblockingId={unblockingId} />
+        </div>
+      )}
+
+      {!isTeacher && (
+        <CountdownTimer timeLeft={timeLeft} totalSec={currentQuestion.timer} />
+      )}
+
       <Card className="w-full max-w-4xl">
-        <CardHeader className="text-center pt-10 pb-4 md:pb-6 px-5 md:px-10">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 block">
-            Question {(quiz.current_question_index ?? 0) + 1} / {quiz.question_count ?? 0}
-          </span>
+        <CardHeader className={cn(
+          "text-center pt-10 pb-4 md:pb-6 px-5 md:px-10 transition-opacity duration-300",
+          isTransitioning ? "opacity-50" : "opacity-100"
+        )}>
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Question {(quiz.current_question_index ?? 0) + 1} / {quiz.question_count ?? 0}
+            </span>
+            <div className="flex gap-1" aria-hidden="true">
+              {Array.from({ length: quiz.question_count ?? 0 }).map((_, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "w-2 h-2 rounded-full transition-all duration-300",
+                    i < (quiz.current_question_index ?? 0) ? "bg-primary" :
+                    i === (quiz.current_question_index ?? 0) ? "bg-primary/60 scale-125" :
+                    "bg-muted-foreground/20"
+                  )}
+                />
+              ))}
+            </div>
+          </div>
           <CardTitle className="text-xl sm:text-3xl md:text-4xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
           {isTeacher && (
             <div className="flex items-center justify-center gap-2 mt-4">
@@ -493,7 +672,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                     ? "border-primary bg-primary/5 shadow-elevation-small"
                     : hasAnswered
                       ? "border-border/30 bg-muted/10 opacity-40"
-                      : "border-border/50 bg-card hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-elevation-small cursor-pointer",
+                      : "border-border/50 bg-card hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-elevation-small cursor-pointer active:scale-[0.98]",
                   (hasAnswered || isTeacher || timeLeft === 0) && "cursor-default"
                 )}
                 aria-label={`Option ${String.fromCharCode(65 + i)}: ${opt}`}
@@ -515,12 +694,31 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
               </button>
             ))}
           </div>
+
+          {hasAnswered && !isTeacher && (
+            <div className="flex items-center justify-center gap-2 mt-4 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-primary" />
+              <span className="font-medium text-primary">Answer Locked</span>
+              <span className="text-muted-foreground mx-1">·</span>
+              {answerSynced ? (
+                <span className="text-muted-foreground">Waiting for the Commander...</span>
+              ) : (
+                <span className="text-warning font-medium flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Answer sync pending
+                </span>
+              )}
+            </div>
+          )}
+
           {isTeacher && (
             <div className="flex flex-col items-center pt-6 md:pt-8 gap-2">
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 <Button onClick={handleNext} disabled={isAdvancing || isEnding} size="lg" className="w-full sm:w-auto min-w-[200px]" aria-busy={isAdvancing}>
-                  {isAdvancing ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
-                  {(quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
+                  {isAdvancing && advanceStage === 'evaluating' ? <Loader2 className="animate-spin mr-2" /> : isAdvancing && advanceStage === 'advancing' ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
+                  {isAdvancing && advanceStage === 'evaluating' ? 'Evaluating answers...' :
+                   isAdvancing && advanceStage === 'advancing' ? 'Advancing...' :
+                   (quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
                 </Button>
                 <Button onClick={() => setShowEndConfirm(true)} variant="outline" disabled={isAdvancing || isEnding} size="lg" className="w-full sm:w-auto">
                   {isEnding ? <Loader2 className="animate-spin mr-2" /> : <Flag className="mr-2 h-5 w-5" />}
@@ -528,8 +726,12 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground">{submittedCount} / {studentCount} gladiators answered</p>
+              {studentCount > 0 && submittedCount < studentCount && (
+                <p className="text-xs text-muted-foreground/60">Waiting for {studentCount - submittedCount} more gladiator{(studentCount - submittedCount) !== 1 ? 's' : ''}</p>
+              )}
             </div>
           )}
+
           {participant.status === 'blocked' && !isTeacher && (
              <div className="bg-destructive/5 border border-destructive/10 p-8 rounded-[18px] text-center space-y-3 mt-6">
                 <ShieldAlert className="w-12 h-12 text-destructive mx-auto" />
@@ -539,7 +741,20 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           )}
         </CardContent>
       </Card>
-      <LiveLeaderboard quizId={quiz.id} participants={participants} teacherId={quiz.created_by} currentUserId={user?.id || ''} />
+
+      <LiveLeaderboard participants={participants} teacherId={quiz.created_by} currentUserId={user?.id || ''} />
+
+      {isTeacher && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+          <button
+            onClick={sound.toggleMute}
+            className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-background/80 backdrop-blur-sm border border-border/50 shadow-elevation-small hover:bg-muted transition-colors"
+            aria-label={sound.muted ? 'Unmute sounds' : 'Mute sounds'}
+          >
+            {sound.muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
+        </div>
+      )}
 
       <AlertDialog open={showEndConfirm} onOpenChange={(o) => { if (!o && !isEnding) setShowEndConfirm(false); }}>
         <AlertDialogContent>

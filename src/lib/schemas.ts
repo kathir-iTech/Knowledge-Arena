@@ -9,6 +9,7 @@ export interface ValidatedQuiz {
   question_start_at?: number | null;
   created_at?: number;
   archived?: boolean;
+  commanderLastSeen?: unknown;
 }
 
 export interface ValidatedParticipant {

@@ -86,10 +86,36 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
   const akMap = new Map(answerKeys.map(ak => [ak.questionId, ak.correct_option_index]));
   const subMap = new Map(submissions.map(s => [s.questionId, s]));
 
+  const correctCount = questions.filter(q => {
+    const mySub = subMap.get(q.id);
+    const correctIdx = akMap.get(q.id);
+    return mySub && mySub.selected_option === correctIdx;
+  }).length;
+  const totalAnswered = submissions.length;
+  const totalQuestions = questions.length;
+
   return (
     <div className="space-y-4 animate-in">
       <h2 className="text-section-title font-headline tracking-tight">Post-Battle Debrief</h2>
       <p className="text-base text-muted-foreground">Review each question and your response.</p>
+
+      <div className="flex flex-wrap gap-3 text-sm">
+        <div className="flex items-center gap-1.5 bg-success/5 px-3 py-1.5 rounded-[8px]">
+          <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+          <span className="font-semibold text-success">{correctCount}</span>
+          <span className="text-muted-foreground">correct</span>
+        </div>
+        <div className="flex items-center gap-1.5 bg-destructive/5 px-3 py-1.5 rounded-[8px]">
+          <XCircle className="w-3.5 h-3.5 text-destructive" />
+          <span className="font-semibold text-destructive">{totalAnswered - correctCount}</span>
+          <span className="text-muted-foreground">incorrect</span>
+        </div>
+        <div className="flex items-center gap-1.5 bg-muted/50 px-3 py-1.5 rounded-[8px]">
+          <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="font-semibold">{totalQuestions - totalAnswered}</span>
+          <span className="text-muted-foreground">unanswered</span>
+        </div>
+      </div>
 
       {questions.map((q, idx) => {
         const correctIdx = akMap.get(q.id);

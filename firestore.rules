@@ -100,7 +100,8 @@ service cloud.firestore {
         allow create: if isOwner(userId)
           && isNotBlocked(quizId, userId)
           && request.resource.data.user_id == userId
-          && request.resource.data.lastSeen == request.time;
+          && request.resource.data.lastSeen == request.time
+          && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'waiting';
         // Teacher can update everyone (block/reset), students can only increment violations
         // or block themselves (violations_count + status=blocked) in a single write,
         // or send heartbeat (lastSeen) updates.

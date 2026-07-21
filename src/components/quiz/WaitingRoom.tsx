@@ -57,7 +57,13 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   useEffect(() => {
     mountedRef.current = true;
 
-    if (!isTeacher && user) {
+    if (isTeacher && user) {
+      const send = () => {
+        quizService.commanderHeartbeat(quiz.id).catch(() => {});
+      };
+      send();
+      heartbeatRef.current = setInterval(send, 15000);
+    } else if (!isTeacher && user) {
       const send = () => {
         participantService.heartbeat(quiz.id, user.id).catch(() => {});
       };
@@ -100,12 +106,19 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
 
     const handlePageShow = () => {
       if (!mountedRef.current) return;
-      if (!isTeacher && user) {
+      if (isTeacher && user) {
+        quizService.commanderHeartbeat(quiz.id).catch(() => {});
+      } else if (!isTeacher && user) {
         participantService.heartbeat(quiz.id, user.id).catch(() => {});
-        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-        heartbeatRef.current = setInterval(() => {
-          participantService.heartbeat(quiz.id, user.id).catch(() => {});
-        }, 15000);
+      }
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      const hbUserId = user?.id;
+      if (hbUserId) {
+        const send = isTeacher
+          ? () => quizService.commanderHeartbeat(quiz.id).catch(() => {})
+          : () => participantService.heartbeat(quiz.id, hbUserId).catch(() => {});
+        send();
+        heartbeatRef.current = setInterval(send, 15000);
       }
       subscribe();
     };
