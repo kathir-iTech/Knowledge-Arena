@@ -9,7 +9,7 @@ import { computeAnalytics, type AnalyticsData, type QuestionDoc, type AnswerKeyD
 const CACHE_TTL = 5 * 60 * 1000;
 const cache = new Map<string, { data: AnalyticsData; expiresAt: number }>();
 
-function useAnalytics(teacherId: string | undefined) {
+function useAnalytics(teacherId: string | undefined, role?: string) {
   const { firestore } = useFirebase();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,8 +17,10 @@ function useAnalytics(teacherId: string | undefined) {
   const abortRef = useRef(false);
 
   const fetchAnalytics = useCallback(async () => {
-    if (!teacherId || !firestore) return;
-    const cacheKey = `analytics_${teacherId}`;
+    if (!firestore) return;
+    const isExecutive = role === 'executive';
+    if (!teacherId && !isExecutive) return;
+    const cacheKey = `analytics_${isExecutive ? 'all' : teacherId}`;
 
     const cached = cache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) {
@@ -31,19 +33,21 @@ function useAnalytics(teacherId: string | undefined) {
     abortRef.current = false;
 
     try {
-      const quizzesQuery = query(collection(firestore, 'quizzes'), where('created_by', '==', teacherId));
+      const quizzesQuery = isExecutive
+        ? collection(firestore, 'quizzes')
+        : query(collection(firestore, 'quizzes'), where('created_by', '==', teacherId));
       const quizzesSnap = await getDocs(quizzesQuery);
 
       if (abortRef.current) return;
 
-      const teacherQuizzes: ValidatedQuiz[] = [];
+      const allQuizzes: ValidatedQuiz[] = [];
       for (const d of quizzesSnap.docs) {
-        teacherQuizzes.push({ id: d.id, ...d.data() } as ValidatedQuiz);
+        allQuizzes.push({ id: d.id, ...d.data() } as ValidatedQuiz);
       }
 
-      const teacherQuizIds = teacherQuizzes.map(q => q.id);
+      const quizIds = allQuizzes.map(q => q.id).slice(0, 100);
 
-      if (!teacherQuizIds.length) {
+      if (!quizIds.length) {
         const empty = computeAnalytics([], {}, {}, {}, {});
         setData(empty);
         cache.set(cacheKey, { data: empty, expiresAt: Date.now() + CACHE_TTL });
@@ -52,9 +56,9 @@ function useAnalytics(teacherId: string | undefined) {
       }
 
       const [participantsSnaps, questionsSnaps, answerKeysSnaps] = await Promise.all([
-        Promise.all(teacherQuizIds.map(id => getDocs(collection(firestore, 'quizzes', id, 'participants')))),
-        Promise.all(teacherQuizIds.map(id => getDocs(collection(firestore, 'quizzes', id, 'questions')))),
-        Promise.all(teacherQuizIds.map(id => getDocs(collection(firestore, 'quizzes', id, 'answerKeys')))),
+        Promise.all(quizIds.map(id => getDocs(collection(firestore, 'quizzes', id, 'participants')))),
+        Promise.all(quizIds.map(id => getDocs(collection(firestore, 'quizzes', id, 'questions')))),
+        Promise.all(quizIds.map(id => getDocs(collection(firestore, 'quizzes', id, 'answerKeys')))),
       ]);
 
       if (abortRef.current) return;
@@ -64,13 +68,11 @@ function useAnalytics(teacherId: string | undefined) {
       const answerKeysMap: Record<string, AnswerKeyDoc[]> = {};
       const submissionsMap: Record<string, SubmissionDoc[]> = {};
 
-      for (let i = 0; i < teacherQuizIds.length; i++) {
-        const qid = teacherQuizIds[i];
+      const subFetchPromises = quizIds.map(async (qid, i) => {
         participantsMap[qid] = participantsSnaps[i].docs.map(d => ({ user_id: d.id, ...d.data() } as ValidatedParticipant));
         questionsMap[qid] = questionsSnaps[i].docs.map(d => ({ id: d.id, ...d.data() } as QuestionDoc));
         answerKeysMap[qid] = answerKeysSnaps[i].docs.map(d => ({ id: d.id, ...d.data() } as AnswerKeyDoc));
 
-        // Submissions are nested under each question: quizzes/{id}/questions/{questionId}/submissions
         const questionDocs = questionsSnaps[i].docs;
         const subSnaps = await Promise.all(
           questionDocs.map(qDoc =>
@@ -88,11 +90,12 @@ function useAnalytics(teacherId: string | undefined) {
           }
         }
         submissionsMap[qid] = quizSubmissions;
-      }
+      });
+      await Promise.all(subFetchPromises);
 
       if (abortRef.current) return;
 
-      const result = computeAnalytics(teacherQuizzes, participantsMap, questionsMap, answerKeysMap, submissionsMap);
+      const result = computeAnalytics(allQuizzes, participantsMap, questionsMap, answerKeysMap, submissionsMap);
       setData(result);
       cache.set(cacheKey, { data: result, expiresAt: Date.now() + CACHE_TTL });
     } catch (err: unknown) {
@@ -102,7 +105,7 @@ function useAnalytics(teacherId: string | undefined) {
     } finally {
       if (!abortRef.current) setIsLoading(false);
     }
-  }, [teacherId, firestore]);
+  }, [teacherId, role, firestore]);
 
   useEffect(() => {
     fetchAnalytics();
@@ -110,9 +113,10 @@ function useAnalytics(teacherId: string | undefined) {
   }, [fetchAnalytics]);
 
   const refetch = useCallback(() => {
-    if (teacherId) cache.delete(`analytics_${teacherId}`);
+    const cacheKey = role === 'executive' ? 'analytics_all' : `analytics_${teacherId}`;
+    cache.delete(cacheKey);
     fetchAnalytics();
-  }, [teacherId, fetchAnalytics]);
+  }, [teacherId, role, fetchAnalytics]);
 
   return { data, isLoading, error, refetch };
 }

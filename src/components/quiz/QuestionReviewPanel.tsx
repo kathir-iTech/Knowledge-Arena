@@ -9,18 +9,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
-import { cn, generateRoomCode } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { quizService } from '@/services/quiz.service';
-import { participantService } from '@/services/participant.service';
-import { questionService } from '@/services/game.service';
+import { arenaCreationService } from '@/services/arena-creation.service';
 import { validateQuiz, type QuizValidationIssue } from '@/lib/quiz-validator';
-import type { ValidatedQuiz } from '@/lib/schemas';
 
 interface Question {
   id: string;
@@ -200,59 +197,18 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
 
     submittedRef.current = true;
     setIsSubmitting(true);
-    
+
     try {
-        let roomCode = generateRoomCode();
-        let existing: ValidatedQuiz | null = null;
-        try {
-            existing = await quizService.getQuizById(roomCode);
-        } catch {
-            // NotFound is expected
-        }
-
-        let attempts = 0;
-        while (existing && attempts < 5) {
-            roomCode = generateRoomCode();
-            try {
-                existing = await quizService.getQuizById(roomCode);
-            } catch {
-                existing = null;
-            }
-            attempts++;
-        }
-
-        if (existing) {
-            throw new Error('Room code collision detected. Please try again.');
-        }
-
-        await quizService.createQuiz({
-            id: roomCode,
-            title: quizTitle,
-            status: 'waiting',
-            current_question_index: -1,
-            question_count: questions.length,
-            created_by: user.id,
-        });
-
-        await participantService.joinQuiz(roomCode, user.id);
-
-        const questionPayload = questions.map((q, idx) => ({
-            quiz_id: roomCode,
+        const roomCode = await arenaCreationService.createArenaAtomic({
+          title: quizTitle,
+          questions: questions.map((q) => ({
             text: q.text,
             options: q.options,
+            correctAnswerIndex: q.correctAnswerIndex,
             timer: globalTimer,
-            sort_index: idx
-        }));
-
-        const savedQuestions = await questionService.createQuestions(questionPayload);
-
-        const answerKeys = savedQuestions.map((sq, idx) => ({
-            question_id: sq.id,
-            quiz_id: roomCode,
-            correct_option_index: questions[idx].correctAnswerIndex
-        }));
-
-        await questionService.createAnswerKeys(answerKeys);
+          })),
+          createdBy: user.id,
+        });
 
         onArenaCreated?.();
         toast({ title: "Arena Created", description: `Room Code: ${roomCode}` });

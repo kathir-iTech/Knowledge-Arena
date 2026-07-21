@@ -134,21 +134,29 @@ export async function GET(req: NextRequest) {
       try {
         console.log('[AdminUsers][GET] Enriching commanders');
         const uids = users.map(u => u.uid);
-        const quizzesSnap = await getAdminDb()
-          .collection('quizzes')
-          .where('created_by', 'in', uids.slice(0, 30))
-          .get();
 
         const arenaCounts: Record<string, number> = {};
         const lastActiveMap: Record<string, number | null> = {};
-        for (const qDoc of quizzesSnap.docs) {
-          const qData = qDoc.data();
-          const creator = qData.created_by;
-          if (creator) {
-            arenaCounts[creator] = (arenaCounts[creator] || 0) + 1;
-            if (qData.created_at && (!lastActiveMap[creator] || qData.created_at > lastActiveMap[creator]!)) {
-              lastActiveMap[creator] = qData.created_at;
+
+        for (let i = 0; i < uids.length; i += 30) {
+          const chunk = uids.slice(i, i + 30);
+          try {
+            const quizzesSnap = await getAdminDb()
+              .collection('quizzes')
+              .where('created_by', 'in', chunk)
+              .get();
+            for (const qDoc of quizzesSnap.docs) {
+              const qData = qDoc.data();
+              const creator = qData.created_by;
+              if (creator) {
+                arenaCounts[creator] = (arenaCounts[creator] || 0) + 1;
+                if (qData.created_at && (!lastActiveMap[creator] || qData.created_at > lastActiveMap[creator]!)) {
+                  lastActiveMap[creator] = qData.created_at;
+                }
+              }
             }
+          } catch {
+            // chunk failed — skip silently
           }
         }
 
@@ -165,20 +173,27 @@ export async function GET(req: NextRequest) {
       try {
         console.log('[AdminUsers][GET] Enriching gladiators');
         const uids = users.map(u => u.uid);
-        const partSnapshot = await getAdminDb()
-          .collectionGroup('participants')
-          .where('user_id', 'in', uids.slice(0, 30))
-          .get();
 
         const battleCounts: Record<string, number> = {};
         const scoreSums: Record<string, number> = {};
 
-        for (const pDoc of partSnapshot.docs) {
-          const pData = pDoc.data();
-          const userId = pData.user_id;
-          if (userId) {
-            battleCounts[userId] = (battleCounts[userId] || 0) + 1;
-            scoreSums[userId] = (scoreSums[userId] || 0) + (pData.score || 0);
+        for (let i = 0; i < uids.length; i += 30) {
+          const chunk = uids.slice(i, i + 30);
+          try {
+            const partSnapshot = await getAdminDb()
+              .collectionGroup('participants')
+              .where('user_id', 'in', chunk)
+              .get();
+            for (const pDoc of partSnapshot.docs) {
+              const pData = pDoc.data();
+              const userId = pData.user_id;
+              if (userId) {
+                battleCounts[userId] = (battleCounts[userId] || 0) + 1;
+                scoreSums[userId] = (scoreSums[userId] || 0) + (pData.score || 0);
+              }
+            }
+          } catch {
+            // chunk failed — skip silently
           }
         }
 

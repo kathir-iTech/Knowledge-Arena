@@ -8,11 +8,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
-import { quizService } from '@/services/quiz.service';
-import { participantService } from '@/services/participant.service';
-import { questionService } from '@/services/game.service';
+import { arenaCreationService } from '@/services/arena-creation.service';
 import { useToast } from '@/hooks/use-toast';
-import { cn, generateRoomCode } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +20,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler, AlertTriangle } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import type { ValidatedQuiz } from '@/lib/schemas';
 
 const questionSchema = z.object({
   id: z.string(),
@@ -112,64 +109,19 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
     setIsSubmitting(true);
 
     try {
-        let quizId = generateRoomCode();
-        let existing: ValidatedQuiz | null = null;
-        try {
-            existing = await quizService.getQuizById(quizId);
-        } catch {
-            // NotFound is expected
-        }
-
-        let attempts = 0;
-        while (existing && attempts < 5) {
-            quizId = generateRoomCode();
-            try {
-                existing = await quizService.getQuizById(quizId);
-            } catch {
-                existing = null;
-            }
-            attempts++;
-        }
-        
-        if (existing) {
-            throw new Error('Collision detected in the arena. Tactical retry required.');
-        }
-
-        // 1. Create the Quiz using Service
-        await quizService.createQuiz({
-            id: quizId,
-            title: data.title,
-            status: 'waiting',
-            current_question_index: -1,
-            question_count: data.questions.length,
-            created_by: user.id
-        });
-
-        // 2. Register the Teacher as a Participant
-        await participantService.joinQuiz(quizId, user.id);
-
-        // 3. Prepare and Create Questions
-        const questionPayload = data.questions.map((q, idx) => ({
-            quiz_id: quizId,
+        const roomCode = await arenaCreationService.createArenaAtomic({
+          title: data.title,
+          questions: data.questions.map((q) => ({
             text: q.text,
             options: q.options,
+            correctAnswerIndex: q.correctAnswerIndex,
             timer: q.timer,
-            sort_index: idx
-        }));
+          })),
+          createdBy: user.id,
+        });
 
-        const savedQuestions = await questionService.createQuestions(questionPayload);
-
-        // 4. Link Answer Keys
-        const answerKeys = savedQuestions.map((sq, idx) => ({
-            question_id: sq.id,
-            quiz_id: quizId,
-            correct_option_index: data.questions[idx].correctAnswerIndex
-        }));
-
-        await questionService.createAnswerKeys(answerKeys);
-
-        toast({ title: 'Arena Created', description: `Room Code: ${quizId}` });
-        router.push(`/battle/${quizId}`);
+        toast({ title: 'Arena Created', description: `Room Code: ${roomCode}` });
+        router.push(`/battle/${roomCode}`);
     } catch (error: unknown) {
         toast({ variant: 'destructive', title: 'Creation Failed', description: error instanceof Error ? error.message : "Unknown error" });
     } finally {
