@@ -257,6 +257,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const advancingRef = useRef(false);
   const confirmedQuestionIds = useRef(new Set<string>());
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const operationLock = useRef(false);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { firestore } = useFirebase();
@@ -490,8 +491,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   };
 
   const handleNext = async () => {
-    if (!isTeacher || advancingRef.current) return;
+    if (!isTeacher || advancingRef.current || operationLock.current) return;
     advancingRef.current = true;
+    operationLock.current = true;
     setIsAdvancing(true);
     setAdvanceStage('evaluating');
     try {
@@ -507,14 +509,16 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         await quizService.updateQuizStatus(quiz.id, 'finished');
         await participantService.markAllFinished(quiz.id, quiz.created_by);
       }
-    } catch {
+    } catch (e) {
+      console.error('[handleNext] Failed to advance:', e);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to advance. Please try again.' });
-    } finally { advancingRef.current = false; setIsAdvancing(false); setAdvanceStage('idle'); }
+    } finally { advancingRef.current = false; operationLock.current = false; setIsAdvancing(false); setAdvanceStage('idle'); }
   };
 
   const handleEndBattle = async () => {
-    if (!isTeacher || endingRef.current) return;
+    if (!isTeacher || endingRef.current || operationLock.current) return;
     endingRef.current = true;
+    operationLock.current = true;
     setIsEnding(true);
     try {
       if (currentQuestion) {
@@ -524,9 +528,12 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       await quizService.updateQuizStatus(quiz.id, 'finished');
       await participantService.markAllFinished(quiz.id, quiz.created_by);
       toast({ title: 'Battle Ended', description: 'The battle has been finalized.' });
-    } catch {
+    } catch (e) {
+      console.error('[handleEndBattle] Failed to end:', e);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to end battle. Please try again.' });
+    } finally {
       endingRef.current = false;
+      operationLock.current = false;
       setIsEnding(false);
     }
   };

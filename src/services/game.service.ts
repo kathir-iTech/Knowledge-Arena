@@ -116,7 +116,10 @@ export const questionService = {
     const answerKeySnap = await getDoc(
       doc(db, 'quizzes', quizId, 'answerKeys', questionId)
     );
-    if (!answerKeySnap.exists()) return;
+    if (!answerKeySnap.exists()) {
+      console.warn('[evaluateQuestion] No answerKey for', quizId, questionId);
+      return;
+    }
     const correctIndex = answerKeySnap.data().correct_option_index;
 
     // Read participants to enumerate who may have submitted
@@ -124,48 +127,61 @@ export const questionService = {
       collection(db, 'quizzes', quizId, 'participants')
     );
 
+    console.log('[evaluateQuestion] Scoring', quizId, questionId, 'participants:', participantsSnap.docs.length, 'startTime:', startTime);
+
     // Single atomic transaction: read question → read each submission → write scores
-    await runTransaction(db, async (transaction) => {
-      const qSnap = await transaction.get(questionRef);
-      if (!qSnap.exists()) return;
-      if (qSnap.data().scored) return;
-
-      const timerSeconds = qSnap.data().timer || 30;
-      const timeLimit = timerSeconds * 1000;
-
-      for (const pDoc of participantsSnap.docs) {
-        const uid = pDoc.id;
-
-        const participantRef = doc(db, 'quizzes', quizId, 'participants', uid);
-        const pSnap = await transaction.get(participantRef);
-        if (!pSnap.exists()) continue;
-
-        const subRef = doc(
-          db,
-          'quizzes', quizId,
-          'questions', questionId,
-          'submissions', uid
-        );
-        const subSnap = await transaction.get(subRef);
-        if (!subSnap.exists()) continue;
-
-        const subData = subSnap.data();
-        const isCorrect = subData.selected_option === correctIndex;
-        if (!isCorrect) continue;
-
-        const submittedAt = toMillis(subData.submittedAt);
-        const clampedSubmittedAt = Math.max(submittedAt, startTime);
-        const elapsed = clampedSubmittedAt - startTime;
-        const timeFraction = Math.max(0, 1 - elapsed / timeLimit);
-        const scoreToAdd = Math.round(500 + timeFraction * 500);
-
-        if (scoreToAdd > 0) {
-          transaction.update(participantRef, { score: increment(scoreToAdd) });
+    try {
+      await runTransaction(db, async (transaction) => {
+        const qSnap = await transaction.get(questionRef);
+        if (!qSnap.exists()) {
+          console.warn('[evaluateQuestion] Question doc missing:', questionId);
+          return;
         }
-      }
+        if (qSnap.data().scored) {
+          console.log('[evaluateQuestion] Already scored:', questionId);
+          return;
+        }
 
-      transaction.update(questionRef, { scored: true });
-    });
+        const timerSeconds = qSnap.data().timer || 30;
+        const timeLimit = timerSeconds * 1000;
+
+        for (const pDoc of participantsSnap.docs) {
+          const uid = pDoc.id;
+
+          const participantRef = doc(db, 'quizzes', quizId, 'participants', uid);
+          const pSnap = await transaction.get(participantRef);
+          if (!pSnap.exists()) continue;
+
+          const subRef = doc(
+            db,
+            'quizzes', quizId,
+            'questions', questionId,
+            'submissions', uid
+          );
+          const subSnap = await transaction.get(subRef);
+          if (!subSnap.exists()) continue;
+
+          const subData = subSnap.data();
+          const isCorrect = subData.selected_option === correctIndex;
+          if (!isCorrect) continue;
+
+          const submittedAt = toMillis(subData.submittedAt);
+          const clampedSubmittedAt = Math.max(submittedAt, startTime);
+          const elapsed = clampedSubmittedAt - startTime;
+          const timeFraction = Math.max(0, 1 - elapsed / timeLimit);
+          const scoreToAdd = Math.round(500 + timeFraction * 500);
+
+          if (scoreToAdd > 0) {
+            transaction.update(participantRef, { score: increment(scoreToAdd) });
+          }
+        }
+
+        transaction.update(questionRef, { scored: true });
+      });
+    } catch (e) {
+      console.error('[evaluateQuestion] Transaction failed:', quizId, questionId, e);
+      throw e;
+    }
   },
 
   async getAnswerKeys(quizId: string): Promise<Array<{ questionId: string; correct_option_index: number }>> {
