@@ -451,7 +451,19 @@ function buildTimeline(submissions: SubmissionDoc[]): { time: number; count: num
     .map(([time, count]) => ({ time, count }));
 }
 
-export function exportAnalyticsCSV(data: AnalyticsData): string {
+export interface ExportPreferences {
+  includeStudentNames: boolean;
+  includeScores: boolean;
+  includeTimestamps: boolean;
+}
+
+const defaultExportPrefs: ExportPreferences = {
+  includeStudentNames: true,
+  includeScores: true,
+  includeTimestamps: true,
+};
+
+export function exportAnalyticsCSV(data: AnalyticsData, prefs: ExportPreferences = defaultExportPrefs): string {
   const rows: string[][] = [['Metric', 'Value']];
   rows.push(['Total Quizzes', String(data.overview.totalQuizzes)]);
   rows.push(['Completed Quizzes', String(data.overview.completedQuizzes)]);
@@ -459,17 +471,37 @@ export function exportAnalyticsCSV(data: AnalyticsData): string {
   rows.push(['Average Score', String(data.overview.averageScore)]);
   rows.push(['Completion Rate (%)', String(data.overview.completionRate)]);
   rows.push([]);
-  rows.push(['Student', 'Quizzes', 'Completed', 'Completion %', 'Avg Score', 'Highest', 'Lowest', 'Violations', 'Blocked']);
+  const headers = ['Student', 'Quizzes', 'Completed', 'Completion %'];
+  if (prefs.includeScores) headers.push('Avg Score', 'Highest', 'Lowest');
+  if (prefs.includeTimestamps) headers.push('Last Active');
+  headers.push('Violations', 'Blocked');
+  rows.push(headers);
   for (const s of data.students) {
-    rows.push([s.name, String(s.quizzesAttended), String(s.quizzesCompleted), String(s.completionPercent), String(s.averageScore), String(s.highestScore), String(s.lowestScore), String(s.totalViolations), String(s.blockedCount)]);
+    const row: string[] = [prefs.includeStudentNames ? s.name : s.userId.slice(0, 8)];
+    row.push(String(s.quizzesAttended), String(s.quizzesCompleted), String(s.completionPercent));
+    if (prefs.includeScores) row.push(String(s.averageScore), String(s.highestScore), String(s.lowestScore));
+    if (prefs.includeTimestamps) row.push(String(s.lastSeen ? new Date(s.lastSeen).toLocaleDateString() : 'Never'));
+    row.push(String(s.totalViolations), String(s.blockedCount));
+    rows.push(row);
   }
   return rows.map(r => r.map(c => escCsv(c)).join(',')).join('\n');
 }
 
-export function exportAnalyticsHTML(data: AnalyticsData): string {
-  const studentRows = data.students.map(s =>
-    `<tr><td>${escHtml(s.name)}</td><td>${s.quizzesAttended}</td><td>${s.completionPercent}%</td><td>${s.averageScore}</td><td>${s.highestScore}</td><td>${s.totalViolations}</td></tr>`
-  ).join('');
+export function exportAnalyticsHTML(data: AnalyticsData, prefs: ExportPreferences = defaultExportPrefs): string {
+  const studentHeaders = ['Name'];
+  if (prefs.includeScores) studentHeaders.push('Avg Score', 'Highest');
+  studentHeaders.push('Quizzes', 'Completion');
+  if (prefs.includeTimestamps) studentHeaders.push('Last Active');
+  studentHeaders.push('Violations');
+
+  const studentRows = data.students.map(s => {
+    const cells: string[] = [prefs.includeStudentNames ? escHtml(s.name) : escHtml(s.userId.slice(0, 8))];
+    if (prefs.includeScores) cells.push(String(s.averageScore), String(s.highestScore));
+    cells.push(String(s.quizzesAttended), `${s.completionPercent}%`);
+    if (prefs.includeTimestamps) cells.push(s.lastSeen ? escHtml(new Date(s.lastSeen).toLocaleDateString()) : 'Never');
+    cells.push(String(s.totalViolations));
+    return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`;
+  }).join('');
 
   const quizRows = data.quizzes.map(q =>
     `<tr><td>${escHtml(q.title)}</td><td>${q.totalParticipants}</td><td>${q.completionPercent}%</td><td>${q.averageScore}</td><td>${q.engagementScore}</td><td>${q.totalViolations}</td></tr>`
@@ -499,7 +531,7 @@ tr{page-break-inside:avoid}
 <div class="card"><div class="value">${data.overview.completionRate}%</div><div class="label">Completion Rate</div></div>
 </div>
 <h2>Students</h2>
-<table><thead><tr><th>Name</th><th>Quizzes</th><th>Completion</th><th>Avg Score</th><th>Highest</th><th>Violations</th></tr></thead>
+<table><thead><tr>${studentHeaders.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr></thead>
 <tbody>${studentRows}</tbody></table>
 ${quizRows ? `<h2>Finished Quizzes</h2>
 <table><thead><tr><th>Title</th><th>Participants</th><th>Completion</th><th>Avg Score</th><th>Engagement</th><th>Violations</th></tr></thead>

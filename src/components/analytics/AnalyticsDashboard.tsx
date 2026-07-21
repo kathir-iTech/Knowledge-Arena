@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { QuizOverviewCards } from './QuizOverviewCards';
@@ -17,11 +17,32 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { exportAnalyticsCSV, exportAnalyticsHTML } from '@/services/analytics.service';
+import { exportAnalyticsCSV, exportAnalyticsHTML, type ExportPreferences } from '@/services/analytics.service';
+
+const defaultExportPrefs: ExportPreferences = {
+  includeStudentNames: true,
+  includeScores: true,
+  includeTimestamps: true,
+};
 
 export function AnalyticsDashboard() {
   const { user } = useAuth();
-  const { data, isLoading, error, refetch } = useAnalytics(user?.id);
+  const { data, isLoading, error, refetch } = useAnalytics(user?.id, user?.role);
+  const [exportPrefs, setExportPrefs] = useState<ExportPreferences>(defaultExportPrefs);
+
+  useEffect(() => {
+    if (user?.role !== 'executive') return;
+    fetch('/api/executive/settings', {
+      headers: user ? { Authorization: `Bearer ${user.id}` } : {},
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.settings?.exportPreferences) {
+          setExportPrefs(data.settings.exportPreferences);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   if (isLoading) return <LoadingScreen />;
 
@@ -39,7 +60,7 @@ export function AnalyticsDashboard() {
   if (!data) return null;
 
   const handleExportCSV = () => {
-    const csv = exportAnalyticsCSV(data);
+    const csv = exportAnalyticsCSV(data, exportPrefs);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -50,7 +71,7 @@ export function AnalyticsDashboard() {
   };
 
   const handleExportHTML = () => {
-    const html = exportAnalyticsHTML(data);
+    const html = exportAnalyticsHTML(data, exportPrefs);
     const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

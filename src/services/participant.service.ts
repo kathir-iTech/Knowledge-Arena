@@ -48,6 +48,11 @@ export const participantService = {
     const quizSnap = await getDoc(quizRef);
     if (!quizSnap.exists()) throw new Error('Quiz not found');
     if (quizSnap.data().status !== 'waiting') throw new Error('This battle has already started. Late joining is not permitted.');
+
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists() && userDoc.data()?.disabled === true) {
+      throw new Error('Your account has been disabled. Please contact an administrator.');
+    }
     const data: Record<string, unknown> = {
       user_id: userId,
       score: 0,
