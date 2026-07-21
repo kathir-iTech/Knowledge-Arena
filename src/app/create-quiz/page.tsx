@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useRef, useEffect, Suspense } from 'react';
+import React, { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 
 const QuizCreatorForm = dynamic(() => import('@/components/quiz/QuizCreatorForm').then(m => m.QuizCreatorForm), { ssr: false });
 const PDFQuizGenerator = dynamic(() => import('@/components/quiz/PDFQuizGenerator').then(m => m.PDFQuizGenerator), { ssr: false });
+const QuestionBankPicker = dynamic(() => import('@/components/quiz/QuestionBankPicker').then(m => m.QuestionBankPicker), { ssr: false });
 const QuestionReviewPanel = dynamic(() => import('@/components/quiz/QuestionReviewPanel').then(m => m.QuestionReviewPanel), { ssr: false });
 
 interface GeneratedQuestion {
@@ -14,7 +15,7 @@ interface GeneratedQuestion {
   explanation: string;
 }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PencilRuler, Sparkles, ChevronLeft, ArrowLeft } from "lucide-react";
+import { PencilRuler, Sparkles, BookOpen, ChevronLeft, ArrowLeft } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
@@ -36,18 +37,80 @@ export default function CreateQuizPage() {
   const [backAction, setBackAction] = useState<'review' | 'dashboard' | null>(null);
   const [manualDirty, setManualDirty] = useState(false);
   const [forgeDirty, setForgeDirty] = useState(false);
+  const [showDraftRestore, setShowDraftRestore] = useState(false);
   const hasUnsavedWork = manualDirty || forgeDirty;
   const dashboardPath = user?.role === 'executive' ? '/executive/dashboard' : '/commander/dashboard';
+
+  const draftKey = user?.id ? `ka_draft_${user.id}` : null;
+
+  useEffect(() => {
+    if (!draftKey || generatedQuestions) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft.generatedQuestions && Array.isArray(draft.generatedQuestions) && draft.generatedQuestions.length > 0) {
+        setShowDraftRestore(true);
+      }
+    } catch {}
+  }, [draftKey, generatedQuestions]);
+
+  const restoreDraft = () => {
+    if (!draftKey) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft.generatedQuestions) setGeneratedQuestions(draft.generatedQuestions);
+      if (draft.difficulty) setDifficulty(draft.difficulty);
+      if (draft.activeTab) setActiveTab(draft.activeTab);
+      if (draft.forgeParams) forgeParams.current = draft.forgeParams;
+      setShowDraftRestore(false);
+      toast({ title: 'Draft Restored', description: 'Your previous work has been restored.' });
+    } catch {
+      clearDraft();
+    }
+  };
+
+  const clearDraft = () => {
+    if (!draftKey) return;
+    try { localStorage.removeItem(draftKey); } catch {}
+    setShowDraftRestore(false);
+  };
+
+  const saveDraft = useCallback(() => {
+    if (!draftKey) return;
+    if (!generatedQuestions && !hasUnsavedWork) return;
+    try {
+      const draft: Record<string, unknown> = {
+        timestamp: Date.now(),
+        activeTab,
+      };
+      if (generatedQuestions) {
+        draft.generatedQuestions = generatedQuestions;
+        draft.difficulty = difficulty;
+        if (forgeParams.current) draft.forgeParams = forgeParams.current;
+      }
+      localStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch {}
+  }, [draftKey, generatedQuestions, difficulty, hasUnsavedWork, activeTab]);
+
+  useEffect(() => {
+    if (!generatedQuestions && !hasUnsavedWork) return;
+    const timer = setTimeout(saveDraft, 1000);
+    return () => clearTimeout(timer);
+  }, [generatedQuestions, hasUnsavedWork, saveDraft]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!hasUnsavedWork && !generatedQuestions) return;
+      saveDraft();
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [generatedQuestions, hasUnsavedWork]);
+  }, [generatedQuestions, hasUnsavedWork, saveDraft]);
 
   const handleBackClick = () => {
     if (generatedQuestions) {
@@ -107,8 +170,13 @@ export default function CreateQuizPage() {
         throw new Error(result.error);
       }
       if (result.questions && result.questions.length > 0) {
+        const q = result.questions[0];
+        if (!q.text || q.text.trim().length < 5) throw new Error('Generated question text is too short');
+        if (!q.options || q.options.length < 2) throw new Error('Generated question has too few options');
+        if (q.correctAnswerIndex < 0 || q.correctAnswerIndex >= q.options.length) throw new Error('Generated question has invalid correct answer');
+        if (new Set(q.options.map(o => o.trim().toLowerCase())).size !== q.options.length) throw new Error('Generated question has duplicate options');
         const updated = [...generatedQuestions];
-        updated[index] = result.questions[0];
+        updated[index] = q;
         setGeneratedQuestions(updated);
         toast({ title: 'Regenerated', description: `Question ${index + 1} has been reforged.` });
       } else {
@@ -171,6 +239,7 @@ export default function CreateQuizPage() {
               onRegenerate={handleRegenerate}
               onEditSettings={handleEditSettings}
               onRegenerateQuestion={forgeParams.current ? handleRegenerateQuestion : undefined}
+              onArenaCreated={clearDraft}
           />
         </Suspense>
 
@@ -191,12 +260,15 @@ export default function CreateQuizPage() {
       </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-        <TabsList className="grid w-full grid-cols-2 h-12 bg-secondary/20 p-1 rounded-lg border border-primary/10">
+        <TabsList className="grid w-full grid-cols-3 h-12 bg-secondary/20 p-1 rounded-lg border border-primary/10">
           <TabsTrigger value="manual" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
             <PencilRuler className="mr-2 h-4 w-4" /> Manual
           </TabsTrigger>
           <TabsTrigger value="forge" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
-            <Sparkles className="mr-2 h-4 w-4" /> AI PDF Forge
+            <Sparkles className="mr-2 h-4 w-4" /> AI Forge
+          </TabsTrigger>
+          <TabsTrigger value="bank" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
+            <BookOpen className="mr-2 h-4 w-4" /> Question Bank
           </TabsTrigger>
         </TabsList>
 
@@ -211,8 +283,29 @@ export default function CreateQuizPage() {
              <PDFQuizGenerator onQuestionsGenerated={handleQuestionsGenerated} onDirtyChange={setForgeDirty} />
           </Suspense>
         </TabsContent>
+
+        <TabsContent value="bank" className="animate-in">
+          <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
+             <QuestionBankPicker onQuestionsGenerated={handleQuestionsGenerated} onDirtyChange={setForgeDirty} />
+          </Suspense>
+        </TabsContent>
        </Tabs>
        {backConfirmDialog}
+
+      <Dialog open={showDraftRestore} onOpenChange={(open) => { if (!open) { clearDraft(); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Restore Previous Draft?</DialogTitle>
+            <DialogDescription>
+              You have unsaved questions from a previous session. Would you like to restore them?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={clearDraft}>Discard Draft</Button>
+            <Button onClick={restoreDraft}>Restore Draft</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
      </div>
   );
 }

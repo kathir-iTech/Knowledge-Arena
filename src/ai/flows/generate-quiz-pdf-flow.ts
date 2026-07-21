@@ -26,7 +26,7 @@ const QuizQuestionOutputSchema = z.object({
 const GenerateQuizFromPDFInputSchema = z.object({
   pdfDataUri: z.string().describe("A PDF as a data URI (base64)."),
   difficulty: z.enum(['easy', 'moderate', 'hard']).describe('Difficulty of the questions.'),
-  questionCount: z.number().min(3).max(30).describe('Number of questions to generate.'),
+  questionCount: z.number().min(1).max(30).describe('Number of questions to generate.'),
   idToken: z.string().describe('Firebase ID token for authentication.'),
 });
 export type GenerateQuizFromPDFInput = z.infer<typeof GenerateQuizFromPDFInputSchema>;
