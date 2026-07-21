@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, Suspense } from 'react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 
 const QuizCreatorForm = dynamic(() => import('@/components/quiz/QuizCreatorForm').then(m => m.QuizCreatorForm), { ssr: false });
@@ -33,18 +33,44 @@ export default function CreateQuizPage() {
   const { toast } = useToast();
   const { auth } = useFirebase();
   const [showBackConfirm, setShowBackConfirm] = useState(false);
+  const [backAction, setBackAction] = useState<'review' | 'dashboard' | null>(null);
+  const [manualDirty, setManualDirty] = useState(false);
+  const [forgeDirty, setForgeDirty] = useState(false);
+  const hasUnsavedWork = manualDirty || forgeDirty;
+  const dashboardPath = user?.role === 'executive' ? '/executive/dashboard' : '/commander/dashboard';
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedWork && !generatedQuestions) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [generatedQuestions, hasUnsavedWork]);
 
   const handleBackClick = () => {
     if (generatedQuestions) {
+      setBackAction('review');
       setShowBackConfirm(true);
     } else {
-      handleRegenerate();
+      router.push(dashboardPath);
     }
+  };
+
+  const handleDashboardBack = () => {
+    if (hasUnsavedWork || generatedQuestions) {
+      setBackAction('dashboard');
+      setShowBackConfirm(true);
+      return;
+    }
+    router.push(dashboardPath);
   };
 
   const handleQuestionsGenerated = (questions: GeneratedQuestion[], diff: string, dataUri?: string, questionCount?: number) => {
     setGeneratedQuestions(questions);
     setDifficulty(diff);
+    setForgeDirty(true);
     setShowForgeWithPreserved(false);
     if (dataUri && questionCount) {
       forgeParams.current = { pdfDataUri: dataUri, diff: diff as 'easy' | 'moderate' | 'hard', count: questionCount };
@@ -54,6 +80,8 @@ export default function CreateQuizPage() {
   const handleRegenerate = () => {
     setGeneratedQuestions(null);
     setShowForgeWithPreserved(false);
+    setForgeDirty(false);
+    forgeParams.current = null;
   };
 
   const handleEditSettings = () => {
@@ -93,6 +121,41 @@ export default function CreateQuizPage() {
     }
   };
 
+  const confirmBack = () => {
+    const action = backAction;
+    setShowBackConfirm(false);
+    setBackAction(null);
+    if (action === 'review') {
+      handleRegenerate();
+    } else if (action === 'dashboard') {
+      setGeneratedQuestions(null);
+      setShowForgeWithPreserved(false);
+      setManualDirty(false);
+      setForgeDirty(false);
+      forgeParams.current = null;
+      router.push(dashboardPath);
+    }
+  };
+
+  const backConfirmDialog = (
+    <Dialog open={showBackConfirm} onOpenChange={(open) => { if (!open) { setShowBackConfirm(false); setBackAction(null); } }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{backAction === 'dashboard' ? 'Leave Arena Architect?' : 'Leave Question Review?'}</DialogTitle>
+          <DialogDescription>
+            {backAction === 'dashboard'
+              ? 'Your unsaved arena work will be lost if you leave this page.'
+              : 'Your generated questions and review edits will be discarded.'}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => { setShowBackConfirm(false); setBackAction(null); }}>Cancel</Button>
+          <Button variant="destructive" onClick={confirmBack}>Discard & Leave</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (generatedQuestions && !showForgeWithPreserved) {
     return (<>
         <header className="page-section flex items-center justify-between">
@@ -111,29 +174,14 @@ export default function CreateQuizPage() {
           />
         </Suspense>
 
-      <Dialog open={showBackConfirm} onOpenChange={setShowBackConfirm}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Leave Question Review?</DialogTitle>
-            <DialogDescription>
-              Any edits you made (text changes, deletions, shuffles) will be lost. Regenerated questions will be preserved.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowBackConfirm(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => { setShowBackConfirm(false); handleRegenerate(); }}>
-              Discard & Leave
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {backConfirmDialog}
     </>);
   }
 
   return (
     <div className="page-container safe-top safe-bottom animate-in">
         <header className="page-section safe-top flex items-start gap-4">
-          <Button variant="ghost" onClick={() => router.push(user?.role === 'executive' ? '/executive/dashboard' : '/commander/dashboard')} className="h-9 shrink-0 mt-0.5">
+          <Button variant="ghost" onClick={handleDashboardBack} className="h-9 shrink-0 mt-0.5">
             <ArrowLeft className="mr-2 h-4 w-4" /> Dashboard
           </Button>
           <div>
@@ -154,16 +202,17 @@ export default function CreateQuizPage() {
 
         <TabsContent value="manual" className="animate-in">
           <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
-            <QuizCreatorForm />
+             <QuizCreatorForm onDirtyChange={setManualDirty} />
           </Suspense>
         </TabsContent>
 
         <TabsContent value="forge" className="animate-in">
           <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
-            <PDFQuizGenerator onQuestionsGenerated={handleQuestionsGenerated} />
+             <PDFQuizGenerator onQuestionsGenerated={handleQuestionsGenerated} onDirtyChange={setForgeDirty} />
           </Suspense>
         </TabsContent>
-      </Tabs>
-    </div>
+       </Tabs>
+       {backConfirmDialog}
+     </div>
   );
 }

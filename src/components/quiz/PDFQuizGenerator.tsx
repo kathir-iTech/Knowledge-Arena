@@ -20,6 +20,7 @@ interface GeneratedQuestion {
 
 interface PDFQuizGeneratorProps {
   onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string, dataUri?: string, questionCount?: number) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 type GenerationStage = 'idle' | 'reading' | 'generating' | 'complete' | 'error';
@@ -34,7 +35,7 @@ const STAGE_LABELS: Record<GenerationStage, string> = {
 
 const CLIENT_TIMEOUT_MS = 120000;
 
-export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps) {
+export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQuizGeneratorProps) {
   const { toast } = useToast();
   const { auth } = useFirebase();
   const [file, setFile] = useState<File | null>(null);
@@ -46,6 +47,10 @@ export function PDFQuizGenerator({ onQuestionsGenerated }: PDFQuizGeneratorProps
   const mountedRef = useRef(true);
 
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
+
+  useEffect(() => {
+    onDirtyChange?.(Boolean(file || difficulty || isGenerating));
+  }, [file, difficulty, isGenerating, onDirtyChange]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];

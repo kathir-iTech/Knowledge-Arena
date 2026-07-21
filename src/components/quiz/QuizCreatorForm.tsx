@@ -41,9 +41,10 @@ type QuizFormData = z.infer<typeof quizSchema>;
 
 interface QuizCreatorFormProps {
   initialQuestions?: any[];
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
+export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreatorFormProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -65,6 +66,10 @@ export function QuizCreatorForm({ initialQuestions }: QuizCreatorFormProps) {
       ],
     },
   });
+
+  useEffect(() => {
+    onDirtyChange?.(form.formState.isDirty);
+  }, [form.formState.isDirty, onDirtyChange]);
 
   useEffect(() => {
     if (initialQuestions) {

@@ -15,6 +15,8 @@ import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface WaitingRoomProps {
   quiz: ValidatedQuiz;
@@ -23,6 +25,7 @@ interface WaitingRoomProps {
 
 export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const [shareableLink, setShareableLink] = useState('');
   const { toast } = useToast();
   const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
@@ -30,6 +33,9 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const [teacherOnline, setTeacherOnline] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [presenceNow, setPresenceNow] = useState(() => Date.now());
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -37,6 +43,11 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       setShareableLink(url.toString());
     }
   }, [quiz.id]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setPresenceNow(Date.now()), 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const unsubRef = useRef<(() => void) | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,6 +75,9 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
           setTeacherOnline(true);
         }
         setIsReconnecting(false);
+      }, () => {
+        if (!mountedRef.current) return;
+        setIsReconnecting(true);
       });
     };
 
@@ -78,12 +92,35 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       }, 3000);
     };
 
+    const handleOnline = () => {
+      if (!mountedRef.current) return;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      subscribe();
+    };
+
+    const handlePageShow = () => {
+      if (!mountedRef.current) return;
+      if (!isTeacher && user) {
+        participantService.heartbeat(quiz.id, user.id).catch(() => {});
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        heartbeatRef.current = setInterval(() => {
+          participantService.heartbeat(quiz.id, user.id).catch(() => {});
+        }, 15000);
+      }
+      subscribe();
+    };
+
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('pageshow', handlePageShow);
 
     const unsubQuiz = quizService.subscribeToQuiz(quiz.id, (q) => {
       if (!mountedRef.current) return;
       if (!q) { setTeacherOnline(false); return; }
       setTeacherOnline(q.status === 'waiting' || q.status === 'live');
+    }, () => {
+      if (!mountedRef.current) return;
+      setIsReconnecting(true);
     });
 
     return () => {
@@ -92,12 +129,13 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
       if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('pageshow', handlePageShow);
       unsubQuiz();
     };
   }, [quiz.id, quiz.created_by, isTeacher, user]);
 
   const studentParticipants = useMemo(() => {
-    const now = Date.now();
     return participants.filter(p => {
       if (p.user_id === quiz.created_by) return false;
       if (p.status === 'blocked') return false;
@@ -105,9 +143,9 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       if (!lastSeen) return true;
       const ts = typeof lastSeen === 'number' ? lastSeen : (lastSeen as any).toMillis?.();
       if (!ts) return true;
-      return now - ts < 30000;
+      return presenceNow - ts < 30000;
     });
-  }, [participants, quiz.created_by]);
+  }, [participants, presenceNow, quiz.created_by]);
 
   const blockedParticipants = useMemo(() => {
     return participants.filter(p => p.user_id !== quiz.created_by && p.status === 'blocked');
@@ -124,6 +162,21 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to unblock gladiator.' });
     } finally {
       setUnblockingId(null);
+    }
+  };
+
+  const handleLeave = async () => {
+    if (isTeacher || !user || isLeaving) return;
+    setIsLeaving(true);
+    try {
+      await participantService.leaveQuiz(quiz.id, user.id);
+      toast({ title: 'Arena Left', description: 'You can rejoin this arena from the dashboard.' });
+      router.push('/gladiator/dashboard');
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to leave the arena.' });
+    } finally {
+      setIsLeaving(false);
+      setShowLeaveDialog(false);
     }
   };
 
@@ -285,6 +338,33 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
             <Clock className="w-3.5 h-3.5" />
             <span>Quiz starting soon...</span>
           </div>
+        )}
+
+        {!isTeacher && (
+          <>
+            <Button variant="outline" className="w-full" onClick={() => setShowLeaveDialog(true)} disabled={isLeaving}>
+              Leave Arena
+            </Button>
+            <AlertDialog open={showLeaveDialog} onOpenChange={(open) => { if (!isLeaving) setShowLeaveDialog(open); }}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Leave Arena?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    You will be removed from the waiting room. You can rejoin later with the room code.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isLeaving}>Stay</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(event) => { event.preventDefault(); void handleLeave(); }}
+                    disabled={isLeaving}
+                  >
+                    {isLeaving ? 'Leaving...' : 'Leave Arena'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
         )}
       </div>
     </div>

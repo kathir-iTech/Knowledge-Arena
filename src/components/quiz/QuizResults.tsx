@@ -28,6 +28,8 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
     const unsub = participantService.subscribeToParticipants(quiz.id, (parts) => {
       setParticipants(parts);
       setIsLoading(false);
+    }, () => {
+      setIsLoading(false);
     });
     return () => { unsub(); };
   }, [quiz.id]);

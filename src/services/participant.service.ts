@@ -10,6 +10,7 @@ import {
   deleteDoc,
   collection,
   collectionGroup,
+  documentId,
   onSnapshot,
   query,
   where,
@@ -43,6 +44,10 @@ export const participantService = {
     if (!quizId || quizId.length !== 6) throw new Error('Invalid quiz code');
     if (!userId) throw new Error('User ID required');
     const db = getFirestore();
+    const quizRef = doc(db, 'quizzes', quizId);
+    const quizSnap = await getDoc(quizRef);
+    if (!quizSnap.exists()) throw new Error('Quiz not found');
+    if (quizSnap.data().status !== 'waiting') throw new Error('This battle has already started. Late joining is not permitted.');
     const data: Record<string, unknown> = {
       user_id: userId,
       score: 0,
@@ -92,6 +97,11 @@ export const participantService = {
     await Promise.all(deletes);
   },
 
+  async leaveQuiz(quizId: string, userId: string): Promise<void> {
+    const db = getFirestore();
+    await deleteDoc(doc(db, participantPath(quizId, userId)));
+  },
+
   async heartbeat(quizId: string, userId: string): Promise<void> {
     const db = getFirestore();
     await updateDoc(doc(db, participantPath(quizId, userId)), {
@@ -101,7 +111,8 @@ export const participantService = {
 
   subscribeToParticipants(
     quizId: string,
-    callback: (participants: ValidatedParticipant[]) => void
+    callback: (participants: ValidatedParticipant[]) => void,
+    onError?: (error: Error) => void
   ) {
     const db = getFirestore();
     return onSnapshot(collection(db, 'quizzes', quizId, 'participants'), (snap) => {
@@ -109,12 +120,12 @@ export const participantService = {
         d => ({ user_id: d.id, ...d.data() } as ValidatedParticipant)
       );
       callback(participants);
-    });
+    }, (error) => onError?.(error));
   },
 
   async getStudentHistory(userId: string): Promise<Array<{ quizId: string; title: string; score: number; status: string; created_at: number }>> {
     const db = getFirestore();
-    const q = query(collectionGroup(db, 'participants'), where('user_id', '==', userId));
+    const q = query(collectionGroup(db, 'participants'), where(documentId(), '==', userId));
     const snap = await getDocs(q);
     const quizIds = snap.docs.map(d => d.ref.parent.parent?.id).filter(Boolean) as string[];
     if (!quizIds.length) return [];

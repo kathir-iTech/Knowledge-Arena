@@ -29,17 +29,22 @@ interface LiveQuizQuestion {
 
 const ONLINE_TIMEOUT_MS = 30000;
 
-function isParticipantOnline(p: ValidatedParticipant): boolean {
+function isParticipantOnline(p: ValidatedParticipant, now: number): boolean {
   const lastSeen = p.lastSeen;
   if (!lastSeen) return true;
   const ts = typeof lastSeen === 'number' ? lastSeen : (lastSeen as any).toMillis?.();
   if (!ts) return true;
-  return Date.now() - ts < ONLINE_TIMEOUT_MS;
+  return now - ts < ONLINE_TIMEOUT_MS;
 }
 
 const LiveLeaderboard = ({ quizId, participants, teacherId, currentUserId }: { quizId: string, participants: ValidatedParticipant[], teacherId: string, currentUserId: string }) => {
     const sortedParticipants = useMemo(() => [...participants].sort((a,b) => b.score - a.score), [participants]);
-    const onlineParticipants = useMemo(() => sortedParticipants.filter(p => p.user_id === teacherId || isParticipantOnline(p)), [sortedParticipants, teacherId]);
+    const [presenceNow, setPresenceNow] = useState(() => Date.now());
+    useEffect(() => {
+      const interval = setInterval(() => setPresenceNow(Date.now()), 5000);
+      return () => clearInterval(interval);
+    }, []);
+    const onlineParticipants = useMemo(() => sortedParticipants.filter(p => p.user_id === teacherId || isParticipantOnline(p, presenceNow)), [sortedParticipants, teacherId, presenceNow]);
     const total = onlineParticipants.filter(p => p.user_id !== teacherId).length;
 
     return (
@@ -82,11 +87,18 @@ const LiveLeaderboard = ({ quizId, participants, teacherId, currentUserId }: { q
     );
 };
 
-const ParticipantStats = ({ participants, teacherId, submittedCount }: { participants: ValidatedParticipant[], teacherId: string, submittedCount: number }) => {
+const ParticipantStats = ({ participants, teacherId, submittedCount, onUnblock, unblockingId }: {
+  participants: ValidatedParticipant[];
+  teacherId: string;
+  submittedCount: number;
+  onUnblock: (userId: string) => void;
+  unblockingId: string | null;
+}) => {
   const students = participants.filter(p => p.user_id !== teacherId);
   const playing = students.filter(p => p.status === 'playing').length;
   const blocked = students.filter(p => p.status === 'blocked').length;
   const finished = students.filter(p => p.status === 'finished').length;
+  const blockedStudents = students.filter(p => p.status === 'blocked');
 
   return (
     <div className="flex flex-wrap gap-2 justify-center mb-4 md:mb-6">
@@ -118,6 +130,21 @@ const ParticipantStats = ({ participants, teacherId, submittedCount }: { partici
           <span className="text-muted-foreground">done</span>
         </div>
       )}
+      {blockedStudents.length > 0 && (
+        <div className="w-full max-w-xl basis-full rounded-[12px] border border-destructive/10 bg-destructive/5 p-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-destructive">Blocked gladiators</div>
+          <div className="flex flex-wrap gap-2">
+            {blockedStudents.map(p => (
+              <div key={p.user_id} className="flex items-center gap-2 rounded-[10px] bg-background/70 px-2.5 py-1.5 text-xs">
+                <span className="max-w-28 truncate">{p.name || p.user_id.slice(0, 8)}</span>
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onUnblock(p.user_id)} disabled={unblockingId === p.user_id}>
+                  {unblockingId === p.user_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Unblock'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -144,6 +171,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const advancingRef = useRef(false);
   const confirmedQuestionIds = useRef(new Set<string>());
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const { firestore } = useFirebase();
 
   useEffect(() => {
@@ -153,8 +181,18 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     };
     send();
     heartbeatRef.current = setInterval(send, 15000);
+
+    const handlePageShow = () => {
+      send();
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      heartbeatRef.current = setInterval(send, 15000);
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+
     return () => {
       if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, [quiz.id, user, isTeacher]);
 
@@ -177,9 +215,13 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     let mounted = true;
     const qSub = questionService.subscribeToQuestions(quiz.id, (qs) => {
       if (mounted) { setQuestions(qs); setIsLoadingQuestions(false); }
+    }, () => {
+      if (mounted && navigator.onLine) {
+        toast({ variant: 'destructive', title: 'Connection Issue', description: 'Failed to sync questions. Retrying...' });
+      }
     });
     return () => { mounted = false; qSub(); };
-  }, [quiz.id]);
+  }, [quiz.id, toast]);
 
   useEffect(() => {
     let mounted = true;
@@ -205,9 +247,13 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           prevViolationsRef.current[p.user_id] = curr;
         });
       }
+    }, () => {
+      if (mounted && navigator.onLine) {
+        toast({ variant: 'destructive', title: 'Connection Issue', description: 'Participant sync interrupted. Reconnecting...' });
+      }
     });
     return () => { mounted = false; pSub(); };
-  }, [quiz.id, isTeacher, quiz.created_by]);
+  }, [quiz.id, isTeacher, quiz.created_by, toast]);
 
   const currentQuestion = useMemo(() => {
     if (!questions.length || (quiz.current_question_index ?? -1) < 0) return null;
@@ -252,7 +298,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         setHasAnswered(true);
         confirmedQuestionIds.current.add(currentQuestion.id);
       }
-    });
+    }, () => {});
     return () => { unsub(); };
   }, [quiz.current_question_index, isTeacher, user?.id, firestore, quiz.id]);
 
@@ -364,6 +410,19 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     }
   };
 
+  const handleUnblock = async (userId: string) => {
+    if (!isTeacher || unblockingId) return;
+    setUnblockingId(userId);
+    try {
+      await participantService.unblockParticipant(quiz.id, userId);
+      toast({ title: 'Unblocked', description: 'The gladiator can join the arena again.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to unblock gladiator.' });
+    } finally {
+      setUnblockingId(null);
+    }
+  };
+
   if (isLoadingQuestions) return <LoadingScreen message="Loading questions..." />;
   if (!currentQuestion) return null;
 
@@ -395,7 +454,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         </div>
       )}
 
-      {isTeacher && <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} />}
+       {isTeacher && <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} onUnblock={handleUnblock} unblockingId={unblockingId} />}
 
       {!isTeacher && (
         <div className={cn(
