@@ -20,7 +20,8 @@ import { Textarea } from '../ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler } from 'lucide-react';
+import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler, AlertTriangle } from 'lucide-react';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import type { ValidatedQuiz } from '@/lib/schemas';
 
 const questionSchema = z.object({
@@ -50,6 +51,7 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittedRef = useRef(false);
+  const [deleteConfirmIdx, setDeleteConfirmIdx] = useState<number | null>(null);
 
   const form = useForm<QuizFormData>({
     resolver: zodResolver(quizSchema),
@@ -98,6 +100,14 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
         return;
     }
     if (submittedRef.current) return;
+
+    for (let i = 0; i < data.questions.length; i++) {
+      if (hasDuplicateOptions(data.questions[i])) {
+        toast({ variant: 'destructive', title: 'Duplicate Options', description: `Question ${i + 1} has duplicate option text. Each option must be unique.` });
+        return;
+      }
+    }
+
     submittedRef.current = true;
     setIsSubmitting(true);
 
@@ -168,12 +178,22 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
     }
   };
 
+  const hasDuplicateOptions = (q: { options: string[] }) => {
+    const seen = new Set<string>();
+    for (const opt of q.options) {
+      const trimmed = opt.trim().toLowerCase();
+      if (trimmed && seen.has(trimmed)) return true;
+      seen.add(trimmed);
+    }
+    return false;
+  };
+
   const addOption = (qIdx: number) => {
     const opts = form.getValues(`questions.${qIdx}.options`);
     if (opts.length < 4) form.setValue(`questions.${qIdx}.options`, [...opts, '']);
   };
 
-  return (
+  return (<>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl mx-auto pb-20">
         <Card>
@@ -213,7 +233,7 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
                     )}
                 </div>
                 
-                <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && remove(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5" disabled={fields.length <= 1}><Trash2 className="h-4 w-4" /></Button>
+                <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && setDeleteConfirmIdx(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5" disabled={fields.length <= 1} aria-label={`Delete question ${index + 1}`}><Trash2 className="h-4 w-4" /></Button>
                 
                 <CardContent className="space-y-6">
                 <FormField control={form.control} name={`questions.${index}.text`} render={({ field }) => (
@@ -320,5 +340,20 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
         </div>
       </form>
     </Form>
-  );
+
+    <AlertDialog open={deleteConfirmIdx !== null} onOpenChange={() => setDeleteConfirmIdx(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Question?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This question will be permanently removed. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setDeleteConfirmIdx(null)}>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { if (deleteConfirmIdx !== null) remove(deleteConfirmIdx); setDeleteConfirmIdx(null); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>);
 }

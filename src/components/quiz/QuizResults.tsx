@@ -1,19 +1,19 @@
 'use client';
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { ValidatedQuiz } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Home, Eye, Target, Clock, BarChart3, Award, Medal, Crown, CheckCircle2, XCircle, HelpCircle, Loader2 } from 'lucide-react';
+import { Home, Eye, Target, Clock, BarChart3, Award, Medal, Crown, CheckCircle2 } from 'lucide-react';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
 import { participantService } from '@/services/participant.service';
 import { cn } from '@/lib/utils';
 import type { ValidatedParticipant } from '@/lib/schemas';
 import { QuizReview } from './QuizReview';
+import { Celebration } from '@/components/Celebration';
 
 function getMedalIcon(rank: number) {
   if (rank === 1) return <Crown className="w-5 h-5 text-warning" />;
@@ -27,19 +27,36 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
   const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showReview, setShowReview] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const firstLoadRef = useRef(true);
+  const reducedMotionRef = useRef(false);
 
-  const { toast } = useToast();
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      reducedMotionRef.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+  }, []);
 
   useEffect(() => {
     setIsLoading(true);
     const unsub = participantService.subscribeToParticipants(quiz.id, (parts) => {
       setParticipants(parts);
       setIsLoading(false);
+      if (firstLoadRef.current && parts.length > 0 && !reducedMotionRef.current) {
+        const teacherId = quiz.created_by || '';
+        const students = parts.filter(p => p.user_id !== teacherId);
+        const sorted = [...students].sort((a, b) => b.score - a.score);
+        const uid = currentUserId || user?.id || '';
+        if (sorted.length > 0 && sorted[0].user_id === uid) {
+          setShowCelebration(true);
+        }
+        firstLoadRef.current = false;
+      }
     }, () => {
       setIsLoading(false);
     });
     return () => { unsub(); };
-  }, [quiz.id]);
+  }, [quiz.id, quiz.created_by, currentUserId, user?.id]);
 
   const uid = currentUserId || user?.id || '';
   const teacherId = quiz.created_by || '';
@@ -90,6 +107,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
 
   return (
     <div className="flex flex-col items-center min-h-screen p-4 bg-background animate-in safe-top safe-bottom">
+      <Celebration show={showCelebration} onComplete={() => setShowCelebration(false)} />
       <Card className="w-full max-w-3xl">
         <CardHeader className="text-center space-y-3 pb-0">
           <CardTitle className="text-display font-headline text-foreground tracking-tight">Results</CardTitle>

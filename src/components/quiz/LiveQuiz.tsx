@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag, Wifi, WifiOff, Volume2, VolumeX } from 'lucide-react';
+import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -53,37 +53,6 @@ function useCommanderPresence(quiz: ValidatedQuiz) {
   }, [quiz, presenceNow]);
 
   return commanderOnline;
-}
-
-function useSound(url?: string) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [muted, setMuted] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('ka_sound_muted') !== 'false';
-  });
-
-  useEffect(() => {
-    if (!url) return;
-    audioRef.current = new Audio(url);
-    audioRef.current.preload = 'none';
-    return () => { audioRef.current = null; };
-  }, [url]);
-
-  const play = useCallback(() => {
-    if (muted || !audioRef.current) return;
-    const p = audioRef.current.play();
-    if (p) p.catch(() => {});
-  }, [muted]);
-
-  const toggleMute = useCallback(() => {
-    setMuted(prev => {
-      const next = !prev;
-      localStorage.setItem('ka_sound_muted', String(next));
-      return next;
-    });
-  }, []);
-
-  return { play, muted, toggleMute };
 }
 
 const CountdownTimer = ({ timeLeft, totalSec }: { timeLeft: number; totalSec: number }) => {
@@ -267,7 +236,6 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const { user } = useAuth();
   const { toast } = useToast();
   const commanderOnline = useCommanderPresence(quiz);
-  const sound = useSound();
 
   const [questions, setQuestions] = useState<LiveQuizQuestion[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
@@ -743,18 +711,6 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       </Card>
 
       <LiveLeaderboard participants={participants} teacherId={quiz.created_by} currentUserId={user?.id || ''} />
-
-      {isTeacher && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-          <button
-            onClick={sound.toggleMute}
-            className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-background/80 backdrop-blur-sm border border-border/50 shadow-elevation-small hover:bg-muted transition-colors"
-            aria-label={sound.muted ? 'Unmute sounds' : 'Mute sounds'}
-          >
-            {sound.muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
-        </div>
-      )}
 
       <AlertDialog open={showEndConfirm} onOpenChange={(o) => { if (!o && !isEnding) setShowEndConfirm(false); }}>
         <AlertDialogContent>

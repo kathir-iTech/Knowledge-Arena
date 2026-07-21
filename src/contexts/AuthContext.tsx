@@ -50,11 +50,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const redirectCheckComplete = useRef(false);
   const fetchInProgress = useRef(false);
   const fetchInProgressUid = useRef<string | null>(null);
-  const timingRef = useRef<{ redirectReturn?: number; authResolved?: number; profileResolved?: number }>({});
-
-  useEffect(() => {
-    console.log('[AuthDebug] firebaseUser:', firebaseUser?.email || null, 'isUserLoading:', isUserLoading, 'auth.currentUser:', auth?.currentUser?.email || null);
-  }, [firebaseUser, isUserLoading, auth]);
 
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
@@ -108,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const email = defaults?.email || auth.currentUser?.email || '';
         const photoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
         const avatar = photoURL || getRandomAvatar();
-        console.log('[Profile] Creating Firestore profile for', uid, { displayName, email, hasPhoto: !!photoURL });
+
         const newUser: User = {
           id: uid,
           name: displayName,
@@ -138,7 +133,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchInProgress.current = true;
     fetchInProgressUid.current = uid;
     lastFetchedUid.current = uid;
-    timingRef.current.authResolved = performance.now();
     try {
         const googleUser = auth?.currentUser;
         const profile = await ensureGladiatorProfile(uid, {
@@ -146,14 +140,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: googleUser?.email || undefined,
           photoURL: googleUser?.photoURL || undefined,
         });
-        timingRef.current.profileResolved = performance.now();
-        const { redirectReturn, authResolved, profileResolved } = timingRef.current;
-        if (redirectReturn) {
-          console.log('[Timing] OAuth redirect→auth:', (authResolved - redirectReturn).toFixed(0) + 'ms',
-            'auth→profile:', (profileResolved - authResolved).toFixed(0) + 'ms',
-            'total:', (profileResolved - redirectReturn).toFixed(0) + 'ms');
-        }
-        console.log('[Auth] User resolved: uid=' + uid + ' role=' + profile.role + ' name=' + profile.name);
         setUser(profile);
     } catch (err) {
         console.error('AuthContext: fetchUserDocument error', err);
@@ -182,7 +168,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.removeItem('oa_pending');
       fetchUserDocument(firebaseUser.uid);
     } else {
-      console.log('[Auth] No Firebase user — clearing session');
       setUser(null);
       fetchInProgress.current = false;
       fetchInProgressUid.current = null;
@@ -279,17 +264,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    if (!auth) { console.log('[Auth] getRedirectResult: no auth'); redirectCheckComplete.current = true; return; }
+    if (!auth) { redirectCheckComplete.current = true; return; }
     redirectCheckComplete.current = false;
     getRedirectResult(auth)
       .then((result) => {
         redirectCheckComplete.current = true;
         if (result) {
-          timingRef.current.redirectReturn = performance.now();
           sessionStorage.removeItem('oa_pending');
-          console.log('[Auth] Redirect sign-in successful', result.user.email);
         } else {
-          console.log('[Auth] getRedirectResult: null (no pending redirect)');
           const oaMarker = sessionStorage.getItem('oa_pending');
           let oaValid = false;
           if (oaMarker) {
@@ -324,7 +306,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      console.log('[Auth] Google sign-in: initiating redirect with prompt=select_account');
       await signInWithRedirect(auth, provider);
     } catch (error: unknown) {
       console.error('[Auth] signInWithRedirect error', error);

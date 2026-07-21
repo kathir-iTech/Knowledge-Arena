@@ -44,9 +44,10 @@ interface QuestionReviewPanelProps {
   onRegenerate: () => void;
   onEditSettings: () => void;
   onRegenerateQuestion?: (index: number) => void;
+  onArenaCreated?: () => void;
 }
 
-export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate, onEditSettings, onRegenerateQuestion }: QuestionReviewPanelProps) {
+export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate, onEditSettings, onRegenerateQuestion, onArenaCreated }: QuestionReviewPanelProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -114,14 +115,17 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   const handleShuffleOptions = (id: string) => {
     setQuestions(prevQ => prevQ.map(q => {
       if (q.id !== id) return q;
-      const correctText = q.options[q.correctAnswerIndex];
-      const shuffled = [...q.options];
-      for (let i = shuffled.length - 1; i > 0; i--) {
+      const items = q.options.map((text, i) => ({
+        text,
+        isCorrect: i === q.correctAnswerIndex,
+        originalIndex: i,
+      }));
+      for (let i = items.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        [items[i], items[j]] = [items[j], items[i]];
       }
-      const newCorrectIndex = shuffled.indexOf(correctText);
-      return { ...q, options: shuffled, correctAnswerIndex: newCorrectIndex };
+      const newCorrectIndex = items.findIndex(item => item.isCorrect);
+      return { ...q, options: items.map(item => item.text), correctAnswerIndex: newCorrectIndex };
     }));
   };
 
@@ -250,6 +254,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
 
         await questionService.createAnswerKeys(answerKeys);
 
+        onArenaCreated?.();
         toast({ title: "Arena Created", description: `Room Code: ${roomCode}` });
         router.push(`/battle/${roomCode}`);
     } catch (e: unknown) {
@@ -351,14 +356,14 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                     <CardTitle className="text-lg font-medium">{q.text}</CardTitle>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => startEditing(q)}><Edit3 className="w-4 h-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleShuffleOptions(q.id)} className="text-muted-foreground" title="Shuffle answer options"><RefreshCw className="w-4 h-4 rotate-90" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => startEditing(q)} aria-label={`Edit question ${index + 1}`}><Edit3 className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleShuffleOptions(q.id)} className="text-muted-foreground" title="Shuffle answer options" aria-label="Shuffle options"><RefreshCw className="w-4 h-4 rotate-90" /></Button>
                     {regeneratingIndex === index ? (
-                      <Button variant="ghost" size="icon" disabled className="text-primary"><Loader2 className="w-4 h-4 animate-spin" /></Button>
+                      <Button variant="ghost" size="icon" disabled className="text-primary" aria-label="Regenerating"><Loader2 className="w-4 h-4 animate-spin" /></Button>
                     ) : onRegenerateQuestion && (
-                      <Button variant="ghost" size="icon" onClick={() => handleRegenQuestion(index)} className="text-primary"><RefreshCw className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleRegenQuestion(index)} className="text-primary" aria-label={`Regenerate question ${index + 1}`}><RefreshCw className="w-4 h-4" /></Button>
                     )}
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(q.id)} className="text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(q.id)} className="text-destructive" aria-label={`Delete question ${index + 1}`}><Trash2 className="w-4 h-4" /></Button>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
