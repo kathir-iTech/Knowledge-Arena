@@ -6,7 +6,7 @@ import type { ValidatedQuiz } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Home, Eye, Target, Clock, BarChart3, Award } from 'lucide-react';
+import { Home, Eye, Target, Clock, BarChart3, Award, Medal, Crown, CheckCircle2, XCircle, HelpCircle, Loader2 } from 'lucide-react';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -14,6 +14,13 @@ import { participantService } from '@/services/participant.service';
 import { cn } from '@/lib/utils';
 import type { ValidatedParticipant } from '@/lib/schemas';
 import { QuizReview } from './QuizReview';
+
+function getMedalIcon(rank: number) {
+  if (rank === 1) return <Crown className="w-5 h-5 text-warning" />;
+  if (rank === 2) return <Medal className="w-5 h-5 text-muted-foreground" />;
+  if (rank === 3) return <Medal className="w-5 h-5 text-amber-700" />;
+  return null;
+}
 
 export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQuiz; currentUserId?: string }) {
   const { user } = useAuth();
@@ -35,7 +42,6 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
   }, [quiz.id]);
 
   const uid = currentUserId || user?.id || '';
-
   const teacherId = quiz.created_by || '';
 
   const ranked = useMemo(() => {
@@ -90,7 +96,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
           <CardDescription className="text-base text-muted-foreground max-w-md mx-auto">&ldquo;{quiz.title}&rdquo;</CardDescription>
           {currentRank && (
             <div className="inline-flex items-center gap-2 mt-2 bg-primary/10 px-4 py-2 rounded-full text-sm font-medium text-primary">
-              <Award className="w-4 h-4" />
+              {currentRank === 1 ? <Crown className="w-4 h-4" /> : <Award className="w-4 h-4" />}
               <span>#{currentRank} of {totalParticipants}</span>
             </div>
           )}
@@ -123,31 +129,69 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
             </div>
           )}
 
-          <div className="space-y-1 pt-4 border-t border-border/50">
-            {ranked.map((p, idx) => (
-              <div key={p.user_id} className={cn(
-                "flex justify-between items-center p-3 md:p-4 rounded-[12px] transition-all duration-150 border border-transparent",
-                p.user_id === uid ? "bg-primary/5 border-primary/10" : "hover:bg-muted/30"
-              )}>
-                <div className="flex items-center gap-3">
-                  <span className={cn(
-                    "font-mono text-sm w-6 text-center",
-                    idx === 0 ? "text-warning font-bold" : idx === 1 ? "text-muted-foreground font-bold" : idx === 2 ? "text-amber-700 font-bold" : "text-muted-foreground"
-                  )}>{idx + 1}</span>
-                  <Avatar className="h-9 w-9"><AvatarFallback className="text-xs bg-secondary">{getParticipantAvatar(p)}</AvatarFallback></Avatar>
-                  <div>
-                    <span className="font-medium text-sm">{getParticipantLabel(p)}</span>
-                    {p.user_id === uid && <span className="ml-2 text-[10px] font-semibold text-primary uppercase bg-primary/10 px-1.5 py-0.5 rounded">You</span>}
+          {ranked.length > 0 && (
+            <div className="space-y-1 pt-4 border-t border-border/50">
+              {ranked.slice(0, 3).length > 0 && (
+                <div className="flex items-center justify-center gap-4 md:gap-8 pb-6 mb-4 border-b border-border/30">
+                  {ranked.length >= 2 && (
+                    <div className="flex flex-col items-center gap-2 text-center">
+                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-muted-foreground/30 ring-offset-2 ring-offset-card">
+                        <AvatarFallback className="text-xl bg-secondary">{getParticipantAvatar(ranked[1])}</AvatarFallback>
+                      </Avatar>
+                      <Medal className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-xs font-medium max-w-16 truncate">{getParticipantLabel(ranked[1])}</span>
+                      <span className="font-mono text-sm font-bold">{ranked[1].score}</span>
+                    </div>
+                  )}
+                  {ranked.length >= 1 && (
+                    <div className="flex flex-col items-center gap-2 text-center -mt-4">
+                      <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-2 ring-warning/40 ring-offset-2 ring-offset-card">
+                        <AvatarFallback className="text-2xl bg-secondary">{getParticipantAvatar(ranked[0])}</AvatarFallback>
+                      </Avatar>
+                      <Crown className="w-6 h-6 text-warning" />
+                      <span className="text-sm font-semibold max-w-20 truncate">{getParticipantLabel(ranked[0])}</span>
+                      <span className="font-mono text-base font-bold text-warning">{ranked[0].score}</span>
+                    </div>
+                  )}
+                  {ranked.length >= 3 && (
+                    <div className="flex flex-col items-center gap-2 text-center">
+                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-amber-700/30 ring-offset-2 ring-offset-card">
+                        <AvatarFallback className="text-xl bg-secondary">{getParticipantAvatar(ranked[2])}</AvatarFallback>
+                      </Avatar>
+                      <Medal className="w-5 h-5 text-amber-700" />
+                      <span className="text-xs font-medium max-w-16 truncate">{getParticipantLabel(ranked[2])}</span>
+                      <span className="font-mono text-sm font-bold">{ranked[2].score}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {ranked.map((p, idx) => (
+                <div key={p.user_id} className={cn(
+                  "flex justify-between items-center p-3 md:p-4 rounded-[12px] transition-all duration-150 border border-transparent",
+                  p.user_id === uid ? "bg-primary/5 border-primary/10" : "hover:bg-muted/30"
+                )}>
+                  <div className="flex items-center gap-3">
+                    <span className={cn(
+                      "font-mono text-sm w-6 text-center flex items-center justify-center",
+                      idx === 0 ? "text-warning font-bold" : idx === 1 ? "text-muted-foreground font-bold" : idx === 2 ? "text-amber-700 font-bold" : "text-muted-foreground"
+                    )}>
+                      {idx < 3 ? getMedalIcon(idx) : idx + 1}
+                    </span>
+                    <Avatar className="h-9 w-9"><AvatarFallback className="text-xs bg-secondary">{getParticipantAvatar(p)}</AvatarFallback></Avatar>
+                    <div>
+                      <span className="font-medium text-sm">{getParticipantLabel(p)}</span>
+                      {p.user_id === uid && <span className="ml-2 text-[10px] font-semibold text-primary uppercase bg-primary/10 px-1.5 py-0.5 rounded">You</span>}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-mono text-base text-foreground font-bold">{p.score}</span>
+                    <span className="text-xs ml-1 text-muted-foreground">pts</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="font-mono text-base text-foreground font-bold">{p.score}</span>
-                  <span className="text-xs ml-1 text-muted-foreground">pts</span>
-                </div>
-              </div>
-            ))}
-            {ranked.length === 0 && <p className="text-center text-muted-foreground py-8 text-sm">No participants remained in the arena.</p>}
-          </div>
+              ))}
+            </div>
+          )}
+          {ranked.length === 0 && <p className="text-center text-muted-foreground py-8 text-sm">No participants remained in the arena.</p>}
 
           <div className="flex justify-center gap-3 pt-2">
             {uid && (
