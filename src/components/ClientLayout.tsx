@@ -50,6 +50,12 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    if (user.mustChangePassword && currentPath !== '/force-password-change') {
+      router.replace('/force-password-change');
+      redirecting.current = null;
+      return;
+    }
+
     let target: string | null = null;
 
     if (currentPath === '/') {
