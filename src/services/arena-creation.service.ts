@@ -138,13 +138,22 @@ export const arenaCreationService = {
           batch.set(item.ref, item.data);
         }
 
-        await batch.commit();
+        try {
+          await batch.commit();
+        } catch (batchErr: unknown) {
+          const firstPath = slice[0]?.ref?.path || 'unknown';
+          const lastPath = slice[slice.length - 1]?.ref?.path || 'unknown';
+          console.error('[ArenaCreation] Batch', b, 'failed. Range:', firstPath, 'to', lastPath, 'Error:', batchErr);
+          throw batchErr;
+        }
 
         for (const item of slice) {
           committedRefs.push(item.ref);
         }
       }
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : 'Unknown error';
+      console.error('[ArenaCreation] createArenaAtomic failed after', committedRefs.length, 'committed docs:', errMsg);
       await Promise.allSettled(
         committedRefs.map(ref => deleteDoc(ref))
       );

@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   if (!executiveAuth && !commanderAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  console.log('[QuestionBank GET] auth:', executiveAuth?.uid || commanderAuth?.uid, 'role:', executiveAuth ? 'executive' : 'commander');
 
   try {
     const { searchParams } = new URL(req.url);
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
     const difficulty = searchParams.get('difficulty');
     const search = searchParams.get('search');
 
+    console.log('[QuestionBank GET] query params:', { category, difficulty, search });
     let query = getAdminDb().collection('question_bank').orderBy('createdAt', 'desc');
 
     if (category) {
@@ -27,6 +29,7 @@ export async function GET(req: NextRequest) {
     }
 
     const snapshot = await query.get();
+    console.log('[QuestionBank GET] query returned', snapshot.docs.length, 'docs');
     let questions = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -43,6 +46,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ questions });
   } catch (err: any) {
+    console.error('[QuestionBank GET] error:', err?.name, err?.code, err?.message);
     return NextResponse.json({ error: err?.message || 'Failed to list questions' }, { status: 500 });
   }
 }

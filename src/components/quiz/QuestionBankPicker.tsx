@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Check, BookOpen, Search, Loader2, AlertCircle, Sparkles, ChevronDown, ChevronUp, X, CheckCircle2, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/firebase';
 import { Badge } from '@/components/ui/badge';
 
 interface QuestionBankItem {
@@ -35,6 +36,7 @@ interface QuestionBankPickerProps {
 
 export function QuestionBankPicker({ onQuestionsGenerated, onDirtyChange }: QuestionBankPickerProps) {
   const { toast } = useToast();
+  const { auth } = useFirebase();
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -46,11 +48,16 @@ export function QuestionBankPicker({ onQuestionsGenerated, onDirtyChange }: Ques
   const fetchQuestions = useCallback(async () => {
     setLoading(true);
     try {
+      const user = auth?.currentUser;
+      if (!user) { setLoading(false); return; }
+      const token = await user.getIdToken();
       const params = new URLSearchParams();
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
       if (difficultyFilter !== 'all') params.set('difficulty', difficultyFilter);
       if (search) params.set('search', search);
-      const res = await fetch(`/api/executive/question-bank?${params.toString()}`);
+      const res = await fetch(`/api/executive/question-bank?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error('Failed to load');
       const data = await res.json();
       setQuestions(data.questions || []);
@@ -59,7 +66,7 @@ export function QuestionBankPicker({ onQuestionsGenerated, onDirtyChange }: Ques
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, difficultyFilter, search, toast]);
+  }, [auth, categoryFilter, difficultyFilter, search, toast]);
 
   useEffect(() => {
     const timer = setTimeout(fetchQuestions, 300);
