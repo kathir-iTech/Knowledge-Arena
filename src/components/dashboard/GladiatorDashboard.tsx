@@ -80,6 +80,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
     try {
       const quiz = await quizService.getQuizById(code);
       if (quiz.status === 'finished') throw new Error('Battle has ended');
+      if (quiz.status === 'live') throw new Error('This battle has already started. Late joining is not permitted.');
 
       const participants = await participantService.getAllParticipants(code);
       const existing = participants.find(p => p.user_id === user.id);

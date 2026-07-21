@@ -38,6 +38,20 @@ service cloud.firestore {
       return !exists(partPath) || get(partPath).data.status != 'blocked';
     }
 
+    function isQuizParticipant(quizId, userId) {
+      let partPath = /databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId);
+      return isSignedIn() && exists(partPath);
+    }
+
+    function canReadArena(quizId) {
+      let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
+      return isSignedIn() && exists(quizPath) && (
+        get(quizPath).data.status != 'finished' ||
+        isQuizCreator(quizId) ||
+        isQuizParticipant(quizId, request.auth.uid)
+      );
+    }
+
     // --- Rules ---
 
     match /users/{userId} {
@@ -55,7 +69,7 @@ service cloud.firestore {
       allow update, delete: if isQuizCreator(quizId);
 
       match /questions/{questionId} {
-        allow read: if isSignedIn();
+        allow read: if canReadArena(quizId);
         allow create: if isQuizCreator(quizId);
         allow update, delete: if isQuizCreator(quizId);
 
@@ -65,21 +79,28 @@ service cloud.firestore {
             && request.resource.data.selected_option >= 0
             && request.resource.data.selected_option <= 3
             && request.resource.data.keys().hasOnly(['question_id', 'selected_option', 'submittedAt', 'clientTime'])
-            && (!request.resource.data.keys().hasAny(['submittedAt']) || request.resource.data.submittedAt == null);
+            && request.resource.data.submittedAt == request.time;
           allow update: if false;
           allow delete: if isQuizCreator(quizId);
         }
       }
 
       match /answerKeys/{questionId} {
-        allow read: if isQuizCreator(quizId) || (isSignedIn() && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'finished');
+        allow read: if isQuizCreator(quizId) || (
+          isSignedIn() &&
+          get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'finished' &&
+          isQuizParticipant(quizId, request.auth.uid)
+        );
         allow create: if isQuizCreator(quizId);
         allow update, delete: if isQuizCreator(quizId);
       }
 
       match /participants/{userId} {
-        allow read: if isSignedIn();
-        allow create: if isOwner(userId);
+        allow read: if canReadArena(quizId);
+        allow create: if isOwner(userId)
+          && isNotBlocked(quizId, userId)
+          && request.resource.data.user_id == userId
+          && request.resource.data.lastSeen == request.time;
         // Teacher can update everyone (block/reset), students can only increment violations
         // or block themselves (violations_count + status=blocked) in a single write,
         // or send heartbeat (lastSeen) updates.
@@ -96,9 +117,14 @@ service cloud.firestore {
               )
             ) ||
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen'])
+            && request.resource.data.lastSeen == request.time
           )
         );
-        allow delete: if isQuizCreator(quizId);
+        allow delete: if isQuizCreator(quizId) || (
+          isOwner(userId) &&
+          get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'waiting' &&
+          resource.data.status != 'blocked'
+        );
       }
     }
   }
@@ -125,6 +151,6 @@ service cloud.firestore {
 
   // Collection group queries for student history
   match /{path=**}/participants/{userId} {
-    allow read: if request.auth != null;
+    allow read: if request.auth != null && request.auth.uid == userId;
   }
 }

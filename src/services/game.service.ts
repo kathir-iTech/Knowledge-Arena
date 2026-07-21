@@ -92,7 +92,7 @@ export const questionService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as QuestionDoc));
   },
 
-  subscribeToQuestions(quizId: string, callback: (questions: QuestionDoc[]) => void) {
+  subscribeToQuestions(quizId: string, callback: (questions: QuestionDoc[]) => void, onError?: (error: Error) => void) {
     const db = getFirestore();
     const q = query(
       collection(db, 'quizzes', quizId, 'questions'),
@@ -101,7 +101,7 @@ export const questionService = {
     return onSnapshot(q, (snap) => {
       const questions = snap.docs.map(d => ({ id: d.id, ...d.data() } as QuestionDoc));
       callback(questions);
-    });
+    }, (error) => onError?.(error));
   },
 
   async evaluateQuestion(

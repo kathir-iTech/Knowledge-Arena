@@ -30,6 +30,13 @@ function normalizeQuiz(data: Record<string, unknown>): void {
   }
 }
 
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  draft: ['waiting'],
+  waiting: ['live'],
+  live: ['finished'],
+  finished: [],
+};
+
 export const quizService = {
   async getQuizById(id: string): Promise<ValidatedQuiz> {
     const db = getFirestore();
@@ -83,7 +90,17 @@ export const quizService = {
 
   async updateQuizStatus(id: string, status: 'waiting' | 'live' | 'finished'): Promise<void> {
     const db = getFirestore();
-    await updateDoc(doc(db, 'quizzes', id), { status });
+    const quizRef = doc(db, 'quizzes', id);
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(quizRef);
+      if (!snap.exists()) throw new Error('Quiz not found');
+      const currentStatus = snap.data().status as string;
+      const allowed = ALLOWED_TRANSITIONS[currentStatus] || [];
+      if (!allowed.includes(status)) {
+        throw new Error(`Invalid status transition: ${currentStatus} → ${status}`);
+      }
+      transaction.update(quizRef, { status });
+    });
   },
 
   async startQuiz(id: string): Promise<void> {
@@ -159,6 +176,12 @@ export const quizService = {
   async resetQuiz(id: string): Promise<void> {
     const db = getFirestore();
 
+    const quizSnap = await getDoc(doc(db, 'quizzes', id));
+    if (!quizSnap.exists()) throw new Error('Quiz not found');
+    if (quizSnap.data().status !== 'finished') {
+      throw new Error('Only finished arenas can be replayed');
+    }
+
     const errors: Error[] = [];
 
     // Delete all submissions + reset scored flag on each question
@@ -181,6 +204,10 @@ export const quizService = {
       deleteDoc(pDoc.ref).catch(e => { errors.push(e); })
     ));
 
+    if (errors.length > 0) {
+      throw new Error(`Could not fully reset arena (${errors.length} operation${errors.length === 1 ? '' : 's'} failed)`);
+    }
+
     // Reset quiz metadata
     await updateDoc(doc(db, 'quizzes', id), {
       status: 'waiting',
@@ -188,12 +215,19 @@ export const quizService = {
       question_start_at: null,
     });
 
-    if (errors.length > 0) {
-      console.warn(`resetQuiz: ${errors.length} sub-operation(s) failed for quiz ${id}`, errors);
-    }
   },
 
-  subscribeToQuiz(id: string, callback: (quiz: ValidatedQuiz | null) => void) {
+  async replayQuiz(id: string, creatorId: string): Promise<string> {
+    const db = getFirestore();
+    const quizSnap = await getDoc(doc(db, 'quizzes', id));
+    if (!quizSnap.exists()) throw new Error('Quiz not found');
+    if (quizSnap.data().status !== 'finished') {
+      throw new Error('Only finished arenas can be replayed');
+    }
+    return this.duplicateQuiz(id, creatorId);
+  },
+
+  subscribeToQuiz(id: string, callback: (quiz: ValidatedQuiz | null) => void, onError?: (error: Error) => void) {
     const db = getFirestore();
     return onSnapshot(doc(db, 'quizzes', id), (snap) => {
       if (snap.exists()) {
@@ -203,7 +237,7 @@ export const quizService = {
       } else {
         callback(null);
       }
-    });
+    }, (error) => onError?.(error));
   },
 
   async updateQuiz(id: string, data: { title?: string; archived?: boolean }): Promise<void> {

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 
-import { PlusCircle, Trash2, Users, PlayCircle, Pencil, Copy, Download, FileText, Search as SearchIcon, Swords, MoreHorizontal, Calendar, Shield, HelpCircle } from 'lucide-react';
+import { PlusCircle, Trash2, Users, PlayCircle, Pencil, Copy, Download, FileText, Search as SearchIcon, Swords, MoreHorizontal, Calendar, Shield, HelpCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +54,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     const [isExporting, setIsExporting] = useState<'csv' | 'pdf' | null>(null);
     const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showReplayDialog, setShowReplayDialog] = useState(false);
 
     useEffect(() => {
         const sub = participantService.subscribeToParticipants(quiz.id, setParticipants);
@@ -86,6 +87,21 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
         toast({ variant: 'destructive', title: 'Error', description: 'Could not duplicate arena.' });
       } finally {
         setIsProcessing(false);
+      }
+    };
+
+    const handleReplay = async () => {
+      if (isProcessing) return;
+      setIsProcessing(true);
+      try {
+        const newId = await quizService.replayQuiz(quiz.id, quiz.created_by);
+        toast({ title: 'Replay Arena Created', description: `New room code: ${newId}. Previous results remain intact.` });
+        onUpdate();
+      } catch {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not prepare the arena for replay.' });
+      } finally {
+        setIsProcessing(false);
+        setShowReplayDialog(false);
       }
     };
 
@@ -126,6 +142,8 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     };
 
     const participantCount = participants?.filter(p => p.user_id !== quiz.created_by).length || 0;
+    const isStaleLive = quiz.status === 'live' && quiz.created_at && Date.now() - quiz.created_at > 3600000;
+    const isStaleWaiting = quiz.status === 'waiting' && quiz.created_at && Date.now() - quiz.created_at > 7200000;
 
     return (
         <Card className={cn(
@@ -135,9 +153,9 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
             <div className="relative">
               <div className={cn(
                 "absolute top-0 left-0 w-1 h-full",
-                quiz.status === 'live' ? "bg-success" :
+                quiz.status === 'live' ? (isStaleLive ? "bg-warning" : "bg-success") :
                 quiz.status === 'finished' ? "bg-primary" :
-                quiz.archived ? "bg-muted" : "bg-warning"
+                quiz.archived ? "bg-muted" : (isStaleWaiting ? "bg-muted" : "bg-warning")
               )} />
               <div className="p-6">
                 <div className="flex items-start justify-between gap-4">
@@ -149,12 +167,14 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                       <Badge className={cn(
                           "shrink-0 h-7 px-3 text-xs font-semibold",
                           quiz.archived ? "bg-muted/50 text-muted-foreground" :
+                          isStaleLive ? "bg-warning/10 text-warning border border-warning/20" :
                           quiz.status === 'live' ? "bg-success/10 text-success border border-success/20" :
                           quiz.status === 'finished' ? "bg-primary/10 text-primary border border-primary/20" :
+                          isStaleWaiting ? "bg-muted/50 text-muted-foreground" :
                           "bg-warning/10 text-warning border border-warning/20"
                       )}>
                           <Shield className="w-3 h-3 mr-1" />
-                          {quiz.archived ? 'Archived' : quiz.status === 'live' ? 'LIVE' : quiz.status === 'finished' ? 'Completed' : 'Waiting'}
+                          {isStaleLive ? 'STALLED' : quiz.archived ? 'Archived' : quiz.status === 'live' ? 'LIVE' : quiz.status === 'finished' ? 'Completed' : isStaleWaiting ? 'Abandoned' : 'Waiting'}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
@@ -172,6 +192,12 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                           <Calendar className="w-3.5 h-3.5" />
                           {new Date(quiz.created_at).toLocaleDateString()}
                         </span>
+                      )}
+                      {isStaleLive && (
+                        <span className="text-warning font-medium text-xs">Running for over an hour — consider ending</span>
+                      )}
+                      {isStaleWaiting && participantCount === 0 && (
+                        <span className="text-muted-foreground text-xs">No participants have joined</span>
                       )}
                     </div>
                   </div>
@@ -211,6 +237,9 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                         </DropdownMenuItem>
                         {quiz.status === 'finished' && !quiz.archived && (
                           <>
+                            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowReplayDialog(true); }} disabled={isProcessing}>
+                              <RefreshCw className="w-4 h-4 mr-2" /> Replay Arena
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={handleExportCSV} disabled={!!isExporting}>
                               {isExporting === 'csv' ? <span className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Download className="w-4 h-4 mr-2" />}
                               Export CSV
@@ -231,6 +260,23 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                 </div>
               </div>
             </div>
+
+            <AlertDialog open={showReplayDialog} onOpenChange={(open) => { if (!isProcessing) setShowReplayDialog(open); }}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Replay Arena?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This creates a fresh room with the same questions and answer keys. The completed arena and its results will remain in your history.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isProcessing}>Keep Results</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleReplay} disabled={isProcessing}>
+                    {isProcessing ? 'Preparing...' : 'Replay Arena'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             <AlertDialog open={showDeleteDialog} onOpenChange={(open) => { if (!isProcessing) setShowDeleteDialog(open); }}>
               <AlertDialogContent>
@@ -415,7 +461,3 @@ export default function CommanderDashboard() {
     </div>
   );
 }
-
-
-
-
