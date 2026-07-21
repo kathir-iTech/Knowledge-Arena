@@ -69,12 +69,12 @@ service cloud.firestore {
       allow update, delete: if isQuizCreator(quizId);
 
       match /questions/{questionId} {
-        allow read: if canReadArena(quizId);
+        allow read: if isExecutive() || canReadArena(quizId);
         allow create: if isQuizCreator(quizId);
         allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
-          allow read: if isQuizCreator(quizId) || isOwner(userId);
+          allow read: if isExecutive() || isQuizCreator(quizId) || isOwner(userId);
           allow create: if isOwner(userId) && isNotBlocked(quizId, userId)
             && request.resource.data.selected_option >= 0
             && request.resource.data.selected_option <= 3
@@ -86,7 +86,7 @@ service cloud.firestore {
       }
 
       match /answerKeys/{questionId} {
-        allow read: if isQuizCreator(quizId) || (
+        allow read: if isExecutive() || isQuizCreator(quizId) || (
           isSignedIn() &&
           get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'finished' &&
           isQuizParticipant(quizId, request.auth.uid)
@@ -96,7 +96,7 @@ service cloud.firestore {
       }
 
       match /participants/{userId} {
-        allow read: if canReadArena(quizId);
+        allow read: if isExecutive() || canReadArena(quizId);
         allow create: if isOwner(userId)
           && isNotBlocked(quizId, userId)
           && request.resource.data.user_id == userId
