@@ -33,6 +33,13 @@ service cloud.firestore {
       return isSignedIn() && exists(quizPath) && get(quizPath).data.created_by == request.auth.uid;
     }
 
+    // Batch-aware version: uses getAfter()/existsAfter() so subcollection creates
+    // within an atomic writeBatch can see the parent quiz being created in the same batch.
+    function isQuizCreatorAfter(quizId) {
+      let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
+      return isSignedIn() && existsAfter(quizPath) && getAfter(quizPath).data.created_by == request.auth.uid;
+    }
+
     function isNotBlocked(quizId, userId) {
       let partPath = /databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId);
       return !exists(partPath) || get(partPath).data.status != 'blocked';
@@ -70,7 +77,9 @@ service cloud.firestore {
 
       match /questions/{questionId} {
         allow read: if isExecutive() || canReadArena(quizId);
-        allow create: if isQuizCreator(quizId);
+        // isQuizCreatorAfter supports atomic writeBatch where parent quiz is created
+        // in the same batch — getAfter() sees the pending parent.
+        allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId);
         allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
@@ -91,17 +100,23 @@ service cloud.firestore {
           get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'finished' &&
           isQuizParticipant(quizId, request.auth.uid)
         );
-        allow create: if isQuizCreator(quizId);
+        // isQuizCreatorAfter supports atomic writeBatch where parent quiz is created
+        // in the same batch.
+        allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId);
         allow update, delete: if isQuizCreator(quizId);
       }
 
       match /participants/{userId} {
         allow read: if isExecutive() || canReadArena(quizId);
+        // isOwner(userId) handles both Commander creating their own participant in
+        // the arena creation batch AND Gladiators joining later.
+        // getAfter(quizPath) supports atomic batch where parent quiz is created
+        // in the same batch — getAfter() sees the pending parent with status 'waiting'.
         allow create: if isOwner(userId)
           && isNotBlocked(quizId, userId)
           && request.resource.data.user_id == userId
           && request.resource.data.lastSeen == request.time
-          && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'waiting';
+          && getAfter(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'waiting';
         // Teacher can update everyone (block/reset), students can only increment violations
         // or block themselves (violations_count + status=blocked) in a single write,
         // or send heartbeat (lastSeen) updates.
