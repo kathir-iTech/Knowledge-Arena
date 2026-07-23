@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 import { useFirebase } from '@/firebase';
 import { quizService } from '@/services/quiz.service';
 import { questionService, submissionService } from '@/services/game.service';
@@ -234,6 +235,7 @@ const ParticipantStats = ({ participants, teacherId, submittedCount, onUnblock, 
 
 export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants }: { quiz: ValidatedQuiz, participant: ValidatedParticipant, isTeacher: boolean, allParticipants: ValidatedParticipant[] }) {
   const { user } = useAuth();
+  const router = useRouter();
   const { toast } = useToast();
   const commanderOnline = useCommanderPresence(quiz);
 
@@ -306,6 +308,12 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       };
     }
   }, [quiz.id, user, isTeacher]);
+
+  useEffect(() => {
+    if (!isTeacher && participant.status === 'blocked') {
+      router.push('/kicked');
+    }
+  }, [isTeacher, participant.status, router]);
 
   useEffect(() => {
     if (participant.status === 'blocked') return;

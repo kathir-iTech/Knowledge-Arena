@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ShieldCheck, Copy, Users, Wifi, WifiOff, Clock, Loader2 } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Copy, Users, Wifi, WifiOff, Clock, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
@@ -165,6 +165,31 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   }, [participants, quiz.created_by]);
 
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [kickingId, setKickingId] = useState<string | null>(null);
+  const [isKicking, setIsKicking] = useState(false);
+
+  useEffect(() => {
+    if (!isTeacher && user) {
+      const selfPart = participants.find(p => p.user_id === user.id);
+      if (selfPart && selfPart.status === 'blocked') {
+        router.push('/kicked');
+      }
+    }
+  }, [participants, isTeacher, user, router]);
+
+  const handleKick = async () => {
+    if (!kickingId || !isTeacher) return;
+    setIsKicking(true);
+    try {
+      await participantService.blockParticipant(quiz.id, kickingId);
+      toast({ title: 'Gladiator Kicked', description: 'Participant has been removed from this arena.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to kick gladiator.' });
+    } finally {
+      setIsKicking(false);
+      setKickingId(null);
+    }
+  };
 
   const handleUnblock = async (userId: string) => {
     setUnblockingId(userId);
@@ -295,6 +320,16 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                         <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-success rounded-full border-2 border-card" />
                       </div>
                       <span className="text-xs font-medium max-w-20 truncate">{p.name || p.user_id.slice(0, 8)}</span>
+                      {isTeacher && p.user_id !== quiz.created_by && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="h-7 px-2 text-[10px]"
+                          onClick={() => setKickingId(p.user_id)}
+                        >
+                          Kick
+                        </Button>
+                      )}
                     </div>
                   )                  ) : (
                     <p className="text-sm text-muted-foreground">Waiting for participants to arrive...</p>
@@ -379,6 +414,28 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
             </AlertDialog>
           </>
         )}
+
+        <AlertDialog open={!!kickingId} onOpenChange={(open) => { if (!open && !isKicking) setKickingId(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove this Gladiator from this Arena?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The gladiator will be removed immediately and redirected to the kicked screen. They will not be able to rejoin this specific arena.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isKicking}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); void handleKick(); }}
+                disabled={isKicking}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isKicking ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                Remove Gladiator
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
