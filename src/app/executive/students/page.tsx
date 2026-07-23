@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Search, Users, User, Ban, Check, Swords, Star, Clock } from 'lucide-react';
+import { Search, Users, User, Ban, Check, Swords, Star, Clock, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -51,11 +51,25 @@ export default function StudentManagementPage() {
   const [summary, setSummary] = useState({ total: 0, active: 0, disabled: 0 });
   const [selectedGladiator, setSelectedGladiator] = useState<Gladiator | null>(null);
   const [toggleConfirmGladiator, setToggleConfirmGladiator] = useState<Gladiator | null>(null);
+  const [deleteConfirmGladiator, setDeleteConfirmGladiator] = useState<Gladiator | null>(null);
+
+  const getToken = async (): Promise<string> => {
+    const firebaseAuth = auth as any;
+    if (firebaseAuth?.currentUser) {
+      return await firebaseAuth.currentUser.getIdToken();
+    }
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 300));
+      if (firebaseAuth?.currentUser) {
+        return await firebaseAuth.currentUser.getIdToken();
+      }
+    }
+    throw new Error('Not authenticated');
+  };
 
   const fetchGladiators = useCallback(async () => {
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
+      const token = await getToken();
       const res = await fetch('/api/admin/users?role=gladiator', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -73,7 +87,7 @@ export default function StudentManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [auth, toast]);
 
   useEffect(() => {
     if (user) fetchGladiators();
@@ -81,7 +95,7 @@ export default function StudentManagementPage() {
 
   const handleToggleDisable = async (gladiator: Gladiator) => {
     try {
-      const token = await auth.currentUser!.getIdToken();
+      const token = await getToken();
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -92,6 +106,21 @@ export default function StudentManagementPage() {
       fetchGladiators();
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to update gladiator.' });
+    }
+  };
+
+  const handleDeletePermanent = async (gladiator: Gladiator) => {
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/admin/users?uid=${gladiator.uid}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      toast({ title: 'Gladiator Deleted', description: 'Account permanently removed. Historical battle records preserved.' });
+      fetchGladiators();
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete gladiator.' });
     }
   };
 
@@ -228,9 +257,17 @@ export default function StudentManagementPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setToggleConfirmGladiator(g)}
-                    title={g.disabled ? 'Enable' : 'Disable'}
+                    title={g.disabled ? 'Re-enable' : 'Disable'}
                   >
-                    {g.disabled ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                    {g.disabled ? <Check className="w-4 h-4 text-green-600" /> : <Ban className="w-4 h-4 text-amber-600" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeleteConfirmGladiator(g)}
+                    title="Delete Permanently"
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
                 </div>
               </CardContent>
@@ -286,17 +323,37 @@ export default function StudentManagementPage() {
       <AlertDialog open={toggleConfirmGladiator !== null} onOpenChange={() => setToggleConfirmGladiator(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{toggleConfirmGladiator?.disabled ? 'Enable Gladiator?' : 'Disable Gladiator?'}</AlertDialogTitle>
+            <AlertDialogTitle>{toggleConfirmGladiator?.disabled ? 'Re-enable Gladiator?' : 'Disable Gladiator?'}</AlertDialogTitle>
             <AlertDialogDescription>
               {toggleConfirmGladiator?.disabled
-                ? 'This gladiator will regain access to all features.'
-                : 'This gladiator will no longer be able to participate in battles until re-enabled.'}
+                ? 'This gladiator will regain access to all features and battles.'
+                : 'This gladiator will no longer be able to log in or participate in battles until re-enabled.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setToggleConfirmGladiator(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => { const g = toggleConfirmGladiator; setToggleConfirmGladiator(null); if (g) handleToggleDisable(g); }} className={toggleConfirmGladiator?.disabled ? '' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}>
-              {toggleConfirmGladiator?.disabled ? 'Enable' : 'Disable'}
+              {toggleConfirmGladiator?.disabled ? 'Re-enable' : 'Disable'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteConfirmGladiator !== null} onOpenChange={() => setDeleteConfirmGladiator(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Gladiator Permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the account and login access for {deleteConfirmGladiator?.displayName}. Completed historical battle records will be preserved for analytical accuracy, but the user will no longer be able to log in or appear as an active registered Gladiator.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmGladiator(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { const g = deleteConfirmGladiator; setDeleteConfirmGladiator(null); if (g) handleDeletePermanent(g); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Permanently
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

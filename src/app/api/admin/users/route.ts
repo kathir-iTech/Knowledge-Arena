@@ -232,8 +232,17 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'uid and disabled are required' }, { status: 400 });
     }
 
+    if (uid === auth.uid) {
+      return NextResponse.json({ error: 'Cannot modify your own executive account' }, { status: 403 });
+    }
+
+    const targetDoc = await getAdminDb().collection('users').doc(uid).get();
+    if (targetDoc.exists && targetDoc.data()?.role === 'executive') {
+      return NextResponse.json({ error: 'Cannot modify executive accounts' }, { status: 403 });
+    }
+
     console.log('[AdminUsers][PATCH] Updating user:', uid);
-    await getAdminDb().collection('users').doc(uid).update({ disabled });
+    await getAdminDb().collection('users').doc(uid).set({ disabled }, { merge: true });
 
     if (disabled) {
       await getAdminAuth().updateUser(uid, { disabled: true });
@@ -246,5 +255,48 @@ export async function PATCH(req: NextRequest) {
   } catch (err: any) {
     console.error('[AdminUsers][PATCH] Error:', err?.name, err?.code);
     return NextResponse.json({ error: err?.message || 'Failed to update user' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  console.log('[AdminUsers][DELETE] Start');
+  try {
+    const auth = await authenticateExecutive(req);
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.log('[AdminUsers][DELETE] Auth verified');
+
+    const { searchParams } = new URL(req.url);
+    let uid = searchParams.get('uid');
+    if (!uid) {
+      try {
+        const body = await req.json();
+        uid = body?.uid;
+      } catch {}
+    }
+
+    if (!uid) {
+      return NextResponse.json({ error: 'uid is required' }, { status: 400 });
+    }
+
+    if (uid === auth.uid) {
+      return NextResponse.json({ error: 'Cannot delete your own executive account' }, { status: 403 });
+    }
+
+    const targetDoc = await getAdminDb().collection('users').doc(uid).get();
+    if (targetDoc.exists && targetDoc.data()?.role === 'executive') {
+      return NextResponse.json({ error: 'Cannot delete executive accounts' }, { status: 403 });
+    }
+
+    console.log('[AdminUsers][DELETE] Deleting user from Auth and Firestore profile:', uid);
+    await getAdminAuth().deleteUser(uid).catch(() => {});
+    await getAdminDb().collection('users').doc(uid).delete().catch(() => {});
+
+    console.log('[AdminUsers][DELETE] Success');
+    return NextResponse.json({ success: true, uid });
+  } catch (err: any) {
+    console.error('[AdminUsers][DELETE] Error:', err?.name, err?.code);
+    return NextResponse.json({ error: err?.message || 'Failed to delete user' }, { status: 500 });
   }
 }

@@ -69,10 +69,23 @@ export default function ExecutiveSettingsPage() {
   const [showDangerDialog, setShowDangerDialog] = useState(false);
   const [dangerAction, setDangerAction] = useState<'reset' | null>(null);
 
+  const getToken = async (): Promise<string> => {
+    const firebaseAuth = auth as any;
+    if (firebaseAuth?.currentUser) {
+      return await firebaseAuth.currentUser.getIdToken();
+    }
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 300));
+      if (firebaseAuth?.currentUser) {
+        return await firebaseAuth.currentUser.getIdToken();
+      }
+    }
+    throw new Error('Not authenticated');
+  };
+
   const fetchSettings = useCallback(async () => {
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
+      const token = await getToken();
       const res = await fetch('/api/executive/settings', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -84,7 +97,7 @@ export default function ExecutiveSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [auth, toast]);
 
   useEffect(() => {
     if (user) fetchSettings();
@@ -93,7 +106,7 @@ export default function ExecutiveSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = await auth.currentUser!.getIdToken();
+      const token = await getToken();
       const res = await fetch('/api/executive/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -111,7 +124,7 @@ export default function ExecutiveSettingsPage() {
   const handleDangerAction = async () => {
     setShowDangerDialog(false);
     try {
-      const token = await auth.currentUser!.getIdToken();
+      const token = await getToken();
       if (dangerAction === 'reset') {
         setSettings(defaultSettings);
         await fetch('/api/executive/settings', {
