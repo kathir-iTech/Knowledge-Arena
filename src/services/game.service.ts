@@ -151,6 +151,7 @@ export const questionService = {
           const participantRef = doc(db, 'quizzes', quizId, 'participants', uid);
           const pSnap = await transaction.get(participantRef);
           if (!pSnap.exists()) continue;
+          if (pSnap.data().status === 'blocked') continue;
 
           const subRef = doc(
             db,

@@ -53,6 +53,11 @@ export const participantService = {
     if (userDoc.exists() && userDoc.data()?.disabled === true) {
       throw new Error('Your account has been disabled. Please contact an administrator.');
     }
+
+    const existingPartSnap = await getDoc(doc(db, participantPath(quizId, userId)));
+    if (existingPartSnap.exists() && existingPartSnap.data()?.status === 'blocked') {
+      throw new Error('You have been removed from this arena by the Commander.');
+    }
     const data: Record<string, unknown> = {
       user_id: userId,
       score: 0,
@@ -71,6 +76,13 @@ export const participantService = {
   ): Promise<void> {
     const db = getFirestore();
     await updateDoc(doc(db, participantPath(quizId, userId)), data);
+  },
+
+  async blockParticipant(quizId: string, userId: string): Promise<void> {
+    const db = getFirestore();
+    await updateDoc(doc(db, participantPath(quizId, userId)), {
+      status: 'blocked',
+    });
   },
 
   async unblockParticipant(quizId: string, userId: string): Promise<void> {
