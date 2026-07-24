@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { auditService } from '@/services/audit.service';
+import { notificationService } from '@/services/notification.service';
 
 export async function POST(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'commander');
-  if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'commander');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { title, type, description } = await req.json();
 
     if (!title || !type) {
@@ -33,19 +34,36 @@ export async function POST(req: NextRequest) {
       executiveComment: null,
     });
 
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: auth.uid,
+      actorRole: 'commander',
+      action: 'request_created',
+      target: docRef.id,
+      metadata: { title, type },
+    });
+    await notificationService.create({
+      type: 'commander_request',
+      title: 'New Commander Request',
+      description: `${title} (${type})`,
+      createdAt: Date.now(),
+      link: '/executive/requests',
+      metadata: { requestId: docRef.id, type },
+    });
+
     return NextResponse.json({ id: docRef.id, success: true });
   } catch (err: any) {
+    console.error('[CommanderRequests POST] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'commander');
-  if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'commander');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const snapshot = await getAdminDb()
       .collection('executive_requests')
       .where('commanderId', '==', auth.uid)
@@ -59,6 +77,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ requests });
   } catch (err: any) {
+    console.error('[CommanderRequests GET] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

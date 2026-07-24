@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { auditService } from '@/services/audit.service';
 
 export async function POST(req: NextRequest) {
   const auth = await verifyFirebaseTokenWithRole(req, 'executive');
@@ -35,6 +36,15 @@ export async function POST(req: NextRequest) {
       createdBy: auth.uid,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+    });
+
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: auth.uid,
+      actorRole: 'executive',
+      action: 'question_set_created',
+      target: docRef.id,
+      metadata: { name: `${data.name} (Copy)`, sourceSetId: setId },
     });
 
     return NextResponse.json({ success: true, id: docRef.id });

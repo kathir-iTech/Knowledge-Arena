@@ -8,7 +8,7 @@ export default function ExecutiveDashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/executive/analytics');
+    router.replace('/executive/workspace');
   }, [router]);
 
   return (

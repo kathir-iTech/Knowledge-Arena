@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar } from 'lucide-react';
+import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar, Key, Trash2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -31,14 +31,34 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
+const COMMANDER_DOMAIN = 'knowledgearena.app';
+
 interface Commander {
   uid: string;
   email: string;
   displayName: string;
   disabled: boolean;
+  deleted?: boolean;
   createdAt: number;
   arenaCount: number;
   lastActive: number | null;
+}
+
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
+  let pwd = '';
+  for (let i = 0; i < 12; i++) {
+    pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pwd;
+}
+
+function validateUsername(input: string): string | null {
+  if (!input.trim()) return 'Username is required.';
+  if (input.includes('@')) return null;
+  if (input.length < 3) return 'Username must be at least 3 characters.';
+  if (!/^[a-zA-Z0-9_.-]+$/.test(input)) return 'Username can only contain letters, numbers, underscores, hyphens, and dots.';
+  return null;
 }
 
 export default function CommanderManagementPage() {
@@ -48,19 +68,26 @@ export default function CommanderManagementPage() {
   const [commanders, setCommanders] = useState<Commander[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled' | 'deleted'>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [createEmail, setCreateEmail] = useState('');
+  const [usernameInput, setUsernameInput] = useState('');
   const [createPassword, setCreatePassword] = useState('');
   const [createDisplayName, setCreateDisplayName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [generatedEmail, setGeneratedEmail] = useState('');
   const [toggleConfirmCommander, setToggleConfirmCommander] = useState<Commander | null>(null);
+  const [processingToggle, setProcessingToggle] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState<Commander | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [deleteConfirmCommander, setDeleteConfirmCommander] = useState<Commander | null>(null);
+  const [processingDelete, setProcessingDelete] = useState(false);
 
   async function safeParseJson(res: Response) {
     const ct = res.headers.get('content-type') || '';
     if (!ct.includes('application/json')) {
       const text = await res.text().catch(() => '');
-      throw new Error(text ? 'Server returned an invalid response. Check deployment configuration.' : 'Server unavailable.');
+      throw new Error(text ? 'Server returned an invalid response.' : 'Server unavailable.');
     }
     return res.json();
   }
@@ -83,32 +110,44 @@ export default function CommanderManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [auth, toast]);
 
   useEffect(() => {
     if (user) fetchCommanders();
   }, [user, fetchCommanders]);
 
+  const getOrGenerateEmail = (input: string): string => {
+    if (input.includes('@')) return input;
+    return `${input}@${COMMANDER_DOMAIN}`;
+  };
+
   const handleCreate = async () => {
-    if (!createEmail || !createPassword) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Email and password are required.' });
+    const usernameError = validateUsername(usernameInput);
+    if (usernameError) {
+      toast({ variant: 'warning', title: 'Validation Error', description: usernameError });
+      return;
+    }
+    if (!createPassword || createPassword.length < 6) {
+      toast({ variant: 'warning', title: 'Validation Error', description: 'Password must be at least 6 characters.' });
       return;
     }
     setCreating(true);
     try {
+      const email = getOrGenerateEmail(usernameInput);
       const token = await auth.currentUser!.getIdToken();
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email: createEmail, password: createPassword, displayName: createDisplayName }),
+        body: JSON.stringify({ email, password: createPassword, displayName: createDisplayName || usernameInput }),
       });
       if (!res.ok) {
         const errBody = await safeParseJson(res).catch(() => null);
         throw new Error(errBody?.error || 'Failed to create commander.');
       }
-      toast({ title: 'Commander Created', description: `${createEmail} has been added.` });
+      setGeneratedEmail(email);
+      toast({ variant: 'success', title: 'Commander Created', description: `Email: ${email} | Password: ${createPassword}` });
       setShowCreateDialog(false);
-      setCreateEmail('');
+      setUsernameInput('');
       setCreatePassword('');
       setCreateDisplayName('');
       fetchCommanders();
@@ -120,6 +159,7 @@ export default function CommanderManagementPage() {
   };
 
   const handleToggleDisable = async (commander: Commander) => {
+    setProcessingToggle(true);
     try {
       const token = await auth.currentUser!.getIdToken();
       const res = await fetch('/api/admin/users', {
@@ -128,10 +168,54 @@ export default function CommanderManagementPage() {
         body: JSON.stringify({ uid: commander.uid, disabled: !commander.disabled }),
       });
       if (!res.ok) throw new Error('Failed to update');
-      toast({ title: commander.disabled ? 'Commander Enabled' : 'Commander Disabled' });
+      toast({ variant: 'success', title: commander.disabled ? 'Commander Enabled' : 'Commander Disabled' });
       fetchCommanders();
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to update commander.' });
+    } finally {
+      setProcessingToggle(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!showResetDialog || !resetPassword || resetPassword.length < 6) {
+      toast({ variant: 'warning', title: 'Validation Error', description: 'Password must be at least 6 characters.' });
+      return;
+    }
+    setResetting(true);
+    try {
+      const token = await auth.currentUser!.getIdToken();
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid: showResetDialog.uid, resetPassword: true, password: resetPassword }),
+      });
+      if (!res.ok) throw new Error('Failed to reset password');
+      toast({ variant: 'success', title: 'Password Reset', description: `New password: ${resetPassword}. Commander must change on next login.` });
+      setShowResetDialog(null);
+      setResetPassword('');
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to reset password.' });
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleDeletePermanent = async (commander: Commander) => {
+    setProcessingDelete(true);
+    try {
+      const token = await auth.currentUser!.getIdToken();
+      const res = await fetch(`/api/admin/users?uid=${commander.uid}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      toast({ variant: 'success', title: 'Commander Deleted', description: 'Account disconnected. Historical arena data preserved.' });
+      fetchCommanders();
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete commander.' });
+    } finally {
+      setProcessingDelete(false);
     }
   };
 
@@ -139,8 +223,9 @@ export default function CommanderManagementPage() {
     const matchesSearch = c.email.toLowerCase().includes(search.toLowerCase()) ||
       c.displayName.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' ||
-      (statusFilter === 'active' && !c.disabled) ||
-      (statusFilter === 'disabled' && c.disabled);
+      (statusFilter === 'active' && !c.disabled && !c.deleted) ||
+      (statusFilter === 'disabled' && c.disabled && !c.deleted) ||
+      (statusFilter === 'deleted' && c.deleted);
     return matchesSearch && matchesStatus;
   });
 
@@ -163,7 +248,7 @@ export default function CommanderManagementPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
         <div className="space-y-1.5">
           <h1 className="text-page-title font-headline tracking-tight">Commanders</h1>
-          <p className="text-base text-muted-foreground">Manage platform commanders and their permissions.</p>
+          <p className="text-base text-muted-foreground">Manage platform commanders. Enter a username — email is auto-generated.</p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)} className="w-full sm:w-auto">
           <Plus className="w-4 h-4 mr-2" />
@@ -182,7 +267,7 @@ export default function CommanderManagementPage() {
           />
         </div>
         <div className="flex gap-1.5">
-          {(['all', 'active', 'disabled'] as const).map(status => (
+          {(['all', 'active', 'disabled', 'deleted'] as const).map(status => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -211,14 +296,17 @@ export default function CommanderManagementPage() {
       ) : (
         <div className="space-y-2">
           {filtered.map(c => (
-            <Card key={c.uid}>
+            <Card key={c.uid} className={cn(c.deleted && 'opacity-60')}>
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 shrink-0">
                     <Shield className="w-5 h-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{c.displayName}</p>
+                    <p className="font-medium truncate">
+                      {c.deleted ? 'Deleted Commander' : c.displayName}
+                      {c.deleted && <span className="text-xs text-muted-foreground ml-2">(deleted)</span>}
+                    </p>
                     <p className="text-sm text-muted-foreground truncate">{c.email}</p>
                   </div>
                 </div>
@@ -237,17 +325,39 @@ export default function CommanderManagementPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant={c.disabled ? 'secondary' : 'default'}>
-                    {c.disabled ? 'Disabled' : 'Active'}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setToggleConfirmCommander(c)}
-                    title={c.disabled ? 'Enable' : 'Disable'}
-                  >
-                    {c.disabled ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
-                  </Button>
+                  {!c.deleted && (
+                    <>
+                      <Badge variant={c.disabled ? 'secondary' : 'default'}>
+                        {c.disabled ? 'Disabled' : 'Active'}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowResetDialog(c)}
+                        title="Reset Password"
+                      >
+                        <Key className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setToggleConfirmCommander(c)}
+                        title={c.disabled ? 'Enable' : 'Disable'}
+                        disabled={processingToggle}
+                      >
+                        {c.disabled ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteConfirmCommander(c)}
+                        title="Delete Permanently"
+                        disabled={processingDelete}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -255,15 +365,30 @@ export default function CommanderManagementPage() {
         </div>
       )}
 
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      {/* Create Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) { setShowCreateDialog(false); setGeneratedEmail(''); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Commander</DialogTitle>
             <DialogDescription>
-              Create a new commander account. The commander will receive login credentials.
+              Enter a username — the email will be auto-generated as username@knowledgearena.app.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="username">Username *</Label>
+              <Input
+                id="username"
+                value={usernameInput}
+                onChange={e => setUsernameInput(e.target.value)}
+                placeholder="e.g. commander_smith"
+              />
+              {usernameInput && !usernameInput.includes('@') && (
+                <p className="text-xs text-muted-foreground">
+                  Email: <span className="font-mono text-primary">{usernameInput}@{COMMANDER_DOMAIN}</span>
+                </p>
+              )}
+            </div>
             <div className="space-y-2">
               <Label htmlFor="displayName">Display Name</Label>
               <Input
@@ -274,39 +399,40 @@ export default function CommanderManagementPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={createEmail}
-                onChange={e => setCreateEmail(e.target.value)}
-                placeholder="commander@school.edu"
-                required
-              />
+              <Label htmlFor="password">Password * (min 6 chars)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="password"
+                  type="text"
+                  value={createPassword}
+                  onChange={e => setCreatePassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  className="flex-1"
+                />
+                <Button variant="outline" size="sm" onClick={() => setCreatePassword(generatePassword())} title="Generate Password">
+                  <Key className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password *</Label>
-              <Input
-                id="password"
-                type="password"
-                value={createPassword}
-                onChange={e => setCreatePassword(e.target.value)}
-                placeholder="Min 6 characters"
-                required
-              />
-            </div>
+            {generatedEmail && (
+              <div className="p-3 rounded-[10px] bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
+                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Commander Created</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">Email: {generatedEmail}</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+            <Button variant="outline" onClick={() => { setShowCreateDialog(false); setGeneratedEmail(''); }}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={creating}>
+            <Button onClick={handleCreate} disabled={creating || !usernameInput.trim()}>
               {creating ? 'Creating...' : 'Create Commander'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Toggle Disable Dialog */}
       <AlertDialog open={toggleConfirmCommander !== null} onOpenChange={() => setToggleConfirmCommander(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -319,8 +445,64 @@ export default function CommanderManagementPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setToggleConfirmCommander(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { const c = toggleConfirmCommander; setToggleConfirmCommander(null); if (c) handleToggleDisable(c); }} className={toggleConfirmCommander?.disabled ? '' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}>
-              {toggleConfirmCommander?.disabled ? 'Enable' : 'Disable'}
+            <AlertDialogAction disabled={processingToggle} onClick={() => { const c = toggleConfirmCommander; setToggleConfirmCommander(null); if (c) handleToggleDisable(c); }} className={toggleConfirmCommander?.disabled ? '' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}>
+              {processingToggle ? 'Processing...' : (toggleConfirmCommander?.disabled ? 'Enable' : 'Disable')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <AlertDialog open={showResetDialog !== null} onOpenChange={() => { setShowResetDialog(null); setResetPassword(''); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Password for {showResetDialog?.displayName}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Set a new temporary password. The commander will be prompted to change it on next login.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Label htmlFor="newPassword">New Password</Label>
+            <div className="flex gap-2 mt-1.5">
+              <Input
+                id="newPassword"
+                type="text"
+                value={resetPassword}
+                onChange={e => setResetPassword(e.target.value)}
+                placeholder="Min 6 characters"
+                className="flex-1"
+              />
+              <Button variant="outline" size="sm" onClick={() => setResetPassword(generatePassword())}>
+                <Key className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setShowResetDialog(null); setResetPassword(''); }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={resetting || resetPassword.length < 6} onClick={handleResetPassword}>
+              {resetting ? 'Resetting...' : 'Reset Password'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={deleteConfirmCommander !== null} onOpenChange={() => setDeleteConfirmCommander(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Commander Permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will disconnect the commander account from Firebase Auth. Their profile will be renamed to &quot;Deleted Commander&quot; and their created arenas, historical battles, and analytics data will be preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmCommander(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={processingDelete}
+              onClick={() => { const c = deleteConfirmCommander; setDeleteConfirmCommander(null); if (c) handleDeletePermanent(c); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {processingDelete ? 'Deleting...' : 'Delete Permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

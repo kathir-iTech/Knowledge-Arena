@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { auditService } from '@/services/audit.service';
+import { notificationService } from '@/services/notification.service';
 
 const REQUIRED_INDEX_WARNING = 'Ensure a composite index exists: collection "conversations", fields "participants" (ARRAY_CONTAINS) + "lastActivity" (DESC).';
 
@@ -81,8 +83,26 @@ export async function POST(req: NextRequest) {
       return { id: docRef.id, ...conversation };
     });
 
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: executiveAuth.uid,
+      actorRole: 'executive',
+      action: 'conversation_created',
+      target: result.id,
+      metadata: { participants: participants.join(',') },
+    });
+    await notificationService.create({
+      type: 'new_message',
+      title: 'Conversation Started',
+      description: `New conversation with commander.`,
+      createdAt: Date.now(),
+      link: '/executive/messages',
+      metadata: { conversationId: result.id },
+    });
+
     return NextResponse.json({ conversation: result });
   } catch (err: any) {
+    console.error('[Conversations POST] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
