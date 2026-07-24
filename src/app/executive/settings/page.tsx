@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Save, AlertTriangle, Building2, Clock, DownloadCloud, Trash2, Shield, BrainCircuit, MessageSquare, Palette } from 'lucide-react';
+import { Save, AlertTriangle, Building2, Clock, DownloadCloud, Trash2, Shield, BrainCircuit, MessageSquare, Palette, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -29,6 +29,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { getAvailableModels, getRecommendedModel, resolveModel } from '@/config/gemini-models';
 
 interface PlatformSettings {
   institutionName: string;
@@ -80,7 +83,7 @@ const defaultSettings: PlatformSettings = {
   },
   ai: {
     enabled: true,
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: getRecommendedModel().id,
     maxPdfSize: 10,
   },
   messaging: {
@@ -126,7 +129,10 @@ export default function ExecutiveSettingsPage() {
       });
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
-      if (data.settings) setSettings(data.settings);
+      if (data.settings) {
+        data.settings.ai.defaultModel = resolveModel(data.settings.ai?.defaultModel);
+        setSettings(data.settings);
+      }
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to load settings.' });
     } finally {
@@ -324,13 +330,38 @@ export default function ExecutiveSettingsPage() {
                 <Switch checked={settings.ai.enabled} onCheckedChange={c => setSettings({ ...settings, ai: { ...settings.ai, enabled: c } })} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="aiModel">Default AI Model</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="aiModel">Default AI Model</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger type="button">
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-64">
+                        <p className="text-xs">Select the Gemini model used for AI-powered question generation and analysis. Models retiring October 2026 will continue working until then.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Select value={settings.ai.defaultModel} onValueChange={v => setSettings({ ...settings, ai: { ...settings.ai, defaultModel: v } })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                    <SelectItem value="gemini-2.0-pro">Gemini 2.0 Pro</SelectItem>
-                    <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
+                    {getAvailableModels().map(model => (
+                      <SelectItem key={model.id} value={model.id} title={model.bestFor}>
+                        <div className="flex flex-col gap-0.5 py-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">{model.displayName}</span>
+                            {model.recommended && (
+                              <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 leading-none">Recommended</Badge>
+                            )}
+                            {model.badges.map(badge => (
+                              <Badge key={badge} variant="outline" className="text-[10px] px-1.5 py-0 h-4 leading-none font-normal">{badge}</Badge>
+                            ))}
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-tight">{model.description}</p>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

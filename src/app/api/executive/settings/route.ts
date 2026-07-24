@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
+import { getRecommendedModel, resolveModel } from '@/config/gemini-models';
 
 export const runtime = 'nodejs';
 
@@ -25,7 +26,7 @@ const defaultSettings = {
   },
   ai: {
     enabled: true,
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: getRecommendedModel().id,
     maxPdfSize: 10,
   },
   messaging: {
@@ -58,7 +59,11 @@ export async function GET(req: NextRequest) {
       ...data,
       auth: { ...defaultSettings.auth, ...(data.auth || {}) },
       battle: { ...defaultSettings.battle, ...(data.battle || {}) },
-      ai: { ...defaultSettings.ai, ...(data.ai || {}) },
+      ai: {
+        ...defaultSettings.ai,
+        ...(data.ai || {}),
+        defaultModel: resolveModel(data.ai?.defaultModel),
+      },
       messaging: { ...defaultSettings.messaging, ...(data.messaging || {}) },
       exportPreferences: { ...defaultSettings.exportPreferences, ...(data.exportPreferences || {}) },
     };
@@ -79,6 +84,10 @@ export async function PUT(req: NextRequest) {
     const { settings } = await req.json();
     if (!settings) {
       return NextResponse.json({ error: 'settings are required' }, { status: 400 });
+    }
+
+    if (settings.ai?.defaultModel) {
+      settings.ai.defaultModel = resolveModel(settings.ai.defaultModel);
     }
 
     await getAdminDb()
