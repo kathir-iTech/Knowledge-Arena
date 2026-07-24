@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ requests });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to list requests' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -57,6 +57,6 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true, id, status });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to update request' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, LayoutDashboard, BrainCircuit, BarChart3, Shield, Users, BookOpen, Inbox, Settings } from 'lucide-react';
+import { LogOut, BrainCircuit, BarChart3, Shield, Users, BookOpen, Layers, Inbox, Settings, MessageSquare } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -16,14 +16,40 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
+import { useFirebase } from '@/firebase';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { AvatarEditor } from './AvatarEditor';
 import { cn } from '@/lib/utils';
 
 const ExecutiveSidebar = () => {
   const { user, logout } = useAuth();
+  const { auth } = useFirebase();
   const pathname = usePathname();
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const fetchUnread = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch('/api/messaging/conversations', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const total = (data.conversations || []).reduce(
+          (sum: number, c: any) => sum + (c.unreadCount?.[user.id] || 0), 0
+        );
+        if (!cancelled) setUnreadCount(total);
+      } catch {}
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [user, auth]);
 
   if (!user) return null;
 
@@ -32,7 +58,9 @@ const ExecutiveSidebar = () => {
     { href: '/executive/commanders', label: 'Commanders', icon: Shield },
     { href: '/executive/students', label: 'Students', icon: Users },
     { href: '/executive/question-bank', label: 'Question Bank', icon: BookOpen },
+    { href: '/executive/question-sets', label: 'Question Sets', icon: Layers },
     { href: '/executive/requests', label: 'Requests', icon: Inbox },
+    { href: '/executive/messages', label: 'Messages', icon: MessageSquare },
     { href: '/executive/settings', label: 'Settings', icon: Settings },
   ];
 
@@ -79,12 +107,18 @@ const ExecutiveSidebar = () => {
                     isActive={active}
                     tooltip={item.label}
                     className={cn(
-                      active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary"
+                      active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary",
+                      !active && item.href === '/executive/messages' && unreadCount > 0 && "relative"
                     )}
                   >
                     <Link href={item.href}>
                       <item.icon className={cn("!size-[18px]", active && "text-primary")} />
                       <span>{item.label}</span>
+                      {item.href === '/executive/messages' && unreadCount > 0 && (
+                        <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

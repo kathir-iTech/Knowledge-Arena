@@ -6,7 +6,7 @@ import type { ValidatedQuiz } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Home, Eye, Target, Clock, BarChart3, Award, Medal, Crown, CheckCircle2 } from 'lucide-react';
+import { Home, Eye, Target, Clock, BarChart3, Award, Medal, Crown } from 'lucide-react';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { useAuth } from '@/hooks/useAuth';
 import { participantService } from '@/services/participant.service';

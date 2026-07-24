@@ -15,6 +15,7 @@ import {
   query,
   where,
   writeBatch,
+  runTransaction,
   serverTimestamp,
 } from 'firebase/firestore';
 import type { ValidatedParticipant } from '@/lib/schemas';
@@ -45,28 +46,32 @@ export const participantService = {
     if (!userId) throw new Error('User ID required');
     const db = getFirestore();
     const quizRef = doc(db, 'quizzes', quizId);
-    const quizSnap = await getDoc(quizRef);
-    if (!quizSnap.exists()) throw new Error('Quiz not found');
-    if (quizSnap.data().status !== 'waiting') throw new Error('This battle has already started. Late joining is not permitted.');
+    await runTransaction(db, async (transaction) => {
+      const quizSnap = await transaction.get(quizRef);
+      if (!quizSnap.exists()) throw new Error('Quiz not found');
+      if (quizSnap.data().status !== 'waiting') throw new Error('This battle has already started. Late joining is not permitted.');
 
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    if (userDoc.exists() && userDoc.data()?.disabled === true) {
-      throw new Error('Your account has been disabled. Please contact an administrator.');
-    }
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await transaction.get(userRef);
+      if (userSnap.exists() && userSnap.data()?.disabled === true) {
+        throw new Error('Your account has been disabled. Please contact an administrator.');
+      }
 
-    const existingPartSnap = await getDoc(doc(db, participantPath(quizId, userId)));
-    if (existingPartSnap.exists() && existingPartSnap.data()?.status === 'blocked') {
-      throw new Error('You have been removed from this arena by the Commander.');
-    }
-    const data: Record<string, unknown> = {
-      user_id: userId,
-      score: 0,
-      status: 'playing',
-      violations_count: 0,
-      lastSeen: serverTimestamp(),
-    };
-    if (name) data.name = name;
-    await setDoc(doc(db, participantPath(quizId, userId)), data);
+      const participantRef = doc(db, `quizzes/${quizId}/participants/${userId}`);
+      const existingPartSnap = await transaction.get(participantRef);
+      if (existingPartSnap.exists() && existingPartSnap.data()?.status === 'blocked') {
+        throw new Error('You have been removed from this arena by the Commander.');
+      }
+      const data: Record<string, unknown> = {
+        user_id: userId,
+        score: 0,
+        status: 'playing',
+        violations_count: 0,
+        lastSeen: serverTimestamp(),
+      };
+      if (name) data.name = name;
+      transaction.set(participantRef, data);
+    });
   },
 
   async updateParticipant(
@@ -75,19 +80,28 @@ export const participantService = {
     data: { violations_count?: number; status?: 'playing' | 'blocked' | 'finished' }
   ): Promise<void> {
     const db = getFirestore();
-    await updateDoc(doc(db, participantPath(quizId, userId)), data);
+    const ref = doc(db, participantPath(quizId, userId));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Participant not found');
+    await updateDoc(ref, data);
   },
 
   async blockParticipant(quizId: string, userId: string): Promise<void> {
     const db = getFirestore();
-    await updateDoc(doc(db, participantPath(quizId, userId)), {
+    const ref = doc(db, participantPath(quizId, userId));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Participant not found');
+    await updateDoc(ref, {
       status: 'blocked',
     });
   },
 
   async unblockParticipant(quizId: string, userId: string): Promise<void> {
     const db = getFirestore();
-    await updateDoc(doc(db, participantPath(quizId, userId)), {
+    const ref = doc(db, participantPath(quizId, userId));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Participant not found');
+    await updateDoc(ref, {
       status: 'playing',
       violations_count: 0,
     });

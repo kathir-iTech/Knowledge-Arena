@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag, Wifi, WifiOff } from 'lucide-react';
+import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -564,7 +564,6 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
   const studentCount = participants.filter(p => p.user_id !== quiz.created_by).length;
   const showCommanderOffline = !isTeacher && !commanderOnline && quiz.status === 'live';
-  const showCommanderReconnected = !isTeacher && commanderOnline;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-3 md:p-4 bg-background overflow-x-hidden animate-in safe-top safe-bottom">

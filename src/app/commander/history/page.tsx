@@ -7,6 +7,7 @@ import { LoadingScreen } from '@/components/LoadingScreen';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { Swords, Users, Calendar, ArrowLeft } from 'lucide-react';
@@ -17,6 +18,7 @@ import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 export default function CommanderHistoryPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [quizzes, setQuizzes] = useState<ValidatedQuiz[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -24,7 +26,7 @@ export default function CommanderHistoryPage() {
     if (!user) return;
     quizService.getQuizzesByCreator(user.id)
       .then(setQuizzes)
-      .catch(() => {})
+      .catch(() => { toast({ variant: 'destructive', title: 'Error', description: 'Failed to load battle history.' }); })
       .finally(() => setLoading(false));
   }, [user]);
 

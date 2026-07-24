@@ -226,6 +226,7 @@ export const quizService = {
       status: 'waiting',
       current_question_index: -1,
       question_start_at: null,
+      commanderLastSeen: null,
     });
 
   },

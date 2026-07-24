@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 
 export async function POST(request: NextRequest) {
+  const auth = await verifyFirebaseTokenWithRole(request, 'executive');
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const logs: string[] = [];
   const log = (msg: string) => {
     console.log(msg);
@@ -32,7 +37,7 @@ export async function POST(request: NextRequest) {
       log(`[DEBUG] Buffer created: length=${buffer.length}, isBuffer=${Buffer.isBuffer(buffer)}`);
     } catch (e: any) {
       log(`[DEBUG] Buffer.from ERROR: ${e.name}: ${e.message}`);
-      return NextResponse.json({ error: 'Buffer creation failed', details: e.message, logs });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     log(`[DEBUG] PDF header: ${buffer.slice(0, 8).toString('hex')} = ${buffer.slice(0, 5).toString()}`);
@@ -87,10 +92,10 @@ export async function POST(request: NextRequest) {
     } catch (extractErr: any) {
       log(`[DEBUG] EXTRACTION ERROR: ${extractErr.name}: ${extractErr.message}`);
       log(`[DEBUG] Stack: ${extractErr.stack}`);
-      return NextResponse.json({ error: 'Extraction failed', details: extractErr.message, stack: extractErr.stack, logs });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   } catch (err: any) {
     log(`[DEBUG] REQUEST ERROR: ${err.name}: ${err.message}`);
-    return NextResponse.json({ error: 'Request failed', details: err.message, logs });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

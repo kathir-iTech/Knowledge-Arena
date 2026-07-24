@@ -31,17 +31,12 @@ export interface ArenaCreationInput {
   createdBy: string;
 }
 
-interface CreationPlan {
-  quizId: string;
-  questionIds: string[];
-}
-
-function planCreation(questionsCount: number): CreationPlan {
+function planCreation(questionsCount: number): string[] {
   const questionIds: string[] = [];
   for (let i = 0; i < questionsCount; i++) {
     questionIds.push(uuidv4());
   }
-  return { quizId: '', questionIds };
+  return questionIds;
 }
 
 function batchCount(questionsCount: number): number {
@@ -62,7 +57,7 @@ export const arenaCreationService = {
 
     const qCount = questions.length;
     const nBatches = batchCount(qCount);
-    const plan = planCreation(qCount);
+    const questionIds = planCreation(qCount);
 
     let roomCode = generateRoomCode();
     for (let attempts = 0; attempts < 5; attempts++) {
@@ -70,8 +65,6 @@ export const arenaCreationService = {
       if (!existing.exists()) break;
       roomCode = generateRoomCode();
     }
-    plan.quizId = roomCode;
-
     const allBatchData: Array<{
       ref: ReturnType<typeof doc>;
       data: Record<string, unknown>;
@@ -101,7 +94,7 @@ export const arenaCreationService = {
     });
 
     for (let i = 0; i < qCount; i++) {
-      const qId = plan.questionIds[i];
+      const qId = questionIds[i];
       const q = questions[i];
 
       allBatchData.push({

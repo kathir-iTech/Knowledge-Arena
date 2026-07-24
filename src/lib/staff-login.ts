@@ -1,10 +1,6 @@
-export const STAFF_EMAIL_DOMAIN = 'knowledge-arena.app';
+const STAFF_EMAIL_DOMAIN = 'knowledge-arena.app';
 
 export function mapStaffIdToEmail(input: string): string {
   if (input.includes('@')) return input;
   return `${input}@${STAFF_EMAIL_DOMAIN}`;
-}
-
-export function isStaffEmail(email: string): boolean {
-  return email.endsWith(`@${STAFF_EMAIL_DOMAIN}`);
 }

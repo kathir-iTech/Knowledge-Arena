@@ -1,4 +1,4 @@
-export interface MappedAuthError {
+interface MappedAuthError {
   title: string;
   message: string;
   isSilent: boolean;
