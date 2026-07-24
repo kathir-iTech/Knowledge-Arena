@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { auditService } from '@/services/audit.service';
+import { notificationService } from '@/services/notification.service';
 
 export async function GET(req: NextRequest) {
   const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
@@ -51,8 +53,26 @@ export async function POST(req: NextRequest) {
       createdAt: Date.now(),
     });
 
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: executiveAuth.uid,
+      actorRole: 'executive',
+      action: 'announcement_sent',
+      target: docRef.id,
+      metadata: { targetRole: targetCommanderId ? 'specific' : 'all' },
+    });
+    await notificationService.create({
+      type: 'new_announcement',
+      title: 'Announcement Published',
+      description: `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}`,
+      createdAt: Date.now(),
+      link: '/executive/messages',
+      metadata: { announcementId: docRef.id },
+    });
+
     return NextResponse.json({ success: true, id: docRef.id });
   } catch (err: any) {
+    console.error('[Announcements POST] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

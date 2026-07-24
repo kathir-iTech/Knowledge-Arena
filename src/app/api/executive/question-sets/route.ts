@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { auditService } from '@/services/audit.service';
+import { notificationService } from '@/services/notification.service';
 
 export async function GET(req: NextRequest) {
-  const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
-  const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
-  if (!executiveAuth && !commanderAuth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
+    const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
+    if (!executiveAuth && !commanderAuth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('search');
 
@@ -40,12 +41,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'executive');
-  if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const body = await req.json();
     const { name, description, category, difficulty, tags, questionIds } = body;
 
@@ -67,19 +67,36 @@ export async function POST(req: NextRequest) {
       updatedAt: Date.now(),
     });
 
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: auth.uid,
+      actorRole: 'executive',
+      action: 'question_set_created',
+      target: docRef.id,
+      metadata: { name: name.trim(), questionCount: (questionIds || []).length },
+    });
+    await notificationService.create({
+      type: 'ai_import_completed',
+      title: 'Question Set Created',
+      description: `"${name.trim()}" with ${(questionIds || []).length} questions.`,
+      createdAt: Date.now(),
+      link: '/executive/question-sets',
+      metadata: { setId: docRef.id },
+    });
+
     return NextResponse.json({ success: true, id: docRef.id });
   } catch (err: any) {
+    console.error('[QuestionSets POST] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'executive');
-  if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const body = await req.json();
     const { id, name, description, category, difficulty, tags, questionIds } = body;
 
@@ -103,19 +120,29 @@ export async function PATCH(req: NextRequest) {
     }
 
     await getAdminDb().collection('question_sets').doc(id).update(updateData);
+
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: auth.uid,
+      actorRole: 'executive',
+      action: 'question_set_edited',
+      target: id,
+      metadata: { updatedFields: Object.keys(updateData).filter(k => k !== 'updatedAt') },
+    });
+
     return NextResponse.json({ success: true, id });
   } catch (err: any) {
+    console.error('[QuestionSets PATCH] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'executive');
-  if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     if (!id) {
@@ -123,8 +150,18 @@ export async function DELETE(req: NextRequest) {
     }
 
     await getAdminDb().collection('question_sets').doc(id).delete();
+
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: auth.uid,
+      actorRole: 'executive',
+      action: 'question_set_deleted',
+      target: id,
+    });
+
     return NextResponse.json({ success: true, id });
   } catch (err: any) {
+    console.error('[QuestionSets DELETE] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

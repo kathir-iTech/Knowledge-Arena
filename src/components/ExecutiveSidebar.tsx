@@ -1,10 +1,9 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, BrainCircuit, BarChart3, Shield, Users, BookOpen, Layers, Inbox, Settings, MessageSquare } from 'lucide-react';
+import { LogOut, BrainCircuit, LayoutDashboard, BarChart3, Shield, Users, BookOpen, Layers, Inbox, Settings, MessageSquare, ClipboardList, Activity, Database, Wifi, Search, Bell, User, Archive } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -27,6 +26,7 @@ const ExecutiveSidebar = () => {
   const pathname = usePathname();
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notifCount, setNotifCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -35,15 +35,27 @@ const ExecutiveSidebar = () => {
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
-        const res = await fetch('/api/messaging/conversations', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        const total = (data.conversations || []).reduce(
-          (sum: number, c: any) => sum + (c.unreadCount?.[user.id] || 0), 0
-        );
-        if (!cancelled) setUnreadCount(total);
+        const [convRes, notifRes] = await Promise.all([
+          fetch('/api/messaging/conversations', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch('/api/executive/notifications?unreadOnly=true', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        if (!cancelled) {
+          if (convRes.ok) {
+            const convData = await convRes.json();
+            const total = (convData.conversations || []).reduce(
+              (sum: number, c: any) => sum + (c.unreadCount?.[user.id] || 0), 0
+            );
+            setUnreadCount(total);
+          }
+          if (notifRes.ok) {
+            const notifData = await notifRes.json();
+            setNotifCount(notifData.unreadCount || 0);
+          }
+        }
       } catch {}
     };
     fetchUnread();
@@ -54,14 +66,23 @@ const ExecutiveSidebar = () => {
   if (!user) return null;
 
   const nav = [
+    { href: '/executive/workspace', label: 'Workspace', icon: LayoutDashboard },
     { href: '/executive/analytics', label: 'Analytics', icon: BarChart3 },
+    { href: '/executive/search', label: 'Search', icon: Search },
     { href: '/executive/commanders', label: 'Commanders', icon: Shield },
     { href: '/executive/students', label: 'Students', icon: Users },
     { href: '/executive/question-bank', label: 'Question Bank', icon: BookOpen },
     { href: '/executive/question-sets', label: 'Question Sets', icon: Layers },
     { href: '/executive/requests', label: 'Requests', icon: Inbox },
     { href: '/executive/messages', label: 'Messages', icon: MessageSquare },
+    { href: '/executive/notifications', label: 'Notifications', icon: Bell },
+    { href: '/executive/audit-logs', label: 'Audit Logs', icon: ClipboardList },
     { href: '/executive/settings', label: 'Settings', icon: Settings },
+    { href: '/executive/backup', label: 'Backup', icon: Archive },
+  ];
+
+  const secondaryNav = [
+    { href: '/executive/profile', label: 'Profile', icon: User },
   ];
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
@@ -100,6 +121,8 @@ const ExecutiveSidebar = () => {
           <SidebarMenu>
             {nav.map((item) => {
               const active = isActive(item.href);
+              const hasBadge = (item.href === '/executive/messages' && unreadCount > 0) || (item.href === '/executive/notifications' && notifCount > 0);
+              const badgeCount = item.href === '/executive/messages' ? unreadCount : item.href === '/executive/notifications' ? notifCount : 0;
               return (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
@@ -108,17 +131,38 @@ const ExecutiveSidebar = () => {
                     tooltip={item.label}
                     className={cn(
                       active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary",
-                      !active && item.href === '/executive/messages' && unreadCount > 0 && "relative"
+                      !active && hasBadge && "relative"
                     )}
                   >
                     <Link href={item.href}>
                       <item.icon className={cn("!size-[18px]", active && "text-primary")} />
                       <span>{item.label}</span>
-                      {item.href === '/executive/messages' && unreadCount > 0 && (
+                      {hasBadge && badgeCount > 0 && (
                         <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
-                          {unreadCount > 9 ? '9+' : unreadCount}
+                          {badgeCount > 9 ? '9+' : badgeCount}
                         </span>
                       )}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+          <SidebarSeparator className="my-1" />
+          <SidebarMenu>
+            {secondaryNav.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={active}
+                    tooltip={item.label}
+                    className={cn(active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary")}
+                  >
+                    <Link href={item.href}>
+                      <item.icon className={cn("!size-[18px]", active && "text-primary")} />
+                      <span>{item.label}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

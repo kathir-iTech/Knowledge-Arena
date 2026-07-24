@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { auditService } from '@/services/audit.service';
+import { notificationService } from '@/services/notification.service';
 
 async function verifyParticipant(req: NextRequest, convId: string) {
   const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
@@ -37,6 +39,7 @@ export async function GET(req: NextRequest) {
     const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     return NextResponse.json({ messages });
   } catch (err: any) {
+    console.error('[Messages GET] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -87,8 +90,26 @@ export async function POST(req: NextRequest) {
       return { id: msgRef.id, text: text.trim(), senderId: verified.auth.uid, senderRole: verified.role, timestamp: now };
     });
 
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: verified.auth.uid,
+      actorRole: verified.role,
+      action: 'message_sent',
+      target: convId,
+      metadata: { textLength: text.trim().length },
+    });
+    await notificationService.create({
+      type: 'new_message',
+      title: 'New Message',
+      description: `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}`,
+      createdAt: Date.now(),
+      link: '/executive/messages',
+      metadata: { conversationId: convId },
+    });
+
     return NextResponse.json({ message: result });
   } catch (err: any) {
+    console.error('[Messages POST] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

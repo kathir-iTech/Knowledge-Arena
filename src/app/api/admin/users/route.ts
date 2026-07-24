@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { rateLimiter, getClientIp, buildRateLimitHeaders, Limits } from '@/lib/rate-limiter';
+import { auditService } from '@/services/audit.service';
+import { notificationService } from '@/services/notification.service';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +28,6 @@ export async function POST(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.log('[AdminUsers][POST] Auth verified');
 
     const { email, password, displayName } = await req.json();
 
@@ -34,20 +35,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
+    if (!email.includes('@') || !email.includes('.')) {
+      return NextResponse.json({ error: 'Invalid email format. Use a valid email address or a username (will be converted to email format).' }, { status: 400 });
+    }
+
     if (password.length < 6) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
 
-    console.log('[AdminUsers][POST] Creating Firebase Auth user');
     const userRecord = await getAdminAuth().createUser({
       email,
       password,
       displayName: displayName || email.split('@')[0],
     });
-    console.log('[AdminUsers][POST] Auth user created:', userRecord.uid);
 
     try {
-      console.log('[AdminUsers][POST] Creating Firestore profile');
       await getAdminDb().collection('users').doc(userRecord.uid).set({
         email,
         displayName: displayName || email.split('@')[0],
@@ -56,13 +58,29 @@ export async function POST(req: NextRequest) {
         createdBy: auth.uid,
         disabled: false,
       });
+
+      await auditService.record({
+        timestamp: Date.now(),
+        actor: auth.uid,
+        actorRole: 'executive',
+        action: 'commander_created',
+        target: userRecord.uid,
+        metadata: { email, displayName: displayName || email.split('@')[0] },
+      });
+      await notificationService.create({
+        type: 'commander_request',
+        title: 'Commander Created',
+        description: `${displayName || email.split('@')[0]} has been added as a commander.`,
+        createdAt: Date.now(),
+        link: '/executive/commanders',
+        metadata: { commanderId: userRecord.uid },
+      });
     } catch (firestoreErr) {
       console.error('[AdminUsers][POST] Firestore write failed, cleaning up Auth user');
       await getAdminAuth().deleteUser(userRecord.uid).catch(() => {});
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
-    console.log('[AdminUsers][POST] Success');
     return NextResponse.json({
       uid: userRecord.uid,
       email: userRecord.email,
@@ -77,6 +95,9 @@ export async function POST(req: NextRequest) {
     if (message.includes('WEAK_PASSWORD') || message.includes('password')) {
       return NextResponse.json({ error: 'Password is too weak. Use at least 6 characters.' }, { status: 400 });
     }
+    if (message.includes('INVALID_EMAIL') || message.includes('invalid email')) {
+      return NextResponse.json({ error: 'Invalid email format. Use a valid email address.' }, { status: 400 });
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -88,18 +109,16 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.log('[AdminUsers][GET] Auth verified');
 
     const { searchParams } = new URL(req.url);
     const role = searchParams.get('role') || 'commander';
 
-    if (!['commander', 'gladiator'].includes(role)) {
+    if (!['commander', 'gladiator', 'executive'].includes(role)) {
       return NextResponse.json({ error: 'Invalid role filter' }, { status: 400 });
     }
 
     let snapshot;
     try {
-      console.log('[AdminUsers][GET] Querying users');
       snapshot = await getAdminDb()
         .collection('users')
         .where('role', '==', role)
@@ -108,8 +127,6 @@ export async function GET(req: NextRequest) {
       console.error('[AdminUsers][GET] Firestore query failed:', queryErr?.name, queryErr?.code);
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
-
-    console.log('[AdminUsers][GET] Found', snapshot.docs.length, 'users');
 
     const users = snapshot.docs.map(doc => {
       const data = doc.data();
@@ -132,14 +149,13 @@ export async function GET(req: NextRequest) {
 
     if (role === 'commander' && users.length > 0) {
       try {
-        console.log('[AdminUsers][GET] Enriching commanders');
         const uids = users.map(u => u.uid);
 
         const arenaCounts: Record<string, number> = {};
         const lastActiveMap: Record<string, number | null> = {};
 
-        for (let i = 0; i < uids.length; i += 30) {
-          const chunk = uids.slice(i, i + 30);
+        for (let i = 0; i < uids.length; i += 10) {
+          const chunk = uids.slice(i, i + 10);
           try {
             const quizzesSnap = await getAdminDb()
               .collection('quizzes')
@@ -171,14 +187,13 @@ export async function GET(req: NextRequest) {
 
     if (role === 'gladiator' && users.length > 0) {
       try {
-        console.log('[AdminUsers][GET] Enriching gladiators');
         const uids = users.map(u => u.uid);
 
         const battleCounts: Record<string, number> = {};
         const scoreSums: Record<string, number> = {};
 
-        for (let i = 0; i < uids.length; i += 30) {
-          const chunk = uids.slice(i, i + 30);
+        for (let i = 0; i < uids.length; i += 10) {
+          const chunk = uids.slice(i, i + 10);
           try {
             const partSnapshot = await getAdminDb()
               .collectionGroup('participants')
@@ -209,7 +224,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    console.log('[AdminUsers][GET] Success');
     return NextResponse.json({ users: enriched });
   } catch (err: any) {
     console.error('[AdminUsers][GET] Unhandled error:', err?.name, err?.message);
@@ -224,12 +238,11 @@ export async function PATCH(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.log('[AdminUsers][PATCH] Auth verified');
 
-    const { uid, disabled } = await req.json();
+    const { uid, disabled, password, resetPassword } = await req.json();
 
-    if (!uid || typeof disabled !== 'boolean') {
-      return NextResponse.json({ error: 'uid and disabled are required' }, { status: 400 });
+    if (!uid) {
+      return NextResponse.json({ error: 'uid is required' }, { status: 400 });
     }
 
     if (uid === auth.uid) {
@@ -237,21 +250,59 @@ export async function PATCH(req: NextRequest) {
     }
 
     const targetDoc = await getAdminDb().collection('users').doc(uid).get();
-    if (targetDoc.exists && targetDoc.data()?.role === 'executive') {
+    if (!targetDoc.exists) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    if (targetDoc.data()?.role === 'executive') {
       return NextResponse.json({ error: 'Cannot modify executive accounts' }, { status: 403 });
     }
 
-    console.log('[AdminUsers][PATCH] Updating user:', uid);
-    await getAdminDb().collection('users').doc(uid).set({ disabled }, { merge: true });
-
-    if (disabled) {
-      await getAdminAuth().updateUser(uid, { disabled: true });
-    } else {
-      await getAdminAuth().updateUser(uid, { disabled: false });
+    if (typeof disabled === 'boolean') {
+      await getAdminDb().collection('users').doc(uid).set({ disabled }, { merge: true });
+      await getAdminAuth().updateUser(uid, { disabled });
+      await auditService.record({
+        timestamp: Date.now(),
+        actor: auth.uid,
+        actorRole: 'executive',
+        action: disabled ? 'commander_disabled' : 'commander_enabled',
+        target: uid,
+        metadata: { disabled },
+      });
+      await notificationService.create({
+        type: disabled ? 'system_warning' : 'gladiator_registration',
+        title: disabled ? 'Commander Disabled' : 'Commander Enabled',
+        description: `Commander account ${disabled ? 'disabled' : 'enabled'}.`,
+        createdAt: Date.now(),
+        link: '/executive/commanders',
+        metadata: { commanderId: uid, disabled },
+      });
+      return NextResponse.json({ success: true, uid, disabled });
     }
 
-    console.log('[AdminUsers][PATCH] Success');
-    return NextResponse.json({ success: true, uid, disabled });
+    if (resetPassword) {
+      if (password && password.length >= 6) {
+        await getAdminAuth().updateUser(uid, { password });
+        await auditService.record({
+          timestamp: Date.now(),
+          actor: auth.uid,
+          actorRole: 'executive',
+          action: 'password_reset',
+          target: uid,
+        });
+        await notificationService.create({
+          type: 'operation_failed',
+          title: 'Password Reset',
+          description: `Password reset for commander account.`,
+          createdAt: Date.now(),
+          link: '/executive/commanders',
+          metadata: { commanderId: uid },
+        });
+        return NextResponse.json({ success: true, uid, passwordReset: true });
+      }
+      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+    }
+
+    return NextResponse.json({ error: 'No valid operation specified' }, { status: 400 });
   } catch (err: any) {
     console.error('[AdminUsers][PATCH] Error:', err?.name, err?.code);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -265,7 +316,6 @@ export async function DELETE(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.log('[AdminUsers][DELETE] Auth verified');
 
     const { searchParams } = new URL(req.url);
     let uid = searchParams.get('uid');
@@ -285,15 +335,61 @@ export async function DELETE(req: NextRequest) {
     }
 
     const targetDoc = await getAdminDb().collection('users').doc(uid).get();
-    if (targetDoc.exists && targetDoc.data()?.role === 'executive') {
+    if (!targetDoc.exists) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    const targetRole = targetDoc.data()?.role;
+    if (targetRole === 'executive') {
       return NextResponse.json({ error: 'Cannot delete executive accounts' }, { status: 403 });
     }
 
-    console.log('[AdminUsers][DELETE] Deleting user from Auth and Firestore profile:', uid);
-    await getAdminAuth().deleteUser(uid).catch(() => {});
-    await getAdminDb().collection('users').doc(uid).delete().catch(() => {});
+    const targetData = targetDoc.data();
+    const displayName = targetData?.displayName || targetData?.email || 'Unknown';
 
-    console.log('[AdminUsers][DELETE] Success');
+    // Delete Firebase Auth user
+    await getAdminAuth().deleteUser(uid).catch(() => {});
+
+    // For commanders: rename profile to preserve historical data
+    if (targetRole === 'commander') {
+      await getAdminDb().collection('users').doc(uid).set({
+        displayName: 'Deleted Commander',
+        email: `deleted_${uid.slice(0, 8)}@knowledgearena.app`,
+        role: 'commander',
+        disabled: true,
+        deleted: true,
+        deletedAt: Date.now(),
+        deletedBy: auth.uid,
+        originalDisplayName: displayName,
+      }, { merge: true });
+      await auditService.record({
+        timestamp: Date.now(),
+        actor: auth.uid,
+        actorRole: 'executive',
+        action: 'commander_deleted',
+        target: uid,
+        metadata: { displayName },
+      });
+      await notificationService.create({
+        type: 'system_warning',
+        title: 'Commander Deleted',
+        description: `${displayName} has been permanently deleted.`,
+        createdAt: Date.now(),
+        link: '/executive/commanders',
+        metadata: { commanderId: uid, displayName },
+      });
+    } else {
+      // For gladiators: hard delete profile
+      await getAdminDb().collection('users').doc(uid).delete().catch(() => {});
+      await auditService.record({
+        timestamp: Date.now(),
+        actor: auth.uid,
+        actorRole: 'executive',
+        action: 'gladiator_deleted',
+        target: uid,
+        metadata: { displayName },
+      });
+    }
+
     return NextResponse.json({ success: true, uid });
   } catch (err: any) {
     console.error('[AdminUsers][DELETE] Error:', err?.name, err?.code);

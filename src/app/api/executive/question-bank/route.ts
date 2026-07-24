@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { auditService } from '@/services/audit.service';
+import { notificationService } from '@/services/notification.service';
 
 const validDifficulties = ['easy', 'medium', 'hard'];
 
 export async function GET(req: NextRequest) {
-  const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
-  const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
-  if (!executiveAuth && !commanderAuth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  console.log('[QuestionBank GET] auth:', executiveAuth?.uid || commanderAuth?.uid, 'role:', executiveAuth ? 'executive' : 'commander');
-
   try {
+    const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
+    const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
+    if (!executiveAuth && !commanderAuth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.log('[QuestionBank GET] auth:', executiveAuth?.uid || commanderAuth?.uid, 'role:', executiveAuth ? 'executive' : 'commander');
     const { searchParams } = new URL(req.url);
     const category = searchParams.get('category');
     const difficulty = searchParams.get('difficulty');
@@ -67,12 +68,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'executive');
-  if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const body = await req.json();
     const questions = Array.isArray(body) ? body : [body];
 
@@ -109,19 +109,38 @@ export async function POST(req: NextRequest) {
       await batch.commit();
     }
 
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: auth.uid,
+      actorRole: 'executive',
+      action: 'question_added',
+      target: 'question_bank',
+      metadata: { count: results.success, category: questions[0]?.category || 'General' },
+    });
+    if (results.success > 0) {
+      await notificationService.create({
+        type: 'ai_import_completed',
+        title: 'Questions Added',
+        description: `${results.success} question(s) added to the question bank.`,
+        createdAt: Date.now(),
+        link: '/executive/question-bank',
+        metadata: { count: results.success },
+      });
+    }
+
     return NextResponse.json({ ...results, success: results.success > 0 });
   } catch (err: any) {
+    console.error('[QuestionBank POST] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'executive');
-  if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { id, question, options, correctAnswer, explanation, category, difficulty, tags } = await req.json();
 
     if (!id) {
@@ -152,19 +171,29 @@ export async function PATCH(req: NextRequest) {
     }
 
     await getAdminDb().collection('question_bank').doc(id).update(updateData);
+
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: auth.uid,
+      actorRole: 'executive',
+      action: 'question_edited',
+      target: id,
+      metadata: { updatedFields: Object.keys(updateData) },
+    });
+
     return NextResponse.json({ success: true, id });
   } catch (err: any) {
+    console.error('[QuestionBank PATCH] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'executive');
-  if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
 
@@ -188,6 +217,22 @@ export async function DELETE(req: NextRequest) {
       });
       await batch.commit();
     }
+
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: auth.uid,
+      actorRole: 'executive',
+      action: 'question_deleted',
+      target: id,
+      metadata: { affectedSets: setsSnapshot.docs.length },
+    });
+    await notificationService.create({
+      type: 'operation_failed',
+      title: 'Question Deleted',
+      description: `A question was removed from the question bank.`,
+      createdAt: Date.now(),
+      link: '/executive/question-bank',
+    });
 
     return NextResponse.json({ success: true, id });
   } catch (err: any) {
