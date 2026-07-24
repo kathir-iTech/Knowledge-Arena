@@ -22,15 +22,6 @@ export async function GET(req: Request) {
     const data = await getPredictionSummary(auth.uid);
     return NextResponse.json(data);
   } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: error instanceof Error ? error.message : String(error),
-        stack: process.env.NODE_ENV === "development"
-          ? error instanceof Error ? error.stack : undefined
-          : undefined
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

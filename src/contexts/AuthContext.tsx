@@ -127,10 +127,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [firestore, auth, getRandomAvatar, normalizeRole, buildFallbackProfile]);
 
   const fetchUserDocument = useCallback(async (uid: string) => {
-    console.log('[StaffLogin] fetchUserDocument called for uid:', uid);
-    if (!firestore) { console.log('[StaffLogin] fetchUserDocument: no firestore'); setIsLoading(false); return; }
-    if (lastFetchedUid.current === uid && user) { console.log('[StaffLogin] fetchUserDocument: already fetched', uid); return; }
-    if (fetchInProgress.current && fetchInProgressUid.current === uid) { console.log('[StaffLogin] fetchUserDocument: already in progress', uid); return; }
+    if (!firestore) { setIsLoading(false); return; }
+    if (lastFetchedUid.current === uid && user) { return; }
+    if (fetchInProgress.current && fetchInProgressUid.current === uid) { return; }
     fetchInProgress.current = true;
     fetchInProgressUid.current = uid;
     lastFetchedUid.current = uid;
@@ -166,7 +165,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (signupInProgress.current && signupUserId.current === firebaseUser.uid) {
         return;
       }
-      console.log('[StaffLogin] useEffect: firebaseUser set, uid:', firebaseUser.uid, '— calling fetchUserDocument');
       sessionStorage.removeItem('oa_pending');
       fetchUserDocument(firebaseUser.uid);
     } else {
@@ -210,10 +208,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       const email = mapStaffIdToEmail(credentials.email);
-      console.log('[StaffLogin] login(): mapped email', credentials.email, '→', email);
       await checkRateLimit('login', email);
       await signInWithEmailAndPassword(auth, email, credentials.password);
-      console.log('[StaffLogin] login(): signInWithEmailAndPassword OK, currentUser.uid:', auth.currentUser?.uid);
 
       const uid = auth.currentUser?.uid;
       if (!uid) {
@@ -229,7 +225,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const userDoc = await getDoc(doc(firestore, 'users', uid));
-      console.log('[StaffLogin] login(): Firestore doc exists:', userDoc.exists(), 'role:', userDoc.data()?.role);
 
       if (!userDoc.exists()) {
         await signOut(auth);
@@ -243,7 +238,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toast({ variant: "destructive", title: "Access Denied", description: "Staff login is not available for this account. Gladiators must use Google Sign-In." });
         throw new Error("Staff login is not available for this account.");
       }
-      console.log('[StaffLogin] login(): role check passed —', role);
     } catch (error: unknown) {
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
         toast({ variant: "destructive", title: "Too Many Attempts", description: "Too many attempts. Please wait a moment and try again." });

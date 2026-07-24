@@ -7,8 +7,7 @@ import QRCode from 'react-qr-code';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ShieldCheck, ShieldAlert, Copy, Users, Wifi, WifiOff, Clock, Loader2 } from 'lucide-react';
+import { ShieldCheck, Copy, Users, Clock, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
@@ -30,7 +29,6 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const { toast } = useToast();
   const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [teacherOnline, setTeacherOnline] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [presenceNow, setPresenceNow] = useState(() => Date.now());
@@ -77,9 +75,6 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
         if (!mountedRef.current) return;
         setParticipants(parts);
         setIsLoading(false);
-        if (parts.some(p => p.user_id === quiz.created_by)) {
-          setTeacherOnline(true);
-        }
         setIsReconnecting(false);
       }, () => {
         if (!mountedRef.current) return;
@@ -127,11 +122,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('pageshow', handlePageShow);
 
-    const unsubQuiz = quizService.subscribeToQuiz(quiz.id, (q) => {
-      if (!mountedRef.current) return;
-      if (!q) { setTeacherOnline(false); return; }
-      setTeacherOnline(q.status === 'waiting' || q.status === 'live');
-    }, () => {
+    const unsubQuiz = quizService.subscribeToQuiz(quiz.id, () => {}, () => {
       if (!mountedRef.current) return;
       setIsReconnecting(true);
     });
@@ -158,6 +149,15 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       if (!ts) return true;
       return presenceNow - ts < 30000;
     });
+  }, [participants, presenceNow, quiz.created_by]);
+
+  const teacherOnline = useMemo(() => {
+    const teacher = participants.find(p => p.user_id === quiz.created_by);
+    if (!teacher) return false;
+    if (!teacher.lastSeen) return true;
+    const ts = typeof teacher.lastSeen === 'number' ? teacher.lastSeen : (teacher.lastSeen as any).toMillis?.();
+    if (!ts) return true;
+    return presenceNow - ts < 30000;
   }, [participants, presenceNow, quiz.created_by]);
 
   const blockedParticipants = useMemo(() => {

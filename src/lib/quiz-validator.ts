@@ -154,7 +154,7 @@ export function validateQuiz(questions: ValidatedQuestion[]): QuizValidationIssu
   return issues;
 }
 
-export function groupIssuesByQuestion(issues: QuizValidationIssue[]): Map<number, QuizValidationIssue[]> {
+function groupIssuesByQuestion(issues: QuizValidationIssue[]): Map<number, QuizValidationIssue[]> {
   const grouped = new Map<number, QuizValidationIssue[]>();
   for (const issue of issues) {
     if (!grouped.has(issue.questionIndex)) {

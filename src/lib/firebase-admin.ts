@@ -65,13 +65,11 @@ function initAdmin() {
 }
 
 export function getAdminDb() {
-  console.log('[FirebaseAdmin] getAdminDb');
   initAdmin();
   return getFirestore();
 }
 
 export function getAdminAuth() {
-  console.log('[FirebaseAdmin] getAdminAuth');
   initAdmin();
   return getAuth();
 }

@@ -17,8 +17,16 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get('category');
     const difficulty = searchParams.get('difficulty');
     const search = searchParams.get('search');
+    const idsParam = searchParams.get('ids');
+    const idsArr = searchParams.getAll('ids');
 
-    console.log('[QuestionBank GET] query params:', { category, difficulty, search });
+    let ids: string[] = [];
+    if (idsParam) {
+      ids = idsParam.split(',').filter(Boolean);
+    } else if (idsArr.length > 0) {
+      ids = idsArr.filter(Boolean);
+    }
+
     let query = getAdminDb().collection('question_bank').orderBy('createdAt', 'desc');
 
     if (category) {
@@ -29,11 +37,18 @@ export async function GET(req: NextRequest) {
     }
 
     const snapshot = await query.get();
-    console.log('[QuestionBank GET] query returned', snapshot.docs.length, 'docs');
     let questions = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    if (idsParam) {
+      const ids = idsParam.split(',').filter(Boolean);
+      if (ids.length > 0) {
+        const idSet = new Set(ids);
+        questions = questions.filter((q: any) => idSet.has(q.id));
+      }
+    }
 
     if (search) {
       const lower = search.toLowerCase();
@@ -47,7 +62,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ questions });
   } catch (err: any) {
     console.error('[QuestionBank GET] error:', err?.name, err?.code, err?.message);
-    return NextResponse.json({ error: err?.message || 'Failed to list questions' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -58,33 +73,45 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { question, options, correctAnswer, explanation, category, difficulty, tags } = await req.json();
+    const body = await req.json();
+    const questions = Array.isArray(body) ? body : [body];
 
-    if (!question || !options || !Array.isArray(options) || options.length < 2) {
-      return NextResponse.json({ error: 'Question and at least 2 options are required' }, { status: 400 });
-    }
-    if (correctAnswer === undefined || correctAnswer < 0 || correctAnswer >= options.length) {
-      return NextResponse.json({ error: 'Valid correctAnswer is required' }, { status: 400 });
-    }
-    if (difficulty && !validDifficulties.includes(difficulty)) {
-      return NextResponse.json({ error: 'Invalid difficulty. Use easy, medium, or hard' }, { status: 400 });
+    const batch = getAdminDb().batch();
+    const results = {
+      requested: questions.length,
+      success: 0,
+      failed: 0,
+    };
+
+    for (const q of questions) {
+      const { question, options, correctAnswer, explanation, category, difficulty, tags } = q;
+      if (!question || !options || !Array.isArray(options) || options.length < 2 || correctAnswer === undefined) {
+        results.failed++;
+        continue;
+      }
+
+      const docRef = getAdminDb().collection('question_bank').doc();
+      batch.set(docRef, {
+        question,
+        options,
+        correctAnswer,
+        explanation: explanation || '',
+        category: category || 'General',
+        difficulty: difficulty || 'medium',
+        tags: tags || [],
+        createdBy: auth.uid,
+        createdAt: Date.now(),
+      });
+      results.success++;
     }
 
-    const docRef = await getAdminDb().collection('question_bank').add({
-      question,
-      options,
-      correctAnswer,
-      explanation: explanation || '',
-      category: category || 'General',
-      difficulty: difficulty || 'medium',
-      tags: tags || [],
-      createdBy: auth.uid,
-      createdAt: Date.now(),
-    });
+    if (results.success > 0) {
+      await batch.commit();
+    }
 
-    return NextResponse.json({ id: docRef.id, success: true });
+    return NextResponse.json({ ...results, success: results.success > 0 });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to create question' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -127,7 +154,7 @@ export async function PATCH(req: NextRequest) {
     await getAdminDb().collection('question_bank').doc(id).update(updateData);
     return NextResponse.json({ success: true, id });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to update question' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -145,9 +172,25 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    await getAdminDb().collection('question_bank').doc(id).delete();
+    const questionDoc = getAdminDb().collection('question_bank').doc(id);
+    await questionDoc.delete();
+
+    const setsSnapshot = await getAdminDb().collection('question_sets')
+      .where('questionIds', 'array-contains', id)
+      .get();
+
+    if (!setsSnapshot.empty) {
+      const batch = getAdminDb().batch();
+      setsSnapshot.forEach(doc => {
+        const data = doc.data();
+        const updatedIds = (data.questionIds || []).filter((qid: string) => qid !== id);
+        batch.update(doc.ref, { questionIds: updatedIds, questionCount: updatedIds.length, updatedAt: Date.now() });
+      });
+      await batch.commit();
+    }
+
     return NextResponse.json({ success: true, id });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to delete question' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

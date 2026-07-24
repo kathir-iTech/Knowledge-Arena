@@ -52,6 +52,8 @@ export default function StudentManagementPage() {
   const [selectedGladiator, setSelectedGladiator] = useState<Gladiator | null>(null);
   const [toggleConfirmGladiator, setToggleConfirmGladiator] = useState<Gladiator | null>(null);
   const [deleteConfirmGladiator, setDeleteConfirmGladiator] = useState<Gladiator | null>(null);
+  const [processingToggle, setProcessingToggle] = useState(false);
+  const [processingDelete, setProcessingDelete] = useState(false);
 
   const getToken = async (): Promise<string> => {
     const firebaseAuth = auth as any;
@@ -94,6 +96,7 @@ export default function StudentManagementPage() {
   }, [user, fetchGladiators]);
 
   const handleToggleDisable = async (gladiator: Gladiator) => {
+    setProcessingToggle(true);
     try {
       const token = await getToken();
       const res = await fetch('/api/admin/users', {
@@ -106,10 +109,13 @@ export default function StudentManagementPage() {
       fetchGladiators();
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to update gladiator.' });
+    } finally {
+      setProcessingToggle(false);
     }
   };
 
   const handleDeletePermanent = async (gladiator: Gladiator) => {
+    setProcessingDelete(true);
     try {
       const token = await getToken();
       const res = await fetch(`/api/admin/users?uid=${gladiator.uid}`, {
@@ -121,6 +127,8 @@ export default function StudentManagementPage() {
       fetchGladiators();
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete gladiator.' });
+    } finally {
+      setProcessingDelete(false);
     }
   };
 
@@ -258,6 +266,7 @@ export default function StudentManagementPage() {
                     size="sm"
                     onClick={() => setToggleConfirmGladiator(g)}
                     title={g.disabled ? 'Re-enable' : 'Disable'}
+                    disabled={processingToggle}
                   >
                     {g.disabled ? <Check className="w-4 h-4 text-green-600" /> : <Ban className="w-4 h-4 text-amber-600" />}
                   </Button>
@@ -266,6 +275,7 @@ export default function StudentManagementPage() {
                     size="sm"
                     onClick={() => setDeleteConfirmGladiator(g)}
                     title="Delete Permanently"
+                    disabled={processingDelete}
                   >
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
@@ -332,8 +342,8 @@ export default function StudentManagementPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setToggleConfirmGladiator(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { const g = toggleConfirmGladiator; setToggleConfirmGladiator(null); if (g) handleToggleDisable(g); }} className={toggleConfirmGladiator?.disabled ? '' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}>
-              {toggleConfirmGladiator?.disabled ? 'Re-enable' : 'Disable'}
+            <AlertDialogAction disabled={processingToggle} onClick={() => { const g = toggleConfirmGladiator; setToggleConfirmGladiator(null); if (g) handleToggleDisable(g); }} className={toggleConfirmGladiator?.disabled ? '' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}>
+              {processingToggle ? 'Processing...' : (toggleConfirmGladiator?.disabled ? 'Re-enable' : 'Disable')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -350,10 +360,11 @@ export default function StudentManagementPage() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeleteConfirmGladiator(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              disabled={processingDelete}
               onClick={() => { const g = deleteConfirmGladiator; setDeleteConfirmGladiator(null); if (g) handleDeletePermanent(g); }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete Permanently
+              {processingDelete ? 'Deleting...' : 'Delete Permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

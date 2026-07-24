@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/', '/kicked', '/cheating-detected'];
+const PUBLIC_ROUTES = ['/', '/kicked', '/cheating-detected', '/force-password-change'];
 const BATTLE_ROUTE_PREFIX = '/battle/';
 const API_ROUTE_PREFIX = '/api/';
 

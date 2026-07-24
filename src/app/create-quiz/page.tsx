@@ -7,6 +7,7 @@ const QuizCreatorForm = dynamic(() => import('@/components/quiz/QuizCreatorForm'
 const PDFQuizGenerator = dynamic(() => import('@/components/quiz/PDFQuizGenerator').then(m => m.PDFQuizGenerator), { ssr: false });
 const QuestionBankPicker = dynamic(() => import('@/components/quiz/QuestionBankPicker').then(m => m.QuestionBankPicker), { ssr: false });
 const QuestionReviewPanel = dynamic(() => import('@/components/quiz/QuestionReviewPanel').then(m => m.QuestionReviewPanel), { ssr: false });
+const ArenaTemplateSelector = dynamic(() => import('@/components/question-sets/ArenaTemplateSelector').then(m => m.ArenaTemplateSelector), { ssr: false });
 
 interface GeneratedQuestion {
   text: string;
@@ -15,7 +16,7 @@ interface GeneratedQuestion {
   explanation: string;
 }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PencilRuler, Sparkles, BookOpen, ChevronLeft, ArrowLeft } from "lucide-react";
+import { PencilRuler, Sparkles, BookOpen, Layers, ChevronLeft, ArrowLeft } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
@@ -260,7 +261,7 @@ export default function CreateQuizPage() {
       </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-        <TabsList className="grid w-full grid-cols-3 h-12 bg-secondary/20 p-1 rounded-lg border border-primary/10">
+        <TabsList className="grid w-full grid-cols-4 h-12 bg-secondary/20 p-1 rounded-lg border border-primary/10">
           <TabsTrigger value="manual" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
             <PencilRuler className="mr-2 h-4 w-4" /> Manual
           </TabsTrigger>
@@ -269,6 +270,9 @@ export default function CreateQuizPage() {
           </TabsTrigger>
           <TabsTrigger value="bank" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
             <BookOpen className="mr-2 h-4 w-4" /> Question Bank
+          </TabsTrigger>
+          <TabsTrigger value="sets" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
+            <Layers className="mr-2 h-4 w-4" /> Question Sets
           </TabsTrigger>
         </TabsList>
 
@@ -287,6 +291,12 @@ export default function CreateQuizPage() {
         <TabsContent value="bank" className="animate-in">
           <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
              <QuestionBankPicker onQuestionsGenerated={handleQuestionsGenerated} onDirtyChange={setForgeDirty} />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="sets" className="animate-in">
+          <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
+             <ArenaTemplateSelector onArenaCreated={clearDraft} />
           </Suspense>
         </TabsContent>
        </Tabs>

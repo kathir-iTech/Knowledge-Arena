@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     } catch (firestoreErr) {
       console.error('[AdminUsers][POST] Firestore write failed, cleaning up Auth user');
       await getAdminAuth().deleteUser(userRecord.uid).catch(() => {});
-      return NextResponse.json({ error: 'Failed to create user profile. Please try again.' }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     console.log('[AdminUsers][POST] Success');
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     if (message.includes('WEAK_PASSWORD') || message.includes('password')) {
       return NextResponse.json({ error: 'Password is too weak. Use at least 6 characters.' }, { status: 400 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
         .get();
     } catch (queryErr: any) {
       console.error('[AdminUsers][GET] Firestore query failed:', queryErr?.name, queryErr?.code);
-      return NextResponse.json({ error: 'Failed to query users' }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     console.log('[AdminUsers][GET] Found', snapshot.docs.length, 'users');
@@ -213,7 +213,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ users: enriched });
   } catch (err: any) {
     console.error('[AdminUsers][GET] Unhandled error:', err?.name, err?.message);
-    return NextResponse.json({ error: 'Failed to list users' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -254,7 +254,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true, uid, disabled });
   } catch (err: any) {
     console.error('[AdminUsers][PATCH] Error:', err?.name, err?.code);
-    return NextResponse.json({ error: err?.message || 'Failed to update user' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -297,6 +297,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true, uid });
   } catch (err: any) {
     console.error('[AdminUsers][DELETE] Error:', err?.name, err?.code);
-    return NextResponse.json({ error: err?.message || 'Failed to delete user' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

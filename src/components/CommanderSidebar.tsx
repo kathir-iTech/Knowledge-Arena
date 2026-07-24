@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, LayoutDashboard, BrainCircuit, PencilRuler, History, UserCircle, Inbox } from 'lucide-react';
+import { LogOut, LayoutDashboard, BrainCircuit, PencilRuler, History, UserCircle, Inbox, MessageSquare } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -16,14 +16,40 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
+import { useFirebase } from '@/firebase';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { AvatarEditor } from './AvatarEditor';
 import { cn } from '@/lib/utils';
 
 const CommanderSidebar = () => {
   const { user, logout } = useAuth();
+  const { auth } = useFirebase();
   const pathname = usePathname();
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const fetchUnread = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch('/api/messaging/conversations', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const total = (data.conversations || []).reduce(
+          (sum: number, c: any) => sum + (c.unreadCount?.[user.id] || 0), 0
+        );
+        if (!cancelled) setUnreadCount(total);
+      } catch {}
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [user, auth]);
 
   if (!user) return null;
 
@@ -31,6 +57,7 @@ const CommanderSidebar = () => {
     { href: '/commander/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/create-quiz', label: 'Create Arena', icon: PencilRuler },
     { href: '/commander/requests', label: 'Requests', icon: Inbox },
+    { href: '/commander/messages', label: 'Messages', icon: MessageSquare },
     { href: '/commander/history', label: 'Battle History', icon: History },
     { href: '/commander/profile', label: 'Profile', icon: UserCircle },
   ];
@@ -78,12 +105,18 @@ const CommanderSidebar = () => {
                     isActive={active}
                     tooltip={item.label}
                     className={cn(
-                      active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary"
+                      active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary",
+                      !active && item.href === '/commander/messages' && unreadCount > 0 && "relative"
                     )}
                   >
                     <Link href={item.href}>
                       <item.icon className={cn("!size-[18px]", active && "text-primary")} />
                       <span>{item.label}</span>
+                      {item.href === '/commander/messages' && unreadCount > 0 && (
+                        <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

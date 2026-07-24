@@ -3,17 +3,19 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { participantService } from '@/services/participant.service';
-import { History, Swords, ExternalLink, ArrowLeft } from 'lucide-react';
+import { Swords, ExternalLink, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
 export default function GladiatorHistoryPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [history, setHistory] = useState<Array<{ quizId: string; title: string; score: number; status: string; created_at: number }>>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,7 +23,7 @@ export default function GladiatorHistoryPage() {
     if (!user) return;
     participantService.getStudentHistory(user.id)
       .then(setHistory)
-      .catch(() => {})
+      .catch(() => { toast({ variant: 'destructive', title: 'Error', description: 'Failed to load battle history.' }); })
       .finally(() => setLoading(false));
   }, [user]);
 

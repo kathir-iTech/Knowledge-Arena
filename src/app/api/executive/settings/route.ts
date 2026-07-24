@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ settings: docSnap.data() });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to load settings' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -59,6 +59,6 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to save settings' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
