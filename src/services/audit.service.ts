@@ -59,13 +59,4 @@ export const auditService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as AuditEntry & { id: string }));
   },
 
-  async getStats(): Promise<Record<string, number>> {
-    const snap = await getAdminDb().collection('auditLogs').get();
-    const counts: Record<string, number> = {};
-    snap.docs.forEach(d => {
-      const action = d.data().action as string;
-      counts[action] = (counts[action] || 0) + 1;
-    });
-    return counts;
-  },
 };

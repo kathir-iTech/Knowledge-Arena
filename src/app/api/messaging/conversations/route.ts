@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   try {
     const snapshot = await getAdminDb().collection('conversations')
       .where('participants', 'array-contains', auth.uid)
+      .limit(200)
       .get();
 
     const conversations = snapshot.docs

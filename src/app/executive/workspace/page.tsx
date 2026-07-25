@@ -13,10 +13,10 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useRouter } from 'next/navigation';
 import {
   Users, Shield, User, BookOpen, Swords, MessageSquare,
-  Megaphone, Inbox, Activity, Database, Wifi, BrainCircuit,
+  Inbox, Activity, Database, Wifi, BrainCircuit,
   CheckCircle2, AlertTriangle, AlertCircle, Clock, TrendingUp,
   Calendar, Star, Award, Zap, PlayCircle, FlaskConical, Bell, BellOff,
-  Plus, FileText, Settings, ListChecks, ChevronRight, RefreshCw,
+  Plus, Settings, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -190,23 +190,29 @@ export default function ExecutiveWorkspacePage() {
     }
   };
 
+  const fetchNotifs = async () => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+      const res = await fetch('/api/executive/notifications', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRecentNotifications((data.notifications || []).slice(0, 5));
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     if (!user) return;
     fetchStats();
-    const fetchNotifs = async () => {
-      try {
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) return;
-        const res = await fetch('/api/executive/notifications', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setRecentNotifications((data.notifications || []).slice(0, 5));
-        }
-      } catch {}
-    };
     fetchNotifs();
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchNotifs();
+    }, 30000);
+    return () => clearInterval(interval);
   }, [user, auth]);
 
   const handleGenerateDemo = async () => {
@@ -331,7 +337,7 @@ export default function ExecutiveWorkspacePage() {
             {stats?.recentBattles && stats.recentBattles.length > 0 ? (
               <div className="space-y-2">
                 {stats.recentBattles.map(battle => (
-                  <div key={battle.id} className="flex items-center justify-between p-3 rounded-[10px] bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <div key={battle.id} onClick={() => router.push(`/commander/edit-arena/${battle.id}`)} className="flex items-center justify-between p-3 rounded-[10px] bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{battle.title}</p>
                       <p className="text-xs text-muted-foreground">{battle.commanderName} · {battle.participantCount} participants</p>
@@ -368,7 +374,7 @@ export default function ExecutiveWorkspacePage() {
             {stats?.recentRequests && stats.recentRequests.length > 0 ? (
               <div className="space-y-2">
                 {stats.recentRequests.map(req => (
-                  <div key={req.id} className="flex items-center justify-between p-3 rounded-[10px] bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <div key={req.id} onClick={() => router.push('/executive/requests')} className="flex items-center justify-between p-3 rounded-[10px] bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{req.title}</p>
                       <p className="text-xs text-muted-foreground">{req.commanderName} · {formatDate(req.createdAt)}</p>
@@ -376,7 +382,9 @@ export default function ExecutiveWorkspacePage() {
                     <Badge variant="outline" className={cn(
                       'text-[10px] ml-2',
                       req.status === 'pending' && 'border-amber-300 text-amber-600',
-                      req.status === 'handled' && 'border-emerald-300 text-emerald-600',
+                      req.status === 'approved' && 'border-emerald-300 text-emerald-600',
+                      req.status === 'completed' && 'border-slate-300 text-slate-600',
+                      req.status === 'rejected' && 'border-red-300 text-red-600',
                     )}>
                       {req.status}
                     </Badge>
@@ -404,7 +412,7 @@ export default function ExecutiveWorkspacePage() {
             {recentNotifications.length > 0 ? (
               <div className="space-y-2">
                 {recentNotifications.map(n => (
-                  <div key={n.id} className="flex items-start gap-3 p-2 rounded-[8px] hover:bg-muted/30 transition-colors">
+                  <div key={n.id} onClick={() => router.push('/executive/notifications')} className="flex items-start gap-3 p-2 rounded-[8px] hover:bg-muted/30 transition-colors cursor-pointer">
                     <Bell className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm truncate">{n.title}</p>
@@ -439,7 +447,7 @@ export default function ExecutiveWorkspacePage() {
               {stats?.activeCommandersList && stats.activeCommandersList.length > 0 ? (
                 <div className="space-y-2">
                   {stats.activeCommandersList.slice(0, 5).map(cmd => (
-                    <div key={cmd.uid} className="flex items-center justify-between p-2 rounded-[8px] hover:bg-muted/30 transition-colors">
+                    <div key={cmd.uid} onClick={() => router.push('/executive/commanders')} className="flex items-center justify-between p-2 rounded-[8px] hover:bg-muted/30 transition-colors cursor-pointer">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                           <Shield className="w-4 h-4 text-muted-foreground" />

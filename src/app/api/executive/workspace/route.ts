@@ -41,7 +41,7 @@ async function getSystemHealth() {
   }
 
   // AI — check Genkit is configured (env vars present)
-  const hasGeminiKey = !!process.env.GEMINI_API_KEY || !!process.env.GOOGLE_GENAI_API_KEY;
+  const hasGeminiKey = !!process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   checks.ai = hasGeminiKey ? { status: 'healthy' } : { status: 'warning' };
 
   // Storage — verify Firebase storage bucket is configured
@@ -74,18 +74,16 @@ export async function GET(req: NextRequest) {
       announcementsSnap,
       auditSnap,
       requestsSnap,
-      allUsersSnap,
     ] = await Promise.all([
-      getAdminDb().collection('users').where('role', '==', 'executive').get(),
-      getAdminDb().collection('users').where('role', '==', 'commander').get(),
-      getAdminDb().collection('users').where('role', '==', 'gladiator').get(),
-      getAdminDb().collection('question_bank').get(),
+      getAdminDb().collection('users').where('role', '==', 'executive').select('createdAt').get(),
+      getAdminDb().collection('users').where('role', '==', 'commander').select('displayName', 'disabled', 'deleted', 'createdAt', 'lastActive').get(),
+      getAdminDb().collection('users').where('role', '==', 'gladiator').select('disabled', 'createdAt').get(),
+      getAdminDb().collection('question_bank').select('createdBy', 'source').get(),
       getAdminDb().collection('quizzes').get(),
-      getAdminDb().collection('conversations').get(),
+      getAdminDb().collection('conversations').select('messageCount').get(),
       getAdminDb().collection('announcements').get(),
       getAdminDb().collection('auditLogs').orderBy('timestamp', 'desc').limit(50).get(),
-      getAdminDb().collection('executive_requests').get(),
-      getAdminDb().collection('users').get(),
+      getAdminDb().collection('executive_requests').select('status', 'createdAt', 'title', 'commanderId', 'commanderEmail', 'type').get(),
     ]);
 
     const totalCommanders = commandersSnap.docs.length;
@@ -112,12 +110,13 @@ export async function GET(req: NextRequest) {
     }).length;
 
     // New users today / this week
-    const newUsersToday = allUsersSnap.docs.filter(d => {
+    const allUserDocs = [...executivesSnap.docs, ...commandersSnap.docs, ...gladiatorsSnap.docs];
+    const newUsersToday = allUserDocs.filter(d => {
       const t = d.data().createdAt || 0;
       return t >= dayStart.getTime();
     }).length;
 
-    const newUsersThisWeek = allUsersSnap.docs.filter(d => {
+    const newUsersThisWeek = allUserDocs.filter(d => {
       const t = d.data().createdAt || 0;
       return t >= weekStart.getTime();
     }).length;
@@ -242,10 +241,11 @@ export async function GET(req: NextRequest) {
       .slice(0, 5);
     const recentRequests = sortedRequests.map(d => {
       const data = d.data();
+      const commanderDoc = commandersSnap.docs.find(c => c.id === data.commanderId);
       return {
         id: d.id,
         title: data.title || 'Untitled Request',
-        commanderName: data.commanderName || data.createdBy || 'Unknown',
+        commanderName: commanderDoc?.data()?.displayName || data.commanderEmail || 'Unknown',
         status: data.status || 'pending',
         createdAt: data.createdAt || 0,
         type: data.type || 'general',

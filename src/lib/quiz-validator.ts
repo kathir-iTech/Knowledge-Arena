@@ -154,13 +154,3 @@ export function validateQuiz(questions: ValidatedQuestion[]): QuizValidationIssu
   return issues;
 }
 
-function groupIssuesByQuestion(issues: QuizValidationIssue[]): Map<number, QuizValidationIssue[]> {
-  const grouped = new Map<number, QuizValidationIssue[]>();
-  for (const issue of issues) {
-    if (!grouped.has(issue.questionIndex)) {
-      grouped.set(issue.questionIndex, []);
-    }
-    grouped.get(issue.questionIndex)!.push(issue);
-  }
-  return grouped;
-}

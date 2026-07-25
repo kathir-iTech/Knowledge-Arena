@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
     }
 
     const query = q.toLowerCase();
+    const MAX_RESULTS = 200;
+
     const [
       usersSnap,
       questionsSnap,
@@ -26,12 +28,12 @@ export async function GET(req: NextRequest) {
       conversationsSnap,
       announcementsSnap,
     ] = await Promise.all([
-      getAdminDb().collection('users').get(),
-      getAdminDb().collection('question_bank').get(),
-      getAdminDb().collection('quizzes').get(),
-      getAdminDb().collection('auditLogs').orderBy('timestamp', 'desc').limit(100).get(),
-      getAdminDb().collection('conversations').get(),
-      getAdminDb().collection('announcements').get(),
+      getAdminDb().collection('users').select('name', 'displayName', 'email', 'role', 'deleted', 'avatar').limit(MAX_RESULTS).get(),
+      getAdminDb().collection('question_bank').select('question_text', 'text', 'subject', 'category').limit(MAX_RESULTS).get(),
+      getAdminDb().collection('quizzes').select('title', 'name', 'status', 'totalParticipants', 'created_by').limit(MAX_RESULTS).get(),
+      getAdminDb().collection('auditLogs').select('actor', 'target', 'action', 'timestamp').orderBy('timestamp', 'desc').limit(100).get(),
+      getAdminDb().collection('conversations').select('title', 'name', 'participants').limit(MAX_RESULTS).get(),
+      getAdminDb().collection('announcements').select('title', 'content', 'message').limit(MAX_RESULTS).get(),
     ]);
 
     const results: Array<{

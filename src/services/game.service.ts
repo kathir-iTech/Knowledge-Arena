@@ -127,7 +127,7 @@ export const questionService = {
       collection(db, 'quizzes', quizId, 'participants')
     );
 
-    console.log('[evaluateQuestion] Scoring', quizId, questionId, 'participants:', participantsSnap.docs.length, 'startTime:', startTime);
+    // Scoring...
 
     // Single atomic transaction: read question → read each submission → write scores
     try {
@@ -138,7 +138,7 @@ export const questionService = {
           return;
         }
         if (qSnap.data().scored) {
-          console.log('[evaluateQuestion] Already scored:', questionId);
+          // already scored
           return;
         }
 

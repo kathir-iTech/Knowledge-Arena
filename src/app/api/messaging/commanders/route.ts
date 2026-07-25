@@ -11,8 +11,11 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('search');
-    let query = getAdminDb().collection('users').where('role', '==', 'commander');
-    const snapshot = await query.get();
+    const snapshot = await getAdminDb().collection('users')
+      .where('role', '==', 'commander')
+      .select('name', 'email', 'avatar', 'displayName', 'lastActive')
+      .limit(200)
+      .get();
     let commanders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     if (search) {

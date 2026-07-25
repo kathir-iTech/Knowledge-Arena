@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(backup);
-  } catch {
+  } catch (err: any) {
+    console.error('[Backup Export] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Backup failed' }, { status: 500 });
   }
 }

@@ -61,14 +61,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (attachments && Array.isArray(attachments)) {
-      const totalSize = attachments.reduce((sum: number, f: any) => sum + (f.size || 0), 0);
-      if (totalSize > 5 * 1024 * 1024) {
-        return NextResponse.json({ error: 'Total attachment size exceeds 5MB limit' }, { status: 400 });
-      }
+      let totalBase64Size = 0;
       for (const f of attachments) {
         if (!f.name || !f.type || !f.data) {
           return NextResponse.json({ error: 'Each attachment must have name, type, and data' }, { status: 400 });
         }
+        const base64Data = typeof f.data === 'string' ? f.data.split(',')[1] || f.data : f.data;
+        totalBase64Size += base64Data.length;
+        f.data = base64Data;
+      }
+      if (totalBase64Size > 800 * 1024) {
+        return NextResponse.json({ error: 'Total attachment data exceeds 800KB limit' }, { status: 400 });
       }
     }
 
@@ -113,9 +116,10 @@ export async function POST(req: NextRequest) {
       actorRole: verified.role,
       action: 'message_sent',
       target: convId,
-      metadata: { textLength: text.trim().length },
+      metadata: { textLength: text?.trim()?.length || 0, attachmentsCount: attachments?.length || 0 },
     });
-    const notifDesc = text?.trim() ? `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}` : '📎 File attachment';
+    const msgText = text?.trim() || '';
+    const notifDesc = msgText ? `${msgText.slice(0, 80)}${msgText.length > 80 ? '...' : ''}` : '📎 File attachment';
     await notificationService.create({
       type: 'new_message',
       title: 'New Message',

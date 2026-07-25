@@ -60,7 +60,7 @@ function formatFileSize(bytes: number): string {
 
 function downloadFile(attachment: Attachment) {
   const link = document.createElement('a');
-  link.href = attachment.data;
+  link.href = attachment.data.startsWith('data:') ? attachment.data : `data:${attachment.type};base64,${attachment.data}`;
   link.download = attachment.name;
   document.body.appendChild(link);
   link.click();

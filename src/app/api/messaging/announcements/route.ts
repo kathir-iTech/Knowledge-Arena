@@ -14,9 +14,10 @@ export async function GET(req: NextRequest) {
   const role = executiveAuth ? 'executive' : 'commander';
 
   try {
-    let query = getAdminDb().collection('announcements').orderBy('createdAt', 'desc');
-
-    const snapshot = await query.get();
+    const snapshot = await getAdminDb().collection('announcements')
+      .orderBy('createdAt', 'desc')
+      .limit(200)
+      .get();
     let announcements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     if (role === 'commander') {

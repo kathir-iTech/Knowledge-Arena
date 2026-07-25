@@ -14,7 +14,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     await notificationService.delete(id);
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err: any) {
+    console.error('[Notification DELETE] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Failed to delete notification' }, { status: 500 });
   }
 }
