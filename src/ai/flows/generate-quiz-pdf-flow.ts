@@ -9,12 +9,12 @@ import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 
 import { PdfReader } from 'pdfreader';
-import { verifyFirebaseToken } from '@/lib/verify-auth';
+import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 
 const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
-const EXTRACTION_TIMEOUT_MS = 30000;
-const GEMINI_TIMEOUT_MS = 60000;
+const EXTRACTION_TIMEOUT_MS = 8000;
+const GEMINI_TIMEOUT_MS = 10000;
 
 const QuizQuestionOutputSchema = z.object({
   text: z.string().describe('The question text.'),
@@ -41,9 +41,8 @@ export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutput
 
 const MODEL_FALLBACK_CHAIN = [
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.5-pro',
 ];
+const MAX_RETRIES_PER_MODEL = 1;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
@@ -171,7 +170,7 @@ function tryParseQuestions(raw: string): { questions: QuizQuestions } | null {
 
 async function callModelWithRetry(promptText: string, modelName: string): Promise<GeminiResult> {
   const errors: string[] = [];
-  const maxAttempts = 2; // Retry once on parse failure
+  const maxAttempts = MAX_RETRIES_PER_MODEL;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -265,13 +264,15 @@ async function callGeminiWithFallback(promptText: string): Promise<GeminiResult>
 
 export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Promise<GenerateQuizFromPDFOutput> {
   try {
-    const auth = await verifyFirebaseToken(input.idToken);
-    if (!auth) {
+    const execAuth = await verifyFirebaseTokenWithRole(input.idToken, 'executive');
+    const cmdAuth = !execAuth ? await verifyFirebaseTokenWithRole(input.idToken, 'commander') : null;
+    if (!execAuth && !cmdAuth) {
       console.error('[Forge] Unauthorized');
       return { questions: [], difficulty: input.difficulty, error: 'UNAUTHORIZED' };
     }
+    const uid = execAuth?.uid || cmdAuth!.uid;
 
-    const rl = rateLimiter.check(`ai:pdf:${auth.uid}`, { maxRequests: 5, windowMs: 60000, message: 'PDF Forge rate limit exceeded (5/min).' });
+    const rl = rateLimiter.check(`ai:pdf:${uid}`, { maxRequests: 5, windowMs: 60000, message: 'PDF Forge rate limit exceeded (5/min).' });
     if (!rl.allowed) {
       console.error('[Forge] Rate limited');
       return { questions: [], difficulty: input.difficulty, error: 'PDF_FORGE_RATE_LIMITED' };

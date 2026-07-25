@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
       getAdminDb().collection('users').where('role', '==', 'commander').select('displayName', 'disabled', 'deleted', 'createdAt', 'lastActive').get(),
       getAdminDb().collection('users').where('role', '==', 'gladiator').select('disabled', 'createdAt').get(),
       getAdminDb().collection('question_bank').select('createdBy', 'source').get(),
-      getAdminDb().collection('quizzes').get(),
+      getAdminDb().collection('quizzes').select('title','status','created_by','created_at','finished_at','participantCount','question_count','difficulty').limit(2000).get(),
       getAdminDb().collection('conversations').select('messageCount').get(),
       getAdminDb().collection('announcements').get(),
       getAdminDb().collection('auditLogs').orderBy('timestamp', 'desc').limit(50).get(),
@@ -155,26 +155,26 @@ export async function GET(req: NextRequest) {
       .map(d => d.id);
 
     if (finishedQuizIds.length > 0) {
-      const participantResults = await Promise.allSettled(
-        finishedQuizIds.map(quizId =>
-          getAdminDb()
-            .collection('quizzes')
-            .doc(quizId)
-            .collection('participants')
-            .get()
-        )
-      );
-      for (const result of participantResults) {
-        if (result.status === 'fulfilled') {
-          result.value.docs.forEach(p => {
-            const score = p.data().score || 0;
-            if (score > 0) {
-              totalScore += score;
-              scoredParticipants++;
-            }
-          });
-        } else {
-          console.error('[Workspace] Failed to fetch participants:', result.reason?.name, result.reason?.message);
+      const db = getAdminDb();
+      for (let i = 0; i < finishedQuizIds.length; i += 30) {
+        const chunk = finishedQuizIds.slice(i, i + 30);
+        const partResults = await Promise.allSettled(
+          chunk.map(quizId =>
+            db.collection('quizzes').doc(quizId).collection('participants').get()
+          )
+        );
+        for (const result of partResults) {
+          if (result.status === 'fulfilled') {
+            result.value.docs.forEach(p => {
+              const score = p.data().score || 0;
+              if (score > 0) {
+                totalScore += score;
+                scoredParticipants++;
+              }
+            });
+          } else {
+            console.error('[Workspace] Failed to fetch participants:', result.reason?.name, result.reason?.message);
+          }
         }
       }
     }

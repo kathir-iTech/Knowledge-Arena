@@ -10,11 +10,6 @@ interface RateLimitEntry {
 
 class SlidingWindowLimiter {
   private store = new Map<string, RateLimitEntry>();
-  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
-
-  constructor() {
-    this.cleanupTimer = setInterval(() => this.cleanup(), 60000);
-  }
 
   check(
     key: string,
@@ -39,6 +34,9 @@ class SlidingWindowLimiter {
     }
 
     entry.timestamps.push(now);
+    if (this.store.size > 10000) {
+      this.cleanup(now);
+    }
     return {
       allowed: true,
       remaining: config.maxRequests - entry.timestamps.length,
@@ -50,18 +48,13 @@ class SlidingWindowLimiter {
     this.store.delete(key);
   }
 
-  private cleanup() {
-    const now = Date.now();
+  private cleanup(now: number) {
     for (const [key, entry] of this.store.entries()) {
       entry.timestamps = entry.timestamps.filter(t => now - t < 120000);
       if (entry.timestamps.length === 0) {
         this.store.delete(key);
       }
     }
-  }
-
-  destroy() {
-    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
   }
 }
 
