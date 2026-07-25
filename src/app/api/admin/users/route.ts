@@ -16,7 +16,6 @@ async function authenticateExecutive(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  console.log('[AdminUsers][POST] Start');
   try {
     const ip = getClientIp(req);
     const rl = rateLimiter.check(`admin:${ip}`, Limits.LOGIN_PER_IP);
@@ -103,7 +102,6 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  console.log('[AdminUsers][GET] Start');
   try {
     const auth = await authenticateExecutive(req);
     if (!auth) {
@@ -128,7 +126,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
-    const users = snapshot.docs.map(doc => {
+    const users = snapshot.docs
+      .filter(doc => !doc.data().deleted)
+      .map(doc => {
       const data = doc.data();
       return {
         uid: doc.id,
@@ -232,7 +232,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  console.log('[AdminUsers][PATCH] Start');
   try {
     const auth = await authenticateExecutive(req);
     if (!auth) {
@@ -310,7 +309,6 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  console.log('[AdminUsers][DELETE] Start');
   try {
     const auth = await authenticateExecutive(req);
     if (!auth) {

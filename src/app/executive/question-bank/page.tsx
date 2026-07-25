@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { BookOpen, Plus, Search, Edit3, Trash2, ChevronDown, Tag, Layers, Brain, X, Sparkles, ChevronLeft, CheckSquare, Square, ListChecks } from 'lucide-react';
+import { BookOpen, Plus, Search, Edit3, Trash2, ChevronDown, Tag, Brain, X, Sparkles, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -64,14 +64,6 @@ interface GeneratedQuestion {
   explanation: string;
 }
 
-interface QuestionSetSummary {
-  id: string;
-  name: string;
-  category: string;
-  questionCount: number;
-  questionIds: string[];
-}
-
 export default function QuestionBankPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
@@ -103,15 +95,6 @@ export default function QuestionBankPage() {
   const [showForgeWithPreserved, setShowForgeWithPreserved] = useState(false);
   const forgeParams = useRef<{ pdfDataUri: string; diff: 'easy' | 'moderate' | 'hard'; count: number } | null>(null);
 
-  // Multi-select for Question Sets
-  const [selectedBankIds, setSelectedBankIds] = useState<Set<string>>(new Set());
-  const [showAddToSetDialog, setShowAddToSetDialog] = useState(false);
-  const [availableSets, setAvailableSets] = useState<QuestionSetSummary[]>([]);
-  const [selectedSetId, setSelectedSetId] = useState<string>('');
-  const [newSetName, setNewSetName] = useState('');
-  const [addingToSet, setAddingToSet] = useState(false);
-  const [loadingSets, setLoadingSets] = useState(false);
-
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 400);
     return () => clearTimeout(timer);
@@ -141,89 +124,6 @@ export default function QuestionBankPage() {
   useEffect(() => {
     if (user) fetchQuestions();
   }, [user, fetchQuestions]);
-
-  const fetchSets = useCallback(async () => {
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
-      setLoadingSets(true);
-      const res = await fetch('/api/executive/question-sets', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to fetch sets');
-      const data = await res.json();
-      setAvailableSets(data.sets || []);
-    } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load question sets.' });
-    } finally {
-      setLoadingSets(false);
-    }
-  }, [auth, toast]);
-
-  const openAddToSetDialog = () => {
-    fetchSets();
-    setSelectedSetId('');
-    setNewSetName('');
-    setShowAddToSetDialog(true);
-  };
-
-  const handleAddToSet = async () => {
-    if (selectedBankIds.size === 0) return;
-    setAddingToSet(true);
-    try {
-      const token = await auth.currentUser!.getIdToken();
-
-      let targetSetId = selectedSetId;
-
-      // Create new set if name provided
-      if (!targetSetId && newSetName.trim()) {
-        const createRes = await fetch('/api/executive/question-sets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ name: newSetName.trim(), category: 'General', tags: [] }),
-        });
-        if (!createRes.ok) throw new Error('Failed to create set');
-        const createData = await createRes.json();
-        targetSetId = createData.id;
-      }
-
-      if (!targetSetId) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Select an existing set or enter a name for a new one.' });
-        return;
-      }
-
-      // Get current set data to merge IDs
-      const getRes = await fetch(`/api/executive/question-sets?`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const getData = await getRes.json();
-      const targetSet = getData.sets?.find((s: QuestionSetSummary) => s.id === targetSetId);
-
-      const existingIds = targetSet?.questionIds || [];
-      const newIds = Array.from(selectedBankIds);
-      const mergedIds = [...new Set([...existingIds, ...newIds])];
-
-      if (mergedIds.length === existingIds.length) {
-        toast({ title: 'Already in Set', description: 'All selected questions are already in this set.' });
-        return;
-      }
-
-      const addedCount = mergedIds.length - existingIds.length;
-      const patchRes = await fetch('/api/executive/question-sets', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: targetSetId, questionIds: mergedIds }),
-      });
-      if (!patchRes.ok) throw new Error('Failed to update set');
-      toast({ title: 'Added to Set', description: `${addedCount} question(s) added to set.` });
-      setShowAddToSetDialog(false);
-      setSelectedBankIds(new Set());
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
-    } finally {
-      setAddingToSet(false);
-    }
-  };
 
   const resetForm = () => {
     setFormQuestion('');
@@ -310,23 +210,6 @@ export default function QuestionBankPage() {
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete question.' });
     }
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedBankIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAllVisible = () => {
-    setSelectedBankIds(new Set(questions.map(q => q.id)));
-  };
-
-  const clearSelection = () => {
-    setSelectedBankIds(new Set());
   };
 
   const handleQuestionsGenerated = (qList: GeneratedQuestion[], diff: string, dataUri?: string, questionCount?: number) => {
@@ -457,7 +340,7 @@ export default function QuestionBankPage() {
             </Select>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-auto min-w-[120px]">
-                <Layers className="w-4 h-4 mr-2" />
+                <BookOpen className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
@@ -485,40 +368,12 @@ export default function QuestionBankPage() {
             </Card>
           ) : (
             <div className="space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-sm text-muted-foreground">
-                  {selectedBankIds.size > 0 ? `${selectedBankIds.size} selected` : `${questions.length} questions`}
-                </span>
-                <div className="flex gap-2">
-                  {selectedBankIds.size > 0 && (
-                    <>
-                      <Button variant="outline" size="sm" onClick={clearSelection}>
-                        <X className="w-3 h-3 mr-1.5" /> Clear
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={openAddToSetDialog}>
-                        <Layers className="w-3 h-3 mr-1.5" /> Add to Set
-                      </Button>
-                    </>
-                  )}
-                  <Button variant="ghost" size="sm" onClick={selectAllVisible} disabled={questions.length === 0}>
-                    <ListChecks className="w-3 h-3 mr-1.5" /> Select All
-                  </Button>
-                </div>
-              </div>
               {questions.map(q => {
                 const diffBadgeVariant = q.difficulty === 'easy' ? 'border-success/30 text-success' : q.difficulty === 'hard' ? 'border-destructive/30 text-destructive' : 'border-warning/30 text-warning';
-                const isSelected = selectedBankIds.has(q.id);
                 return (
-                  <Card key={q.id} className={cn(isSelected && 'border-primary bg-primary/5')}>
+                  <Card key={q.id}>
                     <CardContent className="py-4">
                       <div className="flex items-start justify-between gap-3">
-                        <button
-                          onClick={() => toggleSelect(q.id)}
-                          className="shrink-0 mt-1 text-muted-foreground hover:text-primary transition-colors"
-                          aria-label={isSelected ? `Deselect question` : `Select question`}
-                        >
-                          {isSelected ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5" />}
-                        </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2">
                             <Badge variant="outline" className={diffBadgeVariant}>
@@ -717,74 +572,12 @@ export default function QuestionBankPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showAddToSetDialog} onOpenChange={setShowAddToSetDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add to Question Set</DialogTitle>
-            <DialogDescription>
-              {selectedBankIds.size} question(s) selected. Choose an existing set or create a new one.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Select Existing Set</Label>
-              {loadingSets ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : availableSets.length > 0 ? (
-                <div className="max-h-40 overflow-y-auto space-y-1">
-                  {availableSets.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => { setSelectedSetId(s.id); setNewSetName(''); }}
-                      className={cn(
-                        "w-full text-left p-2 rounded border text-sm transition-colors",
-                        selectedSetId === s.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
-                      )}
-                    >
-                      <span className="font-medium">{s.name}</span>
-                      <span className="text-xs text-muted-foreground ml-2">({s.questionCount} questions)</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No existing sets. Create a new one below.</p>
-              )}
-            </div>
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">or</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="newSetName">Create New Set</Label>
-              <Input
-                id="newSetName"
-                value={newSetName}
-                onChange={e => { setNewSetName(e.target.value); setSelectedSetId(''); }}
-                placeholder="e.g. Python Basics"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddToSetDialog(false)}>Cancel</Button>
-            <Button onClick={handleAddToSet} disabled={(!selectedSetId && !newSetName.trim()) || addingToSet}>
-              {addingToSet ? 'Adding...' : `Add to ${selectedSetId ? 'Set' : 'New Set'}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <AlertDialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Question?</AlertDialogTitle>
             <AlertDialogDescription>
-              This question will be permanently removed from the bank and all question sets. This action cannot be undone.
+              This question will be permanently removed from the bank. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

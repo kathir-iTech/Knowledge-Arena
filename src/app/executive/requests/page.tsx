@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Inbox, Check, X, MessageSquare, Search } from 'lucide-react';
+import { Inbox, Check, X, MessageSquare, Search, Paperclip, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -20,6 +20,13 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
+interface Attachment {
+  name: string;
+  type: string;
+  size: number;
+  data: string;
+}
+
 interface RequestItem {
   id: string;
   title: string;
@@ -32,6 +39,23 @@ interface RequestItem {
   handledAt: number | null;
   handledBy: string | null;
   executiveComment: string | null;
+  attachments: Attachment[];
+  replyAttachments: Attachment[];
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function downloadFile(attachment: Attachment) {
+  const link = document.createElement('a');
+  link.href = attachment.data;
+  link.download = attachment.name;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 const statusColors: Record<string, string> = {
@@ -58,6 +82,7 @@ export default function ExecutiveRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedRequest, setSelectedRequest] = useState<RequestItem | null>(null);
   const [comment, setComment] = useState('');
+  const [replyAttachments, setReplyAttachments] = useState<Attachment[]>([]);
   const [processing, setProcessing] = useState(false);
 
   const fetchRequests = useCallback(async () => {
@@ -89,18 +114,40 @@ export default function ExecutiveRequestsPage() {
       const res = await fetch('/api/executive/requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id, status: newStatus, comment }),
+        body: JSON.stringify({ id, status: newStatus, comment, replyAttachments }),
       });
       if (!res.ok) throw new Error('Failed to update');
       toast({ title: 'Request Updated', description: `Request marked as ${newStatus}.` });
       setSelectedRequest(null);
       setComment('');
+      setReplyAttachments([]);
       fetchRequests();
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to update request.' });
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleReplyFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const newAttachments: Attachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > 500 * 1024) {
+        toast({ variant: 'destructive', title: 'File too large', description: `${file.name} exceeds 500KB limit.` });
+        continue;
+      }
+      const data = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+      newAttachments.push({ name: file.name, type: file.type, size: file.size, data });
+    }
+    setReplyAttachments(prev => [...prev, ...newAttachments]);
+    e.target.value = '';
   };
 
   const filtered = requests.filter(r => {
@@ -197,7 +244,7 @@ export default function ExecutiveRequestsPage() {
         </div>
       )}
 
-      <Dialog open={!!selectedRequest} onOpenChange={(open) => { if (!open) { setSelectedRequest(null); setComment(''); } }}>
+      <Dialog open={!!selectedRequest} onOpenChange={(open) => { if (!open) { setSelectedRequest(null); setComment(''); setReplyAttachments([]); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Request Details</DialogTitle>
@@ -234,6 +281,25 @@ export default function ExecutiveRequestsPage() {
                   <p className="text-sm bg-muted/50 p-3 rounded-lg">{selectedRequest.description}</p>
                 </div>
               )}
+              {selectedRequest.attachments && selectedRequest.attachments.length > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Attachments</p>
+                  <div className="space-y-1">
+                    {selectedRequest.attachments.map((f, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-1.5 bg-muted/50 rounded-lg text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Paperclip className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{f.name}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">({formatFileSize(f.size)})</span>
+                        </div>
+                        <button onClick={() => downloadFile(f)} className="text-muted-foreground hover:text-primary">
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {selectedRequest.executiveComment && (
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Executive Note</p>
@@ -252,6 +318,30 @@ export default function ExecutiveRequestsPage() {
                       placeholder="Add a note about your decision..."
                       className="min-h-[80px]"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Reply Attachments</Label>
+                    <label className="flex items-center gap-2 px-3 py-2 border border-dashed rounded-lg cursor-pointer hover:bg-accent/30 text-sm text-muted-foreground">
+                      <Paperclip className="w-4 h-4" />
+                      <span>Attach files (max 500KB each)</span>
+                      <input type="file" multiple onChange={handleReplyFileSelect} className="hidden" accept=".pdf,.csv,.json,.xlsx,.txt" />
+                    </label>
+                    {replyAttachments.length > 0 && (
+                      <div className="space-y-1">
+                        {replyAttachments.map((f, i) => (
+                          <div key={i} className="flex items-center justify-between px-3 py-1.5 bg-muted/50 rounded-lg text-sm">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Paperclip className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                              <span className="truncate">{f.name}</span>
+                              <span className="text-xs text-muted-foreground shrink-0">({formatFileSize(f.size)})</span>
+                            </div>
+                            <button onClick={() => setReplyAttachments(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2 justify-end">
                     <Button variant="destructive" onClick={() => handleStatusUpdate(selectedRequest.id, 'rejected')} disabled={processing}>

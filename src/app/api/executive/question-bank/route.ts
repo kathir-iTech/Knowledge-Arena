@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     if (!executiveAuth && !commanderAuth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.log('[QuestionBank GET] auth:', executiveAuth?.uid || commanderAuth?.uid, 'role:', executiveAuth ? 'executive' : 'commander');
+
     const { searchParams } = new URL(req.url);
     const category = searchParams.get('category');
     const difficulty = searchParams.get('difficulty');
@@ -204,27 +204,13 @@ export async function DELETE(req: NextRequest) {
     const questionDoc = getAdminDb().collection('question_bank').doc(id);
     await questionDoc.delete();
 
-    const setsSnapshot = await getAdminDb().collection('question_sets')
-      .where('questionIds', 'array-contains', id)
-      .get();
-
-    if (!setsSnapshot.empty) {
-      const batch = getAdminDb().batch();
-      setsSnapshot.forEach(doc => {
-        const data = doc.data();
-        const updatedIds = (data.questionIds || []).filter((qid: string) => qid !== id);
-        batch.update(doc.ref, { questionIds: updatedIds, questionCount: updatedIds.length, updatedAt: Date.now() });
-      });
-      await batch.commit();
-    }
-
     await auditService.record({
       timestamp: Date.now(),
       actor: auth.uid,
       actorRole: 'executive',
       action: 'question_deleted',
       target: id,
-      metadata: { affectedSets: setsSnapshot.docs.length },
+      metadata: {},
     });
     await notificationService.create({
       type: 'operation_failed',

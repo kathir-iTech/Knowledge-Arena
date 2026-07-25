@@ -6,7 +6,7 @@ import { auditService } from '@/services/audit.service';
 export const runtime = 'nodejs';
 
 const ALLOWED_COLLECTIONS = new Set([
-  'users', 'question_bank', 'question_sets', 'quizzes',
+  'users', 'question_bank', 'quizzes',
   'auditLogs', 'announcements', 'conversations', 'platform_settings', 'executive_requests',
 ]);
 

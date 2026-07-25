@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const timestamp = Date.now();
     const backupId = `backup_${timestamp}`;
 
-    const collections = ['users', 'question_bank', 'question_sets', 'quizzes', 'auditLogs', 'conversations', 'announcements', 'platform_settings', 'executive_requests'];
+    const collections = ['users', 'question_bank', 'quizzes', 'auditLogs', 'conversations', 'announcements', 'platform_settings', 'executive_requests'];
 
     const backup: BackupData = {
       metadata: {

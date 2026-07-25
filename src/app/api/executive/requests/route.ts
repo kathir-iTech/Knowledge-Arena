@@ -37,7 +37,8 @@ export async function PATCH(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const { id, status, comment } = await req.json();
+    const body = await req.json();
+    const { id, status, comment, replyAttachments } = body;
 
     if (!id || !status) {
       return NextResponse.json({ error: 'id and status are required' }, { status: 400 });
@@ -47,12 +48,25 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
+    if (replyAttachments && Array.isArray(replyAttachments)) {
+      const totalSize = replyAttachments.reduce((sum: number, f: any) => sum + (f.size || 0), 0);
+      if (totalSize > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Total attachment size exceeds 5MB limit' }, { status: 400 });
+      }
+      for (const f of replyAttachments) {
+        if (!f.name || !f.type || !f.data) {
+          return NextResponse.json({ error: 'Each attachment must have name, type, and data' }, { status: 400 });
+        }
+      }
+    }
+
     const updateData: Record<string, unknown> = {
       status,
       handledBy: auth.uid,
       handledAt: Date.now(),
     };
     if (comment !== undefined) updateData.executiveComment = comment;
+    if (replyAttachments !== undefined) updateData.replyAttachments = replyAttachments;
 
     await getAdminDb().collection('executive_requests').doc(id).update(updateData);
 

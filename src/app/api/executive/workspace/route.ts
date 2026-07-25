@@ -69,7 +69,6 @@ export async function GET(req: NextRequest) {
       commandersSnap,
       gladiatorsSnap,
       questionsSnap,
-      setsSnap,
       quizzesSnap,
       conversationsSnap,
       announcementsSnap,
@@ -81,7 +80,6 @@ export async function GET(req: NextRequest) {
       getAdminDb().collection('users').where('role', '==', 'commander').get(),
       getAdminDb().collection('users').where('role', '==', 'gladiator').get(),
       getAdminDb().collection('question_bank').get(),
-      getAdminDb().collection('question_sets').get(),
       getAdminDb().collection('quizzes').get(),
       getAdminDb().collection('conversations').get(),
       getAdminDb().collection('announcements').get(),
@@ -92,7 +90,7 @@ export async function GET(req: NextRequest) {
 
     const totalCommanders = commandersSnap.docs.length;
     const activeCommanders = commandersSnap.docs.filter(d => !d.data().disabled && !d.data().deleted).length;
-    const disabledCommanders = commandersSnap.docs.filter(d => d.data().disabled).length;
+    const disabledCommanders = commandersSnap.docs.filter(d => d.data().disabled && !d.data().deleted).length;
 
     const totalGladiators = gladiatorsSnap.docs.length;
     const activeGladiators = gladiatorsSnap.docs.filter(d => !d.data().disabled).length;
@@ -150,25 +148,6 @@ export async function GET(req: NextRequest) {
       ? { uid: sortedCommanders[0][0], name: sortedCommanders[0][1].name, arenaCount: sortedCommanders[0][1].count }
       : null;
 
-    // Most used question set
-    const setUsageCount: Record<string, { count: number; name: string }> = {};
-    quizzesSnap.docs.forEach(d => {
-      const data = d.data();
-      const setId = data.questionSetId;
-      if (setId) {
-        if (!setUsageCount[setId]) {
-          const setDoc = setsSnap.docs.find(s => s.id === setId);
-          setUsageCount[setId] = { count: 0, name: setDoc?.data()?.name || setId };
-        }
-        setUsageCount[setId].count++;
-      }
-    });
-    const sortedSets = Object.entries(setUsageCount)
-      .sort(([, a], [, b]) => b.count - a.count);
-    const mostUsedQuestionSet = sortedSets[0]
-      ? { id: sortedSets[0][0], name: sortedSets[0][1].name, usageCount: sortedSets[0][1].count }
-      : null;
-
     // Average battle score
     let totalScore = 0;
     let scoredParticipants = 0;
@@ -223,6 +202,56 @@ export async function GET(req: NextRequest) {
 
     const unreadRequests = requestsSnap.docs.filter(d => d.data().status === 'pending').length;
 
+    // Recent battles (last 5 finished)
+    const sortedQuizzes = [...quizzesSnap.docs]
+      .sort((a, b) => (b.data().created_at || 0) - (a.data().created_at || 0))
+      .slice(0, 5);
+    const recentBattles = sortedQuizzes.map(d => {
+      const data = d.data();
+      const creatorDoc = commandersSnap.docs.find(c => c.id === data.created_by);
+      return {
+        id: d.id,
+        title: data.title || 'Untitled Battle',
+        commanderName: creatorDoc?.data()?.displayName || data.created_by || 'Unknown',
+        status: data.status || 'unknown',
+        participantCount: data.participantCount || 0,
+        createdAt: data.created_at || 0,
+        difficulty: data.difficulty || 'medium',
+      };
+    });
+
+    // Active commanders list (sorted by arena count)
+    const activeCommandersList = Object.entries(commanderArenaCount)
+      .sort(([, a], [, b]) => b.count - a.count)
+      .slice(0, 10)
+      .map(([uid, info]) => {
+        const doc = commandersSnap.docs.find(c => c.id === uid);
+        const data = doc?.data() || {};
+        return {
+          uid,
+          name: info.name,
+          arenaCount: info.count,
+          disabled: !!data.disabled,
+          lastActive: data.lastActive || null,
+        };
+      });
+
+    // Recent requests (last 5)
+    const sortedRequests = [...requestsSnap.docs]
+      .sort((a, b) => (b.data().createdAt || 0) - (a.data().createdAt || 0))
+      .slice(0, 5);
+    const recentRequests = sortedRequests.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        title: data.title || 'Untitled Request',
+        commanderName: data.commanderName || data.createdBy || 'Unknown',
+        status: data.status || 'pending',
+        createdAt: data.createdAt || 0,
+        type: data.type || 'general',
+      };
+    });
+
     const recentActivity = auditSnap.docs.map(d => {
       const data = d.data();
       return {
@@ -249,7 +278,6 @@ export async function GET(req: NextRequest) {
       activeGladiators,
       totalUsers,
       questionBank: questionsSnap.docs.length,
-      questionSets: setsSnap.docs.length,
       battles: totalBattles,
       completedBattles,
       activeBattles,
@@ -261,13 +289,15 @@ export async function GET(req: NextRequest) {
       questionsImported: aiImportedCount,
       aiGeneratedQuestions: aiGeneratedCount,
       mostActiveCommander,
-      mostUsedQuestionSet,
       averageBattleScore,
       averageBattleDuration: avgDurationMinutes,
       messages: messagesCount,
       conversations: conversationsSnap.docs.length,
       announcements: announcementsSnap.docs.length,
       unreadRequests,
+      recentBattles,
+      activeCommandersList,
+      recentRequests,
       recentActivity,
       systemHealth,
     });

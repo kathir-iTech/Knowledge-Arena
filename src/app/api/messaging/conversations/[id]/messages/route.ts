@@ -55,9 +55,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { text } = await req.json();
-    if (!text?.trim()) {
-      return NextResponse.json({ error: 'Message text is required' }, { status: 400 });
+    const { text, attachments } = await req.json();
+    if (!text?.trim() && (!attachments || attachments.length === 0)) {
+      return NextResponse.json({ error: 'Message text or attachment is required' }, { status: 400 });
+    }
+
+    if (attachments && Array.isArray(attachments)) {
+      const totalSize = attachments.reduce((sum: number, f: any) => sum + (f.size || 0), 0);
+      if (totalSize > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Total attachment size exceeds 5MB limit' }, { status: 400 });
+      }
+      for (const f of attachments) {
+        if (!f.name || !f.type || !f.data) {
+          return NextResponse.json({ error: 'Each attachment must have name, type, and data' }, { status: 400 });
+        }
+      }
     }
 
     const now = Date.now();
@@ -65,19 +77,24 @@ export async function POST(req: NextRequest) {
     // Use transaction to atomically add message + update conversation
     const result = await getAdminDb().runTransaction(async (transaction) => {
       const msgRef = verified.convRef.collection('messages').doc();
-      transaction.set(msgRef, {
-        text: text.trim(),
+      const msgData: Record<string, unknown> = {
+        text: text?.trim() || '',
         senderId: verified.auth.uid,
         senderRole: verified.role,
         timestamp: now,
-      });
+      };
+      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        msgData.attachments = attachments;
+      }
+      transaction.set(msgRef, msgData);
 
       const convSnap = await transaction.get(verified.convRef);
       const convData = convSnap.data()!;
       const otherParticipant = convData.participants.find((p: string) => p !== verified.auth.uid);
 
+      const displayText = text?.trim() || (attachments?.length ? `📎 ${attachments[0].name}${attachments.length > 1 ? ` +${attachments.length - 1} more` : ''}` : '');
       const updateData: Record<string, unknown> = {
-        lastMessage: { text: text.trim(), senderId: verified.auth.uid, senderRole: verified.role, timestamp: now },
+        lastMessage: { text: displayText, senderId: verified.auth.uid, senderRole: verified.role, timestamp: now, hasAttachments: !!(attachments?.length) },
         lastActivity: now,
       };
       if (otherParticipant) {
@@ -87,7 +104,7 @@ export async function POST(req: NextRequest) {
 
       transaction.update(verified.convRef, updateData);
 
-      return { id: msgRef.id, text: text.trim(), senderId: verified.auth.uid, senderRole: verified.role, timestamp: now };
+      return { id: msgRef.id, ...msgData };
     });
 
     await auditService.record({
@@ -98,10 +115,11 @@ export async function POST(req: NextRequest) {
       target: convId,
       metadata: { textLength: text.trim().length },
     });
+    const notifDesc = text?.trim() ? `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}` : '📎 File attachment';
     await notificationService.create({
       type: 'new_message',
       title: 'New Message',
-      description: `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}`,
+      description: notifDesc,
       createdAt: Date.now(),
       link: '/executive/messages',
       metadata: { conversationId: convId },

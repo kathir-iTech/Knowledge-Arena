@@ -19,25 +19,11 @@ export async function GET(req: NextRequest) {
     const limitParam = parseInt(searchParams.get('limit') || '100', 10);
     const limit = Number.isNaN(limitParam) ? 100 : Math.min(limitParam, 500);
 
-    let query: FirebaseFirestore.Query = getAdminDb()
-      .collection('auditLogs')
-      .orderBy('timestamp', 'desc');
-
-    if (action) {
-      query = query.where('action', '==', action);
-    }
-    if (actorRole) {
-      query = query.where('actorRole', '==', actorRole);
-    }
-    if (dateFrom) {
-      query = query.where('timestamp', '>=', parseInt(dateFrom, 10));
-    }
-    if (dateTo) {
-      query = query.where('timestamp', '<=', parseInt(dateTo, 10));
-    }
-
-    const snap = await query.limit(limit).get();
-    const logs = snap.docs.map(d => {
+    const snap = await getAdminDb().collection('auditLogs')
+      .orderBy('timestamp', 'desc')
+      .limit(limit * 2)
+      .get();
+    let logs = snap.docs.map(d => {
       const data = d.data();
       return {
         id: d.id,
@@ -50,6 +36,12 @@ export async function GET(req: NextRequest) {
         createdAt: data.createdAt,
       };
     });
+
+    if (action) logs = logs.filter(l => l.action === action);
+    if (actorRole) logs = logs.filter(l => l.actorRole === actorRole);
+    if (dateFrom) logs = logs.filter(l => l.timestamp >= parseInt(dateFrom, 10));
+    if (dateTo) logs = logs.filter(l => l.timestamp <= parseInt(dateTo, 10));
+    logs = logs.slice(0, limit);
 
     // Get unique actions and actor roles for filters
     const allActionsSnap = await getAdminDb().collection('auditLogs')

@@ -10,7 +10,8 @@ export async function POST(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const { title, type, description } = await req.json();
+    const body = await req.json();
+    const { title, type, description, attachments } = body;
 
     if (!title || !type) {
       return NextResponse.json({ error: 'Title and type are required' }, { status: 400 });
@@ -19,6 +20,21 @@ export async function POST(req: NextRequest) {
     const validTypes = ['question_bank', 'student_report', 'arena_approval', 'other'];
     if (!validTypes.includes(type)) {
       return NextResponse.json({ error: 'Invalid request type' }, { status: 400 });
+    }
+
+    if (attachments && Array.isArray(attachments)) {
+      const totalSize = attachments.reduce((sum: number, f: any) => sum + (f.size || 0), 0);
+      if (totalSize > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Total attachment size exceeds 5MB limit' }, { status: 400 });
+      }
+      for (const f of attachments) {
+        if (!f.name || !f.type || !f.data) {
+          return NextResponse.json({ error: 'Each attachment must have name, type, and data' }, { status: 400 });
+        }
+        if (f.data.length > 500 * 1024) {
+          return NextResponse.json({ error: `Attachment ${f.name} exceeds 500KB limit` }, { status: 400 });
+        }
+      }
     }
 
     const docRef = await getAdminDb().collection('executive_requests').add({
@@ -32,6 +48,8 @@ export async function POST(req: NextRequest) {
       handledAt: null,
       handledBy: null,
       executiveComment: null,
+      attachments: attachments || [],
+      replyAttachments: [],
     });
 
     await auditService.record({

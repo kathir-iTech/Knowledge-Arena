@@ -16,8 +16,7 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
   const specialPages = ['/kicked', '/cheating-detected'];
 
   useEffect(() => {
-    if (isLoading) { console.log('[StaffLogin] ClientLayout: isLoading, skipping'); return; }
-    console.log('[StaffLogin] ClientLayout: user=', user?.id, 'role=', user?.role, 'mustChangePassword=', user?.mustChangePassword, 'path=', pathname);
+    if (isLoading) return;
 
     const currentPath = pathname;
     if (specialPages.includes(currentPath)) {
