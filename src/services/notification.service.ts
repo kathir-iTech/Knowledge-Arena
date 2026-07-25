@@ -27,12 +27,15 @@ export const notificationService = {
   },
 
   async getAll(options?: { limit?: number; unreadOnly?: boolean }): Promise<Notification[]> {
-    let query = getAdminDb().collection('notifications').orderBy('createdAt', 'desc');
+    const snap = await getAdminDb().collection('notifications')
+      .orderBy('createdAt', 'desc')
+      .limit(options?.limit || 100)
+      .get();
+    let results = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() || d.data().createdAt } as Notification));
     if (options?.unreadOnly) {
-      query = query.where('read', '==', false);
+      results = results.filter(n => !n.read);
     }
-    const snap = await query.limit(options?.limit || 100).get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() || d.data().createdAt } as Notification));
+    return results;
   },
 
   async markRead(ids: string[]): Promise<void> {

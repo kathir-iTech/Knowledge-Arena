@@ -21,7 +21,6 @@ export async function GET(req: NextRequest) {
     const [
       usersSnap,
       questionsSnap,
-      setsSnap,
       quizzesSnap,
       auditSnap,
       conversationsSnap,
@@ -29,7 +28,6 @@ export async function GET(req: NextRequest) {
     ] = await Promise.all([
       getAdminDb().collection('users').get(),
       getAdminDb().collection('question_bank').get(),
-      getAdminDb().collection('question_sets').get(),
       getAdminDb().collection('quizzes').get(),
       getAdminDb().collection('auditLogs').orderBy('timestamp', 'desc').limit(100).get(),
       getAdminDb().collection('conversations').get(),
@@ -47,6 +45,7 @@ export async function GET(req: NextRequest) {
 
     for (const doc of usersSnap.docs) {
       const data = doc.data();
+      if (data.deleted) continue;
       const name = ((data.name || data.displayName || '') as string).toLowerCase();
       const email = (data.email || '' as string).toLowerCase();
       if (name.includes(query) || email.includes(query) || doc.id.includes(query)) {
@@ -72,20 +71,6 @@ export async function GET(req: NextRequest) {
           title: text.slice(0, 80),
           subtitle: `Question Bank · ${data.subject || data.category || 'General'}`,
           href: '/executive/question-bank',
-        });
-      }
-    }
-
-    for (const doc of setsSnap.docs) {
-      const data = doc.data();
-      const name = (data.name || '') as string;
-      if (name.toLowerCase().includes(query)) {
-        results.push({
-          type: 'Question Set',
-          id: doc.id,
-          title: name,
-          subtitle: `${(data.questions?.length || 0)} questions`,
-          href: '/executive/question-sets',
         });
       }
     }

@@ -32,7 +32,6 @@ const actionLabels: Record<string, string> = {
   question_edited: 'Edited Question',
   question_deleted: 'Deleted Question',
   question_imported: 'Imported Questions',
-  question_set_created: 'Created Question Set',
   arena_created: 'Created Arena',
   arena_started: 'Started Arena',
   arena_ended: 'Ended Arena',

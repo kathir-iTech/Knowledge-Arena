@@ -46,6 +46,7 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  poweredByHeader: false,
 };
 
 export default nextConfig;

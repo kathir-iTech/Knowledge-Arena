@@ -121,7 +121,7 @@ export default function ExecutiveBackupPage() {
             </p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Database className="w-3.5 h-3.5" />
-              <span>Includes: users, question bank, question sets, quizzes, audit logs, conversations, announcements, settings, requests</span>
+              <span>Includes: users, question bank, quizzes, audit logs, conversations, announcements, settings, requests</span>
             </div>
             <Button onClick={handleExport} disabled={exporting}>
               <Archive className="w-4 h-4 mr-2" />

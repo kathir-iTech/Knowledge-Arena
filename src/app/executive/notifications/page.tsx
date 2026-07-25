@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Bell, CheckCheck, Trash2, UserPlus, UserCheck, Swords, Zap,
   Megaphone, MessageSquare, AlertTriangle, AlertCircle, Clock,
-  Shield, BookOpen, Layers, Lock,
+  Shield, BookOpen, Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -40,7 +40,6 @@ const typeConfig: Record<string, { icon: React.ElementType; color: string }> = {
   password_reset: { icon: Lock, color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20' },
   question_added: { icon: BookOpen, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
   question_deleted: { icon: AlertTriangle, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-  question_set_created: { icon: Layers, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20' },
   arena_created: { icon: Swords, color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
   arena_started: { icon: Zap, color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
   arena_completed: { icon: Swords, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },

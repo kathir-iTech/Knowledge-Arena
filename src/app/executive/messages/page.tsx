@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
   MessageSquare, Send, Search, Plus, ArrowLeft,
-  Loader2, Megaphone, CheckCheck, RefreshCw, WifiOff
+  Loader2, Megaphone, CheckCheck, RefreshCw, WifiOff, Paperclip, X, Download
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -30,12 +30,35 @@ interface Conversation {
   createdAt: number;
 }
 
+interface Attachment {
+  name: string;
+  type: string;
+  size: number;
+  data: string;
+}
+
 interface Message {
   id: string;
   text: string;
   senderId: string;
   senderRole: string;
   timestamp: number;
+  attachments?: Attachment[];
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function downloadFile(attachment: Attachment) {
+  const link = document.createElement('a');
+  link.href = attachment.data;
+  link.download = attachment.name;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 interface Announcement {
@@ -64,6 +87,7 @@ export default function ExecutiveMessagesPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState('');
+  const [fileAttachments, setFileAttachments] = useState<Attachment[]>([]);
   const [sending, setSending] = useState(false);
   const [sidebarSearch, setSidebarSearch] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -176,8 +200,29 @@ export default function ExecutiveMessagesPage() {
     } catch {}
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const newFiles: Attachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > 500 * 1024) {
+        toast({ variant: 'destructive', title: 'File too large', description: `${file.name} exceeds 500KB limit.` });
+        continue;
+      }
+      const data = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+      newFiles.push({ name: file.name, type: file.type, size: file.size, data });
+    }
+    setFileAttachments(prev => [...prev, ...newFiles]);
+    e.target.value = '';
+  };
+
   const sendMessage = async () => {
-    if (!messageText.trim() || !activeConvId || sending) return;
+    if ((!messageText.trim() && fileAttachments.length === 0) || !activeConvId || sending) return;
     setSending(true);
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -185,10 +230,11 @@ export default function ExecutiveMessagesPage() {
       const res = await fetch(`/api/messaging/conversations/${activeConvId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: messageText.trim() }),
+        body: JSON.stringify({ text: messageText.trim(), attachments: fileAttachments }),
       });
       if (!res.ok) throw new Error('Failed to send');
       setMessageText('');
+      setFileAttachments([]);
       fetchConversations();
     } catch {
       toast({
@@ -279,6 +325,14 @@ export default function ExecutiveMessagesPage() {
   const getOtherParticipantId = (conv: Conversation) =>
     conv.participants.find(p => p !== user?.id) || '';
 
+  const filteredConversations = sidebarSearch
+    ? conversations.filter(c => {
+        const lastMsg = c.lastMessage;
+        const search = sidebarSearch.toLowerCase();
+        return lastMsg?.text?.toLowerCase().includes(search);
+      })
+    : conversations;
+
   const activeConv = conversations.find(c => c.id === activeConvId);
 
   const totalUnread = conversations.reduce((sum, c) =>
@@ -351,16 +405,20 @@ export default function ExecutiveMessagesPage() {
             <div className="flex-1 overflow-y-auto space-y-1">
               {loading ? (
                 [1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)
-              ) : conversations.length === 0 ? (
+              ) : filteredConversations.length === 0 ? (
                 <div className="flex flex-col items-center py-8 text-center">
                   <MessageSquare className="w-8 h-8 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">No conversations yet.</p>
-                  <Button variant="link" size="sm" onClick={openCompose} className="mt-1">
-                    Start a conversation
-                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    {sidebarSearch ? 'No conversations match your search.' : 'No conversations yet.'}
+                  </p>
+                  {!sidebarSearch && (
+                    <Button variant="link" size="sm" onClick={openCompose} className="mt-1">
+                      Start a conversation
+                    </Button>
+                  )}
                 </div>
               ) : (
-                conversations.map(conv => {
+                filteredConversations.map(conv => {
                   const unread = conv.unreadCount?.[user?.id || ''] || 0;
                   const lastMsg = conv.lastMessage;
                   const otherId = getOtherParticipantId(conv);
@@ -442,7 +500,26 @@ export default function ExecutiveMessagesPage() {
                               ? "bg-primary text-primary-foreground rounded-br-md"
                               : "bg-secondary text-secondary-foreground rounded-bl-md"
                           )}>
-                            <p>{msg.text}</p>
+                            {msg.text && <p>{msg.text}</p>}
+                            {msg.attachments && msg.attachments.length > 0 && (
+                              <div className={cn("space-y-1", msg.text ? "mt-2" : "")}>
+                                {msg.attachments.map((f, i) => (
+                                  <div key={i} className={cn(
+                                    "flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs",
+                                    isMine ? "bg-primary-foreground/10" : "bg-background/50"
+                                  )}>
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <Paperclip className="w-3 h-3 shrink-0 opacity-70" />
+                                      <span className="truncate">{f.name}</span>
+                                      <span className="opacity-60 shrink-0">({formatFileSize(f.size)})</span>
+                                    </div>
+                                    <button onClick={() => downloadFile(f)} className="opacity-70 hover:opacity-100 shrink-0">
+                                      <Download className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <div className={cn(
                               "flex items-center gap-1 mt-1",
                               isMine ? "justify-end" : "justify-start"
@@ -458,7 +535,25 @@ export default function ExecutiveMessagesPage() {
                   <div ref={messagesEndRef} />
                 </div>
                 <div className="p-3 border-t border-border/20 bg-background rounded-b-lg">
+                  {fileAttachments.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {fileAttachments.map((f, i) => (
+                        <div key={i} className="flex items-center gap-1 px-2 py-1 bg-muted/50 rounded-lg text-xs">
+                          <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" />
+                          <span className="truncate max-w-[120px]">{f.name}</span>
+                          <span className="text-muted-foreground">({formatFileSize(f.size)})</span>
+                          <button onClick={() => setFileAttachments(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive ml-0.5">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-2 items-end">
+                    <label className="cursor-pointer text-muted-foreground hover:text-foreground mb-0.5 shrink-0">
+                      <Paperclip className="w-5 h-5" />
+                      <input type="file" multiple onChange={handleFileSelect} className="hidden" accept=".pdf,.csv,.json,.xlsx,.txt,.png,.jpg,.jpeg,.gif" />
+                    </label>
                     <textarea
                       value={messageText}
                       onChange={e => setMessageText(e.target.value)}
@@ -476,7 +571,7 @@ export default function ExecutiveMessagesPage() {
                     <Button
                       size="icon"
                       onClick={sendMessage}
-                      disabled={!messageText.trim() || sending || offline}
+                      disabled={(!messageText.trim() && fileAttachments.length === 0) || sending || offline}
                       className="shrink-0 mb-0.5"
                       aria-label="Send message"
                     >

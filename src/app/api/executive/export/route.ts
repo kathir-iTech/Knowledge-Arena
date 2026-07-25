@@ -39,10 +39,6 @@ const exportHandlers: Record<string, (db: FirebaseFirestore.Firestore) => Promis
     const snap = await db.collection('question_bank').get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
-  'question-sets': async (db) => {
-    const snap = await db.collection('question_sets').get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  },
   battles: async (db) => {
     const snap = await db.collection('quizzes').get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));

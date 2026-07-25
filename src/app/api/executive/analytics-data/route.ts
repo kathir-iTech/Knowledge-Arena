@@ -5,12 +5,11 @@ import { getAdminDb } from '@/lib/firebase-admin';
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithRole(req, 'executive');
-  if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const db = getAdminDb();
 
     const now = Date.now();
@@ -121,7 +120,8 @@ export async function GET(req: NextRequest) {
         totalConversations: conversations.length,
       },
     });
-  } catch {
+  } catch (err: any) {
+    console.error('[AnalyticsData GET] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Analytics data fetch failed' }, { status: 500 });
   }
 }

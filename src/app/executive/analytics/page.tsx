@@ -11,7 +11,7 @@ const AnalyticsDashboard = dynamic(
 
 export default function ExecutiveAnalyticsPage() {
   return (
-    <div className="page-container page-section">
+    <div className="page-container page-section animate-in">
       <Suspense fallback={<LoadingScreen />}>
         <AnalyticsDashboard />
       </Suspense>

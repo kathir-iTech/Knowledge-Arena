@@ -199,28 +199,7 @@ export async function POST(req: NextRequest) {
     }
     if (opCount > 0) await batch.commit();
 
-    // 4. Create 10 Question Sets
-    const setIdMap: string[] = [];
-    for (let i = 0; i < 10; i++) {
-      const startIdx = i * 50;
-      const setQuestionIds = questionIds.slice(startIdx, startIdx + 50);
-      const docRef = getAdminDb().collection('question_sets').doc();
-      setIdMap.push(docRef.id);
-      await docRef.set({
-        name: `${topics[i]} Question Set`,
-        description: `A comprehensive set of questions covering ${topics[i]}.`,
-        category: topics[i],
-        difficulty: randomItem(['easy', 'medium', 'hard']),
-        tags: [topics[i].toLowerCase(), 'demo'],
-        questionIds: setQuestionIds,
-        questionCount: setQuestionIds.length,
-        createdBy: auth.uid,
-        createdAt: now - randomInt(0, 20 * 86400000),
-        updatedAt: now - randomInt(0, 10 * 86400000),
-      });
-    }
-
-    // 5. Create 5 Battles with participants
+    // 4. Create 5 Battles with participants
     for (let i = 0; i < 5; i++) {
       const roomCode = generateRoomCode();
       const commanderId = commanderIds[i % 3];
@@ -261,11 +240,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 6. Create 50 Audit Logs
+    // 5. Create 50 Audit Logs
     const auditActions = [
       'commander_created', 'commander_disabled', 'commander_enabled',
       'question_added', 'question_edited', 'question_deleted',
-      'question_set_created', 'arena_created', 'arena_started',
+      'arena_created', 'arena_started',
       'arena_ended', 'student_joined', 'student_kicked',
       'message_sent', 'announcement_sent', 'settings_changed',
     ];
@@ -295,7 +274,7 @@ export async function POST(req: NextRequest) {
     }
     if (opCount > 0) await batch.commit();
 
-    // 7. Create 5 Announcements
+    // 6. Create 5 Announcements
     const announcementTexts = [
       'Welcome to the Knowledge Arena demo! All commanders are encouraged to create their first arena.',
       'Platform maintenance scheduled for next Sunday. All battles will be paused during maintenance.',
@@ -315,7 +294,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 8. Create some conversations and messages
+    // 7. Create some conversations and messages
     for (let i = 0; i < Math.min(3, commanderIds.length); i++) {
       const participants = [auth.uid, commanderIds[i]];
       const convRef = getAdminDb().collection('conversations').doc();
@@ -344,7 +323,7 @@ export async function POST(req: NextRequest) {
       actorRole: 'executive',
       action: 'demo_generated',
       target: 'workspace',
-      metadata: { stats: { commanders: 3, gladiators: 25, questions: 500, questionSets: 10, battles: 5 } },
+      metadata: { stats: { commanders: 3, gladiators: 25, questions: 500, battles: 5 } },
     });
     await notificationService.create({
       type: 'ai_import_completed',
@@ -360,7 +339,6 @@ export async function POST(req: NextRequest) {
         commanders: 3,
         gladiators: 25,
         questions: 500,
-        questionSets: 10,
         battles: 5,
         auditLogs: 50,
         announcements: 5,
