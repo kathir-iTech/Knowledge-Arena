@@ -96,3 +96,51 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ error: 'Request id is required' }, { status: 400 });
+    }
+
+    const docRef = getAdminDb().collection('executive_requests').doc(id);
+    const existingDoc = await docRef.get();
+    if (!existingDoc.exists) {
+      return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+    }
+
+    // Delete the request document
+    await docRef.delete();
+
+    // Clean up related notifications
+    const notifSnap = await getAdminDb().collection('notifications')
+      .where('metadata.requestId', '==', id)
+      .get();
+    if (!notifSnap.empty) {
+      const batch = getAdminDb().batch();
+      notifSnap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: auth.uid,
+      actorRole: 'executive',
+      action: 'request_deleted',
+      target: id,
+      metadata: {},
+    });
+
+    return NextResponse.json({ success: true, id });
+  } catch (err: any) {
+    console.error('[ExecutiveRequests DELETE] Error:', err?.name, err?.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

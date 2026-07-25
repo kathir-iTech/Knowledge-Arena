@@ -4,6 +4,8 @@ import { getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 
+const PAGE_SIZE = 50;
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await verifyFirebaseTokenWithRole(req, 'executive');
@@ -16,13 +18,9 @@ export async function GET(req: NextRequest) {
     const actorRole = searchParams.get('actorRole');
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
-    const limitParam = parseInt(searchParams.get('limit') || '100', 10);
-    const limit = Number.isNaN(limitParam) ? 100 : Math.min(limitParam, 500);
-
-    const pageSize = Math.min(limit, 500);
     const cursor = searchParams.get('cursor');
 
-    let query = getAdminDb().collection('auditLogs').orderBy('timestamp', 'desc').limit(pageSize * 2);
+    let query = getAdminDb().collection('auditLogs').orderBy('timestamp', 'desc').limit(PAGE_SIZE + 1);
     if (cursor) {
       const cursorDoc = await getAdminDb().collection('auditLogs').doc(cursor).get();
       if (cursorDoc.exists) {
@@ -31,7 +29,10 @@ export async function GET(req: NextRequest) {
     }
     const snap = await query.get();
 
-    let logs = snap.docs.map(d => {
+    const hasMore = snap.docs.length > PAGE_SIZE;
+    const docs = snap.docs.slice(0, PAGE_SIZE);
+
+    let logs = docs.map(d => {
       const data = d.data();
       return {
         id: d.id,
@@ -41,7 +42,6 @@ export async function GET(req: NextRequest) {
         action: data.action,
         target: data.target,
         metadata: data.metadata || {},
-        createdAt: data.createdAt,
       };
     });
 
@@ -49,7 +49,8 @@ export async function GET(req: NextRequest) {
     if (actorRole) logs = logs.filter(l => l.actorRole === actorRole);
     if (dateFrom) logs = logs.filter(l => l.timestamp >= parseInt(dateFrom, 10));
     if (dateTo) logs = logs.filter(l => l.timestamp <= parseInt(dateTo, 10));
-    logs = logs.slice(0, pageSize);
+
+    const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : null;
 
     const allActions = new Set<string>();
     const allRoles = new Set<string>();
@@ -60,7 +61,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       logs,
-      nextCursor: logs.length === pageSize ? logs[logs.length - 1].id : null,
+      nextCursor,
+      hasMore,
       filters: {
         actions: Array.from(allActions).sort(),
         roles: Array.from(allRoles).sort(),

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Inbox, Check, X, MessageSquare, Search, Paperclip, Download } from 'lucide-react';
+import { Inbox, Check, X, MessageSquare, Search, Paperclip, Download, Archive, MoreHorizontal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -129,6 +129,28 @@ export default function ExecutiveRequestsPage() {
     }
   };
 
+  const handleDeleteRequest = async (id: string) => {
+    if (!window.confirm('Delete this request? This action cannot be undone.')) return;
+    setProcessing(true);
+    try {
+      const token = await auth.currentUser!.getIdToken();
+      const res = await fetch(`/api/executive/requests?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      toast({ title: 'Request Deleted', description: 'The request has been permanently removed.' });
+      setSelectedRequest(null);
+      setComment('');
+      setReplyAttachments([]);
+      fetchRequests();
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete request.' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleReplyFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -237,6 +259,15 @@ export default function ExecutiveRequestsPage() {
                   <Badge className={cn(statusColors[r.status] || '')}>
                     {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                   </Badge>
+                  {r.status !== 'pending' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteRequest(r.id); }}
+                      className="ml-2 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                      title="Delete request"
+                    >
+                      <Archive className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -355,6 +386,13 @@ export default function ExecutiveRequestsPage() {
                     </Button>
                   </div>
                 </>
+              )}
+              {selectedRequest.status !== 'pending' && (
+                <div className="flex justify-end pt-2 border-t border-border/30">
+                  <Button variant="outline" size="sm" onClick={() => handleDeleteRequest(selectedRequest.id)} disabled={processing}>
+                    <Archive className="w-4 h-4 mr-2" /> Delete Request
+                  </Button>
+                </div>
               )}
             </div>
           )}

@@ -8,8 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Download, Filter, Clock, Activity } from 'lucide-react';
+import { Search, Download, Filter, Clock, Activity, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +41,9 @@ const actionLabels: Record<string, string> = {
   message_sent: 'Message Sent',
   announcement_sent: 'Announcement Sent',
   settings_changed: 'Settings Changed',
+  request_deleted: 'Request Deleted',
+  request_handled: 'Request Handled',
+  gladiator_deleted: 'Gladiator Deleted',
 };
 
 const actionColors: Record<string, string> = {
@@ -50,25 +52,66 @@ const actionColors: Record<string, string> = {
   commander_disabled: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
   commander_enabled: 'text-green-600 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800',
   password_reset: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800',
+  gladiator_deleted: 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
+  request_deleted: 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
+  request_handled: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800',
 };
 
 function getActionColor(action: string): string {
   return actionColors[action] || 'text-muted-foreground bg-muted/30 border-border/50';
 }
 
+const actorRoleColors: Record<string, string> = {
+  executive: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+  commander: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  gladiator: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+};
+
+function formatTimestamp(ts: number): string {
+  if (!ts) return 'N/A';
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  if (diff < 60000) return 'Just now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function formatMetadata(metadata: Record<string, unknown>): { label: string; value: string }[] {
+  const entries: { label: string; value: string }[] = [];
+  for (const [key, val] of Object.entries(metadata)) {
+    if (val === null || val === undefined) continue;
+    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+    let value: string;
+    if (typeof val === 'object') {
+      value = JSON.stringify(val);
+    } else {
+      value = String(val);
+    }
+    if (value.length > 200) value = value.slice(0, 200) + '...';
+    entries.push({ label, value });
+  }
+  return entries;
+}
+
 export default function AuditLogsPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [allLogs, setAllLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [availableActions, setAvailableActions] = useState<string[]>([]);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
-  const [totalLogs, setTotalLogs] = useState(0);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (append = false) => {
     if (!user) return;
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -76,28 +119,40 @@ export default function AuditLogsPage() {
       const params = new URLSearchParams();
       if (actionFilter) params.set('action', actionFilter);
       if (roleFilter) params.set('actorRole', roleFilter);
+      if (append && nextCursor) params.set('cursor', nextCursor);
       const res = await fetch(`/api/executive/audit-logs?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setLogs(data.logs || []);
+        if (append) {
+          setAllLogs(prev => [...prev, ...(data.logs || [])]);
+        } else {
+          setAllLogs(data.logs || []);
+        }
+        setNextCursor(data.nextCursor || null);
+        setHasMore(data.hasMore || false);
         setAvailableActions(data.filters?.actions || []);
         setAvailableRoles(data.filters?.roles || []);
-        setTotalLogs(data.filters?.total || 0);
       }
     } catch {
       // silently fail
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [user, auth, actionFilter, roleFilter]);
+  }, [user, auth, actionFilter, roleFilter, nextCursor]);
 
   useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+    fetchLogs(false);
+  }, [actionFilter, roleFilter]);
 
-  const filtered = logs.filter(log => {
+  const loadMore = () => {
+    setLoadingMore(true);
+    fetchLogs(true);
+  };
+
+  const filtered = allLogs.filter(log => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -107,6 +162,15 @@ export default function AuditLogsPage() {
       (log.metadata?.displayName as string || '').toLowerCase().includes(q)
     );
   });
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const exportJSON = () => {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' });
@@ -123,7 +187,11 @@ export default function AuditLogsPage() {
       <div className="page-container animate-in space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-64 w-full" />
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -133,7 +201,7 @@ export default function AuditLogsPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
         <div className="space-y-1.5">
           <h1 className="text-page-title font-headline tracking-tight">Audit Logs</h1>
-          <p className="text-base text-muted-foreground">Track all platform actions. {totalLogs > 0 && `${totalLogs} total entries.`}</p>
+          <p className="text-base text-muted-foreground">Track all platform actions. {allLogs.length > 0 && `${allLogs.length} loaded.`}</p>
         </div>
         <Button variant="outline" onClick={exportJSON} disabled={filtered.length === 0}>
           <Download className="w-4 h-4 mr-2" />
@@ -177,16 +245,21 @@ export default function AuditLogsPage() {
 
       {filtered.length === 0 ? (
         <EmptyState icon={Activity}
-          title={logs.length === 0 ? 'No Audit Logs' : 'No Results'}
-          description={logs.length === 0 ? 'Audit logs will appear here as actions are performed on the platform.' : 'No logs match your search or filter criteria.'}
+          title={allLogs.length === 0 ? 'No Audit Logs' : 'No Results'}
+          description={allLogs.length === 0 ? 'Audit logs will appear here as actions are performed on the platform.' : 'No logs match your search or filter criteria.'}
         />
       ) : (
-        <Card>
-          <ScrollArea className="max-h-[70vh]">
-            <div className="divide-y divide-border/30">
-              {filtered.map(log => (
-                <div key={log.id} className="p-4 hover:bg-muted/20 transition-colors">
-                  <div className="flex items-start gap-3">
+        <div className="space-y-2">
+          {filtered.map(log => {
+            const isExpanded = expandedIds.has(log.id);
+            const metaEntries = formatMetadata(log.metadata);
+            return (
+              <Card key={log.id} className="hover:bg-accent/20 transition-colors">
+                <CardContent className="p-0">
+                  <button
+                    onClick={() => toggleExpand(log.id)}
+                    className="w-full flex items-start gap-3 p-4 text-left"
+                  >
                     <div className="shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center mt-0.5">
                       <Activity className="w-3.5 h-3.5 text-muted-foreground" />
                     </div>
@@ -195,29 +268,84 @@ export default function AuditLogsPage() {
                         <Badge className={cn("text-[10px] h-5 font-normal border", getActionColor(log.action))}>
                           {actionLabels[log.action] || log.action.replace(/_/g, ' ')}
                         </Badge>
-                        <Badge variant="outline" className="text-[10px] h-5">{log.actorRole}</Badge>
-                        <span className="text-xs text-muted-foreground font-mono">{new Date(log.timestamp).toLocaleString()}</span>
+                        <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", actorRoleColors[log.actorRole] || 'bg-muted text-muted-foreground')}>
+                          {log.actorRole}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{formatTimestamp(log.timestamp)}</span>
                       </div>
-                      <p className="text-sm mt-1">
-                        <span className="font-medium">Actor:</span> {log.actor}
-                      </p>
-                      {log.target && (
-                        <p className="text-sm text-muted-foreground">
-                          <span className="font-medium">Target:</span> {log.target}
-                        </p>
-                      )}
-                      {Object.keys(log.metadata).length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                          {JSON.stringify(log.metadata).slice(0, 120)}
-                        </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-sm font-medium">{log.actor}</span>
+                        {log.target && (
+                          <>
+                            <span className="text-xs text-muted-foreground">→</span>
+                            <span className="text-sm text-muted-foreground truncate max-w-[200px]">{log.target}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 mt-1">
+                      {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-0 border-t border-border/30 mt-0">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Actor</p>
+                          <p className="text-sm font-mono">{log.actor}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Action</p>
+                          <p className="text-sm">{actionLabels[log.action] || log.action.replace(/_/g, ' ')}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Role</p>
+                          <p className="text-sm capitalize">{log.actorRole}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Target</p>
+                          <p className="text-sm font-mono">{log.target || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Timestamp</p>
+                          <p className="text-sm">{log.timestamp ? new Date(log.timestamp).toLocaleString() : 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Log ID</p>
+                          <p className="text-xs font-mono text-muted-foreground">{log.id}</p>
+                        </div>
+                      </div>
+
+                      {metaEntries.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-border/20">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Metadata</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {metaEntries.map(({ label, value }) => (
+                              <div key={label} className="bg-muted/30 rounded-lg px-3 py-2">
+                                <p className="text-[10px] text-muted-foreground">{label}</p>
+                                <p className="text-sm font-mono break-all">{value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
-                  </div>
-                </div>
-              ))}
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {hasMore && (
+            <div className="flex justify-center pt-2 pb-4">
+              <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                {loadingMore ? 'Loading...' : 'Load More'}
+              </Button>
             </div>
-          </ScrollArea>
-        </Card>
+          )}
+        </div>
       )}
     </div>
   );

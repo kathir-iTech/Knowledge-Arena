@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
 import { validateAttachments } from '@/lib/file-security';
@@ -8,20 +7,37 @@ import { validateAttachments } from '@/lib/file-security';
 export const runtime = 'nodejs';
 
 async function verifyParticipant(req: NextRequest, convId: string) {
-  const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
-  const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
-  if (!executiveAuth && !commanderAuth) return null;
-  const auth = executiveAuth || commanderAuth!;
-  const role = executiveAuth ? 'executive' : 'commander';
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
 
-  // Verify user is a participant in this conversation
-  const convRef = getAdminDb().collection('conversations').doc(convId);
-  const conv = await convRef.get();
-  if (!conv.exists) return null;
-  const data = conv.data()!;
-  if (!data.participants?.includes(auth.uid)) return null;
+  const idToken = authHeader.slice(7);
+  let decodedToken;
+  try {
+    decodedToken = await getAdminAuth().verifyIdToken(idToken);
+  } catch {
+    return null;
+  }
 
-  return { auth, role, convRef, conv };
+  try {
+    const result = await getAdminDb().runTransaction(async (tx) => {
+      const userRef = getAdminDb().collection('users').doc(decodedToken.uid);
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) return null;
+      const role = userSnap.data()?.role;
+      if (role !== 'executive' && role !== 'commander') return null;
+
+      const convRef = getAdminDb().collection('conversations').doc(convId);
+      const convSnap = await tx.get(convRef);
+      if (!convSnap.exists) return null;
+      const convData = convSnap.data()!;
+      if (!convData.participants?.includes(decodedToken.uid)) return null;
+
+      return { auth: { uid: decodedToken.uid, email: decodedToken.email ?? null }, role, convRef };
+    });
+    return result;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
