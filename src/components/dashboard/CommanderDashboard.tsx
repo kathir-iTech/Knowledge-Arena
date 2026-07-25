@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
-import { LoadingScreen } from '@/components/LoadingScreen';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
@@ -363,7 +362,34 @@ export default function CommanderDashboard() {
     return result;
   }, [quizzes, debouncedQuery, sortKey, filterKey]);
 
-  if (loading) return <LoadingScreen message="Loading arenas..." />;
+  if (loading) {
+    return (
+      <div className="page-container safe-bottom" aria-busy="true" aria-label="Loading dashboard">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 safe-top" aria-hidden="true">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[14px] bg-muted animate-pulse" />
+              <div className="h-8 w-48 bg-muted rounded-lg animate-pulse" />
+            </div>
+            <div className="h-5 w-72 bg-muted rounded-lg animate-pulse ml-[3.25rem]" />
+          </div>
+          <div className="h-12 w-40 bg-muted rounded-xl animate-pulse" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10" aria-hidden="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />
+          ))}
+        </div>
+        <div className="h-10 w-full max-w-md bg-muted rounded-lg animate-pulse mb-6" aria-hidden="true" />
+        <div className="grid gap-4" aria-hidden="true">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-32 bg-muted rounded-xl animate-pulse" />
+          ))}
+        </div>
+        <span className="sr-only">Dashboard is loading...</span>
+      </div>
+    );
+  }
 
   const quickActions = [
     { label: 'Create Arena', icon: PlusCircle, href: '/create-quiz', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
@@ -384,7 +410,7 @@ export default function CommanderDashboard() {
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 page-section safe-top">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-[14px] bg-primary/10">
+            <div className="flex items-center justify-center w-10 h-10 rounded-[14px] bg-primary/10" aria-hidden="true">
               <Swords className="w-5 h-5 text-primary" />
             </div>
             <h1 className="text-page-title font-headline tracking-tight">Battle Control</h1>
@@ -392,7 +418,7 @@ export default function CommanderDashboard() {
           <p className="text-base text-muted-foreground pl-[3.25rem]">Welcome back, {user?.name || 'Commander'}. Ready to create an arena?</p>
         </div>
         <Button asChild size="lg" className="h-12 px-6 text-base font-semibold gap-2">
-          <Link href="/create-quiz"><PlusCircle className="h-4 w-4" />Create Arena</Link>
+          <Link href="/create-quiz"><PlusCircle className="h-4 w-4" aria-hidden="true" />Create Arena</Link>
         </Button>
       </header>
 
@@ -411,8 +437,9 @@ export default function CommanderDashboard() {
               key={action.label}
               onClick={() => router.push(action.href)}
               className="flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-border hover:border-primary/30 hover:bg-accent/30 transition-colors text-sm font-medium"
+              aria-label={action.label}
             >
-              <div className={cn('w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0', action.color)}>
+              <div className={cn('w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0', action.color)} aria-hidden="true">
                 <action.icon className="w-3.5 h-3.5" />
               </div>
               {action.label}
@@ -423,7 +450,7 @@ export default function CommanderDashboard() {
 
       {/* Stats Row */}
       {dashboardData && (
-        <section className="page-section">
+        <section className="page-section" aria-live="polite" aria-label="Platform statistics">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatCard icon={Swords} label="Total Battles" value={dashboardData.stats.totalBattles} color="text-blue-600" />
             <StatCard icon={PlayCircle} label="Active" value={dashboardData.stats.activeCount} color="text-emerald-600" />
@@ -436,10 +463,10 @@ export default function CommanderDashboard() {
       {/* Active + Upcoming Battles */}
       <div className="page-section grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Live Battles */}
-        <Card>
+        <Card aria-live="polite" aria-label="Active battles">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
+              <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
               </span>
@@ -468,10 +495,10 @@ export default function CommanderDashboard() {
         </Card>
 
         {/* Upcoming Battles */}
-        <Card>
+        <Card aria-live="polite" aria-label="Upcoming battles">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <Clock className="w-4 h-4" />
+              <Clock className="w-4 h-4" aria-hidden="true" />
               Upcoming Battles
             </CardTitle>
           </CardHeader>
@@ -500,14 +527,14 @@ export default function CommanderDashboard() {
       {/* Recent Battles + Pending Requests + Notifications */}
       <div className="page-section grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Battles */}
-        <Card>
+        <Card aria-live="polite" aria-label="Recent battles">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" />
+              <TrendingUp className="w-4 h-4" aria-hidden="true" />
               Recent Battles
             </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => router.push('/commander/history')}>
-              View All <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            <Button variant="ghost" size="sm" onClick={() => router.push('/commander/history')} aria-label="View all recent battles">
+              View All <ChevronRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" />
             </Button>
           </CardHeader>
           <CardContent>
@@ -530,20 +557,20 @@ export default function CommanderDashboard() {
         </Card>
 
         {/* Pending Requests */}
-        <Card>
+        <Card aria-live="polite" aria-label="Pending requests">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <Inbox className="w-4 h-4" />
+              <Inbox className="w-4 h-4" aria-hidden="true" />
               Pending Requests
             </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => router.push('/commander/requests')}>
-              View All <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            <Button variant="ghost" size="sm" onClick={() => router.push('/commander/requests')} aria-label="View all pending requests">
+              View All <ChevronRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" />
             </Button>
           </CardHeader>
           <CardContent>
             {dashboardData && dashboardData.pendingRequestsCount > 0 ? (
               <div className="p-3 rounded-[10px] bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-3">
-                <Inbox className="w-5 h-5 text-amber-600 shrink-0" />
+                <Inbox className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />
                 <div>
                   <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{dashboardData.pendingRequestsCount} pending request{dashboardData.pendingRequestsCount !== 1 ? 's' : ''}</p>
                   <p className="text-xs text-amber-600 dark:text-amber-400">Awaiting executive review</p>
@@ -559,11 +586,11 @@ export default function CommanderDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <MessageSquare className="w-4 h-4" />
+              <MessageSquare className="w-4 h-4" aria-hidden="true" />
               Messages
             </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => router.push('/commander/messages')}>
-              View All <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            <Button variant="ghost" size="sm" onClick={() => router.push('/commander/messages')} aria-label="View all messages">
+              View All <ChevronRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" />
             </Button>
           </CardHeader>
           <CardContent>
@@ -573,16 +600,16 @@ export default function CommanderDashboard() {
       </div>
 
       {/* Arena Library */}
-      <section className="page-section">
+      <section className="page-section" aria-label="Arena library">
         <div className="flex items-center gap-2.5 mb-4">
-          <Swords className="w-5 h-5 text-primary" />
+          <Swords className="w-5 h-5 text-primary" aria-hidden="true" />
           <h2 className="text-section-title tracking-tight">Arena Library</h2>
-          <span className="text-sm text-muted-foreground ml-auto">{filteredAndSorted.length} arena{filteredAndSorted.length !== 1 ? 's' : ''}</span>
+          <span className="text-sm text-muted-foreground ml-auto" aria-label={`${filteredAndSorted.length} arenas`}>{filteredAndSorted.length} arena{filteredAndSorted.length !== 1 ? 's' : ''}</span>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mb-6">
           <div className="relative flex-1 max-w-md">
-            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search arenas by name or room code..." className="pl-10 h-11" aria-label="Search arenas" />
           </div>
           <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)} className="h-11 rounded-[12px] border border-input bg-background px-4 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Sort quizzes">
@@ -604,6 +631,7 @@ export default function CommanderDashboard() {
                   filterKey === key ? "bg-primary text-primary-foreground shadow-elevation-small" : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
                 )}
                 aria-pressed={filterKey === key}
+                aria-label={`Filter: ${label}`}
               >
                 {label}
               </button>
@@ -618,15 +646,12 @@ export default function CommanderDashboard() {
             </div>
           ))}
           {filteredAndSorted.length === 0 && (
-            <div className="py-16 text-center border-2 border-dashed border-border/50 rounded-[18px]">
-              <Swords className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-              <p className="text-base text-muted-foreground mb-4">
-                {debouncedQuery ? 'No arenas match your search.' : 'No arenas have been created yet.'}
-              </p>
-              {!debouncedQuery && filterKey === 'all' && (
-                <Button asChild><Link href="/create-quiz"><PlusCircle className="mr-2 h-4 w-4" />Create Your First Arena</Link></Button>
-              )}
-            </div>
+            <EmptyState
+              icon={Swords}
+              title={debouncedQuery ? 'No Results' : 'No Arenas Yet'}
+              description={debouncedQuery ? 'Try a different search term or filter.' : 'Create your first arena to get started.'}
+              action={!debouncedQuery && filterKey === 'all' ? <Button asChild><Link href="/create-quiz"><PlusCircle className="mr-2 h-4 w-4" />Create Your First Arena</Link></Button> : undefined}
+            />
           )}
         </div>
       </section>

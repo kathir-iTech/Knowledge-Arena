@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 
+export const runtime = 'nodejs';
+
 export async function GET(req: NextRequest) {
   const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
   if (!executiveAuth) {
@@ -27,6 +29,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ commanders });
   } catch (err: any) {
+    console.error('[Commanders GET] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

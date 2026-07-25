@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { rateLimiter, Limits, getClientIp, buildRateLimitHeaders } from '@/lib/rate-limiter';
 
+export const runtime = 'nodejs';
+
 const VALID_TYPES = ['login', 'signup'] as const;
 type CheckType = (typeof VALID_TYPES)[number];
 
@@ -47,7 +49,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ allowed: true });
-  } catch {
+  } catch (err: unknown) {
+    console.error('[RateLimitCheck] Error:', err);
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 }

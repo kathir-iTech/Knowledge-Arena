@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFirebase } from '@/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
-import { computeAnalytics, type AnalyticsData, type QuestionDoc, type AnswerKeyDoc, type SubmissionDoc } from '@/services/analytics.service';
+import { computeAnalytics, type AnalyticsData, type AnswerKeyDoc, type SubmissionDoc } from '@/services/analytics.service';
+import type { QuestionDoc } from '@/lib/schemas';
 
 const CACHE_TTL = 5 * 60 * 1000;
 const cache = new Map<string, { data: AnalyticsData; expiresAt: number }>();

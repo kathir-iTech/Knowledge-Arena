@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 
+export const runtime = 'nodejs';
+
 export async function POST(req: NextRequest) {
   const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
   const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
+    console.error('[ConversationRead POST] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

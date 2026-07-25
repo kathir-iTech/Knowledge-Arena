@@ -1,12 +1,4 @@
-import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
-
-export interface QuestionDoc {
-  id: string;
-  text: string;
-  options: string[];
-  timer: number;
-  sort_index: number;
-}
+import type { ValidatedQuiz, ValidatedParticipant, QuestionDoc } from '@/lib/schemas';
 
 export interface AnswerKeyDoc {
   id: string;

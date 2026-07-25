@@ -324,6 +324,7 @@ export default function QuestionBankPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9"
+                aria-label="Search questions"
               />
             </div>
             <Select value={difficultyFilter} onValueChange={setDifficultyFilter}>

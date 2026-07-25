@@ -18,6 +18,15 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
+import type { QuestionDoc } from '@/lib/schemas';
+import {
+  COLLECTIONS,
+  PS_BLOCKED,
+  QUIZ_WAITING,
+  SCORE_BASE,
+  SCORE_TIMED_BONUS,
+  DEFAULT_TIMER_SECONDS,
+} from '@/lib/constants';
 
 function toMillis(val: unknown): number {
   if (typeof val === 'number') return val;
@@ -28,14 +37,6 @@ function toMillis(val: unknown): number {
 
 function getFirestore() {
   return initializeFirebase().firestore;
-}
-
-export interface QuestionDoc {
-  id: string;
-  text: string;
-  options: string[];
-  timer: number;
-  sort_index: number;
 }
 
 export const questionService = {
@@ -53,7 +54,7 @@ export const questionService = {
 
     for (const q of questions) {
       const questionId = uuidv4();
-      const questionRef = doc(db, 'quizzes', q.quiz_id, 'questions', questionId);
+      const questionRef = doc(db, COLLECTIONS.QUIZZES, q.quiz_id, COLLECTIONS.QUESTIONS, questionId);
       await setDoc(questionRef, {
         text: q.text,
         options: q.options,
@@ -75,7 +76,7 @@ export const questionService = {
   ): Promise<void> {
     const db = getFirestore();
     const creates = answerKeys.map(ak =>
-      setDoc(doc(db, 'quizzes', ak.quiz_id, 'answerKeys', ak.question_id), {
+      setDoc(doc(db, COLLECTIONS.QUIZZES, ak.quiz_id, COLLECTIONS.ANSWER_KEYS, ak.question_id), {
         correct_option_index: ak.correct_option_index,
       })
     );
@@ -85,7 +86,7 @@ export const questionService = {
   async getQuestionsByQuizId(quizId: string): Promise<QuestionDoc[]> {
     const db = getFirestore();
     const q = query(
-      collection(db, 'quizzes', quizId, 'questions'),
+      collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUESTIONS),
       orderBy('sort_index')
     );
     const snap = await getDocs(q);
@@ -95,7 +96,7 @@ export const questionService = {
   subscribeToQuestions(quizId: string, callback: (questions: QuestionDoc[]) => void, onError?: (error: Error) => void) {
     const db = getFirestore();
     const q = query(
-      collection(db, 'quizzes', quizId, 'questions'),
+      collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUESTIONS),
       orderBy('sort_index')
     );
     return onSnapshot(q, (snap) => {
@@ -110,11 +111,10 @@ export const questionService = {
     startTime: number
   ): Promise<void> {
     const db = getFirestore();
-    const questionRef = doc(db, 'quizzes', quizId, 'questions', questionId);
+    const questionRef = doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUESTIONS, questionId);
 
-    // Read the answer key (static data — safe outside transaction)
     const answerKeySnap = await getDoc(
-      doc(db, 'quizzes', quizId, 'answerKeys', questionId)
+      doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.ANSWER_KEYS, questionId)
     );
     if (!answerKeySnap.exists()) {
       console.warn('[evaluateQuestion] No answerKey for', quizId, questionId);
@@ -122,14 +122,10 @@ export const questionService = {
     }
     const correctIndex = answerKeySnap.data().correct_option_index;
 
-    // Read participants to enumerate who may have submitted
     const participantsSnap = await getDocs(
-      collection(db, 'quizzes', quizId, 'participants')
+      collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS)
     );
 
-    // Scoring...
-
-    // Single atomic transaction: read question → read each submission → write scores
     try {
       await runTransaction(db, async (transaction) => {
         const qSnap = await transaction.get(questionRef);
@@ -138,26 +134,25 @@ export const questionService = {
           return;
         }
         if (qSnap.data().scored) {
-          // already scored
           return;
         }
 
-        const timerSeconds = qSnap.data().timer || 30;
+        const timerSeconds = qSnap.data().timer || DEFAULT_TIMER_SECONDS;
         const timeLimit = timerSeconds * 1000;
 
         for (const pDoc of participantsSnap.docs) {
           const uid = pDoc.id;
 
-          const participantRef = doc(db, 'quizzes', quizId, 'participants', uid);
+          const participantRef = doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS, uid);
           const pSnap = await transaction.get(participantRef);
           if (!pSnap.exists()) continue;
-          if (pSnap.data().status === 'blocked') continue;
+          if (pSnap.data().status === PS_BLOCKED) continue;
 
           const subRef = doc(
             db,
-            'quizzes', quizId,
-            'questions', questionId,
-            'submissions', uid
+            COLLECTIONS.QUIZZES, quizId,
+            COLLECTIONS.QUESTIONS, questionId,
+            COLLECTIONS.SUBMISSIONS, uid
           );
           const subSnap = await transaction.get(subRef);
           if (!subSnap.exists()) continue;
@@ -170,7 +165,7 @@ export const questionService = {
           const clampedSubmittedAt = Math.max(submittedAt, startTime);
           const elapsed = clampedSubmittedAt - startTime;
           const timeFraction = Math.max(0, 1 - elapsed / timeLimit);
-          const scoreToAdd = Math.round(500 + timeFraction * 500);
+          const scoreToAdd = Math.round(SCORE_BASE + timeFraction * SCORE_TIMED_BONUS);
 
           if (scoreToAdd > 0) {
             transaction.update(participantRef, { score: increment(scoreToAdd) });
@@ -187,7 +182,7 @@ export const questionService = {
 
   async getAnswerKeys(quizId: string): Promise<Array<{ questionId: string; correct_option_index: number }>> {
     const db = getFirestore();
-    const snap = await getDocs(collection(db, 'quizzes', quizId, 'answerKeys'));
+    const snap = await getDocs(collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.ANSWER_KEYS));
     return snap.docs.map(d => ({ questionId: d.id, ...d.data() as { correct_option_index: number } }));
   },
 
@@ -198,21 +193,20 @@ export const questionService = {
   ): Promise<void> {
     const db = getFirestore();
 
-    const quizSnap = await getDoc(doc(db, 'quizzes', quizId));
+    const quizSnap = await getDoc(doc(db, COLLECTIONS.QUIZZES, quizId));
     if (!quizSnap.exists()) throw new Error('Quiz not found');
-    if (quizSnap.data().status !== 'waiting') throw new Error('Can only edit a waiting quiz');
+    if (quizSnap.data().status !== QUIZ_WAITING) throw new Error('Can only edit a waiting quiz');
 
-    // Track created docs for potential rollback
     const createdQuestions: string[] = [];
     const createdKeys: string[] = [];
 
     try {
-      const oldAkSnap = await getDocs(collection(db, 'quizzes', quizId, 'answerKeys'));
+      const oldAkSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.ANSWER_KEYS));
       await Promise.all(oldAkSnap.docs.map(d => deleteDoc(d.ref)));
 
-      const oldQSnap = await getDocs(collection(db, 'quizzes', quizId, 'questions'));
+      const oldQSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUESTIONS));
       await Promise.all(oldQSnap.docs.map(async (qDoc) => {
-        const subSnap = await getDocs(collection(db, 'quizzes', quizId, 'questions', qDoc.id, 'submissions'));
+        const subSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUESTIONS, qDoc.id, COLLECTIONS.SUBMISSIONS));
         await Promise.all(subSnap.docs.map(s => deleteDoc(s.ref)));
         await deleteDoc(qDoc.ref);
       }));
@@ -220,7 +214,7 @@ export const questionService = {
       const newIds: string[] = [];
       for (const q of questions) {
         const questionId = uuidv4();
-        await setDoc(doc(db, 'quizzes', quizId, 'questions', questionId), {
+        await setDoc(doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUESTIONS, questionId), {
           text: q.text,
           options: q.options,
           timer: q.timer,
@@ -231,19 +225,18 @@ export const questionService = {
       }
 
       const creates = answerKeys.map((ak, i) =>
-        setDoc(doc(db, 'quizzes', quizId, 'answerKeys', newIds[i]), {
+        setDoc(doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.ANSWER_KEYS, newIds[i]), {
           correct_option_index: ak.correct_option_index,
         }).then(() => newIds[i])
       );
       const keyIds = await Promise.all(creates);
       createdKeys.push(...keyIds);
 
-      await updateDoc(doc(db, 'quizzes', quizId), { question_count: questions.length });
+      await updateDoc(doc(db, COLLECTIONS.QUIZZES, quizId), { question_count: questions.length });
     } catch (e) {
-      // Rollback: delete any created questions and answer keys
       await Promise.all([
-        ...createdKeys.map(id => deleteDoc(doc(db, 'quizzes', quizId, 'answerKeys', id))),
-        ...createdQuestions.map(id => deleteDoc(doc(db, 'quizzes', quizId, 'questions', id))),
+        ...createdKeys.map(id => deleteDoc(doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.ANSWER_KEYS, id))),
+        ...createdQuestions.map(id => deleteDoc(doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUESTIONS, id))),
       ]);
       throw e;
     }
@@ -266,11 +259,11 @@ export const submissionService = {
     await setDoc(
       doc(
         db,
-        'quizzes',
+        COLLECTIONS.QUIZZES,
         submission.quiz_id,
-        'questions',
+        COLLECTIONS.QUESTIONS,
         submission.question_id,
-        'submissions',
+        COLLECTIONS.SUBMISSIONS,
         submission.user_id
       ),
       {

@@ -1,5 +1,6 @@
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
+import { COLLECTIONS, DEFAULT_PAGE_LIMIT } from '@/lib/constants';
 
 export interface AuditEntry {
   timestamp: number;
@@ -13,12 +14,12 @@ export interface AuditEntry {
 export const auditService = {
   async record(entry: AuditEntry): Promise<void> {
     try {
-      await getAdminDb().collection('auditLogs').add({
+      await getAdminDb().collection(COLLECTIONS.AUDIT_LOGS).add({
         ...entry,
         createdAt: Timestamp.fromMillis(entry.timestamp),
       });
     } catch {
-      // audit failures should never break the app
+      /* audit failures should never break the app */
     }
   },
 
@@ -30,7 +31,7 @@ export const auditService = {
     dateTo?: number;
   }): Promise<(AuditEntry & { id: string })[]> {
     let query: FirebaseFirestore.Query = getAdminDb()
-      .collection('auditLogs')
+      .collection(COLLECTIONS.AUDIT_LOGS)
       .orderBy('timestamp', 'desc');
 
     if (options?.action) {
@@ -46,17 +47,16 @@ export const auditService = {
       query = query.where('timestamp', '<=', options.dateTo);
     }
 
-    const snap = await query.limit(options?.limit || 100).get();
+    const snap = await query.limit(options?.limit || DEFAULT_PAGE_LIMIT).get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as AuditEntry & { id: string }));
   },
 
   async getRecent(limit = 20): Promise<(AuditEntry & { id: string })[]> {
     const snap = await getAdminDb()
-      .collection('auditLogs')
+      .collection(COLLECTIONS.AUDIT_LOGS)
       .orderBy('timestamp', 'desc')
       .limit(limit)
       .get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as AuditEntry & { id: string }));
   },
-
 };

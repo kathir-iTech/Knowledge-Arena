@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { LoadingScreen } from '@/components/LoadingScreen';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { participantService } from '@/services/participant.service';
 import { Swords, ExternalLink, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -27,7 +28,14 @@ export default function GladiatorHistoryPage() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  if (loading) return <LoadingScreen message="Loading battle history..." />;
+  if (loading) {
+    return (
+      <div className="page-container safe-bottom safe-top animate-in space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full rounded-[18px]" />
+      </div>
+    );
+  }
 
   return (
     <div className="page-container safe-bottom safe-top animate-in">
@@ -40,11 +48,7 @@ export default function GladiatorHistoryPage() {
       </div>
 
       {history.length === 0 ? (
-        <div className="py-16 text-center border-2 border-dashed border-border/50 rounded-[18px]">
-          <Swords className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-          <p className="text-base text-muted-foreground mb-4">No battles fought yet.</p>
-          <Button asChild><Link href="/gladiator/dashboard">Join a Battle</Link></Button>
-        </div>
+        <EmptyState icon={Swords} title="No Battles Fought Yet" description="Join a battle from your dashboard to start your journey." action={<Button asChild><Link href="/gladiator/dashboard">Join a Battle</Link></Button>} />
       ) : (
         <div className="-mx-4 md:mx-0 overflow-x-auto rounded-none md:rounded-[14px] border-x-0 md:border border-border/50 mobile-hide-overflow">
           <table className="w-full text-sm min-w-[360px] md:min-w-0">
