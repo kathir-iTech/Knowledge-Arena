@@ -35,12 +35,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const snapshot = await verified.convRef.collection('messages')
+    const { searchParams } = url;
+    const cursor = searchParams.get('cursor');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '100', 10), 200);
+
+    let query = verified.convRef.collection('messages')
       .orderBy('timestamp', 'asc')
-      .get();
+      .limit(limit);
+
+    if (cursor) {
+      const cursorDoc = await verified.convRef.collection('messages').doc(cursor).get();
+      if (cursorDoc.exists) {
+        query = query.startAfter(cursorDoc);
+      }
+    }
+
+    const snapshot = await query.get();
 
     const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    return NextResponse.json({ messages });
+    return NextResponse.json({
+      messages,
+      nextCursor: snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null,
+    });
   } catch (err: any) {
     console.error('[Messages GET] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -87,8 +103,11 @@ export async function POST(req: NextRequest) {
       transaction.set(msgRef, msgData);
 
       const convSnap = await transaction.get(verified.convRef);
+      if (!convSnap.exists) {
+        throw new Error('Conversation not found');
+      }
       const convData = convSnap.data()!;
-      const otherParticipant = convData.participants.find((p: string) => p !== verified.auth.uid);
+      const otherParticipant = (convData.participants || []).find((p: string) => p !== verified.auth.uid);
 
       const displayText = text?.trim() || (attachments?.length ? `📎 ${attachments[0].name}${attachments.length > 1 ? ` +${attachments.length - 1} more` : ''}` : '');
       const updateData: Record<string, unknown> = {

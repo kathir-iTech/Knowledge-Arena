@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
       .select('name', 'email', 'avatar', 'displayName', 'lastActive')
       .limit(200)
       .get();
-    let commanders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let commanders = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter((c: any) => c.deleted !== true);
 
     if (search) {
       const lower = search.toLowerCase();
@@ -27,7 +29,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ commanders });
+    return NextResponse.json({ commanders }, { headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=120' } });
   } catch (err: any) {
     console.error('[Commanders GET] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

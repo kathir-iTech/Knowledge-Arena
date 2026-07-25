@@ -49,7 +49,8 @@ export const notificationService = {
   },
 
   async markAllRead(): Promise<void> {
-    const snap = await getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).where('read', '==', false).get();
+    const snap = await getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).where('read', '==', false).limit(500).get();
+    if (snap.empty) return;
     const batch = getAdminDb().batch();
     snap.docs.forEach(d => batch.update(d.ref, { read: true }));
     await batch.commit();
@@ -60,7 +61,7 @@ export const notificationService = {
   },
 
   async getUnreadCount(): Promise<number> {
-    const snap = await getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).where('read', '==', false).get();
+    const snap = await getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).where('read', '==', false).limit(500).get();
     return snap.docs.length;
   },
 };

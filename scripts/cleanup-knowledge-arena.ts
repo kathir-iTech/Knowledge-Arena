@@ -211,6 +211,10 @@ async function dryRunFirestore(): Promise<void> {
     { path: 'quizzes', purpose: 'Quiz/arena metadata', count: 0, action: 'DELETE ALL' },
     { path: 'executive_requests', purpose: 'Commander-to-Executive requests', count: 0, action: 'DELETE ALL' },
     { path: 'question_bank', purpose: 'Reusable executive-managed questions', count: 0, action: 'DELETE ALL' },
+    { path: 'conversations', purpose: 'Messaging conversations', count: 0, action: 'DELETE ALL' },
+    { path: 'notifications', purpose: 'System notifications', count: 0, action: 'DELETE ALL' },
+    { path: 'auditLogs', purpose: 'Audit trail entries', count: 0, action: 'DELETE ALL' },
+    { path: 'announcements', purpose: 'Broadcast announcements', count: 0, action: 'DELETE ALL' },
     { path: 'platform_settings', purpose: 'Global platform config (single doc)', count: 0, action: 'PRESERVE' },
   ];
 
@@ -265,6 +269,10 @@ async function dryRunFirestore(): Promise<void> {
   console.log(`  Quiz subcollections del:  ${totalQuizSub}`);
   console.log(`  Executive requests del:   ${await countDocs('executive_requests')}`);
   console.log(`  Question bank del:        ${await countDocs('question_bank')}`);
+  console.log(`  Conversations del:        ${await countDocs('conversations')}`);
+  console.log(`  Notifications del:        ${await countDocs('notifications')}`);
+  console.log(`  Audit logs del:           ${await countDocs('auditLogs')}`);
+  console.log(`  Announcements del:        ${await countDocs('announcements')}`);
   console.log(`  Platform settings kept:   1 (global config)\n`);
 }
 
@@ -303,6 +311,22 @@ async function executeFirestoreCleanup(): Promise<void> {
   console.log('Deleting question_bank...');
   const deletedQB = await deleteAllDocsInCollection('question_bank');
   console.log(`  Deleted ${deletedQB} documents\n`);
+
+  console.log('Deleting conversations...');
+  const deletedConvs = await deleteAllDocsInCollection('conversations');
+  console.log(`  Deleted ${deletedConvs} documents`);
+
+  console.log('Deleting notifications...');
+  const deletedNotifs = await deleteAllDocsInCollection('notifications');
+  console.log(`  Deleted ${deletedNotifs} documents`);
+
+  console.log('Deleting audit logs...');
+  const deletedLogs = await deleteAllDocsInCollection('auditLogs');
+  console.log(`  Deleted ${deletedLogs} documents`);
+
+  console.log('Deleting announcements...');
+  const deletedAnns = await deleteAllDocsInCollection('announcements');
+  console.log(`  Deleted ${deletedAnns} documents`);
 
   console.log('Deleting user documents (except Executive)...');
   const deletedUsers = await deleteAllDocsInCollection('users', PRESERVED_UID);
@@ -355,6 +379,18 @@ async function verifyCleanup(): Promise<void> {
 
   const qb = await db.collection('question_bank').get();
   console.log(`Question bank: ${qb.size} (expected 0)`);
+
+  const convs = await db.collection('conversations').get();
+  console.log(`Conversations: ${convs.size} (expected 0)`);
+
+  const notifs = await db.collection('notifications').get();
+  console.log(`Notifications: ${notifs.size} (expected 0)`);
+
+  const audit = await db.collection('auditLogs').get();
+  console.log(`Audit logs: ${audit.size} (expected 0)`);
+
+  const anns = await db.collection('announcements').get();
+  console.log(`Announcements: ${anns.size} (expected 0)`);
 
   console.log('\n=== VERIFICATION COMPLETE ===\n');
 }

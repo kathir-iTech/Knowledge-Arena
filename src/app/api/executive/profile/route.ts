@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
         actionCount: recentActivity.length,
       },
       recentActivity: recentActivity.slice(0, 20),
-    });
+    }, { headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=120' } });
   } catch (err: any) {
     console.error('[Profile] Error:', err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

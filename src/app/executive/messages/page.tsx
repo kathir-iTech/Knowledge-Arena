@@ -322,8 +322,8 @@ export default function ExecutiveMessagesPage() {
     }
   };
 
-  const getOtherParticipantId = (conv: Conversation) =>
-    conv.participants.find(p => p !== user?.id) || '';
+  const getOtherParticipantId = (conv: Conversation | undefined) =>
+    (conv?.participants || []).find(p => p !== user?.id) || '';
 
   const filteredConversations = sidebarSearch
     ? conversations.filter(c => {

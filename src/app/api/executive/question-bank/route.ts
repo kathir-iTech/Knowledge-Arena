@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ questions });
+    return NextResponse.json({ questions }, { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=60' } });
   } catch (err: any) {
     console.error('[QuestionBank GET] error:', err?.name, err?.code, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

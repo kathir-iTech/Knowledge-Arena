@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       exportPreferences: { ...defaultSettings.exportPreferences, ...(data.exportPreferences || {}) },
     };
 
-    return NextResponse.json({ settings: merged });
+    return NextResponse.json({ settings: merged }, { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=60' } });
   } catch (err: any) {
     console.error('[Settings GET] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
