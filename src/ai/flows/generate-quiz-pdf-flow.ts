@@ -39,10 +39,19 @@ const GenerateQuizFromPDFOutputSchema = z.object({
 });
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
-const MODEL_FALLBACK_CHAIN = [
-  'gemini-2.5-flash',
-];
 const MAX_RETRIES_PER_MODEL = 1;
+
+const modelFallbackChain = async (): Promise<string[]> => {
+  try {
+    const { getAdminDb } = await import('@/lib/firebase-admin');
+    const snap = await getAdminDb().collection('platform_settings').doc('global').get();
+    const stored = snap.data()?.ai?.defaultModel;
+    if (stored && typeof stored === 'string') return [stored];
+  } catch {
+    // fall through to default
+  }
+  return ['gemini-2.5-flash'];
+};
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
@@ -234,7 +243,8 @@ async function callGeminiWithFallback(promptText: string): Promise<GeminiResult>
   let allQuota = true;
   let allTimeout = true;
 
-  for (const modelName of MODEL_FALLBACK_CHAIN) {
+  const chain = await modelFallbackChain();
+  for (const modelName of chain) {
     const result = await callModelWithRetry(promptText, modelName);
 
     if (result.ok) {
