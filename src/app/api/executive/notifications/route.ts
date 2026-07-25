@@ -34,6 +34,8 @@ export async function PATCH(req: NextRequest) {
       await notificationService.markAllRead();
     } else if (body.ids && Array.isArray(body.ids)) {
       await notificationService.markRead(body.ids);
+    } else {
+      return NextResponse.json({ error: 'Provide markAllRead or ids array' }, { status: 400 });
     }
     return NextResponse.json({ success: true });
   } catch (err: any) {

@@ -265,7 +265,6 @@ async function callGeminiWithFallback(promptText: string): Promise<GeminiResult>
 
 export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Promise<GenerateQuizFromPDFOutput> {
   try {
-    console.log('[Forge] PDF generation requested, difficulty:', input.difficulty, 'questionCount:', input.questionCount);
     const auth = await verifyFirebaseToken(input.idToken);
     if (!auth) {
       console.error('[Forge] Unauthorized');
@@ -284,8 +283,6 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
       console.error('[Forge] PDF too large:', decodedBytes);
       return { questions: [], difficulty: input.difficulty, error: 'PDF_TOO_LARGE' };
     }
-    console.log('[Forge] Authenticated, rate-limited, PDF size:', decodedBytes, 'bytes');
-
     return await generateQuizFromPDFFlow(input);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -408,9 +405,7 @@ const generateQuizFromPDFFlow = ai.defineFlow(
 
     let extracted;
     try {
-      console.log('[Forge] Starting PDF extraction...');
       extracted = await extractTextFromPdfBuffer(buffer);
-      console.log('[Forge] PDF extraction complete:', extracted.numpages, 'pages, text length:', extracted.text.length);
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       const code = err.message;
@@ -430,7 +425,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     }
 
     const text = extracted.text.replace(/\s+/g, ' ').trim();
-    console.log(`[PDF] Cleaned text length: ${text.length}, pages: ${extracted.numpages}, imageOnly: ${extracted.isImageOnly}`);
 
     if (text.length < 20) {
       if (extracted.isImageOnly) {
@@ -456,7 +450,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       } else {
         truncated = text.slice(0, MAX_INPUT_CHARS);
       }
-      console.log(`[PDF] Text truncated from ${text.length} to ${truncated.length} chars (sentence-boundary-aware)`);
     }
 
     const promptText = `Generate exactly ${input.questionCount} high-quality multiple-choice questions based on the following content.
@@ -482,9 +475,7 @@ Output format MUST be a JSON object with a "questions" array:
 Content:
 ${truncated}`;
 
-    console.log('[Forge] Starting Gemini generation...');
     const result = await callGeminiWithFallback(promptText);
-    console.log('[Forge] Gemini result:', result.ok ? 'success' : 'failed', 'engine:', result.ok ? result.engine : result.reason);
     if (!result.ok) {
       let errorMsg: string;
       switch (result.reason) {

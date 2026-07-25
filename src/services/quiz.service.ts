@@ -131,7 +131,7 @@ export const quizService = {
         const snap = await transaction.get(quizRef);
         if (!snap.exists()) throw new Error('Quiz not found');
         if (snap.data().current_question_index >= index) {
-          console.log('[advanceToQuestion] Already at/advanced, current:', snap.data().current_question_index, 'target:', index);
+          // already at target index
           return;
         }
         transaction.update(quizRef, {

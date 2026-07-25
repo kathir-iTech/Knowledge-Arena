@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
     const last30Days = now - 30 * dayMs;
 
     const [usersSnap, quizzesSnap, questionsSnap, conversationsSnap] = await Promise.all([
-      db.collection('users').get(),
-      db.collection('quizzes').get(),
-      db.collection('question_bank').get(),
-      db.collection('conversations').get(),
+      db.collection('users').select('role', 'createdAt').get(),
+      db.collection('quizzes').select('created_at', 'created_by', 'participantsCount', 'status').get(),
+      db.collection('question_bank').select('subject', 'category', 'createdBy', 'source', 'created_at').get(),
+      db.collection('conversations').select('createdAt', 'messageCount').get(),
     ]);
 
     const users: Record<string, any>[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));

@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       query = query.where('status', '==', status);
     }
 
-    const snapshot = await query.get();
+    const snapshot = await query.limit(200).get();
     const requests = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -68,7 +68,12 @@ export async function PATCH(req: NextRequest) {
     if (comment !== undefined) updateData.executiveComment = comment;
     if (replyAttachments !== undefined) updateData.replyAttachments = replyAttachments;
 
-    await getAdminDb().collection('executive_requests').doc(id).update(updateData);
+    const docRef = getAdminDb().collection('executive_requests').doc(id);
+    const existingDoc = await docRef.get();
+    if (!existingDoc.exists) {
+      return NextResponse.json({ error: 'Request not found' }, { status: 404 });
+    }
+    await docRef.update(updateData);
 
     await auditService.record({
       timestamp: Date.now(),

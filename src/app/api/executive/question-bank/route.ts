@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       query = query.where('difficulty', '==', difficulty);
     }
 
-    const snapshot = await query.get();
+    const snapshot = await query.limit(1000).get();
     let questions = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -170,7 +170,12 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
-    await getAdminDb().collection('question_bank').doc(id).update(updateData);
+    const docRef = getAdminDb().collection('question_bank').doc(id);
+    const existingDoc = await docRef.get();
+    if (!existingDoc.exists) {
+      return NextResponse.json({ error: 'Question not found' }, { status: 404 });
+    }
+    await docRef.update(updateData);
 
     await auditService.record({
       timestamp: Date.now(),
@@ -222,6 +227,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, id });
   } catch (err: any) {
+    console.error('[QuestionBank DELETE] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

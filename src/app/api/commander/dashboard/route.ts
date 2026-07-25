@@ -11,14 +11,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const now = Date.now();
     const quizzesSnap = await getAdminDb().collection('quizzes')
       .where('created_by', '==', auth.uid)
+      .select('status', 'title', 'participantCount', 'created_at', 'winnerName', 'score', 'created_by')
+      .limit(500)
       .get();
 
     const requestsSnap = await getAdminDb().collection('executive_requests')
-      .where('createdBy', '==', auth.uid)
+      .where('commanderId', '==', auth.uid)
       .where('status', '==', 'pending')
+      .limit(100)
       .get();
 
     const allQuizzes = quizzesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];

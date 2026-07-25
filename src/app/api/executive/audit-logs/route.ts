@@ -19,10 +19,18 @@ export async function GET(req: NextRequest) {
     const limitParam = parseInt(searchParams.get('limit') || '100', 10);
     const limit = Number.isNaN(limitParam) ? 100 : Math.min(limitParam, 500);
 
-    const snap = await getAdminDb().collection('auditLogs')
-      .orderBy('timestamp', 'desc')
-      .limit(limit * 2)
-      .get();
+    const pageSize = Math.min(limit, 500);
+    const cursor = searchParams.get('cursor');
+
+    let query = getAdminDb().collection('auditLogs').orderBy('timestamp', 'desc').limit(pageSize * 2);
+    if (cursor) {
+      const cursorDoc = await getAdminDb().collection('auditLogs').doc(cursor).get();
+      if (cursorDoc.exists) {
+        query = query.startAfter(cursorDoc);
+      }
+    }
+    const snap = await query.get();
+
     let logs = snap.docs.map(d => {
       const data = d.data();
       return {
@@ -41,26 +49,21 @@ export async function GET(req: NextRequest) {
     if (actorRole) logs = logs.filter(l => l.actorRole === actorRole);
     if (dateFrom) logs = logs.filter(l => l.timestamp >= parseInt(dateFrom, 10));
     if (dateTo) logs = logs.filter(l => l.timestamp <= parseInt(dateTo, 10));
-    logs = logs.slice(0, limit);
+    logs = logs.slice(0, pageSize);
 
-    // Get unique actions and actor roles for filters
-    const allActionsSnap = await getAdminDb().collection('auditLogs')
-      .select('action', 'actorRole')
-      .get();
     const allActions = new Set<string>();
     const allRoles = new Set<string>();
-    allActionsSnap.docs.forEach(d => {
-      const data = d.data();
-      if (data.action) allActions.add(data.action);
-      if (data.actorRole) allRoles.add(data.actorRole);
+    logs.forEach(l => {
+      if (l.action) allActions.add(l.action);
+      if (l.actorRole) allRoles.add(l.actorRole);
     });
 
     return NextResponse.json({
       logs,
+      nextCursor: logs.length === pageSize ? logs[logs.length - 1].id : null,
       filters: {
         actions: Array.from(allActions).sort(),
         roles: Array.from(allRoles).sort(),
-        total: allActionsSnap.docs.length,
       },
     });
   } catch (err: any) {
