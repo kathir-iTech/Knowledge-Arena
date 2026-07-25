@@ -3,6 +3,9 @@ import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
+import { validateAttachments } from '@/lib/file-security';
+
+export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   try {
@@ -48,15 +51,10 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    if (replyAttachments && Array.isArray(replyAttachments)) {
-      const totalSize = replyAttachments.reduce((sum: number, f: any) => sum + (f.size || 0), 0);
-      if (totalSize > 5 * 1024 * 1024) {
-        return NextResponse.json({ error: 'Total attachment size exceeds 5MB limit' }, { status: 400 });
-      }
-      for (const f of replyAttachments) {
-        if (!f.name || !f.type || !f.data) {
-          return NextResponse.json({ error: 'Each attachment must have name, type, and data' }, { status: 400 });
-        }
+    if (replyAttachments) {
+      const validation = validateAttachments(replyAttachments);
+      if (!validation.valid) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
       }
     }
 

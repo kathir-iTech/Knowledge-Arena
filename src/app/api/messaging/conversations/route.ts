@@ -4,6 +4,8 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
 
+export const runtime = 'nodejs';
+
 export async function GET(req: NextRequest) {
   const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
   const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
@@ -22,7 +24,8 @@ export async function GET(req: NextRequest) {
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .sort((a: any, b: any) => (b.lastActivity || 0) - (a.lastActivity || 0));
     return NextResponse.json({ conversations });
-  } catch {
+  } catch (err: any) {
+    console.error('[Conversations GET] Error:', err?.name, err?.message);
     return NextResponse.json({ conversations: [] });
   }
 }

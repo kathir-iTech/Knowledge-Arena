@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Download, Filter, Clock, Activity } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
 
 interface LogEntry {
@@ -154,6 +155,7 @@ export default function AuditLogsPage() {
           value={actionFilter}
           onChange={e => setActionFilter(e.target.value)}
           className="h-10 rounded-[10px] border border-input bg-background px-3 text-sm"
+          aria-label="Filter by action"
         >
           <option value="">All Actions</option>
           {availableActions.map(a => (
@@ -164,6 +166,7 @@ export default function AuditLogsPage() {
           value={roleFilter}
           onChange={e => setRoleFilter(e.target.value)}
           className="h-10 rounded-[10px] border border-input bg-background px-3 text-sm"
+          aria-label="Filter by role"
         >
           <option value="">All Roles</option>
           {availableRoles.map(r => (
@@ -173,14 +176,10 @@ export default function AuditLogsPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <Activity className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-            <p className="text-base text-muted-foreground">
-              {logs.length === 0 ? 'No audit logs recorded yet.' : 'No logs match your search.'}
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={Activity}
+          title={logs.length === 0 ? 'No Audit Logs' : 'No Results'}
+          description={logs.length === 0 ? 'Audit logs will appear here as actions are performed on the platform.' : 'No logs match your search or filter criteria.'}
+        />
       ) : (
         <Card>
           <ScrollArea className="max-h-[70vh]">

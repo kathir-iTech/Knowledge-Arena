@@ -101,7 +101,7 @@ knowledge-arena/
 │   ├── contexts/             # React contexts (Auth)
 │   ├── firebase/             # Firebase client config
 │   ├── hooks/                # Custom React hooks
-│   ├── lib/                  # Utilities, schemas, types, auth
+│   ├── lib/                  # Utilities, constants, schemas, types, auth
 │   └── services/             # Firestore service layer
 ├── Dockerfile                # Production container
 ├── firebase.json             # Firebase Hosting config

@@ -11,8 +11,15 @@ import {
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { generateRoomCode } from '@/lib/utils';
-
-const MAX_BATCH_OPS = 500;
+import {
+  COLLECTIONS,
+  QUIZ_WAITING,
+  PS_PLAYING,
+  ROOM_CODE_RETRIES,
+  MAX_BATCH_OPS,
+  MIN_TITLE_LENGTH,
+  MIN_QUESTIONS,
+} from '@/lib/constants';
 
 function getFirestore() {
   return initializeFirebase().firestore;
@@ -51,17 +58,16 @@ export const arenaCreationService = {
     const db = getFirestore();
     const { title, questions, createdBy } = input;
 
-    if (!title || title.length < 3) throw new Error('Title must be at least 3 characters');
+    if (!title || title.length < MIN_TITLE_LENGTH) throw new Error('Title must be at least 3 characters');
     if (!createdBy) throw new Error('Creator ID required');
     if (!questions.length) throw new Error('At least one question is required');
 
     const qCount = questions.length;
-    const nBatches = batchCount(qCount);
     const questionIds = planCreation(qCount);
 
     let roomCode = generateRoomCode();
-    for (let attempts = 0; attempts < 5; attempts++) {
-      const existing = await getDoc(doc(db, 'quizzes', roomCode));
+    for (let attempts = 0; attempts < ROOM_CODE_RETRIES; attempts++) {
+      const existing = await getDoc(doc(db, COLLECTIONS.QUIZZES, roomCode));
       if (!existing.exists()) break;
       roomCode = generateRoomCode();
     }
@@ -71,10 +77,10 @@ export const arenaCreationService = {
     }> = [];
 
     allBatchData.push({
-      ref: doc(db, 'quizzes', roomCode),
+      ref: doc(db, COLLECTIONS.QUIZZES, roomCode),
       data: {
         title,
-        status: 'waiting',
+        status: QUIZ_WAITING,
         current_question_index: -1,
         question_count: qCount,
         created_by: createdBy,
@@ -83,11 +89,11 @@ export const arenaCreationService = {
     });
 
     allBatchData.push({
-      ref: doc(db, 'quizzes', roomCode, 'participants', createdBy),
+      ref: doc(db, COLLECTIONS.QUIZZES, roomCode, COLLECTIONS.PARTICIPANTS, createdBy),
       data: {
         user_id: createdBy,
         score: 0,
-        status: 'playing',
+        status: PS_PLAYING,
         violations_count: 0,
         lastSeen: serverTimestamp(),
       },
@@ -98,7 +104,7 @@ export const arenaCreationService = {
       const q = questions[i];
 
       allBatchData.push({
-        ref: doc(db, 'quizzes', roomCode, 'questions', qId),
+        ref: doc(db, COLLECTIONS.QUIZZES, roomCode, COLLECTIONS.QUESTIONS, qId),
         data: {
           text: q.text,
           options: q.options,
@@ -108,7 +114,7 @@ export const arenaCreationService = {
       });
 
       allBatchData.push({
-        ref: doc(db, 'quizzes', roomCode, 'answerKeys', qId),
+        ref: doc(db, COLLECTIONS.QUIZZES, roomCode, COLLECTIONS.ANSWER_KEYS, qId),
         data: {
           correct_option_index: q.correctAnswerIndex,
         },

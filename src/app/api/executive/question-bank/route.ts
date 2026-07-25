@@ -4,6 +4,8 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
 
+export const runtime = 'nodejs';
+
 const validDifficulties = ['easy', 'medium', 'hard'];
 
 export async function GET(req: NextRequest) {

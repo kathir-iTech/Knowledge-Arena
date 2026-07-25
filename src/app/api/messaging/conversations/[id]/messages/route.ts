@@ -3,6 +3,9 @@ import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
+import { validateAttachments } from '@/lib/file-security';
+
+export const runtime = 'nodejs';
 
 async function verifyParticipant(req: NextRequest, convId: string) {
   const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
@@ -60,18 +63,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message text or attachment is required' }, { status: 400 });
     }
 
-    if (attachments && Array.isArray(attachments)) {
-      let totalBase64Size = 0;
-      for (const f of attachments) {
-        if (!f.name || !f.type || !f.data) {
-          return NextResponse.json({ error: 'Each attachment must have name, type, and data' }, { status: 400 });
-        }
-        const base64Data = typeof f.data === 'string' ? f.data.split(',')[1] || f.data : f.data;
-        totalBase64Size += base64Data.length;
-        f.data = base64Data;
-      }
-      if (totalBase64Size > 800 * 1024) {
-        return NextResponse.json({ error: 'Total attachment data exceeds 800KB limit' }, { status: 400 });
+    if (attachments) {
+      const validation = validateAttachments(attachments);
+      if (!validation.valid) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
       }
     }
 

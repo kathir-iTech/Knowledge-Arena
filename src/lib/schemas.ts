@@ -1,4 +1,12 @@
 
+export interface QuestionDoc {
+  id: string;
+  text: string;
+  options: string[];
+  timer: number;
+  sort_index: number;
+}
+
 export interface ValidatedQuiz {
   id: string;
   title: string;

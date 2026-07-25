@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   const auth = await verifyFirebaseTokenWithRole(request, 'executive');
   if (!auth) {

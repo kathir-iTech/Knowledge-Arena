@@ -4,6 +4,8 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
 
+export const runtime = 'nodejs';
+
 export async function GET(req: NextRequest) {
   const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
   const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ announcements });
   } catch (err: any) {
+    console.error('[Announcements GET] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

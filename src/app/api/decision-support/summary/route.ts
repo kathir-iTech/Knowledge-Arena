@@ -4,6 +4,8 @@ import { getDecisionSupportSummary } from '@/ai/engines/decision-support-engine'
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter, Limits, buildRateLimitHeaders } from '@/lib/rate-limiter';
 
+export const runtime = 'nodejs';
+
 export async function GET(req: Request) {
   try {
     const auth = await verifyFirebaseTokenWithRole(req, 'commander');
@@ -22,6 +24,7 @@ export async function GET(req: Request) {
     const data = await getDecisionSupportSummary();
     return NextResponse.json(data);
   } catch (error) {
+    console.error('[DecisionSupport] Error:', (error as Error)?.name, (error as Error)?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
