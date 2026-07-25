@@ -15,7 +15,7 @@ import {
   Users, Shield, User, BookOpen, Swords, MessageSquare,
   Inbox, Activity, Database, Wifi, BrainCircuit,
   CheckCircle2, AlertTriangle, AlertCircle, Clock, TrendingUp,
-  Calendar, Star, Award, Zap, PlayCircle, FlaskConical, Bell, BellOff,
+  Calendar, Star, Award, Zap, PlayCircle, Bell, BellOff,
   Plus, Settings, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -165,7 +165,6 @@ export default function ExecutiveWorkspacePage() {
   const [stats, setStats] = useState<WorkspaceStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [recentNotifications, setRecentNotifications] = useState<Array<{ id: string; type: string; title: string; createdAt: number }>>([]);
 
   const fetchStats = async () => {
@@ -215,29 +214,6 @@ export default function ExecutiveWorkspacePage() {
     return () => clearInterval(interval);
   }, [user, auth]);
 
-  const handleGenerateDemo = async () => {
-    setGenerating(true);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
-      const res = await fetch('/api/executive/demo', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Generation failed' }));
-        toast({ variant: 'destructive', title: 'Error', description: err.error });
-        return;
-      }
-      toast({ variant: 'success', title: 'Demo Workspace Generated', description: 'Sample data has been created. Refreshing...' });
-      fetchStats();
-    } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to generate demo data.' });
-    } finally {
-      setGenerating(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="page-container animate-in space-y-6">
@@ -275,10 +251,6 @@ export default function ExecutiveWorkspacePage() {
           <Button variant="outline" onClick={fetchStats} disabled={loading}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
-          </Button>
-          <Button variant="outline" onClick={handleGenerateDemo} disabled={generating}>
-            <FlaskConical className="w-4 h-4 mr-2" />
-            {generating ? 'Generating...' : 'Generate Demo'}
           </Button>
         </div>
       </div>
