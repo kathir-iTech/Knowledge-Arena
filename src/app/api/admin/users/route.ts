@@ -388,6 +388,111 @@ export async function DELETE(req: NextRequest) {
       });
     }
 
+    // Cascade cleanup
+    const db = getAdminDb();
+
+    // 1. Find and clean up conversations
+    const convSnap = await db.collection('conversations')
+      .where('participants', 'array-contains', uid)
+      .get();
+    if (!convSnap.empty) {
+      for (const convDoc of convSnap.docs) {
+        const messagesSnap = await convDoc.ref.collection('messages')
+          .select()
+          .get();
+        if (!messagesSnap.empty) {
+          const batches: any[] = [];
+          let batch = db.batch();
+          let opCount = 0;
+          for (const msgDoc of messagesSnap.docs) {
+            batch.delete(msgDoc.ref);
+            opCount++;
+            if (opCount >= 500) {
+              batches.push(batch.commit());
+              batch = db.batch();
+              opCount = 0;
+            }
+          }
+          if (opCount > 0) batches.push(batch.commit());
+          await Promise.all(batches);
+        }
+        await convDoc.ref.delete();
+      }
+    }
+
+    // 2. Delete notifications where metadata.commanderId === uid
+    const notifSnap = await db.collection('notifications')
+      .where('metadata.commanderId', '==', uid)
+      .get();
+    if (!notifSnap.empty) {
+      const batch = db.batch();
+      notifSnap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    // 3. Delete executive_requests where commanderId === uid
+    const reqSnap = await db.collection('executive_requests')
+      .where('commanderId', '==', uid)
+      .get();
+    if (!reqSnap.empty) {
+      const batch = db.batch();
+      reqSnap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    // 4. Delete audit log entries where actor === uid or target === uid
+    const auditActorSnap = await db.collection('auditLogs')
+      .where('actor', '==', uid)
+      .get();
+    const auditTargetSnap = await db.collection('auditLogs')
+      .where('target', '==', uid)
+      .get();
+    const auditIds = new Set<string>();
+    auditActorSnap.docs.forEach(d => auditIds.add(d.ref.id));
+    auditTargetSnap.docs.forEach(d => auditIds.add(d.ref.id));
+    if (auditIds.size > 0) {
+      const auditBatch = db.batch();
+      let auditCount = 0;
+      for (const id of auditIds) {
+        auditBatch.delete(db.collection('auditLogs').doc(id));
+        auditCount++;
+        if (auditCount >= 500) {
+          await auditBatch.commit();
+          break;
+        }
+      }
+      if (auditCount < 500) await auditBatch.commit();
+    }
+
+    // 5. For gladiators: clean up participant records
+    if (targetRole === 'gladiator') {
+      try {
+        const partSnap = await db.collectionGroup('participants')
+          .where('user_id', '==', uid)
+          .get();
+        if (!partSnap.empty) {
+          const partBatch = db.batch();
+          partSnap.docs.forEach(d => partBatch.delete(d.ref));
+          await partBatch.commit();
+        }
+      } catch (e: any) {
+        console.error('[AdminUsers][DELETE] participant cleanup failed:', e?.name, e?.code);
+      }
+
+      try {
+        const subSnap = await db.collectionGroup('submissions')
+          .where('user_id', '==', uid)
+          .get();
+        if (!subSnap.empty) {
+          const subBatch = db.batch();
+          subSnap.docs.forEach(d => subBatch.delete(d.ref));
+          await subBatch.commit();
+        }
+      } catch (e: any) {
+        console.error('[AdminUsers][DELETE] submission cleanup failed:', e?.name, e?.code);
+      }
+    }
+
     return NextResponse.json({ success: true, uid });
   } catch (err: any) {
     console.error('[AdminUsers][DELETE] Error:', err?.name, err?.code);

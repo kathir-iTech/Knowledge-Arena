@@ -13,7 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
   MessageSquare, Send, Search, Plus, ArrowLeft,
-  Loader2, Megaphone, CheckCheck, RefreshCw, WifiOff, Paperclip, X, Download
+  Loader2, Megaphone, CheckCheck, RefreshCw, WifiOff, Paperclip, X, Download,
+  FileText, ChevronDown, Trash2, Pencil, Check, Edit
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -24,6 +25,7 @@ interface Conversation {
   id: string;
   participants: string[];
   participantRoles: Record<string, string>;
+  participantNames: Record<string, string>;
   unreadCount: Record<string, number>;
   lastMessage?: { text: string; senderId: string; senderRole: string; timestamp: number };
   lastActivity: number;
@@ -59,6 +61,10 @@ function downloadFile(attachment: Attachment) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+function isImageFile(attachment: Attachment): boolean {
+  return attachment.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment.name);
 }
 
 interface Announcement {
@@ -100,12 +106,18 @@ export default function ExecutiveMessagesPage() {
   const [offline, setOffline] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [showingMobileList, setShowingMobileList] = useState(true);
-
   const [showCompose, setShowCompose] = useState(false);
   const [commanders, setCommanders] = useState<CommanderUser[]>([]);
   const [loadingCommanders, setLoadingCommanders] = useState(false);
   const [commanderSearch, setCommanderSearch] = useState('');
   const [selectedCommander, setSelectedCommander] = useState<CommanderUser | null>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [deleteConvDialog, setDeleteConvDialog] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<string | null>(null);
+  const [editAnnouncementText, setEditAnnouncementText] = useState('');
+  const [deleteAnnouncementId, setDeleteAnnouncementId] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     setOffline(!navigator.onLine);
@@ -161,6 +173,15 @@ export default function ExecutiveMessagesPage() {
   }, [user, fetchConversations, fetchAnnouncements]);
 
   useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      fetchConversations();
+      fetchAnnouncements();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [user, fetchConversations, fetchAnnouncements]);
+
+  useEffect(() => {
     if (!firestore || !activeConvId) return;
     const messagesRef = collection(firestore, 'conversations', activeConvId, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
@@ -171,6 +192,17 @@ export default function ExecutiveMessagesPage() {
     }, () => { setLoadingMessages(false); });
     return () => unsubscribe();
   }, [firestore, activeConvId]);
+
+  const handleScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    setShowScrollButton(el.scrollHeight - el.scrollTop - el.clientHeight > 200);
+  }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowScrollButton(false);
+  };
 
   const isNearBottom = useCallback(() => {
     const el = messagesContainerRef.current;
@@ -221,34 +253,119 @@ export default function ExecutiveMessagesPage() {
     e.target.value = '';
   };
 
+  const optimisticMsgRef = useRef<string | null>(null);
+
   const sendMessage = async () => {
     if ((!messageText.trim() && fileAttachments.length === 0) || !activeConvId || sending) return;
+    const optimisticId = 'opt_' + Date.now();
+    const textToSend = messageText.trim();
+    const filesToSend = [...fileAttachments];
     setSending(true);
+    const optimisticMessage: Message = {
+      id: optimisticId,
+      text: textToSend,
+      senderId: user?.id || '',
+      senderRole: 'executive',
+      timestamp: Date.now(),
+      attachments: filesToSend.length > 0 ? filesToSend : undefined,
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
+    optimisticMsgRef.current = optimisticId;
+    setMessageText('');
+    setFileAttachments([]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('No token');
       const res = await fetch(`/api/messaging/conversations/${activeConvId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: messageText.trim(), attachments: fileAttachments }),
+        body: JSON.stringify({ text: textToSend, attachments: filesToSend }),
       });
       if (!res.ok) throw new Error('Failed to send');
-      setMessageText('');
-      setFileAttachments([]);
+      optimisticMsgRef.current = null;
       fetchConversations();
     } catch {
+      setMessages(prev => prev.filter(m => m.id !== optimisticId));
       toast({
         variant: 'destructive',
         title: 'Failed to send',
         description: 'Your message could not be sent. Check your connection and try again.',
-        action: (
-          <Button variant="outline" size="sm" onClick={() => sendMessage()}>
-            <RefreshCw className="w-3 h-3 mr-1" /> Retry
-          </Button>
-        ),
       });
     } finally {
       setSending(false);
+    }
+  };
+
+  const deleteMessage = async (msgId: string) => {
+    if (!activeConvId) return;
+    setDeletingMessageId(msgId);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('No token');
+      const res = await fetch(`/api/messaging/conversations/${activeConvId}/messages/${msgId}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+    } catch {
+      toast({ variant: 'destructive', title: 'Failed to delete', description: 'Could not delete message.' });
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
+  const deleteConversation = async () => {
+    if (!activeConvId) return;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('No token');
+      const res = await fetch(`/api/messaging/conversations/${activeConvId}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      setDeleteConvDialog(false);
+      setActiveConvId(null);
+      setShowingMobileList(true);
+      fetchConversations();
+      toast({ title: 'Conversation deleted' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete conversation.' });
+    }
+  };
+
+  const editAnnouncement = async (id: string, text: string) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('No token');
+      const res = await fetch('/api/messaging/announcements', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id, text }),
+      });
+      if (!res.ok) throw new Error('Failed to edit');
+      setEditingAnnouncement(null);
+      setEditAnnouncementText('');
+      fetchAnnouncements();
+      toast({ title: 'Announcement updated' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to edit announcement.' });
+    }
+  };
+
+  const deleteAnnouncement = async (id: string) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('No token');
+      const res = await fetch(`/api/messaging/announcements?id=${id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      setDeleteAnnouncementId(null);
+      fetchAnnouncements();
+      toast({ title: 'Announcement deleted' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete announcement.' });
     }
   };
 
@@ -324,6 +441,12 @@ export default function ExecutiveMessagesPage() {
 
   const getOtherParticipantId = (conv: Conversation | undefined) =>
     (conv?.participants || []).find(p => p !== user?.id) || '';
+
+  const getOtherParticipantName = (conv: Conversation | undefined) => {
+    if (!conv) return 'Unknown';
+    const otherId = getOtherParticipantId(conv);
+    return conv.participantNames?.[otherId] || 'Commander';
+  };
 
   const filteredConversations = sidebarSearch
     ? conversations.filter(c => {
@@ -421,7 +544,7 @@ export default function ExecutiveMessagesPage() {
                 filteredConversations.map(conv => {
                   const unread = conv.unreadCount?.[user?.id || ''] || 0;
                   const lastMsg = conv.lastMessage;
-                  const otherId = getOtherParticipantId(conv);
+                  const otherName = getOtherParticipantName(conv);
                   return (
                     <button
                       key={conv.id}
@@ -435,7 +558,7 @@ export default function ExecutiveMessagesPage() {
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium text-sm truncate">
-                          Commander {otherId.slice(0, 8)}
+                          {otherName}
                         </span>
                         {lastMsg && (
                           <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
@@ -476,11 +599,20 @@ export default function ExecutiveMessagesPage() {
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </Button>
-                  <span className="font-medium text-sm">
-                    Commander {getOtherParticipantId(activeConv).slice(0, 8)}
+                  <span className="font-medium text-sm flex-1">
+                    {getOtherParticipantName(activeConv)}
                   </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeleteConvDialog(true)}
+                    aria-label="Delete conversation"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
-                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-3 relative">
                   {loadingMessages ? (
                     <div className="flex items-center justify-center h-full">
                       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -492,32 +624,70 @@ export default function ExecutiveMessagesPage() {
                   ) : (
                     messages.map(msg => {
                       const isMine = msg.senderId === user?.id;
+                      const isOptimistic = msg.id.startsWith('opt_');
                       return (
-                        <div key={msg.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
+                        <div key={msg.id} className={cn("flex group", isMine ? "justify-end" : "justify-start")}>
                           <div className={cn(
-                            "max-w-[85%] sm:max-w-[75%] p-3 rounded-2xl text-sm break-words whitespace-pre-wrap",
+                            "max-w-[85%] sm:max-w-[75%] p-3 rounded-2xl text-sm break-words whitespace-pre-wrap relative",
                             isMine
                               ? "bg-primary text-primary-foreground rounded-br-md"
-                              : "bg-secondary text-secondary-foreground rounded-bl-md"
+                              : "bg-secondary text-secondary-foreground rounded-bl-md",
+                            isOptimistic && "opacity-70"
                           )}>
+                            {isMine && msg.id !== optimisticMsgRef.current && (
+                              <button
+                                onClick={() => deleteMessage(msg.id)}
+                                className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity"
+                                aria-label="Delete message"
+                              >
+                                {deletingMessageId === msg.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                )}
+                              </button>
+                            )}
                             {msg.text && <p>{msg.text}</p>}
                             {msg.attachments && msg.attachments.length > 0 && (
                               <div className={cn("space-y-1", msg.text ? "mt-2" : "")}>
-                                {msg.attachments.map((f, i) => (
-                                  <div key={i} className={cn(
-                                    "flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs",
-                                    isMine ? "bg-primary-foreground/10" : "bg-background/50"
-                                  )}>
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <Paperclip className="w-3 h-3 shrink-0 opacity-70" />
-                                      <span className="truncate">{f.name}</span>
-                                      <span className="opacity-60 shrink-0">({formatFileSize(f.size)})</span>
+                                {msg.attachments.map((f, i) => {
+                                  const isImage = isImageFile(f);
+                                  return (
+                                    <div key={i}>
+                                      {isImage ? (
+                                        <button
+                                          onClick={() => setImagePreview(f.data)}
+                                          className="block max-w-[200px] rounded-lg overflow-hidden border border-border/30 hover:opacity-90 transition-opacity"
+                                        >
+                                          <img
+                                            src={f.data}
+                                            alt={f.name}
+                                            className="w-full h-auto object-cover max-h-[200px]"
+                                          />
+                                          <div className="flex items-center gap-1 px-2 py-1 text-[10px] text-muted-foreground bg-background/80">
+                                            <Download className="w-3 h-3" />
+                                            <span className="truncate">{f.name}</span>
+                                            <span>({formatFileSize(f.size)})</span>
+                                          </div>
+                                        </button>
+                                      ) : (
+                                        <div className={cn(
+                                          "flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs",
+                                          isMine ? "bg-primary-foreground/10" : "bg-background/50"
+                                        )}>
+                                          <div className="flex items-center gap-1.5 min-w-0">
+                                            <FileText className="w-3 h-3 shrink-0 opacity-70" />
+                                            <span className="truncate">{f.name}</span>
+                                            <span className="opacity-60 shrink-0">({formatFileSize(f.size)})</span>
+                                          </div>
+                                          <button onClick={() => downloadFile(f)} className="opacity-70 hover:opacity-100 shrink-0">
+                                            <Download className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
-                                    <button onClick={() => downloadFile(f)} className="opacity-70 hover:opacity-100 shrink-0">
-                                      <Download className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                             <div className={cn(
@@ -526,6 +696,7 @@ export default function ExecutiveMessagesPage() {
                             )}>
                               <span className="text-[10px] opacity-70">{formatTime(msg.timestamp)}</span>
                               {isMine && <CheckCheck className="w-3 h-3 opacity-70" />}
+                              {isOptimistic && <Loader2 className="w-3 h-3 animate-spin opacity-70" />}
                             </div>
                           </div>
                         </div>
@@ -533,6 +704,15 @@ export default function ExecutiveMessagesPage() {
                     })
                   )}
                   <div ref={messagesEndRef} />
+                  {showScrollButton && (
+                    <button
+                      onClick={scrollToBottom}
+                      className="sticky bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all z-10"
+                      aria-label="Scroll to bottom"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
                 <div className="p-3 border-t border-border/20 bg-background rounded-b-lg">
                   {fileAttachments.length > 0 && (
@@ -602,25 +782,65 @@ export default function ExecutiveMessagesPage() {
                 <p className="text-base text-muted-foreground">No announcements sent yet.</p>
               </div>
             ) : (
-              announcements.map(a => (
-                <Card key={a.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <Megaphone className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm whitespace-pre-wrap break-words">{a.text}</p>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                          <span>{formatTime(a.createdAt)}</span>
-                          <span>&middot;</span>
-                          <span>To: {a.targetRole === 'all_commanders' ? 'All Commanders' : 'Specific Commander'}</span>
-                          <span>&middot;</span>
-                          <span>{a.readBy?.length || 0} read</span>
+              announcements.map(a => {
+                const isMyAnnouncement = a.senderId === user?.id;
+                const isEditing = editingAnnouncement === a.id;
+                return (
+                  <Card key={a.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <Megaphone className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <textarea
+                                value={editAnnouncementText}
+                                onChange={e => setEditAnnouncementText(e.target.value)}
+                                className="w-full min-h-[80px] rounded-lg border border-input bg-background p-3 text-sm resize-none"
+                              />
+                              <div className="flex gap-2">
+                                <Button size="sm" onClick={() => editAnnouncement(a.id, editAnnouncementText)} disabled={!editAnnouncementText.trim()}>
+                                  <Check className="w-3 h-3 mr-1" /> Save
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => setEditingAnnouncement(null)}>Cancel</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm whitespace-pre-wrap break-words">{a.text}</p>
+                              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                <span>{formatTime(a.createdAt)}</span>
+                                <span>&middot;</span>
+                                <span>To: {a.targetRole === 'all_commanders' ? 'All Commanders' : 'Specific Commander'}</span>
+                                <span>&middot;</span>
+                                <span>{a.readBy?.length || 0} read</span>
+                              </div>
+                            </>
+                          )}
                         </div>
+                        {isMyAnnouncement && !isEditing && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => { setEditingAnnouncement(a.id); setEditAnnouncementText(a.text); }}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                              aria-label="Edit announcement"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteAnnouncementId(a.id)}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              aria-label="Delete announcement"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </div>
 
@@ -690,6 +910,40 @@ export default function ExecutiveMessagesPage() {
             <Button variant="outline" onClick={() => setShowCompose(false)}>Cancel</Button>
             <Button onClick={startConversation} disabled={!selectedCommander}>Start Conversation</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteConvDialog} onOpenChange={setDeleteConvDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Conversation</DialogTitle>
+            <DialogDescription>Are you sure? This will permanently delete this conversation and all its messages.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConvDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={deleteConversation}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteAnnouncementId} onOpenChange={() => setDeleteAnnouncementId(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Announcement</DialogTitle>
+            <DialogDescription>Are you sure you want to delete this announcement?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteAnnouncementId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteAnnouncementId && deleteAnnouncement(deleteAnnouncementId)}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!imagePreview} onOpenChange={() => setImagePreview(null)}>
+        <DialogContent className="sm:max-w-3xl">
+          {imagePreview && (
+            <img src={imagePreview} alt="Preview" className="w-full h-auto max-h-[80vh] object-contain rounded-lg" />
+          )}
         </DialogContent>
       </Dialog>
     </div>

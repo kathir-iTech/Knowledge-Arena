@@ -80,3 +80,94 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function PUT(req: NextRequest) {
+  const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
+  if (!executiveAuth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const { id, text } = await req.json();
+    if (!id || !text?.trim()) {
+      return NextResponse.json({ error: 'id and text are required' }, { status: 400 });
+    }
+
+    const ref = getAdminDb().collection('announcements').doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) {
+      return NextResponse.json({ error: 'Announcement not found' }, { status: 404 });
+    }
+
+    const existing = doc.data()!;
+    if (existing.senderId !== executiveAuth.uid) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    await ref.update({
+      text: text.trim(),
+      editedAt: Date.now(),
+    });
+
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: executiveAuth.uid,
+      actorRole: 'executive',
+      action: 'announcement_edited',
+      target: id,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error('[Announcements PUT] Error:', err?.name, err?.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
+  if (!executiveAuth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(req.url);
+    let id = searchParams.get('id');
+    if (!id) {
+      try {
+        const body = await req.json();
+        id = body?.id;
+      } catch {}
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+
+    const ref = getAdminDb().collection('announcements').doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) {
+      return NextResponse.json({ error: 'Announcement not found' }, { status: 404 });
+    }
+
+    const existing = doc.data()!;
+    if (existing.senderId !== executiveAuth.uid) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    await ref.delete();
+
+    await auditService.record({
+      timestamp: Date.now(),
+      actor: executiveAuth.uid,
+      actorRole: 'executive',
+      action: 'announcement_deleted',
+      target: id,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error('[Announcements DELETE] Error:', err?.name, err?.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
