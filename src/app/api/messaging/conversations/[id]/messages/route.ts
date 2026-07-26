@@ -106,6 +106,13 @@ export async function POST(req: NextRequest) {
 
     // Use transaction to atomically add message + update conversation
     const result = await getAdminDb().runTransaction(async (transaction) => {
+      const convSnap = await transaction.get(verified.convRef);
+      if (!convSnap.exists) {
+        throw new Error('Conversation not found');
+      }
+      const convData = convSnap.data()!;
+      const otherParticipant = (convData.participants || []).find((p: string) => p !== verified.auth.uid);
+
       const msgRef = verified.convRef.collection('messages').doc();
       const msgData: Record<string, unknown> = {
         text: text?.trim() || '',
@@ -117,13 +124,6 @@ export async function POST(req: NextRequest) {
         msgData.attachments = attachments;
       }
       transaction.set(msgRef, msgData);
-
-      const convSnap = await transaction.get(verified.convRef);
-      if (!convSnap.exists) {
-        throw new Error('Conversation not found');
-      }
-      const convData = convSnap.data()!;
-      const otherParticipant = (convData.participants || []).find((p: string) => p !== verified.auth.uid);
 
       const displayText = text?.trim() || (attachments?.length ? `📎 ${attachments[0].name}${attachments.length > 1 ? ` +${attachments.length - 1} more` : ''}` : '');
       const updateData: Record<string, unknown> = {

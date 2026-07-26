@@ -7,14 +7,14 @@ import { notificationService } from '@/services/notification.service';
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
-  const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
-  const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
-  if (!executiveAuth && !commanderAuth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const auth = executiveAuth || commanderAuth!;
-
   try {
+    const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
+    const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
+    if (!executiveAuth && !commanderAuth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const auth = executiveAuth || commanderAuth!;
+
     const snapshot = await getAdminDb().collection('conversations')
       .where('participants', 'array-contains', auth.uid)
       .limit(200)
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ conversations });
   } catch (err: any) {
     console.error('[Conversations GET] Error:', err?.name, err?.message);
-    return NextResponse.json({ conversations: [] });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

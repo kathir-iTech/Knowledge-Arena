@@ -1,12 +1,23 @@
 import { initializeApp, getApps, getApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { firebaseConfig } from '@/firebase/config';
+import { existsSync, readFileSync } from 'fs';
+
+function loadServiceAccountKey(): string | null {
+  const fromEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (fromEnv) return fromEnv;
+  const fromPath = process.env.SERVICE_ACCOUNT_PATH;
+  if (fromPath && existsSync(fromPath)) return readFileSync(fromPath, 'utf-8');
+  const localPath = 'service-account.json';
+  if (existsSync(localPath)) return readFileSync(localPath, 'utf-8');
+  return null;
+}
 
 function initAdmin() {
   if (getApps().length) return getApp();
 
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  const raw = loadServiceAccountKey();
   if (raw) {
     let parsed: Record<string, unknown>;
     try {
@@ -64,14 +75,24 @@ function initAdmin() {
   }
 }
 
+const globalForFirebase = globalThis as any;
+let _db = globalForFirebase.__firebaseDb as Firestore | undefined;
+let _auth = globalForFirebase.__firebaseAuth as ReturnType<typeof getAuth> | undefined;
+
 export function getAdminDb() {
+  if (_db) return _db;
   initAdmin();
-  return getFirestore();
+  _db = getFirestore();
+  globalForFirebase.__firebaseDb = _db;
+  return _db;
 }
 
 export function getAdminAuth() {
+  if (_auth) return _auth;
   initAdmin();
-  return getAuth();
+  _auth = getAuth();
+  globalForFirebase.__firebaseAuth = _auth;
+  return _auth;
 }
 
 export async function fetchDocsWithToken(
