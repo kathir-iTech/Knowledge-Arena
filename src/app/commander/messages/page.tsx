@@ -11,14 +11,19 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
-  MessageSquare, Send, ArrowLeft, Loader2, Megaphone, CheckCheck, RefreshCw, WifiOff, Paperclip, X, Download
+  MessageSquare, Send, ArrowLeft, Loader2, Megaphone, CheckCheck, RefreshCw, WifiOff, Paperclip, X, Download,
+  FileText, ChevronDown, Trash2, LogOut
 } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
+} from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Conversation {
   id: string;
   participants: string[];
   participantRoles: Record<string, string>;
+  participantNames: Record<string, string>;
   unreadCount: Record<string, number>;
   lastMessage?: { text: string; senderId: string; senderRole: string; timestamp: number };
   lastActivity: number;
@@ -85,6 +90,9 @@ export default function CommanderMessagesPage() {
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
   const [offline, setOffline] = useState(false);
   const [showingMobileList, setShowingMobileList] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setOffline(!navigator.onLine);
@@ -98,6 +106,13 @@ export default function CommanderMessagesPage() {
     };
   }, []);
 
+  const getOtherParticipantName = useCallback((conv: Conversation | undefined) => {
+    if (!conv || !user) return 'Executive';
+    const otherId = conv.participants?.find(p => p !== user.id);
+    if (!otherId) return 'Executive';
+    return conv.participantNames?.[otherId] || 'Executive';
+  }, [user]);
+
   const fetchConversations = useCallback(async () => {
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -109,7 +124,6 @@ export default function CommanderMessagesPage() {
       const data = await res.json();
       setConversations(data.conversations || []);
     } catch {
-      // Silently handle
     } finally {
       setLoading(false);
     }
@@ -126,7 +140,6 @@ export default function CommanderMessagesPage() {
       const data = await res.json();
       setAnnouncements(data.announcements || []);
     } catch {
-      // Silently handle
     } finally {
       setLoadingAnnouncements(false);
     }
@@ -138,6 +151,14 @@ export default function CommanderMessagesPage() {
       fetchAnnouncements();
     }
   }, [user, fetchConversations, fetchAnnouncements]);
+
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      fetchConversations();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [user, fetchConversations]);
 
   useEffect(() => {
     if (!firestore || !activeConvId) return;
@@ -163,9 +184,24 @@ export default function CommanderMessagesPage() {
     }
   }, [messages, isNearBottom]);
 
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      setShowScrollButton(el.scrollHeight - el.scrollTop - el.clientHeight > 200);
+    };
+    el.addEventListener('scroll', handleScroll);
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [activeConvId]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const selectConversation = async (convId: string) => {
     setActiveConvId(convId);
     setLoadingMessages(true);
+    setShowScrollButton(false);
     setShowingMobileList(false);
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -235,6 +271,39 @@ export default function CommanderMessagesPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+  };
+
+  const deleteMessage = async (msgId: string) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/messaging/conversations/${activeConvId}/messages/${msgId}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+    } catch {
+      toast({ variant: 'destructive', title: 'Failed to delete', description: 'Could not delete message.' });
+    }
+  };
+
+  const leaveConversation = async () => {
+    if (!activeConvId) return;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('No token');
+      const res = await fetch(`/api/messaging/conversations/${activeConvId}`, {
+        method: 'PATCH', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to leave');
+      setLeaveDialogOpen(false);
+      setActiveConvId(null);
+      setShowingMobileList(true);
+      fetchConversations();
+      toast({ title: 'Left conversation', description: 'You have left the conversation.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to leave conversation.' });
     }
   };
 
@@ -338,7 +407,7 @@ export default function CommanderMessagesPage() {
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium text-sm truncate">
-                          Executive
+                          {getOtherParticipantName(conv)}
                         </span>
                         {lastMsg && (
                           <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
@@ -379,9 +448,18 @@ export default function CommanderMessagesPage() {
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </Button>
-                  <span className="font-medium text-sm">Executive</span>
+                  <span className="font-medium text-sm flex-1">{getOtherParticipantName(activeConv)}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => setLeaveDialogOpen(true)}
+                    aria-label="Leave conversation"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </Button>
                 </div>
-                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 relative">
                   {loadingMessages ? (
                     <div className="flex items-center justify-center h-full">
                       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -394,23 +472,34 @@ export default function CommanderMessagesPage() {
                     messages.map(msg => {
                       const isMine = msg.senderId === user?.id;
                       return (
-                          <div key={msg.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
-                            <div className={cn(
-                              "max-w-[85%] sm:max-w-[75%] p-3 rounded-2xl text-sm break-words whitespace-pre-wrap",
-                              isMine
-                                ? "bg-primary text-primary-foreground rounded-br-md"
-                                : "bg-secondary text-secondary-foreground rounded-bl-md"
-                            )}>
-                              {msg.text && <p>{msg.text}</p>}
-                              {msg.attachments && msg.attachments.length > 0 && (
-                                <div className={cn("space-y-1", msg.text ? "mt-2" : "")}>
-                                  {msg.attachments.map((f, i) => (
+                        <div key={msg.id} className={cn("flex group", isMine ? "justify-end" : "justify-start")}>
+                          <div className={cn(
+                            "max-w-[85%] sm:max-w-[75%] p-3 rounded-2xl text-sm break-words whitespace-pre-wrap",
+                            isMine
+                              ? "bg-primary text-primary-foreground rounded-br-md"
+                              : "bg-secondary text-secondary-foreground rounded-bl-md"
+                          )}>
+                            {msg.text && <p>{msg.text}</p>}
+                            {msg.attachments && msg.attachments.length > 0 && (
+                              <div className={cn("space-y-1", msg.text ? "mt-2" : "")}>
+                                {msg.attachments.map((f, i) => {
+                                  const isImage = f.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(f.name);
+                                  const isPdf = /\.pdf$/i.test(f.name);
+                                  return isImage ? (
+                                    <button key={i} onClick={() => setPreviewImageUrl(f.data)} className="block">
+                                      <img src={f.data} alt={f.name} className="max-w-[200px] max-h-[200px] rounded-lg object-cover border" />
+                                    </button>
+                                  ) : (
                                     <div key={i} className={cn(
                                       "flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs",
                                       isMine ? "bg-primary-foreground/10" : "bg-background/50"
                                     )}>
                                       <div className="flex items-center gap-1.5 min-w-0">
-                                        <Paperclip className="w-3 h-3 shrink-0 opacity-70" />
+                                        {isPdf ? (
+                                          <FileText className="w-3 h-3 shrink-0 opacity-70" />
+                                        ) : (
+                                          <Paperclip className="w-3 h-3 shrink-0 opacity-70" />
+                                        )}
                                         <span className="truncate">{f.name}</span>
                                         <span className="opacity-60 shrink-0">({formatFileSize(f.size)})</span>
                                       </div>
@@ -418,22 +507,37 @@ export default function CommanderMessagesPage() {
                                         <Download className="w-3 h-3" />
                                       </button>
                                     </div>
-                                  ))}
-                                </div>
-                              )}
-                              <div className={cn(
-                                "flex items-center gap-1 mt-1",
-                                isMine ? "justify-end" : "justify-start"
-                              )}>
-                                <span className="text-[10px] opacity-70">{formatTime(msg.timestamp)}</span>
-                                {isMine && <CheckCheck className="w-3 h-3 opacity-70" />}
+                                  );
+                                })}
                               </div>
+                            )}
+                            <div className={cn(
+                              "flex items-center gap-1 mt-1",
+                              isMine ? "justify-end" : "justify-start"
+                            )}>
+                              <span className="text-[10px] opacity-70">{formatTime(msg.timestamp)}</span>
+                              {isMine && <CheckCheck className="w-3 h-3 opacity-70" />}
+                              {isMine && (
+                                <button onClick={() => deleteMessage(msg.id)} className="opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity ml-1" aria-label="Delete message">
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
                             </div>
                           </div>
+                        </div>
                       );
                     })
                   )}
                   <div ref={messagesEndRef} />
+                  {showScrollButton && (
+                    <button
+                      onClick={scrollToBottom}
+                      className="sticky bottom-2 z-10 bg-primary text-primary-foreground rounded-full p-2 shadow-lg hover:bg-primary/90 transition-all mx-auto"
+                      aria-label="Scroll to bottom"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
                 <div className="p-3 border-t border-border/20 bg-background rounded-b-lg">
                   {fileAttachments.length > 0 && (
@@ -538,6 +642,32 @@ export default function CommanderMessagesPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Leave Conversation</DialogTitle>
+            <DialogDescription>Are you sure you want to leave this conversation? This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLeaveDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={leaveConversation}>Leave</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewImageUrl} onOpenChange={() => setPreviewImageUrl(null)}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Image Preview</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center">
+            {previewImageUrl && (
+              <img src={previewImageUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain rounded-lg" />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

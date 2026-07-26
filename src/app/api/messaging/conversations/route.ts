@@ -15,14 +15,49 @@ export async function GET(req: NextRequest) {
     }
     const auth = executiveAuth || commanderAuth!;
 
-    const snapshot = await getAdminDb().collection('conversations')
+    const db = getAdminDb();
+    const snapshot = await db.collection('conversations')
       .where('participants', 'array-contains', auth.uid)
       .limit(200)
       .get();
 
-    const conversations = snapshot.docs
+    let conversations = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .sort((a: any, b: any) => (b.lastActivity || 0) - (a.lastActivity || 0));
+
+    const allUids = new Set<string>();
+    for (const conv of conversations) {
+      const participants: string[] = (conv as any).participants || [];
+      for (const uid of participants) allUids.add(uid);
+    }
+
+    if (allUids.size > 0) {
+      const userRefs = Array.from(allUids).map(uid => db.collection('users').doc(uid));
+      const userSnaps = await db.getAll(...userRefs);
+      const userMap: Record<string, { displayName?: string; email?: string; deleted?: boolean }> = {};
+      for (const snap of userSnaps) {
+        if (snap.exists) {
+          userMap[snap.id] = snap.data() as any;
+        }
+      }
+
+      conversations = conversations.filter((conv: any) => {
+        const participants: string[] = conv.participants || [];
+        return !participants.some(uid => userMap[uid]?.deleted === true);
+      });
+
+      const participantNames: Record<string, string> = {};
+      for (const uid of allUids) {
+        const user = userMap[uid];
+        participantNames[uid] = user?.displayName || user?.email || 'Unknown';
+      }
+
+      conversations = conversations.map((conv: any) => ({
+        ...conv,
+        participantNames,
+      }));
+    }
+
     return NextResponse.json({ conversations });
   } catch (err: any) {
     console.error('[Conversations GET] Error:', err?.name, err?.message);
