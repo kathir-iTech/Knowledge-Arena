@@ -72,7 +72,7 @@ service cloud.firestore {
 
     match /quizzes/{quizId} {
       allow read: if isSignedIn();
-      allow create: if isTeacher();
+      allow create: if isSignedIn() && (getRole() == 'commander' || getRole() == 'executive');
       allow update, delete: if isQuizCreator(quizId);
 
       match /questions/{questionId} {

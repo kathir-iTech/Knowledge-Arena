@@ -179,8 +179,8 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   const handleCreateRoom = async () => {
     if (!user || !quizTitle) return;
     if (submittedRef.current) return;
-    if (user.role !== 'commander') {
-        toast({ variant: 'destructive', title: "Arena Error", description: "Only Commanders can create arenas." });
+    if (user.role !== 'commander' && user.role !== 'executive') {
+        toast({ variant: 'destructive', title: "Arena Error", description: "Only Commanders and Executives can create arenas." });
         return;
     }
     if (questions.length < 3) {
