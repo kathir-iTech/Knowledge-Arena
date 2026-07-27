@@ -165,6 +165,43 @@ service cloud.firestore {
     allow write: if isSignedIn() && getRole() == 'executive';
   }
 
+  // --- Conversations ---
+  match /conversations/{convId} {
+    allow read: if isSignedIn() && resource.data.participants.hasAny([request.auth.uid]);
+    allow create: if isExecutive();
+    allow update, delete: if isExecutive();
+
+    match /messages/{msgId} {
+      allow read: if isSignedIn() && get(/databases/$(database)/documents/conversations/$(convId)).data.participants.hasAny([request.auth.uid]);
+      allow create: if isSignedIn() && get(/databases/$(database)/documents/conversations/$(convId)).data.participants.hasAny([request.auth.uid]);
+      allow delete: if isExecutive() || (isSignedIn() && request.auth.uid == resource.data.senderId);
+    }
+  }
+
+  // --- Announcements ---
+  match /announcements/{annId} {
+    allow read: if isSignedIn();
+    allow create, update, delete: if isExecutive();
+  }
+
+  // --- Notifications ---
+  match /notifications/{notifId} {
+    allow read: if isSignedIn();
+    allow create, update, delete: if isSignedIn();
+  }
+
+  // --- Audit Logs ---
+  match /auditLogs/{logId} {
+    allow read: if isExecutive();
+    allow write: if false;
+  }
+
+  // --- Executive Requests subcollection ---
+  match /executive_requests/{requestId}/responses/{responseId} {
+    allow read: if isSignedIn();
+    allow create: if isSignedIn();
+  }
+
   // Collection group queries for student history
   match /{path=**}/participants/{userId} {
     allow read: if request.auth != null && request.auth.uid == userId;

@@ -304,8 +304,7 @@ export default function CommanderManagementPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="font-medium truncate">
-                      {c.deleted ? 'Deleted Commander' : c.displayName}
-                      {c.deleted && <span className="text-xs text-muted-foreground ml-2">(deleted)</span>}
+                      {c.displayName}
                     </p>
                     <p className="text-sm text-muted-foreground truncate">{c.email}</p>
                   </div>

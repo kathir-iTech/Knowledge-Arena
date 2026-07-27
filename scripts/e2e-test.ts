@@ -137,7 +137,6 @@ async function main() {
     ['Settings', '/api/executive/settings'],
     ['Notifications', '/api/executive/notifications'],
     ['Audit Logs', '/api/executive/audit-logs'],
-    ['Question Bank', '/api/executive/question-bank'],
   ]) {
     await test(`GET ${name}`, async () => {
       const { status } = await api('GET', path, execToken!);
@@ -471,7 +470,6 @@ async function main() {
     '/api/executive/settings',
     '/api/executive/notifications',
     '/api/executive/audit-logs',
-    '/api/executive/question-bank',
     '/api/messaging/conversations',
     '/api/messaging/announcements',
   ];

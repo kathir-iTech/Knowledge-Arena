@@ -274,7 +274,7 @@ export default function AuditLogsPage() {
                         <span className="text-xs text-muted-foreground">{formatTimestamp(log.timestamp)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5">
-                        <span className="text-sm font-medium">{log.actor}</span>
+                        <span className="text-sm font-medium">{log.actorRole ? `${log.actorRole.slice(0, 1).toUpperCase()}${log.actorRole.slice(1)}` : 'User'}</span>
                         {log.target && (
                           <>
                             <span className="text-xs text-muted-foreground">→</span>

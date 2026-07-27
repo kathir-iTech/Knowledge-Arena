@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
       if (creator) {
         if (!commanderArenaCount[creator]) {
           const userDoc = commandersSnap.docs.find(c => c.id === creator);
-          commanderArenaCount[creator] = { count: 0, name: userDoc?.data()?.displayName || creator };
+          commanderArenaCount[creator] = { count: 0, name: userDoc?.data()?.displayName || 'Commander' };
         }
         commanderArenaCount[creator].count++;
       }
@@ -211,7 +211,7 @@ export async function GET(req: NextRequest) {
       return {
         id: d.id,
         title: data.title || 'Untitled Battle',
-        commanderName: creatorDoc?.data()?.displayName || data.created_by || 'Unknown',
+        commanderName: creatorDoc?.data()?.displayName || 'Unknown Commander',
         status: data.status || 'unknown',
         participantCount: data.participantCount || 0,
         createdAt: data.created_at || 0,

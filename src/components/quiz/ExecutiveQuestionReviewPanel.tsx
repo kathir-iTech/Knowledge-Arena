@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2, RefreshCw, BookOpen } from 'lucide-react';
+import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
@@ -163,7 +163,6 @@ export function ExecutiveQuestionReviewPanel({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const submittedRef = useRef(false);
 
   const handleDelete = (id: string) => {
     setDeleteConfirmId(id);
@@ -191,68 +190,6 @@ export function ExecutiveQuestionReviewPanel({
     setQuestions(questions.map(q => (q.id === editForm.id ? editForm : q)));
     setEditingId(null);
     setEditForm(null);
-  };
-
-  const handleAddToQuestionBank = async () => {
-    if (!user || submittedRef.current || isSubmitting) return;
-    if (user.role !== 'executive') {
-      toast({ variant: 'destructive', title: 'Unauthorized', description: 'Only Executives can add to the Question Bank.' });
-      return;
-    }
-    if (questions.length === 0) {
-      toast({ variant: 'destructive', title: 'No Questions', description: 'At least one question is required.' });
-      return;
-    }
-
-    const hasInvalid = validationIssues.some(i => i.severity === 'error');
-    if (hasInvalid) {
-      toast({ variant: 'destructive', title: 'Validation Error', description: 'Fix all validation errors before adding to the Question Bank.' });
-      return;
-    }
-
-    submittedRef.current = true;
-    setIsSubmitting(true);
-
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('UNAUTHORIZED');
-
-      const payload = questions.map(q => ({
-        question: q.text,
-        options: q.options,
-        correctAnswer: q.correctAnswerIndex,
-        explanation: q.explanation || '',
-        category: globalCategory || 'General',
-        difficulty: globalDifficulty === 'moderate' ? 'medium' : (globalDifficulty || 'medium'),
-        tags: globalTags ? globalTags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      }));
-
-      const res = await fetch('/api/executive/question-bank', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to add questions');
-      }
-
-      toast({
-        title: 'Added to Question Bank',
-        description: `Successfully saved ${data.success || payload.length} of ${payload.length} questions.${data.failed ? ` (${data.failed} failed)` : ''}`,
-      });
-
-      onImportComplete();
-    } catch (e: unknown) {
-      toast({ variant: 'destructive', title: 'Import Error', description: e instanceof Error ? e.message : 'Unknown error' });
-    } finally {
-      setIsSubmitting(false);
-      submittedRef.current = false;
-    }
   };
 
   return (
@@ -458,15 +395,6 @@ export function ExecutiveQuestionReviewPanel({
             </div>
           )}
         </div>
-        <Button
-          disabled={questions.length === 0 || isSubmitting}
-          size="lg"
-          onClick={handleAddToQuestionBank}
-          className="h-14 px-12 text-xl font-headline"
-        >
-          {isSubmitting ? <Loader2 className="animate-spin mr-2" /> : <BookOpen className="mr-2" />}
-          ADD TO QUESTION BANK
-        </Button>
       </div>
 
       <AlertDialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>

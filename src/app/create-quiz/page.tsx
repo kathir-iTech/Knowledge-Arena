@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 
 const QuizCreatorForm = dynamic(() => import('@/components/quiz/QuizCreatorForm').then(m => m.QuizCreatorForm), { ssr: false });
 const PDFQuizGenerator = dynamic(() => import('@/components/quiz/PDFQuizGenerator').then(m => m.PDFQuizGenerator), { ssr: false });
-const QuestionBankPicker = dynamic(() => import('@/components/quiz/QuestionBankPicker').then(m => m.QuestionBankPicker), { ssr: false });
 const QuestionReviewPanel = dynamic(() => import('@/components/quiz/QuestionReviewPanel').then(m => m.QuestionReviewPanel), { ssr: false });
 
 interface GeneratedQuestion {
@@ -260,15 +259,12 @@ export default function CreateQuizPage() {
       </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-        <TabsList className="grid w-full grid-cols-3 h-12 bg-secondary/20 p-1 rounded-lg border border-primary/10">
+        <TabsList className="grid w-full grid-cols-2 h-12 bg-secondary/20 p-1 rounded-lg border border-primary/10">
           <TabsTrigger value="manual" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
             <PencilRuler className="mr-2 h-4 w-4" /> Manual
           </TabsTrigger>
           <TabsTrigger value="forge" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
             <Sparkles className="mr-2 h-4 w-4" /> AI Forge
-          </TabsTrigger>
-          <TabsTrigger value="bank" className="text-sm font-headline font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md">
-            <BookOpen className="mr-2 h-4 w-4" /> Question Bank
           </TabsTrigger>
         </TabsList>
 
@@ -284,11 +280,6 @@ export default function CreateQuizPage() {
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="bank" className="animate-in">
-          <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
-             <QuestionBankPicker onQuestionsGenerated={handleQuestionsGenerated} onDirtyChange={setForgeDirty} />
-          </Suspense>
-        </TabsContent>
        </Tabs>
        {backConfirmDialog}
 
