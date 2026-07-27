@@ -92,7 +92,7 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
   });
 
   const onSubmit = async (data: QuizFormData) => {
-    if (!user || user.role !== 'commander') {
+    if (!user || (user.role !== 'commander' && user.role !== 'executive')) {
         toast({ variant: 'destructive', title: 'Error', description: 'Unauthorized.' });
         return;
     }

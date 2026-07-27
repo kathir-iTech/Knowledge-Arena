@@ -50,7 +50,7 @@ const modelFallbackChain = async (): Promise<string[]> => {
   } catch {
     // fall through to default
   }
-  return ['gemini-2.5-flash'];
+  return ['gemini-2.0-flash'];
 };
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
