@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     if (allUids.size > 0) {
       const userRefs = Array.from(allUids).map(uid => db.collection('users').doc(uid));
       const userSnaps = await db.getAll(...userRefs);
-      const userMap: Record<string, { displayName?: string; email?: string; deleted?: boolean }> = {};
+      const userMap: Record<string, { displayName?: string; email?: string; role?: string; deleted?: boolean }> = {};
       for (const snap of userSnaps) {
         if (snap.exists) {
           userMap[snap.id] = snap.data() as any;
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
       const participantNames: Record<string, string> = {};
       for (const uid of allUids) {
         const user = userMap[uid];
-        participantNames[uid] = user?.displayName || user?.email || 'Unknown';
+        participantNames[uid] = user?.displayName || user?.email || (user?.role === 'commander' ? 'Commander' : 'Executive') || 'User';
       }
 
       conversations = conversations.map((conv: any) => ({

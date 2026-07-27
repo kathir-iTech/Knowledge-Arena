@@ -482,7 +482,7 @@ export default function ExecutiveWorkspacePage() {
                           </Badge>
                         </div>
                         <p className="text-sm mt-0.5">
-                          <span className="font-medium">{activity.actor?.slice(0, 16)}</span>
+                          <span className="font-medium">{activity.actorRole ? `A ${activity.actorRole}` : 'A user'}</span>
                           {' '}{actionLabels[activity.action] || activity.action.replace(/_/g, ' ')}
                         </p>
                       </div>
