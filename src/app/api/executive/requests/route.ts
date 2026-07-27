@@ -86,6 +86,7 @@ export async function PATCH(req: NextRequest) {
       title: `Request ${status.charAt(0).toUpperCase() + status.slice(1)}`,
       description: `Executive ${status} the request.`,
       createdAt: Date.now(),
+      userId: auth.uid,
       link: '/executive/requests',
       metadata: { requestId: id, status },
     });

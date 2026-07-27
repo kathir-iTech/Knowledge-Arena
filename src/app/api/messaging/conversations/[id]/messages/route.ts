@@ -155,6 +155,7 @@ export async function POST(req: NextRequest) {
       title: 'New Message',
       description: notifDesc,
       createdAt: Date.now(),
+      userId: verified.auth.uid,
       link: '/executive/messages',
       metadata: { conversationId: convId },
     });

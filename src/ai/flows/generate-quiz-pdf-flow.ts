@@ -46,7 +46,7 @@ const modelFallbackChain = async (): Promise<string[]> => {
     const { getAdminDb } = await import('@/lib/firebase-admin');
     const snap = await getAdminDb().collection('platform_settings').doc('global').get();
     const stored = snap.data()?.ai?.defaultModel;
-    if (stored && typeof stored === 'string') return [stored];
+    if (stored && typeof stored === 'string') return [stored, 'gemini-2.0-flash'];
   } catch {
     // fall through to default
   }
