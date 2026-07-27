@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
       title: 'Announcement Published',
       description: `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}`,
       createdAt: Date.now(),
+      userId: executiveAuth.uid,
       link: '/executive/messages',
       metadata: { announcementId: docRef.id },
     });

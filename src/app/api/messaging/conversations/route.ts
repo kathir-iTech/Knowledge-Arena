@@ -131,6 +131,7 @@ export async function POST(req: NextRequest) {
       title: 'Conversation Started',
       description: `New conversation with commander.`,
       createdAt: Date.now(),
+      userId: executiveAuth.uid,
       link: '/executive/messages',
       metadata: { conversationId: result.id },
     });

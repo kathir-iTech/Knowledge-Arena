@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
       title: 'New Commander Request',
       description: `${title} (${type})`,
       createdAt: Date.now(),
+      userId: auth.uid,
       link: '/executive/requests',
       metadata: { requestId: docRef.id, type },
     });

@@ -10,6 +10,7 @@ export interface Notification {
   description: string;
   read: boolean;
   createdAt: number;
+  userId: string;
   link?: string;
   metadata?: Record<string, unknown>;
 }

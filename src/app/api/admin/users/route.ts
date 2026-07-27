@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
         title: 'Commander Created',
         description: `${displayName || email.split('@')[0]} has been added as a commander.`,
         createdAt: Date.now(),
+        userId: auth.uid,
         link: '/executive/commanders',
         metadata: { commanderId: userRecord.uid },
       });
@@ -272,6 +273,7 @@ export async function PATCH(req: NextRequest) {
         title: disabled ? 'Commander Disabled' : 'Commander Enabled',
         description: `Commander account ${disabled ? 'disabled' : 'enabled'}.`,
         createdAt: Date.now(),
+        userId: auth.uid,
         link: '/executive/commanders',
         metadata: { commanderId: uid, disabled },
       });
@@ -293,6 +295,7 @@ export async function PATCH(req: NextRequest) {
           title: 'Password Reset',
           description: `Password reset for commander account.`,
           createdAt: Date.now(),
+          userId: auth.uid,
           link: '/executive/commanders',
           metadata: { commanderId: uid },
         });
@@ -372,6 +375,7 @@ export async function DELETE(req: NextRequest) {
         title: 'Commander Deleted',
         description: `${displayName} has been permanently deleted.`,
         createdAt: Date.now(),
+        userId: auth.uid,
         link: '/executive/commanders',
         metadata: { commanderId: uid, displayName },
       });
