@@ -90,8 +90,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { text, attachments } = await req.json();
-    console.log('[MSG-API] POST message, conv:', convId, 'text:', text?.substring(0, 50), 'attachments:', attachments?.length);
+    const { text, attachments, idempotencyKey } = await req.json();
+    console.log('[MSG-API] POST message, conv:', convId, 'text:', text?.substring(0, 50), 'attachments:', attachments?.length, 'idempotencyKey:', idempotencyKey);
     if (!text?.trim() && (!attachments || attachments.length === 0)) {
       return NextResponse.json({ error: 'Message text or attachment is required' }, { status: 400 });
     }
@@ -114,7 +114,17 @@ export async function POST(req: NextRequest) {
       const convData = convSnap.data()!;
       const otherParticipant = (convData.participants || []).find((p: string) => p !== verified.auth.uid);
 
-      const msgRef = verified.convRef.collection('messages').doc();
+      // Idempotency: if idempotencyKey is provided, use it as the doc ID and skip if exists
+      if (idempotencyKey) {
+        const existingMsgRef = verified.convRef.collection('messages').doc(idempotencyKey);
+        const existingSnap = await transaction.get(existingMsgRef);
+        if (existingSnap.exists) {
+          return { id: existingSnap.id, ...existingSnap.data() };
+        }
+      }
+      const msgRef = idempotencyKey
+        ? verified.convRef.collection('messages').doc(idempotencyKey)
+        : verified.convRef.collection('messages').doc();
       const msgData: Record<string, unknown> = {
         text: text?.trim() || '',
         senderId: verified.auth.uid,

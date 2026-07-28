@@ -81,7 +81,14 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
 
   if (isLoading) return <LoadingScreen message="Loading review..." />;
 
-  if (error) return <p className="text-center text-destructive py-8">Failed to load review data.</p>;
+  if (error) return (
+    <div className="flex flex-col items-center justify-center py-14 text-center">
+      <div className="w-14 h-14 rounded-[14px] bg-destructive/10 flex items-center justify-center mb-3">
+        <XCircle className="w-6 h-6 text-destructive" />
+      </div>
+      <p className="text-sm text-destructive font-medium">Failed to load review data.</p>
+    </div>
+  );
 
   const akMap = new Map(answerKeys.map(ak => [ak.questionId, ak.correct_option_index]));
   const subMap = new Map(submissions.map(s => [s.questionId, s]));
@@ -145,8 +152,8 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
                 return (
                   <div key={optIdx} className={cn(
                     "flex items-center gap-3 p-3.5 rounded-[12px] border text-sm transition-all",
-                    isCorrectOpt && "bg-success/5 border-success/20",
-                    isSelected && !isCorrectOpt && "bg-destructive/5 border-destructive/20",
+                    isCorrectOpt && "bg-success/5 border-success/20 ring-1 ring-success/10",
+                    isSelected && !isCorrectOpt && "bg-destructive/5 border-destructive/20 ring-1 ring-destructive/10",
                     !isSelected && !isCorrectOpt && "bg-card border-border/50"
                   )}>
                     <span className="shrink-0 flex items-center justify-center w-5 h-5">

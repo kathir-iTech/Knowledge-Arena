@@ -56,7 +56,7 @@ function useCommanderPresence(quiz: ValidatedQuiz) {
   return commanderOnline;
 }
 
-const CountdownTimer = ({ timeLeft, totalSec }: { timeLeft: number; totalSec: number }) => {
+const CountdownTimer = React.memo(({ timeLeft, totalSec }: { timeLeft: number; totalSec: number }) => {
   const progress = totalSec > 0 ? (timeLeft / totalSec) * 100 : 0;
   const isUrgent = timeLeft <= 5;
   const isCritical = timeLeft <= 3;
@@ -65,7 +65,7 @@ const CountdownTimer = ({ timeLeft, totalSec }: { timeLeft: number; totalSec: nu
     <div
       className={cn(
         "flex items-center gap-2 mb-4 px-4 py-2.5 rounded-[12px] border transition-all duration-300",
-        isCritical ? "bg-destructive/10 border-destructive/20" :
+        isCritical ? "bg-destructive/10 border-destructive/20 shadow-elevation-small" :
         isUrgent ? "bg-warning/5 border-warning/15" :
         "bg-card border-border/50"
       )}
@@ -111,7 +111,7 @@ const CountdownTimer = ({ timeLeft, totalSec }: { timeLeft: number; totalSec: nu
       )}
     </div>
   );
-};
+});
 
 const LiveLeaderboard = ({ participants, teacherId, currentUserId }: { participants: ValidatedParticipant[], teacherId: string, currentUserId: string }) => {
     const sortedParticipants = useMemo(() => [...participants].sort((a,b) => b.score - a.score), [participants]);
@@ -125,10 +125,16 @@ const LiveLeaderboard = ({ participants, teacherId, currentUserId }: { participa
     const total = students.length;
 
     return (
-        <Card className="w-full max-w-4xl mt-4 md:mt-6">
+        <Card className="w-full max-w-4xl mt-4 md:mt-6 card-hover shadow-elevation-small">
             <CardHeader className="py-3 md:py-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">Standings</CardTitle>
+                <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                  <span className="relative flex h-2 w-2" aria-hidden="true">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                  </span>
+                  Standings
+                </CardTitle>
                 <span className="text-xs text-muted-foreground tabular-nums">{total} gladiator{total !== 1 ? 's' : ''}</span>
               </div>
             </CardHeader>
@@ -591,7 +597,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       )}
 
       {showCommanderOffline && (
-        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-[12px] bg-warning/5 border border-warning/10 w-full max-w-4xl" role="alert" aria-live="assertive">
+        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-[12px] bg-warning/5 border border-warning/10 w-full max-w-4xl shadow-elevation-small" role="alert" aria-live="assertive">
           <WifiOff className="w-4 h-4 text-warning shrink-0" />
           <div className="text-sm">
             <span className="font-medium text-warning">Commander connection interrupted</span>
@@ -610,7 +616,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         <CountdownTimer timeLeft={timeLeft} totalSec={currentQuestion.timer} />
       )}
 
-      <Card className="w-full max-w-4xl">
+      <Card className="w-full max-w-4xl card-hover shadow-elevation-small">
         <CardHeader className={cn(
           "text-center pt-10 pb-4 md:pb-6 px-5 md:px-10 transition-opacity duration-300",
           isTransitioning ? "opacity-50" : "opacity-100"
@@ -651,10 +657,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                 className={cn(
                   "group relative flex flex-col gap-2 p-3 md:p-5 rounded-[14px] border-2 text-left transition-all duration-150 min-h-[3.5rem] md:min-h-[5.5rem]",
                   selectedAnswer === i
-                    ? "border-primary bg-primary/5 shadow-elevation-small"
+                    ? "border-primary bg-primary/5 shadow-elevation-small ring-1 ring-primary/20"
                     : hasAnswered
                       ? "border-border/30 bg-muted/10 opacity-40"
-                      : "border-border/50 bg-card hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-elevation-small cursor-pointer active:scale-[0.98]",
+                      : "border-border/50 bg-card hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-elevation-small hover:-translate-y-0.5 cursor-pointer active:scale-[0.98]",
                   (hasAnswered || isTeacher || timeLeft === 0) && "cursor-default"
                 )}
                 aria-label={`Option ${String.fromCharCode(65 + i)}: ${opt}`}
@@ -663,8 +669,8 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                   <span className={cn(
                     "shrink-0 flex items-center justify-center w-8 h-8 rounded-[10px] text-sm font-bold font-mono transition-all duration-150",
                     selectedAnswer === i
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-primary/10 text-primary group-hover:bg-primary/20"
+                      ? "bg-primary text-primary-foreground shadow-elevation-small"
+                      : "bg-primary/10 text-primary group-hover:bg-primary/20 group-hover:scale-105"
                   )}>
                     {String.fromCharCode(65 + i)}
                   </span>

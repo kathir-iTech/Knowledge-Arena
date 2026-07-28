@@ -1,285 +1,270 @@
-# Deployment Guide
-
-## Recommended Platform: Firebase Hosting + Cloud Run
-
-For a Next.js 15 app with real-time Firestore and AI features, the recommended deployment is:
-
-| Component | Service | Purpose |
-|-----------|---------|---------|
-| Static assets + SSR | Firebase Hosting + Cloud Run | Serves the Next.js app with full SSR and API routes |
-| Database | Firestore | Real-time NoSQL database |
-| Authentication | Firebase Auth | Email/password with role-by-domain |
-| AI features | Genkit + Google Gemini | Quiz generation, predictions, copilot |
-
-### Why not Vercel?
-
-- Vercel Hobby has a 10-second function timeout — Genkit AI processing may exceed this
-- Vercel Hobby has no support for some Node.js native modules used by `pdf-parse`
-- Firestore real-time listeners work, but Vercel Edge functions have WebSocket limitations
-
-### Why not Render?
-
-- Render's free tier cold starts are slow (15-60s) for Next.js SSR
-- No native Firebase emulator support
-- Same timeout issues for AI flows
-
----
+# Knowledge Arena — Deployment Guide
 
 ## Prerequisites
 
-- Node.js 18+
-- npm 9+
-- A Firebase project (Blaze plan required for Cloud Run)
-- Firebase CLI: `npm install -g firebase-tools`
-- Google AI API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- **Node.js** v20+ and **npm** v10+
+- **Firebase project** with the following services enabled:
+  - [Authentication](https://console.firebase.google.com/project/_/authentication) (Email/Password + Google Sign-In)
+  - [Cloud Firestore](https://console.firebase.google.com/project/_/firestore) (native mode)
+  - [Cloud Storage](https://console.firebase.google.com/project/_/storage) (optional, for file uploads)
+- **Google AI API key** from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- **Vercel account** (or alternative hosting supporting Node.js standalone output)
+- **GitHub repository** (for CI/CD)
 
 ---
 
-## Firebase Setup
+## Firebase Configuration
 
 ### 1. Create a Firebase Project
 
-1. Go to [Firebase Console](https://console.firebase.google.com)
-2. Create a new project (or use existing)
-3. Enable **Firestore Database** (start in test mode, then configure rules)
-4. Enable **Authentication** → Sign-in method → **Email/Password**
-5. (Optional) Enable **Storage** for file attachments
+1. Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project (or use an existing one).
+2. Enable **Authentication** with **Email/Password** and **Google** sign-in providers.
+3. Create a **Cloud Firestore** database in native mode.
+4. (Optional) Enable **Cloud Storage**.
 
-### 2. Configure Firestore
+### 2. Get Firebase Client Config
 
-Deploy indexes:
+In Firebase Console → Project Settings → General → Your apps → Web app:
 
-```bash
-firebase deploy --only firestore:indexes
-```
-
-Deploy security rules:
-
-```bash
-firebase deploy --only firestore:rules
-```
-
-### 3. Get Service Account Key
-
-1. Firebase Console → Project Settings → Service Accounts
-2. Click **Generate new private key**
-3. Save the JSON file (you'll need its contents for `FIREBASE_SERVICE_ACCOUNT_KEY`)
-
-### 4. Update Firebase Config
-
-The client-side Firebase config is in `src/firebase/config.ts`. Update the values to match your Firebase project:
-
-```typescript
-export const firebaseConfig = {
-  projectId: "your-project-id",
-  appId: "1:xxx:web:xxx",
-  apiKey: "AIza...",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
-  measurementId: "",
-  messagingSenderId: "xxx",
+```javascript
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef..."
 };
+```
+
+Update `src/firebase/config.ts` with these values.
+
+### 3. Generate a Service Account Key
+
+Firebase Console → Project Settings → Service Accounts → Generate new private key.
+
+This downloads a JSON file. **Minify it to a single line** and set it as the `FIREBASE_SERVICE_ACCOUNT_KEY` environment variable.
+
+### 4. Deploy Firestore Security Rules & Indexes
+
+```bash
+npm install -g firebase-tools
+firebase login
+firebase use --add
+firebase deploy --only firestore
+```
+
+This deploys:
+- `firestore.rules` — security rules
+- `firestore.indexes.json` — composite indexes
+
+If you change the `.firebaserc` project ID, also update `firebaseConfig.projectId` in `src/firebase/config.ts`.
+
+### 5. (Optional) Deploy Storage Rules
+
+```bash
+firebase deploy --only storage
 ```
 
 ---
 
 ## Environment Variables
 
-### Required
+Create a `.env.production` file (or set in Vercel dashboard):
 
-| Variable | Description | Source |
-|----------|-------------|--------|
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI API key for Genkit features | [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| `FIREBASE_SERVICE_ACCOUNT_KEY` | Full Firebase service account JSON (minified to one line) | Firebase Console → Service Accounts |
+```bash
+# Required: Google AI API key
+GOOGLE_GENERATIVE_AI_API_KEY=your-key-here
 
-### Optional
+# Required for production: Firebase Admin service account key (minified JSON, single line)
+FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"..."}
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Custom auth domain for same-domain OAuth | Firebase project's firebaseapp.com |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase Storage bucket URL for file uploads | (disabled) |
+# Optional: Custom auth domain for same-domain OAuth redirects
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-custom-domain.com
 
-### Script-Only
+# Optional: Firebase Storage bucket
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+```
 
-| Variable | Description |
-|----------|-------------|
-| `SERVICE_ACCOUNT_PATH` | Path to service account JSON file on disk |
-| `EXECUTIVE_SEQ` | Sequence number for bootstrap executive (default: `001`) |
-| `EXECUTIVE_PASSWORD` | Initial password for bootstrap executive (default: `1234567`) |
-| `EXECUTIVE_NAME` | Display name for bootstrap executive |
-
-See `.env.example` for the full documentation.
+See [ENVIRONMENT.md](./ENVIRONMENT.md) for detailed descriptions.
 
 ---
 
-## Build
+## Build & Deploy to Vercel
 
-```bash
-# Install dependencies
-npm install
+### Option A: Vercel Dashboard (Recommended)
 
-# Build for production
-npm run build
+1. Push your repository to GitHub.
+2. Go to [vercel.com](https://vercel.com) and import your GitHub repository.
+3. Configure the project:
+   - **Framework Preset:** Next.js
+   - **Root Directory:** `./`
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `.next`
+4. Add all environment variables from `.env.production` in Vercel's **Environment Variables** section.
+5. Click **Deploy**.
 
-# Verify
-npm run typecheck
-```
-
-The build outputs to `.next/` using Next.js standalone output mode.
-
----
-
-## Deploy to Firebase Hosting + Cloud Run
-
-### 1. Build the Docker Image
-
-```bash
-# Build the Next.js standalone output
-npm run build
-
-# Build the Docker image
-docker build -t knowledge-arena .
-
-# Test locally (optional)
-docker run -p 3000:3000 knowledge-arena
-```
-
-### 2. Push to Google Container Registry
-
-```bash
-# Tag the image
-docker tag knowledge-arena gcr.io/YOUR_PROJECT_ID/knowledge-arena
-
-# Push to GCR
-docker push gcr.io/YOUR_PROJECT_ID/knowledge-arena
-```
-
-### 3. Deploy to Cloud Run
-
-```bash
-gcloud run deploy knowledge-arena \
-  --image gcr.io/YOUR_PROJECT_ID/knowledge-arena \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --memory 1Gi \
-  --timeout 300 \
-  --set-env-vars="GOOGLE_GENERATIVE_AI_API_KEY=your_key_here" \
-  --set-env-vars="FIREBASE_SERVICE_ACCOUNT_KEY=your_service_account_json"
-```
-
-### 4. Configure Firebase Hosting
-
-Update `firebase.json`:
-
-```json
-{
-  "hosting": {
-    "public": "public",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "https://your-cloud-run-url.a.run.app"
-      }
-    ]
-  }
-}
-```
-
-```bash
-firebase deploy --only hosting
-```
-
----
-
-## Deploy to Vercel
-
-The simplest deployment option for smaller projects:
+### Option B: Vercel CLI
 
 ```bash
 # Install Vercel CLI
 npm i -g vercel
 
-# Deploy
-vercel
+# Login
+vercel login
 
-# Set environment variables in Vercel dashboard:
-# - GOOGLE_GENERATIVE_AI_API_KEY
-# - FIREBASE_SERVICE_ACCOUNT_KEY (server-side only)
-# - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN (optional)
+# Deploy to production
+vercel --prod
+
+# Add environment variables
+vercel env add GOOGLE_GENERATIVE_AI_API_KEY
+vercel env add FIREBASE_SERVICE_ACCOUNT_KEY
+# ... etc
 ```
 
-**Note:** Vercel Hobby has a 10s function timeout. AI features (PDF quiz generation) may fail if they exceed this limit. Upgrade to Pro for 60s timeout.
+### Option C: Docker
+
+The project includes a `Dockerfile` for containerized deployment:
+
+```bash
+# Build the Docker image
+docker build -t knowledge-arena .
+
+# Run the container
+docker run -p 3000:3000 \
+  -e GOOGLE_GENERATIVE_AI_API_KEY=your-key \
+  -e FIREBASE_SERVICE_ACCOUNT_KEY='{"..."}' \
+  knowledge-arena
+```
 
 ---
 
-## Deploy to Firebase App Hosting
+## Vercel Configuration Notes
 
-Firebase App Hosting is a new option that integrates with Cloud Run:
+### next.config.ts
 
-```bash
-# Follow Firebase App Hosting setup in Firebase Console
-# Connect your GitHub repository
-# Configure environment variables in the console
-```
+Key settings already configured:
+- `output: 'standalone'` — Enables standalone deployment (required for Docker, optional for Vercel)
+- `experimental.serverActions.bodySizeLimit: '20mb'` — Allows large PDF uploads
+- Security headers (HSTS, X-Frame-Options, etc.)
+- Firebase Auth rewrite: `__/:path*` → `firebaseapp.com/__/:path*`
+
+### Serverless Function Region
+
+If your Firestore database is in a specific region, set the Vercel project's **Functions Region** to the same or nearest region in Vercel Project Settings → Functions.
+
+### Build Settings
+
+| Setting | Value |
+|---|---|
+| Node.js Version | 20.x |
+| Build Command | `npm run build` |
+| Output Directory | `.next` |
+| Install Command | `npm ci` |
+
+### Environment Variables in Vercel
+
+Add these to **Vercel Project Settings → Environment Variables**:
+
+| Name | Scope | Value |
+|---|---|---|
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Production | Your Google AI API key |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | Production | Minified service account JSON |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Production | Your custom domain (if used) |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Production | Your storage bucket URL |
+
+All `NEXT_PUBLIC_*` variables are also needed in **Preview** and **Development** environments if you deploy preview branches.
+
+---
+
+## Post-Deployment Verification
+
+### 1. Health Check
+
+Navigate to your deployed URL. The executive workspace (`/executive`) contains a **system health** panel that verifies:
+- ✅ Firebase Auth connectivity and latency
+- ✅ Firestore read/write access and latency
+- ✅ Messaging collections accessibility
+- ✅ AI API key presence
+- ✅ Firebase Storage bucket configuration
+
+### 2. Test Authentication
+
+1. Open the landing page.
+2. Sign in with a pre-configured Executive or Commander account (email/password).
+3. Verify role-based redirects:
+   - Executive → `/executive`
+   - Commander → `/commander`
+   - Gladiator → `/gladiator` (via Google Sign-In)
+
+### 3. Test Quiz Creation & Battle
+
+1. Sign in as a Commander.
+2. Create a quiz manually or use the AI PDF Forge.
+3. Share the room code with a Gladiator account.
+4. Start the battle and verify real-time question delivery.
+5. Submit answers and verify scoring.
+6. End the battle and verify the leaderboard.
+
+### 4. Test Analytics
+
+1. Sign in as an Executive.
+2. Navigate to the analytics dashboard.
+3. Verify chart data is populated.
+4. Test CSV/HTML export.
+
+### 5. Verify Rate Limiting
+
+Attempt multiple rapid logins to verify the rate limiter returns `429` status.
+
+---
+
+## Troubleshooting
+
+### "Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY is not set"
+
+Ensure `FIREBASE_SERVICE_ACCOUNT_KEY` is set in Vercel environment variables (not `.env.local`). The value must be a single-line, minified JSON string.
+
+### "Service account project does not match client project"
+
+The project ID in your service account key must match `projectId` in `src/firebase/config.ts`. Verify both are the same Firebase project.
+
+### "AI generation failed"
+
+- Check that `GOOGLE_GENERATIVE_AI_API_KEY` is set and valid.
+- Verify the Gemini API is enabled in [Google Cloud Console](https://console.cloud.google.com/apis/library).
+- Check rate limits: PDF Forge allows 5 requests/minute per user.
+
+### "401 Unauthorized" on API calls
+
+- Ensure the Firebase ID token is included in the `Authorization: Bearer <token>` header.
+- Verify the user has the required role in their Firestore user document.
+- Tokens expire after 1 hour; the client should refresh them automatically.
+
+### Firestore permission denied
+
+- Check `firestore.rules` are deployed: `firebase deploy --only firestore`
+- Verify the authenticated user has the correct role matching the rules.
+
+---
+
+## CI/CD Pipeline
+
+The project is designed for GitHub + Vercel continuous deployment:
+
+1. Push to `main` triggers an automatic Vercel deployment.
+2. Environment variables are injected by Vercel.
+3. Preview deployments are created for PR branches.
+4. Pre-deploy checks: `npm run lint` + `npm run typecheck` are run in your CI.
 
 ---
 
 ## Security Checklist
 
-- [ ] Firestore rules restrict access by authenticated user ID
-- [ ] Firebase Auth email/password provider enabled
-- [ ] `FIREBASE_SERVICE_ACCOUNT_KEY` stored as a secret, never in client code
-- [ ] `GOOGLE_GENERATIVE_AI_API_KEY` stored server-side only
-- [ ] CORS headers configured if using custom domains
-- [ ] Rate limiting enabled on auth endpoints
-- [ ] Helmet-like security headers configured (see `next.config.ts`)
-
----
-
-## Post-Deployment Checklist
-
-- [ ] `npm run build` passes with zero errors
-- [ ] `npm run typecheck` passes with zero errors
-- [ ] Firestore indexes deployed (`firebase deploy --only firestore:indexes`)
-- [ ] Firestore rules deployed (`firebase deploy --only firestore:rules`)
-- [ ] Environment variables configured in hosting dashboard
-- [ ] Firebase Authentication email/password provider enabled
-- [ ] Test signup with `@staffs.com` email (teacher/executive role)
-- [ ] Test signup with other email (student/gladiator role)
-- [ ] Bootstrap executive account created (run `npx tsx scripts/bootstrap-executive.ts`)
-- [ ] Test quiz creation, joining, live play, and results
-- [ ] Test search functionality
-- [ ] Test messaging and announcements
-- [ ] Test AI PDF quiz generation (if API key is configured)
-- [ ] Test CSV/PDF export
-- [ ] Verify responsive layout on mobile
-
----
-
-## Common Issues
-
-### "Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY is not set"
-
-The `FIREBASE_SERVICE_ACCOUNT_KEY` environment variable is missing or empty. Set it in your hosting platform's environment variables with the full minified service account JSON.
-
-### AI features return 500 / timeout
-
-- Genkit AI generation may exceed the function timeout on free plans
-- Upgrade to Vercel Pro (60s timeout), Cloud Run (configurable, default 300s), or increase the timeout setting
-- The `serverActions.bodySizeLimit` in `next.config.ts` is set to `20mb` — ensure your hosting platform supports this
-
-### "Failed to fetch" / CORS errors
-
-- Ensure `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` is set to your production domain
-- Firebase Auth OAuth redirects must match the authorised domain list in Firebase Console
-
-### Real-time listeners not working
-
-- Firestore requires websocket-like connections. Ensure your hosting platform supports long-lived connections
-- Cloud Run fully supports this; Vercel serverless functions may have limitations
-
-### Build fails with memory error
-
-- Increase Node.js memory: `NODE_OPTIONS="--max-old-space-size=4096" npm run build`
-- Or build locally and deploy the standalone output
+- [ ] `GOOGLE_GENERATIVE_AI_API_KEY` is restricted to your app's referrer in Google AI Studio
+- [ ] Firestore security rules are deployed and restrict access by role
+- [ ] Firebase Auth email/password sign-in is configured (not anonymous)
+- [ ] CORS is not over-permissive (Next.js API routes handle this)
+- [ ] File upload MIME type validation is active
+- [ ] Rate limiting is enforced for auth and AI endpoints
+- [ ] HSTS headers are enabled via `next.config.ts`

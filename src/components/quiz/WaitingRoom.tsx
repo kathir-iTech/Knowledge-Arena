@@ -269,14 +269,14 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
           </div>
         </div>
 
-        <Card>
+        <Card className="shadow-elevation-small">
           <CardContent className="flex flex-col sm:flex-row items-center justify-center gap-6 py-8">
             <div className="flex flex-col items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground">Room Code</span>
               <div className="text-4xl md:text-5xl font-mono font-bold tracking-[0.15em] text-primary">
                 <span>{quiz.id}</span>
               </div>
-              <Button variant="ghost" size="sm" className="h-10 touch-target text-xs text-muted-foreground hover:text-foreground" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
+              <Button variant="ghost" size="sm" className="h-10 touch-target text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all" onClick={() => copyToClipboard(quiz.id)} aria-label="Copy room code">
                 <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Code
               </Button>
             </div>
@@ -286,7 +286,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
             {shareableLink && (
               <div className="flex flex-col items-center gap-2">
                 <span className="text-xs text-muted-foreground">Or scan to join</span>
-                <div className="bg-white p-3 rounded-[12px] shadow-elevation-small">
+                <div className="bg-white p-3 rounded-[12px] shadow-elevation-small ring-1 ring-black/5">
                   <QRCode value={shareableLink} size={120} aria-label={`QR code to join quiz ${quiz.id}`} />
                 </div>
               </div>
@@ -294,7 +294,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-elevation-small">
           <CardHeader className="pb-4 text-center">
             <CardTitle className="font-headline flex items-center justify-center gap-2.5 text-xl">
                 <Users className="w-5 h-5 text-primary" />
@@ -308,13 +308,13 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                      Array.from({ length: 3 }).map((_, i) => (
                       <div key={i} className="flex flex-col items-center gap-2 text-center">
                         <Skeleton className="h-14 w-14 rounded-full" />
-                        <Skeleton className="h-3 w-16" />
+                        <Skeleton className="h-3 w-16 rounded" />
                       </div>
                     ))
                   ) : studentParticipants.length > 0 ? studentParticipants.map(p => (
                     <div key={p.user_id} className="flex flex-col items-center gap-2 text-center group">
                       <div className="relative">
-                        <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-border ring-offset-2 ring-offset-card">
+                        <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-border ring-offset-2 ring-offset-card shadow-elevation-small">
                           <AvatarFallback className="text-2xl bg-secondary">{p.avatar || '🎮'}</AvatarFallback>
                         </Avatar>
                         <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-success rounded-full border-2 border-card" />
@@ -324,7 +324,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                         <Button
                           variant="destructive"
                           size="sm"
-                          className="h-7 px-2 text-[10px]"
+                          className="h-7 px-2 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() => setKickingId(p.user_id)}
                         >
                           Kick
@@ -332,7 +332,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                       )}
                     </div>
                   )                  ) : (
-                    <p className="text-sm text-muted-foreground">Waiting for participants to arrive...</p>
+                    <p className="text-sm text-muted-foreground py-8">Waiting for participants to arrive...</p>
                   )}
                 </div>
           </CardContent>

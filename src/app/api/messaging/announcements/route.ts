@@ -66,18 +66,17 @@ export async function POST(req: NextRequest) {
       metadata: { targetRole: targetCommanderId ? 'specific' : 'all' },
     });
 
-    const notifUserId = targetCommanderId || executiveAuth.uid;
-    await notificationService.create({
-      type: 'new_announcement',
-      title: 'Announcement Published',
-      description: `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}`,
-      createdAt: Date.now(),
-      userId: notifUserId,
-      link: '/commander/messages',
-      metadata: { announcementId: docRef.id },
-    });
-
-    if (!targetCommanderId) {
+    if (targetCommanderId) {
+      await notificationService.create({
+        type: 'new_announcement',
+        title: 'Announcement Published',
+        description: `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}`,
+        createdAt: Date.now(),
+        userId: targetCommanderId,
+        link: '/commander/messages',
+        metadata: { announcementId: docRef.id },
+      });
+    } else {
       try {
         const commanderSnap = await getAdminDb().collection('users')
           .where('role', '==', 'commander')

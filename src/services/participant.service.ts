@@ -45,7 +45,10 @@ export const participantService = {
 
   async getAllParticipants(quizId: string): Promise<ValidatedParticipant[]> {
     const db = getFirestore();
-    const snap = await getDocs(collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS));
+    const q = query(
+      collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS)
+    );
+    const snap = await getDocs(q);
     return snap.docs.map(d => ({ user_id: d.id, ...d.data() } as ValidatedParticipant));
   },
 
@@ -151,7 +154,10 @@ export const participantService = {
     onError?: (error: Error) => void
   ) {
     const db = getFirestore();
-    return onSnapshot(collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS), (snap) => {
+    const q = query(
+      collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS)
+    );
+    return onSnapshot(q, (snap) => {
       const participants = snap.docs.map(
         d => ({ user_id: d.id, ...d.data() } as ValidatedParticipant)
       );
