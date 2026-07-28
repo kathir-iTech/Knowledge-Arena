@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { text, attachments } = await req.json();
+    console.log('[MSG-API] POST message, conv:', convId, 'text:', text?.substring(0, 50), 'attachments:', attachments?.length);
     if (!text?.trim() && (!attachments || attachments.length === 0)) {
       return NextResponse.json({ error: 'Message text or attachment is required' }, { status: 400 });
     }
@@ -137,9 +138,11 @@ export async function POST(req: NextRequest) {
 
       transaction.update(verified.convRef, updateData);
 
+      console.log('[MSG-API] Message written:', msgRef.id, 'conv:', convId, 'path:', verified.convRef.path + '/messages/' + msgRef.id);
       return { id: msgRef.id, ...msgData };
     });
 
+    console.log('[MSG-API] POST success, conv:', convId, 'result id:', result.id);
     await auditService.record({
       timestamp: Date.now(),
       actor: verified.auth.uid,
@@ -150,15 +153,23 @@ export async function POST(req: NextRequest) {
     });
     const msgText = text?.trim() || '';
     const notifDesc = msgText ? `${msgText.slice(0, 80)}${msgText.length > 80 ? '...' : ''}` : '📎 File attachment';
-    await notificationService.create({
-      type: 'new_message',
-      title: 'New Message',
-      description: notifDesc,
-      createdAt: Date.now(),
-      userId: verified.auth.uid,
-      link: '/executive/messages',
-      metadata: { conversationId: convId },
+    const receiverId = await getAdminDb().runTransaction(async (tx) => {
+      const convSnap = await tx.get(verified.convRef);
+      if (!convSnap.exists) return null;
+      const participants: string[] = convSnap.data()!.participants || [];
+      return participants.find((p: string) => p !== verified.auth.uid) || null;
     });
+    if (receiverId) {
+      await notificationService.create({
+        type: 'new_message',
+        title: 'New Message',
+        description: notifDesc,
+        createdAt: Date.now(),
+        userId: receiverId,
+        link: '/executive/messages',
+        metadata: { conversationId: convId },
+      });
+    }
 
     return NextResponse.json({ message: result });
   } catch (err: any) {

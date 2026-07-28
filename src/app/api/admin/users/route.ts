@@ -424,9 +424,9 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
-    // 2. Delete notifications where metadata.commanderId === uid
+    // 2. Delete notifications owned by the deleted user
     const notifSnap = await db.collection('notifications')
-      .where('metadata.commanderId', '==', uid)
+      .where('userId', '==', uid)
       .get();
     if (!notifSnap.empty) {
       const batch = db.batch();
@@ -444,31 +444,7 @@ export async function DELETE(req: NextRequest) {
       await batch.commit();
     }
 
-    // 4. Delete audit log entries where actor === uid or target === uid
-    const auditActorSnap = await db.collection('auditLogs')
-      .where('actor', '==', uid)
-      .get();
-    const auditTargetSnap = await db.collection('auditLogs')
-      .where('target', '==', uid)
-      .get();
-    const auditIds = new Set<string>();
-    auditActorSnap.docs.forEach(d => auditIds.add(d.ref.id));
-    auditTargetSnap.docs.forEach(d => auditIds.add(d.ref.id));
-    if (auditIds.size > 0) {
-      const auditBatch = db.batch();
-      let auditCount = 0;
-      for (const id of auditIds) {
-        auditBatch.delete(db.collection('auditLogs').doc(id));
-        auditCount++;
-        if (auditCount >= 500) {
-          await auditBatch.commit();
-          break;
-        }
-      }
-      if (auditCount < 500) await auditBatch.commit();
-    }
-
-    // 5. For gladiators: clean up participant records
+    // 4. For gladiators: clean up participant records
     if (targetRole === 'gladiator') {
       try {
         const partSnap = await db.collectionGroup('participants')

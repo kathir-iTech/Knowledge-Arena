@@ -13,8 +13,8 @@ import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 
 const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
-const EXTRACTION_TIMEOUT_MS = 8000;
-const GEMINI_TIMEOUT_MS = 10000;
+const EXTRACTION_TIMEOUT_MS = 30000;
+const GEMINI_TIMEOUT_MS = 30000;
 
 const QuizQuestionOutputSchema = z.object({
   text: z.string().describe('The question text.'),
@@ -39,7 +39,7 @@ const GenerateQuizFromPDFOutputSchema = z.object({
 });
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
-const MAX_RETRIES_PER_MODEL = 1;
+const MAX_RETRIES_PER_MODEL = 3;
 
 const modelFallbackChain = async (): Promise<string[]> => {
   try {
@@ -230,8 +230,8 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
         return { ok: false, reason: 'all_models_failed', errors };
       }
 
-      // Wait briefly before retry
-      await new Promise((r) => setTimeout(r, 1000));
+      // Wait before retry with exponential backoff
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
     }
   }
 

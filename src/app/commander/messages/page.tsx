@@ -162,14 +162,20 @@ export default function CommanderMessagesPage() {
 
   useEffect(() => {
     if (!firestore || !activeConvId) return;
+    console.log('[MSG-DEBUG] Setting up listener for conv:', activeConvId);
     const messagesRef = collection(firestore, 'conversations', activeConvId, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log('[MSG-DEBUG] Snapshot received:', snapshot.docs.length, 'docs, conv:', activeConvId, 'empty?', snapshot.empty);
+      snapshot.docs.forEach(d => console.log('[MSG-DEBUG]   msg doc:', d.id, 'exists:', d.exists, 'data:', JSON.stringify(d.data())));
       const msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Message));
       setMessages(msgs);
       setLoadingMessages(false);
-    }, () => { setLoadingMessages(false); });
-    return () => unsubscribe();
+    }, (err) => { 
+      console.error('[MSG-DEBUG] onSnapshot ERROR:', err.code, err.message, 'conv:', activeConvId);
+      setLoadingMessages(false); 
+    });
+    return () => { console.log('[MSG-DEBUG] Unsubscribing from', activeConvId); unsubscribe(); };
   }, [firestore, activeConvId]);
 
   const isNearBottom = useCallback(() => {
