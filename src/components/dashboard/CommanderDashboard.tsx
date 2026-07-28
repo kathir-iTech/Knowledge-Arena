@@ -31,6 +31,27 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from 'next/navigation';
 
+function AnimatedValue({ value, suffix = '' }: { value: string | number; suffix?: string }) {
+  const [display, setDisplay] = useState(0);
+  const num = typeof value === 'string' ? parseFloat(value) || 0 : value;
+  useEffect(() => {
+    if (!num) { setDisplay(0); return; }
+    const duration = Math.min(1000, Math.max(400, num * 20));
+    const start = performance.now();
+    let frame: number;
+    const animate = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(eased * num));
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [num]);
+  return <span>{display}{suffix}</span>;
+}
+
 type SortKey = 'newest' | 'oldest' | 'title' | 'status';
 type FilterKey = 'all' | 'active' | 'completed' | 'draft' | 'archived';
 
@@ -162,9 +183,9 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     const isStaleWaiting = quiz.status === 'waiting' && quiz.created_at && Date.now() - quiz.created_at > 7200000;
 
     return (
-        <Card className={cn("transition-all duration-200 overflow-hidden", quiz.archived && "opacity-50")}>
+        <Card className={cn("group/card card-hover transition-all duration-200 overflow-hidden hover:shadow-elevation-medium", quiz.archived && "opacity-50")}>
             <div className="relative">
-              <div className={cn("absolute top-0 left-0 w-1 h-full",
+              <div className={cn("absolute top-0 left-0 w-1.5 h-full rounded-r-sm",
                 quiz.status === 'live' ? (isStaleLive ? "bg-warning" : "bg-success") :
                 quiz.status === 'finished' ? "bg-primary" :
                 quiz.archived ? "bg-muted" : (isStaleWaiting ? "bg-muted" : "bg-warning")
@@ -172,11 +193,11 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
               <div className="p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="text-xl md:text-2xl font-headline font-bold tracking-tight truncate">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xl md:text-2xl font-headline font-bold tracking-tight truncate group-hover/card:text-primary transition-colors">
                         {quiz.title}
                       </span>
-                      <Badge className={cn("shrink-0 h-7 px-3 text-xs font-semibold",
+                      <Badge className={cn("shrink-0 h-6 px-2.5 text-[10px] font-semibold uppercase tracking-wider",
                           quiz.archived ? "bg-muted/50 text-muted-foreground" :
                           isStaleLive ? "bg-warning/10 text-warning border border-warning/20" :
                           quiz.status === 'live' ? "bg-success/10 text-success border border-success/20" :
@@ -187,9 +208,9 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                           <Shield className="w-3 h-3 mr-1" />
                           {isStaleLive ? 'STALLED' : quiz.archived ? 'Archived' : quiz.status === 'live' ? 'LIVE' : quiz.status === 'finished' ? 'Completed' : isStaleWaiting ? 'Abandoned' : 'Waiting'}
                       </Badge>
+                      <span className="font-mono text-[10px] bg-muted/50 px-2 py-1 rounded-[6px] tracking-wider text-muted-foreground">{quiz.id}</span>
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                      <span className="font-mono text-xs bg-muted/50 px-2.5 py-1 rounded-[6px] tracking-wider">{quiz.id}</span>
                       <span className="flex items-center gap-1.5">
                         <HelpCircle className="w-3.5 h-3.5" />
                         {quiz.question_count ?? 0} question{(quiz.question_count ?? 0) !== 1 ? 's' : ''}
@@ -208,7 +229,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {!quiz.archived && (
-                      <Button asChild size="default" className="h-10 px-5 font-semibold">
+                      <Button asChild size="default" className="h-10 px-5 font-semibold shadow-elevation-small hover:shadow-elevation-hover transition-all duration-200">
                           <Link href={`/battle/${quiz.id}`}>
                             {quiz.status === 'waiting' ? <><Swords className="mr-2 h-4 w-4" /> Start Battle</> : <><PlayCircle className="mr-2 h-4 w-4" /> Enter Arena</>}
                           </Link>
@@ -216,7 +237,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                     )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="More actions">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-muted/50 transition-colors" aria-label="More actions">
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -391,18 +412,18 @@ export default function CommanderDashboard() {
     );
   }
 
-  const quickActions = [
+  const quickActions = useMemo(() => [
     { label: 'Create Arena', icon: PlusCircle, href: '/create-quiz', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
     { label: 'Question Bank', icon: BookOpen, href: '/create-quiz?tab=bank', color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
     { label: 'AI Import', icon: Zap, href: '/create-quiz?tab=forge', color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20' },
     { label: 'My Requests', icon: Inbox, href: '/commander/requests', color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20' },
     { label: 'Messages', icon: MessageSquare, href: '/commander/messages', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20' },
     { label: 'Battle History', icon: Clock, href: '/commander/history', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },
-  ];
+  ], []);
 
-  const liveBattles = quizzes.filter(q => q.status === 'live' && !q.archived);
-  const waitingBattles = quizzes.filter(q => q.status === 'waiting' && !q.archived);
-  const finishedBattles = quizzes.filter(q => q.status === 'finished' && !q.archived);
+  const liveBattles = useMemo(() => quizzes.filter(q => q.status === 'live' && !q.archived), [quizzes]);
+  const waitingBattles = useMemo(() => quizzes.filter(q => q.status === 'waiting' && !q.archived), [quizzes]);
+  const finishedBattles = useMemo(() => quizzes.filter(q => q.status === 'finished' && !q.archived), [quizzes]);
 
   return (
     <div className="page-container safe-bottom animate-in">
@@ -436,10 +457,10 @@ export default function CommanderDashboard() {
             <button
               key={action.label}
               onClick={() => router.push(action.href)}
-              className="flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-border hover:border-primary/30 hover:bg-accent/30 transition-colors text-sm font-medium"
+              className="group flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-border/60 hover:border-primary/30 hover:bg-accent/30 hover:shadow-elevation-hover transition-all duration-200 text-sm font-medium"
               aria-label={action.label}
             >
-              <div className={cn('w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0', action.color)} aria-hidden="true">
+              <div className={cn('w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110', action.color)} aria-hidden="true">
                 <action.icon className="w-3.5 h-3.5" />
               </div>
               {action.label}
@@ -463,27 +484,30 @@ export default function CommanderDashboard() {
       {/* Active + Upcoming Battles */}
       <div className="page-section grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Live Battles */}
-        <Card aria-live="polite" aria-label="Active battles">
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="card-hover" aria-live="polite" aria-label="Active battles">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border/30 pb-4">
             <CardTitle className="text-base flex items-center gap-2">
               <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
               </span>
               Active Battles
+              {liveBattles.length > 0 && (
+                <span className="text-[10px] font-mono text-muted-foreground ml-1">({liveBattles.length})</span>
+              )}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {liveBattles.length > 0 ? (
               <div className="space-y-2">
                 {liveBattles.map(q => (
-                  <Link key={q.id} href={`/battle/${q.id}`} className="block p-3 rounded-[10px] bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <Link key={q.id} href={`/battle/${q.id}`} className="group block p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-200 border border-transparent hover:border-emerald-200/50">
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{q.title}</p>
-                        <p className="text-xs text-muted-foreground">{q.id} · live</p>
+                        <p className="text-sm font-medium truncate group-hover:text-emerald-600 transition-colors">{q.title}</p>
+                        <p className="text-xs text-muted-foreground">{q.id}</p>
                       </div>
-                      <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-600">LIVE</Badge>
+                      <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20">LIVE</Badge>
                     </div>
                   </Link>
                 ))}
@@ -495,24 +519,27 @@ export default function CommanderDashboard() {
         </Card>
 
         {/* Upcoming Battles */}
-        <Card aria-live="polite" aria-label="Upcoming battles">
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="card-hover" aria-live="polite" aria-label="Upcoming battles">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border/30 pb-4">
             <CardTitle className="text-base flex items-center gap-2">
-              <Clock className="w-4 h-4" aria-hidden="true" />
+              <Clock className="w-4 h-4 text-primary" aria-hidden="true" />
               Upcoming Battles
+              {waitingBattles.length > 0 && (
+                <span className="text-[10px] font-mono text-muted-foreground ml-1">({waitingBattles.length})</span>
+              )}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {waitingBattles.length > 0 ? (
               <div className="space-y-2">
                 {waitingBattles.slice(0, 5).map(q => (
-                  <Link key={q.id} href={`/battle/${q.id}`} className="block p-3 rounded-[10px] bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <Link key={q.id} href={`/battle/${q.id}`} className="group block p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-200 border border-transparent hover:border-amber-200/50">
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{q.title}</p>
-                        <p className="text-xs text-muted-foreground">{q.id} · waiting</p>
+                        <p className="text-sm font-medium truncate group-hover:text-amber-600 transition-colors">{q.title}</p>
+                        <p className="text-xs text-muted-foreground">{q.id}</p>
                       </div>
-                      <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600">WAITING</Badge>
+                      <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20">WAITING</Badge>
                     </div>
                   </Link>
                 ))}
@@ -527,26 +554,26 @@ export default function CommanderDashboard() {
       {/* Recent Battles + Pending Requests + Notifications */}
       <div className="page-section grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Battles */}
-        <Card aria-live="polite" aria-label="Recent battles">
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="card-hover" aria-live="polite" aria-label="Recent battles">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border/30 pb-4">
             <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" aria-hidden="true" />
+              <TrendingUp className="w-4 h-4 text-primary" aria-hidden="true" />
               Recent Battles
             </CardTitle>
             <Button variant="ghost" size="sm" onClick={() => router.push('/commander/history')} aria-label="View all recent battles">
               View All <ChevronRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {finishedBattles.length > 0 ? (
               <div className="space-y-1">
                 {finishedBattles.slice(0, 5).map(q => (
-                  <Link key={q.id} href={`/battle/${q.id}`} className="flex items-center justify-between p-2.5 rounded-[8px] hover:bg-muted/30 transition-colors">
+                  <Link key={q.id} href={`/battle/${q.id}`} className="group flex items-center justify-between p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-200 border border-transparent hover:border-border/50">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{q.title}</p>
+                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{q.title}</p>
                       <p className="text-[11px] text-muted-foreground">{new Date(q.created_at || 0).toLocaleDateString()}</p>
                     </div>
-                    <Badge variant="outline" className="text-[10px] shrink-0 ml-2">DONE</Badge>
+                    <Badge variant="outline" className="text-[10px] shrink-0 ml-2 bg-muted/30">DONE</Badge>
                   </Link>
                 ))}
               </div>
@@ -557,24 +584,30 @@ export default function CommanderDashboard() {
         </Card>
 
         {/* Pending Requests */}
-        <Card aria-live="polite" aria-label="Pending requests">
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="card-hover" aria-live="polite" aria-label="Pending requests">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border/30 pb-4">
             <CardTitle className="text-base flex items-center gap-2">
-              <Inbox className="w-4 h-4" aria-hidden="true" />
+              <Inbox className="w-4 h-4 text-primary" aria-hidden="true" />
               Pending Requests
+              {dashboardData && dashboardData.pendingRequestsCount > 0 && (
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-[10px] font-bold text-white">{dashboardData.pendingRequestsCount}</span>
+              )}
             </CardTitle>
             <Button variant="ghost" size="sm" onClick={() => router.push('/commander/requests')} aria-label="View all pending requests">
               View All <ChevronRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {dashboardData && dashboardData.pendingRequestsCount > 0 ? (
-              <div className="p-3 rounded-[10px] bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-3">
-                <Inbox className="w-5 h-5 text-amber-600 shrink-0" aria-hidden="true" />
+              <div className="group p-4 rounded-[12px] bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/20 dark:to-amber-950/10 border border-amber-200 dark:border-amber-800 flex items-center gap-3 hover:shadow-elevation-small transition-all duration-200">
+                <div className="w-10 h-10 rounded-[10px] bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                  <Inbox className="w-5 h-5 text-amber-600" aria-hidden="true" />
+                </div>
                 <div>
                   <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{dashboardData.pendingRequestsCount} pending request{dashboardData.pendingRequestsCount !== 1 ? 's' : ''}</p>
                   <p className="text-xs text-amber-600 dark:text-amber-400">Awaiting executive review</p>
                 </div>
+                <ChevronRight className="w-4 h-4 text-amber-400 ml-auto transition-transform duration-200 group-hover:translate-x-0.5" />
               </div>
             ) : (
               <EmptyState icon={Inbox} title="No Pending Requests" description="Requests you submit will appear here." />
@@ -583,17 +616,17 @@ export default function CommanderDashboard() {
         </Card>
 
         {/* Messages */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="card-hover">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border/30 pb-4">
             <CardTitle className="text-base flex items-center gap-2">
-              <MessageSquare className="w-4 h-4" aria-hidden="true" />
+              <MessageSquare className="w-4 h-4 text-primary" aria-hidden="true" />
               Messages
             </CardTitle>
             <Button variant="ghost" size="sm" onClick={() => router.push('/commander/messages')} aria-label="View all messages">
               View All <ChevronRight className="w-3.5 h-3.5 ml-1" aria-hidden="true" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             <EmptyState icon={MessageSquare} title="Check Messages" description="Stay in touch with your executive." action={<Button size="sm" variant="outline" onClick={() => router.push('/commander/messages')}>Open Messages</Button>} />
           </CardContent>
         </Card>
@@ -601,18 +634,20 @@ export default function CommanderDashboard() {
 
       {/* Arena Library */}
       <section className="page-section" aria-label="Arena library">
-        <div className="flex items-center gap-2.5 mb-4">
-          <Swords className="w-5 h-5 text-primary" aria-hidden="true" />
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="flex items-center justify-center w-8 h-8 rounded-[10px] bg-primary/10">
+            <Swords className="w-4 h-4 text-primary" aria-hidden="true" />
+          </div>
           <h2 className="text-section-title tracking-tight">Arena Library</h2>
-          <span className="text-sm text-muted-foreground ml-auto" aria-label={`${filteredAndSorted.length} arenas`}>{filteredAndSorted.length} arena{filteredAndSorted.length !== 1 ? 's' : ''}</span>
+          <span className="text-sm text-muted-foreground ml-auto font-mono" aria-label={`${filteredAndSorted.length} arenas`}>{filteredAndSorted.length} arena{filteredAndSorted.length !== 1 ? 's' : ''}</span>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mb-6">
           <div className="relative flex-1 max-w-md">
             <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search arenas by name or room code..." className="pl-10 h-11" aria-label="Search arenas" />
+            <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search arenas by name or room code..." className="pl-10 h-11 rounded-[12px] shadow-elevation-small focus-visible:ring-2 focus-visible:ring-primary/20" aria-label="Search arenas" />
           </div>
-          <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)} className="h-11 rounded-[12px] border border-input bg-background px-4 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Sort quizzes">
+          <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)} className="h-11 rounded-[12px] border border-input bg-background px-4 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 shadow-elevation-small" aria-label="Sort quizzes">
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
             <option value="title">By Title</option>
@@ -628,7 +663,7 @@ export default function CommanderDashboard() {
             ].map(({ key, label }) => (
               <button key={key} onClick={() => setFilterKey(key as FilterKey)}
                 className={cn("px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-150",
-                  filterKey === key ? "bg-primary text-primary-foreground shadow-elevation-small" : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
+                  filterKey === key ? "bg-primary text-primary-foreground shadow-elevation-small ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground hover:shadow-elevation-small"
                 )}
                 aria-pressed={filterKey === key}
                 aria-label={`Filter: ${label}`}
@@ -659,18 +694,19 @@ export default function CommanderDashboard() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color?: string }) {
+const StatCard = React.memo(function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color?: string }) {
+  const bgClass = color ? `${color.replace('text-', 'bg-').replace('600', '100')} dark:${color.replace('text-', 'bg-').replace('600', '950/20')}` : 'bg-muted';
   return (
-    <Card>
+    <Card className="group/card card-hover shadow-elevation-small hover:shadow-elevation-medium">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn("w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0", color ? `${color.replace('text-', 'bg-').replace('600', '100')} dark:${color.replace('text-', 'bg-').replace('600', '950/20')}` : 'bg-muted')}>
+        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-200 group-hover/card:scale-110 group-hover/card:shadow-sm", bgClass)}>
           <Icon className={cn("w-4 h-4", color || 'text-muted-foreground')} />
         </div>
         <div>
-          <p className="text-lg font-bold leading-tight">{value}</p>
+          <p className="text-lg font-bold leading-tight tabular-nums"><AnimatedValue value={value} /></p>
           <p className="text-[11px] text-muted-foreground">{label}</p>
         </div>
       </CardContent>
     </Card>
   );
-}
+});

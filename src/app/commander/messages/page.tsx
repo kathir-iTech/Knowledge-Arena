@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { v4 as uuidv4 } from 'uuid';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from '@/components/ui/dialog';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Conversation {
@@ -93,6 +95,11 @@ export default function CommanderMessagesPage() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [convError, setConvError] = useState(false);
+  const [announcementsError, setAnnouncementsError] = useState(false);
+  const [otherTyping, setOtherTyping] = useState(false);
+  const typingWriteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const optimisticMsgRef = useRef<string | null>(null);
 
   useEffect(() => {
     setOffline(!navigator.onLine);
@@ -115,6 +122,7 @@ export default function CommanderMessagesPage() {
 
   const fetchConversations = useCallback(async () => {
     try {
+      setConvError(false);
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
       const res = await fetch('/api/messaging/conversations', {
@@ -124,6 +132,7 @@ export default function CommanderMessagesPage() {
       const data = await res.json();
       setConversations(data.conversations || []);
     } catch {
+      setConvError(true);
     } finally {
       setLoading(false);
     }
@@ -131,6 +140,7 @@ export default function CommanderMessagesPage() {
 
   const fetchAnnouncements = useCallback(async () => {
     try {
+      setAnnouncementsError(false);
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
       const res = await fetch('/api/messaging/announcements', {
@@ -140,6 +150,7 @@ export default function CommanderMessagesPage() {
       const data = await res.json();
       setAnnouncements(data.announcements || []);
     } catch {
+      setAnnouncementsError(true);
     } finally {
       setLoadingAnnouncements(false);
     }
@@ -162,21 +173,37 @@ export default function CommanderMessagesPage() {
 
   useEffect(() => {
     if (!firestore || !activeConvId) return;
-    console.log('[MSG-DEBUG] Setting up listener for conv:', activeConvId);
     const messagesRef = collection(firestore, 'conversations', activeConvId, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      console.log('[MSG-DEBUG] Snapshot received:', snapshot.docs.length, 'docs, conv:', activeConvId, 'empty?', snapshot.empty);
-      snapshot.docs.forEach(d => console.log('[MSG-DEBUG]   msg doc:', d.id, 'exists:', d.exists, 'data:', JSON.stringify(d.data())));
+    const unsubMessages = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Message));
       setMessages(msgs);
       setLoadingMessages(false);
-    }, (err) => { 
-      console.error('[MSG-DEBUG] onSnapshot ERROR:', err.code, err.message, 'conv:', activeConvId);
-      setLoadingMessages(false); 
+    }, () => {
+      setLoadingMessages(false);
     });
-    return () => { console.log('[MSG-DEBUG] Unsubscribing from', activeConvId); unsubscribe(); };
-  }, [firestore, activeConvId]);
+
+    const convDocRef = doc(firestore, 'conversations', activeConvId);
+    const unsubTyping = onSnapshot(convDocRef, (snap) => {
+      if (!snap.exists) return;
+      const data = snap.data();
+      if (!data) return;
+      const typingMap = data.typing as Record<string, number> | undefined;
+      if (!typingMap || !user) {
+        setOtherTyping(false);
+        return;
+      }
+      const otherId = Object.keys(typingMap).find(id => id !== user.id);
+      if (otherId && typingMap[otherId]) {
+        const elapsed = Date.now() - typingMap[otherId];
+        setOtherTyping(elapsed < 3000);
+      } else {
+        setOtherTyping(false);
+      }
+    });
+
+    return () => { unsubMessages(); unsubTyping(); setOtherTyping(false); };
+  }, [firestore, activeConvId, user]);
 
   const isNearBottom = useCallback(() => {
     const el = messagesContainerRef.current;
@@ -207,6 +234,7 @@ export default function CommanderMessagesPage() {
   const selectConversation = async (convId: string) => {
     setActiveConvId(convId);
     setLoadingMessages(true);
+    setOtherTyping(false);
     setShowScrollButton(false);
     setShowingMobileList(false);
     try {
@@ -244,20 +272,37 @@ export default function CommanderMessagesPage() {
 
   const sendMessage = async () => {
     if ((!messageText.trim() && fileAttachments.length === 0) || !activeConvId || sending) return;
+    const idempotencyKey = uuidv4();
+    const optimisticId = 'opt_' + Date.now();
+    const textToSend = messageText.trim();
+    const filesToSend = [...fileAttachments];
     setSending(true);
+    const optimisticMessage: Message = {
+      id: optimisticId,
+      text: textToSend,
+      senderId: user?.id || '',
+      senderRole: 'commander',
+      timestamp: Date.now(),
+      attachments: filesToSend.length > 0 ? filesToSend : undefined,
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
+    optimisticMsgRef.current = optimisticId;
+    setMessageText('');
+    setFileAttachments([]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('No token');
       const res = await fetch(`/api/messaging/conversations/${activeConvId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: messageText.trim(), attachments: fileAttachments }),
+        body: JSON.stringify({ text: textToSend, attachments: filesToSend, idempotencyKey }),
       });
       if (!res.ok) throw new Error('Failed to send');
-      setMessageText('');
-      setFileAttachments([]);
+      optimisticMsgRef.current = null;
       fetchConversations();
     } catch {
+      setMessages(prev => prev.filter(m => m.id !== optimisticId));
       toast({
         variant: 'destructive',
         title: 'Failed to send',
@@ -272,6 +317,23 @@ export default function CommanderMessagesPage() {
       setSending(false);
     }
   };
+
+  const writeTypingIndicator = useCallback(async () => {
+    if (!firestore || !activeConvId || !user) return;
+    const convRef = doc(firestore, 'conversations', activeConvId);
+    try {
+      await updateDoc(convRef, { [`typing.${user.id}`]: Date.now() });
+    } catch {}
+  }, [firestore, activeConvId, user]);
+
+  const handleTyping = useCallback(() => {
+    if (typingWriteTimeoutRef.current) {
+      clearTimeout(typingWriteTimeoutRef.current);
+    }
+    typingWriteTimeoutRef.current = setTimeout(() => {
+      writeTypingIndicator();
+    }, 300);
+  }, [writeTypingIndicator]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -325,14 +387,14 @@ export default function CommanderMessagesPage() {
     } catch {}
   };
 
-  const activeConv = conversations.find(c => c.id === activeConvId);
+  const activeConv = useMemo(() => conversations.find(c => c.id === activeConvId), [conversations, activeConvId]);
 
-  const totalUnread = conversations.reduce((sum, c) =>
-    sum + (c.unreadCount?.[user?.id || ''] || 0), 0);
+  const totalUnread = useMemo(() => conversations.reduce((sum, c) =>
+    sum + (c.unreadCount?.[user?.id || ''] || 0), 0), [conversations, user?.id]);
 
-  const unreadAnnouncements = announcements.filter(a =>
+  const unreadAnnouncements = useMemo(() => announcements.filter(a =>
     !a.readBy?.includes(user?.id || '')
-  ).length;
+  ).length, [announcements, user?.id]);
 
   const formatTime = (ts: number) => {
     const d = new Date(ts);
@@ -390,6 +452,15 @@ export default function CommanderMessagesPage() {
             <div className="flex-1 overflow-y-auto space-y-1">
               {loading ? (
                 [1,2].map(i => <Skeleton key={i} className="h-16 w-full" />)
+              ) : convError ? (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <WifiOff className="w-8 h-8 text-destructive mb-2" />
+                  <p className="text-sm text-destructive font-medium">Failed to load conversations</p>
+                  <p className="text-xs text-muted-foreground mt-1">Check your connection and try again.</p>
+                  <Button variant="outline" size="sm" onClick={fetchConversations} className="mt-3">
+                    <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                  </Button>
+                </div>
               ) : conversations.length === 0 ? (
                 <div className="flex flex-col items-center py-8 text-center">
                   <MessageSquare className="w-8 h-8 text-muted-foreground mb-2" />
@@ -405,10 +476,10 @@ export default function CommanderMessagesPage() {
                       key={conv.id}
                       onClick={() => selectConversation(conv.id)}
                       className={cn(
-                        "w-full text-left p-3 rounded-lg border transition-colors",
+                        "w-full text-left p-3 rounded-[10px] border transition-all duration-150",
                         activeConvId === conv.id
-                          ? "border-primary bg-primary/5"
-                          : "border-border/40 hover:border-primary/30 hover:bg-muted/20"
+                          ? "border-primary bg-primary/5 shadow-elevation-small"
+                          : "border-border/40 hover:border-primary/30 hover:bg-muted/20 hover:shadow-elevation-small"
                       )}
                     >
                       <div className="flex items-center justify-between mb-1">
@@ -470,35 +541,53 @@ export default function CommanderMessagesPage() {
                     <div className="flex items-center justify-center h-full">
                       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                     </div>
-                  ) : messages.length === 0 ? (
+                  ) : messages.length === 0 && !otherTyping ? (
                     <div className="flex items-center justify-center h-full text-center">
                       <p className="text-sm text-muted-foreground">No messages yet. Start the conversation.</p>
                     </div>
                   ) : (
                     messages.map(msg => {
                       const isMine = msg.senderId === user?.id;
+                      const isOptimistic = msg.id.startsWith('opt_');
+                      const senderName = isMine ? 'You' : getOtherParticipantName(activeConv);
+                      const senderInitial = senderName?.charAt(0)?.toUpperCase() || '?';
                       return (
-                        <div key={msg.id} className={cn("flex group", isMine ? "justify-end" : "justify-start")}>
+                        <div key={msg.id} className={cn("flex gap-1.5 group", isMine ? "justify-end" : "justify-start")}>
+                          {!isMine && (
+                            <div className="flex flex-col justify-end shrink-0">
+                              <Avatar className="w-7 h-7">
+                                <AvatarFallback className="text-[10px] bg-muted-foreground/20 text-muted-foreground">
+                                  {senderInitial}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
+                          )}
                           <div className={cn(
-                            "max-w-[85%] sm:max-w-[75%] p-3 rounded-2xl text-sm break-words whitespace-pre-wrap",
+                            "max-w-[85%] sm:max-w-[75%] px-3 py-2 text-sm break-words whitespace-pre-wrap relative shadow-sm",
                             isMine
-                              ? "bg-primary text-primary-foreground rounded-br-md"
-                              : "bg-secondary text-secondary-foreground rounded-bl-md"
+                              ? "bg-primary text-primary-foreground rounded-[18px] rounded-br-[4px]"
+                              : "bg-card text-card-foreground border border-border/30 rounded-[18px] rounded-bl-[4px]",
+                            isOptimistic && "opacity-70"
                           )}>
-                            {msg.text && <p>{msg.text}</p>}
+                            {msg.text && <p className="leading-relaxed">{msg.text}</p>}
                             {msg.attachments && msg.attachments.length > 0 && (
                               <div className={cn("space-y-1", msg.text ? "mt-2" : "")}>
                                 {msg.attachments.map((f, i) => {
                                   const isImage = f.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(f.name);
                                   const isPdf = /\.pdf$/i.test(f.name);
                                   return isImage ? (
-                                    <button key={i} onClick={() => setPreviewImageUrl(f.data)} className="block">
-                                      <img src={f.data} alt={f.name} className="max-w-[200px] max-h-[200px] rounded-lg object-cover border" />
+                                    <button key={i} onClick={() => setPreviewImageUrl(f.data)} className="block max-w-[200px] rounded-lg overflow-hidden border border-border/30 hover:opacity-90 transition-opacity">
+                                      <img src={f.data} alt={f.name} className="w-full h-auto object-cover max-h-[200px]" />
+                                      <div className="flex items-center gap-1 px-2 py-1 text-[10px] text-muted-foreground bg-background/80">
+                                        <Download className="w-3 h-3" />
+                                        <span className="truncate">{f.name}</span>
+                                        <span>({formatFileSize(f.size)})</span>
+                                      </div>
                                     </button>
                                   ) : (
                                     <div key={i} className={cn(
                                       "flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs",
-                                      isMine ? "bg-primary-foreground/10" : "bg-background/50"
+                                      isMine ? "bg-primary-foreground/10" : "bg-muted/50"
                                     )}>
                                       <div className="flex items-center gap-1.5 min-w-0">
                                         {isPdf ? (
@@ -523,7 +612,8 @@ export default function CommanderMessagesPage() {
                             )}>
                               <span className="text-[10px] opacity-70">{formatTime(msg.timestamp)}</span>
                               {isMine && <CheckCheck className="w-3 h-3 opacity-70" />}
-                              {isMine && (
+                              {isOptimistic && <Loader2 className="w-3 h-3 animate-spin opacity-70" />}
+                              {isMine && msg.id !== optimisticMsgRef.current && (
                                 <button onClick={() => deleteMessage(msg.id)} className="opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity ml-1" aria-label="Delete message">
                                   <Trash2 className="w-3 h-3" />
                                 </button>
@@ -533,6 +623,16 @@ export default function CommanderMessagesPage() {
                         </div>
                       );
                     })
+                  )}
+                  {otherTyping && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
+                      <div className="flex gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                      <span>{getOtherParticipantName(activeConv)} is typing...</span>
+                    </div>
                   )}
                   <div ref={messagesEndRef} />
                   {showScrollButton && (
@@ -567,7 +667,7 @@ export default function CommanderMessagesPage() {
                     </label>
                     <textarea
                       value={messageText}
-                      onChange={e => setMessageText(e.target.value)}
+                      onChange={e => { setMessageText(e.target.value); handleTyping(); }}
                       placeholder="Type a message... (Shift+Enter for new line)"
                       onKeyDown={handleKeyDown}
                       rows={1}
@@ -594,7 +694,9 @@ export default function CommanderMessagesPage() {
             ) : (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
-                  <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                  <div className="w-14 h-14 rounded-[14px] bg-muted flex items-center justify-center mx-auto mb-3 ring-1 ring-border/20">
+                    <MessageSquare className="w-7 h-7 text-muted-foreground" />
+                  </div>
                   <p className="text-base text-muted-foreground font-medium">Select a conversation</p>
                   <p className="text-sm text-muted-foreground mt-1">Choose a conversation from the left.</p>
                 </div>
@@ -607,6 +709,14 @@ export default function CommanderMessagesPage() {
           <div className="flex-1 overflow-y-auto space-y-3 h-full">
             {loadingAnnouncements ? (
               [1,2].map(i => <Skeleton key={i} className="h-24 w-full" />)
+            ) : announcementsError ? (
+              <div className="flex flex-col items-center py-16 text-center">
+                <WifiOff className="w-10 h-10 text-destructive mx-auto mb-3" />
+                <p className="text-base text-destructive font-medium">Failed to load announcements</p>
+                <Button variant="outline" size="sm" onClick={fetchAnnouncements} className="mt-3">
+                  <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                </Button>
+              </div>
             ) : announcements.length === 0 ? (
               <div className="flex flex-col items-center py-16 text-center">
                 <Megaphone className="w-10 h-10 text-muted-foreground mx-auto mb-3" />

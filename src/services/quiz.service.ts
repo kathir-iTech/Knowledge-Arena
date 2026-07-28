@@ -13,6 +13,7 @@ import {
   where,
   onSnapshot,
   runTransaction,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
 import type { ValidatedQuiz } from '@/lib/schemas';
@@ -281,44 +282,38 @@ export const quizService = {
 
     const quizData = quizSnap.data();
     const now = Date.now();
-    const quizDocRef = doc(db, COLLECTIONS.QUIZZES, newId);
-    const createdDocs: Array<ReturnType<typeof doc>> = [quizDocRef];
 
-    try {
-      await setDoc(quizDocRef, {
-        title: quizData.title,
-        status: QUIZ_WAITING,
-        current_question_index: -1,
-        question_count: quizData.question_count || questions.length,
-        created_by: creatorId,
-        created_at: now,
+    const batch = writeBatch(db);
+    const quizDocRef = doc(db, COLLECTIONS.QUIZZES, newId);
+    batch.set(quizDocRef, {
+      title: quizData.title,
+      status: QUIZ_WAITING,
+      current_question_index: -1,
+      question_count: quizData.question_count || questions.length,
+      created_by: creatorId,
+      created_at: now,
+    });
+
+    for (const q of questions) {
+      const newQId = uuidv4();
+      const qDocRef = doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.QUESTIONS, newQId);
+      batch.set(qDocRef, {
+        text: q.text,
+        options: q.options,
+        timer: q.timer,
+        sort_index: q.sort_index,
       });
 
-      for (const q of questions) {
-        const newQId = uuidv4();
-        const qDocRef = doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.QUESTIONS, newQId);
-        createdDocs.push(qDocRef);
-        await setDoc(qDocRef, {
-          text: q.text,
-          options: q.options,
-          timer: q.timer,
-          sort_index: q.sort_index,
+      const ak = answerKeys[q.id];
+      if (ak) {
+        const akDocRef = doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.ANSWER_KEYS, newQId);
+        batch.set(akDocRef, {
+          correct_option_index: ak.correct_option_index,
         });
-
-        const ak = answerKeys[q.id];
-        if (ak) {
-          const akDocRef = doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.ANSWER_KEYS, newQId);
-          createdDocs.push(akDocRef);
-          await setDoc(akDocRef, {
-            correct_option_index: ak.correct_option_index,
-          });
-        }
       }
-    } catch (e) {
-      await Promise.allSettled(createdDocs.map(ref => deleteDoc(ref)));
-      throw e;
     }
 
+    await batch.commit();
     return newId;
   },
 };

@@ -106,14 +106,14 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
   }
 
   return (
-    <div className="flex flex-col items-center min-h-screen p-4 bg-background animate-in safe-top safe-bottom">
+    <div className="flex flex-col items-center min-h-screen p-4 md:p-6 bg-background animate-in safe-top safe-bottom">
       <Celebration show={showCelebration} onComplete={() => setShowCelebration(false)} />
-      <Card className="w-full max-w-3xl">
+      <Card className="w-full max-w-3xl card-hover">
         <CardHeader className="text-center space-y-3 pb-0">
           <CardTitle className="text-display font-headline text-foreground tracking-tight">Results</CardTitle>
           <CardDescription className="text-base text-muted-foreground max-w-md mx-auto">&ldquo;{quiz.title}&rdquo;</CardDescription>
           {currentRank && (
-            <div className="inline-flex items-center gap-2 mt-2 bg-primary/10 px-4 py-2 rounded-full text-sm font-medium text-primary">
+            <div className="inline-flex items-center gap-2 mt-2 bg-primary/10 px-4 py-2 rounded-full text-sm font-medium text-primary ring-1 ring-primary/20">
               {currentRank === 1 ? <Crown className="w-4 h-4" /> : <Award className="w-4 h-4" />}
               <span>#{currentRank} of {totalParticipants}</span>
             </div>
@@ -121,17 +121,17 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
         </CardHeader>
         <CardContent className="space-y-6 py-6">
           <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto">
-            <div className="flex flex-col items-center p-3 rounded-[12px] bg-muted/50">
+            <div className="flex flex-col items-center p-3 rounded-[12px] bg-muted/50 ring-1 ring-border/20">
               <Target className="w-4 h-4 text-muted-foreground mb-1" />
               <span className="text-lg font-bold font-mono text-foreground">{uid ? (ranked.find(p => p.user_id === uid)?.score ?? '—') : '—'}</span>
               <span className="text-[10px] text-muted-foreground">Score</span>
             </div>
-            <div className="flex flex-col items-center p-3 rounded-[12px] bg-muted/50">
+            <div className="flex flex-col items-center p-3 rounded-[12px] bg-muted/50 ring-1 ring-border/20">
               <BarChart3 className="w-4 h-4 text-muted-foreground mb-1" />
               <span className="text-lg font-bold font-mono text-foreground">{stats.avgScore}</span>
               <span className="text-[10px] text-muted-foreground">Avg Score</span>
             </div>
-            <div className="flex flex-col items-center p-3 rounded-[12px] bg-muted/50">
+            <div className="flex flex-col items-center p-3 rounded-[12px] bg-muted/50 ring-1 ring-border/20">
               <Clock className="w-4 h-4 text-muted-foreground mb-1" />
               <span className="text-lg font-bold font-mono text-foreground">{stats.maxScore}</span>
               <span className="text-[10px] text-muted-foreground">Best</span>
@@ -139,11 +139,13 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
           </div>
 
           {uid && (
-            <div className="flex justify-center text-sm text-muted-foreground">
-              {(() => {
-                const myScore = ranked.find(p => p.user_id === uid);
-                return myScore ? `${myScore.score} pts — #${currentRank}` : 'Spectator';
-              })()}
+            <div className="flex justify-center text-sm">
+              <div className="inline-flex items-center gap-1.5 bg-muted/50 px-3 py-1.5 rounded-full ring-1 ring-border/20">
+                {(() => {
+                  const myScore = ranked.find(p => p.user_id === uid);
+                  return myScore ? <><Award className="w-3.5 h-3.5 text-primary" /> {myScore.score} pts &middot; #{currentRank}</> : 'Spectator';
+                })()}
+              </div>
             </div>
           )}
 
@@ -152,41 +154,41 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
               {ranked.slice(0, 3).length > 0 && (
                 <div className="flex items-center justify-center gap-4 md:gap-8 pb-6 mb-4 border-b border-border/30">
                   {ranked.length >= 2 && (
-                    <div className="flex flex-col items-center gap-2 text-center">
-                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-muted-foreground/30 ring-offset-2 ring-offset-card">
+                    <div className="flex flex-col items-center gap-2 text-center group">
+                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-muted-foreground/30 ring-offset-2 ring-offset-card transition-all duration-200 group-hover:scale-105 group-hover:shadow-elevation-small">
                         <AvatarFallback className="text-xl bg-secondary">{getParticipantAvatar(ranked[1])}</AvatarFallback>
                       </Avatar>
                       <Medal className="w-5 h-5 text-muted-foreground" />
                       <span className="text-xs font-medium max-w-16 truncate">{getParticipantLabel(ranked[1])}</span>
-                      <span className="font-mono text-sm font-bold">{ranked[1].score}</span>
+                      <span className="font-mono text-sm font-bold tabular-nums">{ranked[1].score}</span>
                     </div>
                   )}
                   {ranked.length >= 1 && (
-                    <div className="flex flex-col items-center gap-2 text-center -mt-4">
-                      <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-2 ring-warning/40 ring-offset-2 ring-offset-card">
+                    <div className="flex flex-col items-center gap-2 text-center -mt-4 group">
+                      <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-2 ring-warning/40 ring-offset-2 ring-offset-card transition-all duration-200 group-hover:scale-105 group-hover:shadow-elevation-medium">
                         <AvatarFallback className="text-2xl bg-secondary">{getParticipantAvatar(ranked[0])}</AvatarFallback>
                       </Avatar>
                       <Crown className="w-6 h-6 text-warning" />
                       <span className="text-sm font-semibold max-w-20 truncate">{getParticipantLabel(ranked[0])}</span>
-                      <span className="font-mono text-base font-bold text-warning">{ranked[0].score}</span>
+                      <span className="font-mono text-base font-bold text-warning tabular-nums">{ranked[0].score}</span>
                     </div>
                   )}
                   {ranked.length >= 3 && (
-                    <div className="flex flex-col items-center gap-2 text-center">
-                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-amber-700/30 ring-offset-2 ring-offset-card">
+                    <div className="flex flex-col items-center gap-2 text-center group">
+                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-amber-700/30 ring-offset-2 ring-offset-card transition-all duration-200 group-hover:scale-105 group-hover:shadow-elevation-small">
                         <AvatarFallback className="text-xl bg-secondary">{getParticipantAvatar(ranked[2])}</AvatarFallback>
                       </Avatar>
                       <Medal className="w-5 h-5 text-amber-700" />
                       <span className="text-xs font-medium max-w-16 truncate">{getParticipantLabel(ranked[2])}</span>
-                      <span className="font-mono text-sm font-bold">{ranked[2].score}</span>
+                      <span className="font-mono text-sm font-bold tabular-nums">{ranked[2].score}</span>
                     </div>
                   )}
                 </div>
               )}
               {ranked.map((p, idx) => (
                 <div key={p.user_id} className={cn(
-                  "flex justify-between items-center p-3 md:p-4 rounded-[12px] transition-all duration-150 border border-transparent",
-                  p.user_id === uid ? "bg-primary/5 border-primary/10" : "hover:bg-muted/30"
+                  "flex justify-between items-center p-3 md:p-4 rounded-[12px] transition-all duration-150 border",
+                  p.user_id === uid ? "bg-primary/5 border-primary/10 shadow-elevation-small" : "border-transparent hover:bg-muted/30 hover:shadow-elevation-small"
                 )}>
                   <div className="flex items-center gap-3">
                     <span className={cn(

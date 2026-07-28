@@ -1,0 +1,27 @@
+ReferenceError: require is not defined
+    at C:\Users\jeeva\Desktop\project\tailwind.config.ts:123:12
+    at ModuleJobSync.runSync (node:internal/modules/esm/module_job:543:37)
+    at ModuleLoader.importSyncForRequire (node:internal/modules/esm/loader:343:47)
+    at loadESMFromCJS (node:internal/modules/cjs/loader:1690:24)
+    at Module._compile (node:internal/modules/cjs/loader:1853:5)
+    at Object..js (node:internal/modules/cjs/loader:2002:10)
+    at Module.load (node:internal/modules/cjs/loader:1594:32)
+    at Module._load (node:internal/modules/cjs/loader:1396:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1617:12)
+    at mod.require (C:\Users\jeeva\Desktop\project\node_modules\next\dist\server\require-hook.js:68:28)
+    at require (node:internal/modules/helpers:153:16)
+    at C:\Users\jeeva\Desktop\project\node_modules\tailwindcss\lib\lib\load-config.js:51:20
+    at loadConfig (C:\Users\jeeva\Desktop\project\node_modules\tailwindcss\lib\lib\load-config.js:55:6)
+    at getTailwindConfig (C:\Users\jeeva\Desktop\project\node_modules\tailwindcss\lib\lib\setupTrackingContext.js:74:116)
+    at C:\Users\jeeva\Desktop\project\node_modules\tailwindcss\lib\lib\setupTrackingContext.js:103:92
+    at C:\Users\jeeva\Desktop\project\node_modules\tailwindcss\lib\processTailwindFeatures.js:46:11
+    at plugins (C:\Users\jeeva\Desktop\project\node_modules\tailwindcss\lib\plugin.js:38:69)
+    at LazyResult.runOnRoot (C:\Users\jeeva\Desktop\project\node_modules\next\node_modules\postcss\lib\lazy-result.js:329:16)
+    at LazyResult.runAsync (C:\Users\jeeva\Desktop\project\node_modules\next\node_modules\postcss\lib\lazy-result.js:258:26)
+    at LazyResult.async (C:\Users\jeeva\Desktop\project\node_modules\next\node_modules\postcss\lib\lazy-result.js:160:30)
+    at LazyResult.then (C:\Users\jeeva\Desktop\project\node_modules\next\node_modules\postcss\lib\lazy-result.js:404:17)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at runNextTicks (node:internal/process/task_queues:69:3)
+    at process.processImmediate (node:internal/timers:472:9)
+    at process.callbackTrampoline (node:internal/async_hooks:130:17)

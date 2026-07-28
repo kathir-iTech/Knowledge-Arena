@@ -1,0 +1,9 @@
+   ▲ Next.js 15.5.20
+   - Local:        http://localhost:3456
+   - Network:      http://10.85.193.116:3456
+   - Environments: .env
+   - Experiments (use with caution):
+     · serverActions
+
+ ✓ Starting...
+ ✓ Ready in 21.9s
