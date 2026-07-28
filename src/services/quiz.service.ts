@@ -149,37 +149,28 @@ export const quizService = {
 
   async deleteQuiz(id: string): Promise<void> {
     const db = getFirestore();
-    const errors: Error[] = [];
 
     const questionsSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS));
-    const submissionDeletions = questionsSnap.docs.map(qDoc =>
-      getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS, qDoc.id, COLLECTIONS.SUBMISSIONS))
-        .then(subSnap =>
-          Promise.all(subSnap.docs.map(subDoc => deleteDoc(subDoc.ref).catch(e => { errors.push(e); })))
-        )
-        .catch(e => { errors.push(e); })
-    );
-    await Promise.allSettled(submissionDeletions);
+    const allDeletions: Array<Promise<void>> = [];
 
-    await Promise.allSettled(questionsSnap.docs.map(qDoc =>
-      deleteDoc(qDoc.ref).catch(e => { errors.push(e); })
-    ));
+    for (const qDoc of questionsSnap.docs) {
+      const subSnap = await getDocs(
+        collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS, qDoc.id, COLLECTIONS.SUBMISSIONS)
+      );
+      subSnap.docs.forEach(subDoc => allDeletions.push(deleteDoc(subDoc.ref)));
+    }
+
+    questionsSnap.docs.forEach(qDoc => allDeletions.push(deleteDoc(qDoc.ref)));
 
     const participantsSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.PARTICIPANTS));
-    await Promise.allSettled(participantsSnap.docs.map(pDoc =>
-      deleteDoc(pDoc.ref).catch(e => { errors.push(e); })
-    ));
+    participantsSnap.docs.forEach(pDoc => allDeletions.push(deleteDoc(pDoc.ref)));
 
     const answerKeysSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.ANSWER_KEYS));
-    await Promise.allSettled(answerKeysSnap.docs.map(aDoc =>
-      deleteDoc(aDoc.ref).catch(e => { errors.push(e); })
-    ));
+    answerKeysSnap.docs.forEach(aDoc => allDeletions.push(deleteDoc(aDoc.ref)));
 
-    await deleteDoc(doc(db, COLLECTIONS.QUIZZES, id)).catch(e => { errors.push(e); });
+    await Promise.all(allDeletions);
 
-    if (errors.length > 0) {
-      console.warn(`deleteQuiz: ${errors.length} sub-operation(s) failed for quiz ${id}`, errors);
-    }
+    await deleteDoc(doc(db, COLLECTIONS.QUIZZES, id));
   },
 
   async resetQuiz(id: string): Promise<void> {

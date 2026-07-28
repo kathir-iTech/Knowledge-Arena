@@ -112,22 +112,17 @@ export const questionService = {
   ): Promise<void> {
     const db = getFirestore();
     const questionRef = doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUESTIONS, questionId);
-
-    const answerKeySnap = await getDoc(
-      doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.ANSWER_KEYS, questionId)
-    );
-    if (!answerKeySnap.exists()) {
-      console.warn('[evaluateQuestion] No answerKey for', quizId, questionId);
-      return;
-    }
-    const correctIndex = answerKeySnap.data().correct_option_index;
-
-    const participantsSnap = await getDocs(
-      collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS)
-    );
+    const answerKeyRef = doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.ANSWER_KEYS, questionId);
 
     try {
       await runTransaction(db, async (transaction) => {
+        const akSnap = await transaction.get(answerKeyRef);
+        if (!akSnap.exists()) {
+          console.warn('[evaluateQuestion] No answerKey for', quizId, questionId);
+          return;
+        }
+        const correctIndex = akSnap.data().correct_option_index;
+
         const qSnap = await transaction.get(questionRef);
         if (!qSnap.exists()) {
           console.warn('[evaluateQuestion] Question doc missing:', questionId);
@@ -139,6 +134,10 @@ export const questionService = {
 
         const timerSeconds = qSnap.data().timer || DEFAULT_TIMER_SECONDS;
         const timeLimit = timerSeconds * 1000;
+
+        const participantsSnap = await getDocs(
+          collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS)
+        );
 
         for (const pDoc of participantsSnap.docs) {
           const uid = pDoc.id;
