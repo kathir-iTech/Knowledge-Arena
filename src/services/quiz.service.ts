@@ -55,7 +55,11 @@ export const quizService = {
     const db = getFirestore();
     const q = query(collection(db, COLLECTIONS.QUIZZES), where('created_by', '==', creatorId));
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() } as ValidatedQuiz));
+    return snap.docs.map(d => {
+      const data = d.data() as Record<string, unknown>;
+      normalizeQuiz(data);
+      return { id: d.id, ...data } as ValidatedQuiz;
+    });
   },
 
   async createQuiz(data: {
@@ -200,6 +204,11 @@ export const quizService = {
     const participantsSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.PARTICIPANTS));
     await Promise.allSettled(participantsSnap.docs.map(pDoc =>
       deleteDoc(pDoc.ref).catch(e => { errors.push(e); })
+    ));
+
+    const answerKeysSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.ANSWER_KEYS));
+    await Promise.allSettled(answerKeysSnap.docs.map(aDoc =>
+      deleteDoc(aDoc.ref).catch(e => { errors.push(e); })
     ));
 
     if (errors.length > 0) {

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 
 const loginSchema = z.object({
@@ -18,6 +19,7 @@ const loginSchema = z.object({
 
 export function LoginForm() {
   const { login, signInWithGoogle } = useAuth();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
@@ -29,7 +31,9 @@ export function LoginForm() {
     setIsLoading(true);
     try {
       await login(values);
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      toast({ variant: 'destructive', title: 'Login Failed', description: message });
     } finally {
       setIsLoading(false);
     }

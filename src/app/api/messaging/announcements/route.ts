@@ -65,15 +65,45 @@ export async function POST(req: NextRequest) {
       target: docRef.id,
       metadata: { targetRole: targetCommanderId ? 'specific' : 'all' },
     });
+
+    const notifUserId = targetCommanderId || executiveAuth.uid;
     await notificationService.create({
       type: 'new_announcement',
       title: 'Announcement Published',
       description: `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}`,
       createdAt: Date.now(),
-      userId: executiveAuth.uid,
-      link: '/executive/messages',
+      userId: notifUserId,
+      link: '/commander/messages',
       metadata: { announcementId: docRef.id },
     });
+
+    if (!targetCommanderId) {
+      try {
+        const commanderSnap = await getAdminDb().collection('users')
+          .where('role', '==', 'commander')
+          .where('deleted', '==', false)
+          .get();
+        const batch = getAdminDb().batch();
+        for (const cDoc of commanderSnap.docs) {
+          if (cDoc.id !== executiveAuth.uid) {
+            const nRef = getAdminDb().collection('notifications').doc();
+            batch.set(nRef, {
+              type: 'new_announcement',
+              title: 'New Announcement',
+              description: `${text.trim().slice(0, 80)}${text.trim().length > 80 ? '...' : ''}`,
+              createdAt: Date.now(),
+              userId: cDoc.id,
+              read: false,
+              link: '/commander/messages',
+              metadata: { announcementId: docRef.id },
+            });
+          }
+        }
+        await batch.commit();
+      } catch (e) {
+        console.error('[Announcements POST] Failed to notify commanders:', e);
+      }
+    }
 
     return NextResponse.json({ success: true, id: docRef.id });
   } catch (err: any) {
