@@ -53,4 +53,9 @@ service-account.json
 *-firebase-adminsdk-*.json
 
 # dev server logs
-dev-server.log
+dev-server*.log
+nxlog.txt
+
+# test artifacts
+test-results/
+.vscode/
