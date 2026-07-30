@@ -28,6 +28,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
+import { BulkSelection, BulkSelectionCheckbox } from '@/components/ui/bulk-selection';
 
 interface Gladiator {
   uid: string;
@@ -54,6 +55,7 @@ export default function StudentManagementPage() {
   const [deleteConfirmGladiator, setDeleteConfirmGladiator] = useState<Gladiator | null>(null);
   const [processingToggle, setProcessingToggle] = useState(false);
   const [processingDelete, setProcessingDelete] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const getToken = async (): Promise<string> => {
     const firebaseAuth = auth as any;
@@ -127,6 +129,44 @@ export default function StudentManagementPage() {
       fetchGladiators();
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete gladiator.' });
+    } finally {
+      setProcessingDelete(false);
+    }
+  };
+
+  const handleBulkToggle = async (ids: string[], disable: boolean) => {
+    try {
+      const token = await getToken();
+      await Promise.all(ids.map(uid =>
+        fetch('/api/admin/users', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ uid, disabled: disable }),
+        }).then(r => { if (!r.ok) throw new Error('Failed'); })
+      ));
+      toast({ title: disable ? 'Disabled' : 'Enabled', description: `${ids.length} gladiator(s) updated.` });
+      setSelectedIds([]);
+      fetchGladiators();
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update one or more gladiators.' });
+    }
+  };
+
+  const handleBulkDelete = async (ids: string[]) => {
+    setProcessingDelete(true);
+    try {
+      const token = await getToken();
+      await Promise.all(ids.map(uid =>
+        fetch(`/api/admin/users?uid=${uid}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => { if (!r.ok) throw new Error('Failed'); })
+      ));
+      toast({ title: 'Deleted', description: `${ids.length} gladiator(s) removed.` });
+      setSelectedIds([]);
+      fetchGladiators();
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete one or more gladiators.' });
     } finally {
       setProcessingDelete(false);
     }
@@ -211,6 +251,21 @@ export default function StudentManagementPage() {
         </div>
       </div>
 
+      {filtered.length > 0 && (
+        <div className="mb-3">
+          <BulkSelection
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            allIds={filtered.map(g => g.uid)}
+            actions={[
+              { label: 'Activate', icon: Check, onClick: (ids) => handleBulkToggle(ids, false), variant: 'default' },
+              { label: 'Disable', icon: Ban, onClick: (ids) => handleBulkToggle(ids, true), variant: 'secondary' },
+              { label: 'Delete', icon: Trash2, onClick: handleBulkDelete, variant: 'destructive', disabled: processingDelete },
+            ]}
+          />
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
@@ -226,6 +281,7 @@ export default function StudentManagementPage() {
             <Card key={g.uid}>
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <BulkSelectionCheckbox id={g.uid} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
                   <Avatar className="h-10 w-10 shrink-0">
                     <AvatarFallback className="bg-primary/10 text-sm font-medium">
                       {g.displayName.charAt(0).toUpperCase()}

@@ -120,6 +120,8 @@ export default function ExecutiveMessagesPage() {
   const [deleteAnnouncementId, setDeleteAnnouncementId] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editMessageText, setEditMessageText] = useState('');
   const [convError, setConvError] = useState(false);
   const [announcementsError, setAnnouncementsError] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
@@ -348,6 +350,25 @@ export default function ExecutiveMessagesPage() {
     }, 300);
   }, [writeTypingIndicator]);
 
+  const editMessage = async (msgId: string, newText: string) => {
+    if (!activeConvId || !newText.trim()) return;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('No token');
+      const res = await fetch(`/api/messaging/conversations/${activeConvId}/messages/${msgId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: newText.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to edit');
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, text: newText.trim() } : m));
+      setEditingMessageId(null);
+      setEditMessageText('');
+    } catch {
+      toast({ variant: 'destructive', title: 'Failed to edit', description: 'Could not edit message.' });
+    }
+  };
+
   const deleteMessage = async (msgId: string) => {
     if (!activeConvId) return;
     setDeletingMessageId(msgId);
@@ -502,7 +523,11 @@ export default function ExecutiveMessagesPage() {
   const filteredConversations = useMemo(() => {
     if (!sidebarSearch) return conversations;
     const search = sidebarSearch.toLowerCase();
-    return conversations.filter(c => c.lastMessage?.text?.toLowerCase().includes(search));
+    return conversations.filter(c => {
+      const otherName = getOtherParticipantName(c).toLowerCase();
+      const lastMsgText = c.lastMessage?.text?.toLowerCase() || '';
+      return otherName.includes(search) || lastMsgText.includes(search);
+    });
   }, [conversations, sidebarSearch]);
 
   const activeConv = useMemo(() => conversations.find(c => c.id === activeConvId), [conversations, activeConvId]);
@@ -683,6 +708,7 @@ export default function ExecutiveMessagesPage() {
                     messages.map(msg => {
                       const isMine = msg.senderId === user?.id;
                       const isOptimistic = msg.id.startsWith('opt_');
+                      const isEditing = editingMessageId === msg.id;
                       const senderName = isMine ? 'You' : getOtherParticipantName(activeConv);
                       const senderInitial = senderName?.charAt(0)?.toUpperCase() || '?';
                       return (
@@ -703,70 +729,98 @@ export default function ExecutiveMessagesPage() {
                               : "bg-card text-card-foreground border border-border/30 rounded-[18px] rounded-bl-[4px]",
                             isOptimistic && "opacity-70"
                           )}>
-                            {isMine && msg.id !== optimisticMsgRef.current && (
-                              <button
-                                onClick={() => deleteMessage(msg.id)}
-                                className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity"
-                                aria-label="Delete message"
-                              >
-                                {deletingMessageId === msg.id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                                ) : (
-                                  <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
-                                )}
-                              </button>
-                            )}
-                            {msg.text && <p className="leading-relaxed">{msg.text}</p>}
-                            {msg.attachments && msg.attachments.length > 0 && (
-                              <div className={cn("space-y-1", msg.text ? "mt-2" : "")}>
-                                {msg.attachments.map((f, i) => {
-                                  const isImage = isImageFile(f);
-                                  return (
-                                    <div key={i}>
-                                      {isImage ? (
-                                        <button
-                                          onClick={() => setImagePreview(f.data)}
-                                          className="block max-w-[200px] rounded-lg overflow-hidden border border-border/30 hover:opacity-90 transition-opacity"
-                                        >
-                                          <img
-                                            src={f.data}
-                                            alt={f.name}
-                                            className="w-full h-auto object-cover max-h-[200px]"
-                                          />
-                                          <div className="flex items-center gap-1 px-2 py-1 text-[10px] text-muted-foreground bg-background/80">
-                                            <Download className="w-3 h-3" />
-                                            <span className="truncate">{f.name}</span>
-                                            <span>({formatFileSize(f.size)})</span>
-                                          </div>
-                                        </button>
-                                      ) : (
-                                        <div className={cn(
-                                          "flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs",
-                                          isMine ? "bg-primary-foreground/10" : "bg-muted/50"
-                                        )}>
-                                          <div className="flex items-center gap-1.5 min-w-0">
-                                            <FileText className="w-3 h-3 shrink-0 opacity-70" />
-                                            <span className="truncate">{f.name}</span>
-                                            <span className="opacity-60 shrink-0">({formatFileSize(f.size)})</span>
-                                          </div>
-                                          <button onClick={() => downloadFile(f)} className="opacity-70 hover:opacity-100 shrink-0">
-                                            <Download className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
+                            {isMine && msg.id !== optimisticMsgRef.current && !isEditing && (
+                              <div className="absolute -left-16 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => { setEditingMessageId(msg.id); setEditMessageText(msg.text); }}
+                                  className="hover:text-primary"
+                                  aria-label="Edit message"
+                                >
+                                  <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                                </button>
+                                <button
+                                  onClick={() => deleteMessage(msg.id)}
+                                  className="hover:text-destructive"
+                                  aria-label="Delete message"
+                                >
+                                  {deletingMessageId === msg.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                                  ) : (
+                                    <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                  )}
+                                </button>
                               </div>
                             )}
-                            <div className={cn(
-                              "flex items-center gap-1 mt-1",
-                              isMine ? "justify-end" : "justify-start"
-                            )}>
-                              <span className="text-[10px] opacity-70">{formatTime(msg.timestamp)}</span>
-                              {isMine && <CheckCheck className="w-3 h-3 opacity-70" />}
-                              {isOptimistic && <Loader2 className="w-3 h-3 animate-spin opacity-70" />}
-                            </div>
+                            {isEditing ? (
+                              <div className="space-y-2">
+                                <textarea
+                                  value={editMessageText}
+                                  onChange={e => setEditMessageText(e.target.value)}
+                                  className="w-full rounded-lg border border-input bg-background p-2 text-sm resize-none min-h-[60px] text-foreground"
+                                  autoFocus
+                                />
+                                <div className="flex gap-2 justify-end">
+                                  <Button size="sm" variant="ghost" onClick={() => setEditingMessageId(null)}>Cancel</Button>
+                                  <Button size="sm" onClick={() => editMessage(msg.id, editMessageText)} disabled={!editMessageText.trim()}>
+                                    <Check className="w-3 h-3 mr-1" /> Save
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                {msg.text && <p className="leading-relaxed">{msg.text}</p>}
+                                {msg.attachments && msg.attachments.length > 0 && (
+                                  <div className={cn("space-y-1", msg.text ? "mt-2" : "")}>
+                                    {msg.attachments.map((f, i) => {
+                                      const isImage = isImageFile(f);
+                                      return (
+                                        <div key={i}>
+                                          {isImage ? (
+                                            <button
+                                              onClick={() => setImagePreview(f.data)}
+                                              className="block max-w-[200px] rounded-lg overflow-hidden border border-border/30 hover:opacity-90 transition-opacity"
+                                            >
+                                              <img
+                                                src={f.data}
+                                                alt={f.name}
+                                                className="w-full h-auto object-cover max-h-[200px]"
+                                              />
+                                              <div className="flex items-center gap-1 px-2 py-1 text-[10px] text-muted-foreground bg-background/80">
+                                                <Download className="w-3 h-3" />
+                                                <span className="truncate">{f.name}</span>
+                                                <span>({formatFileSize(f.size)})</span>
+                                              </div>
+                                            </button>
+                                          ) : (
+                                            <div className={cn(
+                                              "flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs",
+                                              isMine ? "bg-primary-foreground/10" : "bg-muted/50"
+                                            )}>
+                                              <div className="flex items-center gap-1.5 min-w-0">
+                                                <FileText className="w-3 h-3 shrink-0 opacity-70" />
+                                                <span className="truncate">{f.name}</span>
+                                                <span className="opacity-60 shrink-0">({formatFileSize(f.size)})</span>
+                                              </div>
+                                              <button onClick={() => downloadFile(f)} className="opacity-70 hover:opacity-100 shrink-0">
+                                                <Download className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                <div className={cn(
+                                  "flex items-center gap-1 mt-1",
+                                  isMine ? "justify-end" : "justify-start"
+                                )}>
+                                  <span className="text-[10px] opacity-70">{formatTime(msg.timestamp)}</span>
+                                  {isMine && !isOptimistic && <CheckCheck className="w-3 h-3 opacity-70" />}
+                                  {isOptimistic && <Loader2 className="w-3 h-3 animate-spin opacity-70" />}
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
                       );

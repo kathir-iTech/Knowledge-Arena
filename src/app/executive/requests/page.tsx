@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Inbox, Check, X, MessageSquare, Search, Paperclip, Download, Archive, MoreHorizontal } from 'lucide-react';
+import { Inbox, Check, X, MessageSquare, Search, Paperclip, Download, Archive, MoreHorizontal, FileText, Image as ImageIcon, FileType, ExternalLink } from 'lucide-react';
+import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -84,6 +85,8 @@ export default function ExecutiveRequestsPage() {
   const [comment, setComment] = useState('');
   const [replyAttachments, setReplyAttachments] = useState<Attachment[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const fetchRequests = useCallback(async () => {
     try {
@@ -251,6 +254,12 @@ export default function ExecutiveRequestsPage() {
                     <p className="font-medium truncate">{r.title}</p>
                     <p className="text-sm text-muted-foreground truncate">
                       {typeLabels[r.type] || r.type} &middot; {r.commanderEmail}
+                      {r.attachments && r.attachments.length > 0 && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-xs text-primary">
+                          <Paperclip className="w-3 h-3" />
+                          {r.attachments.length}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -316,18 +325,37 @@ export default function ExecutiveRequestsPage() {
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Attachments</p>
                   <div className="space-y-1">
-                    {selectedRequest.attachments.map((f, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-1.5 bg-muted/50 rounded-lg text-sm">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Paperclip className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                          <span className="truncate">{f.name}</span>
-                          <span className="text-xs text-muted-foreground shrink-0">({formatFileSize(f.size)})</span>
+                    {selectedRequest.attachments.map((f, i) => {
+                      const isImage = f.type.startsWith('image/') || f.name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i);
+                      const isPdf = f.type === 'application/pdf' || f.name.endsWith('.pdf');
+                      const isDocx = f.name.endsWith('.docx');
+                      const FileIcon = isImage ? ImageIcon : isPdf ? FileText : isDocx ? FileType : Paperclip;
+                      return (
+                        <div key={i} className="flex items-center justify-between px-3 py-1.5 bg-muted/50 rounded-lg text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{f.name}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">({formatFileSize(f.size)})</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {isImage && (
+                              <button
+                                onClick={() => {
+                                  setPreviewImage(f.data.startsWith('data:') ? f.data : `data:${f.type};base64,${f.data}`);
+                                }}
+                                className="p-1 text-muted-foreground hover:text-primary"
+                                title="Preview"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button onClick={() => downloadFile(f)} className="p-1 text-muted-foreground hover:text-primary" title="Download">
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <button onClick={() => downloadFile(f)} className="text-muted-foreground hover:text-primary">
-                          <Download className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -394,6 +422,24 @@ export default function ExecutiveRequestsPage() {
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!previewImage} onOpenChange={(open) => { if (!open) setPreviewImage(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Image Preview</DialogTitle>
+          </DialogHeader>
+          {previewImage && (
+            <div className="relative w-full h-[60vh] bg-muted/20 rounded-lg overflow-hidden">
+              <Image
+                src={previewImage}
+                alt="Attachment preview"
+                fill
+                className="object-contain"
+                unoptimized
+              />
             </div>
           )}
         </DialogContent>

@@ -694,12 +694,24 @@ export default function CommanderDashboard() {
   );
 }
 
+function statBgClass(color: string | undefined): string {
+  if (!color) return 'bg-muted';
+  const mapping: Record<string, string> = {
+    'text-blue-600': 'bg-blue-100 dark:bg-blue-950/20',
+    'text-emerald-600': 'bg-emerald-100 dark:bg-emerald-950/20',
+    'text-amber-600': 'bg-amber-100 dark:bg-amber-950/20',
+    'text-purple-600': 'bg-purple-100 dark:bg-purple-950/20',
+    'text-rose-600': 'bg-rose-100 dark:bg-rose-950/20',
+    'text-orange-600': 'bg-orange-100 dark:bg-orange-950/20',
+  };
+  return mapping[color] || 'bg-muted';
+}
+
 const StatCard = React.memo(function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color?: string }) {
-  const bgClass = color ? `${color.replace('text-', 'bg-').replace('600', '100')} dark:${color.replace('text-', 'bg-').replace('600', '950/20')}` : 'bg-muted';
   return (
     <Card className="group/card card-hover shadow-elevation-small hover:shadow-elevation-medium">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-200 group-hover/card:scale-110 group-hover/card:shadow-sm", bgClass)}>
+        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-200 group-hover/card:scale-110 group-hover/card:shadow-sm", statBgClass(color))}>
           <Icon className={cn("w-4 h-4", color || 'text-muted-foreground')} />
         </div>
         <div>

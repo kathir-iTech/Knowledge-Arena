@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar, Key, Trash2, Copy } from 'lucide-react';
+import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar, Key, Trash2, CheckSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -30,6 +30,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { BulkSelection, BulkSelectionCheckbox } from '@/components/ui/bulk-selection';
 
 const COMMANDER_DOMAIN = 'knowledgearena.app';
 
@@ -82,6 +83,7 @@ export default function CommanderManagementPage() {
   const [resetting, setResetting] = useState(false);
   const [deleteConfirmCommander, setDeleteConfirmCommander] = useState<Commander | null>(null);
   const [processingDelete, setProcessingDelete] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   async function safeParseJson(res: Response) {
     const ct = res.headers.get('content-type') || '';
@@ -219,6 +221,44 @@ export default function CommanderManagementPage() {
     }
   };
 
+  const handleBulkDelete = async (ids: string[]) => {
+    setProcessingDelete(true);
+    try {
+      const token = await auth.currentUser!.getIdToken();
+      await Promise.all(ids.map(uid =>
+        fetch(`/api/admin/users?uid=${uid}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => { if (!r.ok) throw new Error('Failed'); })
+      ));
+      toast({ variant: 'success', title: 'Deleted', description: `${ids.length} commander(s) removed.` });
+      setSelectedIds([]);
+      fetchCommanders();
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete one or more commanders.' });
+    } finally {
+      setProcessingDelete(false);
+    }
+  };
+
+  const handleBulkToggle = async (ids: string[], disable: boolean) => {
+    try {
+      const token = await auth.currentUser!.getIdToken();
+      await Promise.all(ids.map(uid =>
+        fetch('/api/admin/users', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ uid, disabled: disable }),
+        }).then(r => { if (!r.ok) throw new Error('Failed'); })
+      ));
+      toast({ variant: 'success', title: disable ? 'Disabled' : 'Enabled', description: `${ids.length} commander(s) updated.` });
+      setSelectedIds([]);
+      fetchCommanders();
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update one or more commanders.' });
+    }
+  };
+
   const filtered = commanders.filter(c => {
     const matchesSearch = c.email.toLowerCase().includes(search.toLowerCase()) ||
       c.displayName.toLowerCase().includes(search.toLowerCase());
@@ -284,6 +324,21 @@ export default function CommanderManagementPage() {
         </div>
       </div>
 
+      {filtered.length > 0 && (
+        <div className="mb-3">
+          <BulkSelection
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            allIds={filtered.map(c => c.uid)}
+            actions={[
+              { label: 'Activate', icon: Check, onClick: (ids) => handleBulkToggle(ids, false), variant: 'default' },
+              { label: 'Disable', icon: Ban, onClick: (ids) => handleBulkToggle(ids, true), variant: 'secondary' },
+              { label: 'Delete', icon: Trash2, onClick: handleBulkDelete, variant: 'destructive', disabled: processingDelete },
+            ]}
+          />
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
@@ -299,6 +354,7 @@ export default function CommanderManagementPage() {
             <Card key={c.uid} className={cn(c.deleted && 'opacity-60')}>
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <BulkSelectionCheckbox id={c.uid} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
                   <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 shrink-0">
                     <Shield className="w-5 h-5 text-primary" />
                   </div>
