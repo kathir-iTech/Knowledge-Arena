@@ -5,6 +5,8 @@ import React, { useEffect, useRef, Suspense } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { SessionTimeout } from '@/components/session-timeout';
+import { OfflineDetector } from '@/components/offline-detector';
 
 function ClientLayoutInner({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -94,23 +96,21 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
 
   const skipNav = <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-background focus:text-foreground focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary" tabIndex={1}>Skip to main content</a>;
 
-  if (specialPages.includes(pathname)) {
-    return <>{skipNav}<main id="main-content">{children}</main></>;
-  }
+  const shared = (
+    <>
+      <OfflineDetector />
+      {user && <SessionTimeout />}
+      {skipNav}
+      <main id="main-content">{children}</main>
+    </>
+  );
 
-  if (!user && pathname === '/') {
-    return <>{skipNav}<main id="main-content">{children}</main></>;
-  }
+  if (specialPages.includes(pathname)) return shared;
+  if (!user && pathname === '/') return shared;
+  if (user && pathname.startsWith('/battle')) return shared;
+  if (user) return shared;
 
-  if (user && pathname.startsWith('/battle')) {
-    return <>{skipNav}<main id="main-content">{children}</main></>;
-  }
-
-  if (user) {
-    return <>{skipNav}<main id="main-content">{children}</main></>;
-  }
-
-  return <>{skipNav}<main id="main-content">{children}</main></>;
+  return shared;
 }
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {

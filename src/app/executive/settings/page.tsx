@@ -130,7 +130,9 @@ export default function ExecutiveSettingsPage() {
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       if (data.settings) {
-        data.settings.ai.defaultModel = resolveModel(data.settings.ai?.defaultModel);
+        if (data.settings.ai) {
+          data.settings.ai.defaultModel = resolveModel(data.settings.ai?.defaultModel);
+        }
         setSettings(data.settings);
       }
     } catch {

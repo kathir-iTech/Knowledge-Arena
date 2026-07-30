@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key, RefreshCw } from 'lucide-react';
@@ -19,81 +20,93 @@ interface GeneratedQuestion {
 }
 
 interface PDFQuizGeneratorProps {
-  onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string, dataUri?: string, questionCount?: number) => void;
+  onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string, dataUri?: string, questionCount?: number, category?: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  initialCategory?: string;
+  showCategorySelector?: boolean;
 }
 
 type GenerationStage = 'idle' | 'reading' | 'generating' | 'complete' | 'error';
 
 const STAGE_LABELS: Record<GenerationStage, string> = {
   idle: 'Ready',
-  reading: 'Reading PDF file...',
+  reading: 'Reading file(s)...',
   generating: 'Processing with AI forge...',
   complete: 'Generation complete!',
   error: 'Generation failed',
 };
 
-const CLIENT_TIMEOUT_MS = 120000;
+const CLIENT_TIMEOUT_MS = 180000;
 
-export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQuizGeneratorProps) {
+const ACCEPTED_TYPES = '.pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp';
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
+export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialCategory, showCategorySelector }: PDFQuizGeneratorProps) {
   const { toast } = useToast();
   const { auth } = useFirebase();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [difficulty, setDifficulty] = useState<'easy' | 'moderate' | 'hard' | null>(null);
   const [questionCount, setQuestionCount] = useState(10);
   const [isGenerating, setIsGenerating] = useState(false);
   const [stage, setStage] = useState<GenerationStage>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [category, setCategory] = useState(initialCategory || 'General');
   const mountedRef = useRef(true);
 
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   useEffect(() => {
-    onDirtyChange?.(Boolean(file || difficulty || isGenerating));
-  }, [file, difficulty, isGenerating, onDirtyChange]);
+    onDirtyChange?.(Boolean(files.length || difficulty || isGenerating));
+  }, [files, difficulty, isGenerating, onDirtyChange]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    setError(null);
+  const validateAndAddFile = (selectedFile: File): boolean => {
+    const name = selectedFile.name.toLowerCase();
+    const isPdf = name.endsWith('.pdf') || selectedFile.type === 'application/pdf';
+    const isDocx = name.endsWith('.docx') || selectedFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const isTxt = name.endsWith('.txt') || selectedFile.type === 'text/plain';
+    const isMd = name.endsWith('.md') || selectedFile.type === 'text/markdown';
+    const isImage = name.match(/\.(png|jpg|jpeg|gif|webp)$/) || selectedFile.type.startsWith('image/');
 
-    if (selectedFile) {
-      if (selectedFile.type !== 'application/pdf') {
-        setError("Please upload a valid PDF file.");
-        return;
-      }
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        setError("The PDF is too large. Maximum size is 10MB.");
-        return;
-      }
-      if (selectedFile.size === 0) {
-        setError("The PDF file is empty.");
-        return;
-      }
-      // Validate PDF magic bytes (%PDF)
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const arr = new Uint8Array(reader.result as ArrayBuffer);
-        const magic = String.fromCharCode(arr[0], arr[1], arr[2], arr[3]);
-        if (magic !== '%PDF') {
-          setError("This file does not appear to be a valid PDF. Please check the file and try again.");
-          return;
-        }
-        setFile(selectedFile);
-      };
-      reader.onerror = () => {
-        setError("Could not read the file. Please try again.");
-      };
-      reader.readAsArrayBuffer(selectedFile.slice(0, 4));
+    if (!isPdf && !isDocx && !isTxt && !isMd && !isImage) {
+      setError("Unsupported file type. Please upload PDF, DOCX, TXT, MD, or image files (PNG, JPG, GIF, WebP).");
+      return false;
     }
+    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+      setError(`${selectedFile.name} exceeds the 10MB size limit.`);
+      return false;
+    }
+    if (selectedFile.size === 0) {
+      setError(`${selectedFile.name} is empty.`);
+      return false;
+    }
+    return true;
   };
 
-  const removeFile = () => {
-    setFile(null);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    setError(null);
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    const validFiles: File[] = [];
+    for (let i = 0; i < selectedFiles.length; i++) {
+      if (validateAndAddFile(selectedFiles[i])) {
+        validFiles.push(selectedFiles[i]);
+      }
+    }
+
+    if (validFiles.length > 0) {
+      setFiles(prev => [...prev, ...validFiles]);
+    }
+    e.target.value = '';
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
     setError(null);
   };
 
   const handleGenerate = async () => {
-    if (!file || !difficulty) return;
+    if (!files.length || !difficulty) return;
     
     setIsGenerating(true);
     setError(null);
@@ -102,30 +115,30 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQui
     const timerId = setTimeout(() => {
       setIsGenerating(false);
       setStage('error');
-      setError("Generation timed out after 2 minutes. Try with fewer questions or a smaller PDF.");
+      setError("Generation timed out after 3 minutes. Try with fewer questions or smaller files.");
     }, CLIENT_TIMEOUT_MS);
 
     try {
-      const reader = new FileReader();
       setStage('reading');
-      const dataUri = await new Promise<string>((resolve, reject) => {
+      const dataUris = await Promise.all(files.map(file => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
         reader.readAsDataURL(file);
-      });
+      })));
 
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!idToken) throw new Error("UNAUTHORIZED");
 
       setStage('generating');
+      const combinedDataUri = dataUris.join('||PDF_SEPARATOR||');
       const result = await generateQuizFromPDF({
-        pdfDataUri: dataUri,
+        pdfDataUri: combinedDataUri,
         difficulty,
         questionCount,
         idToken,
       });
 
-      // Check if server returned an error message
       if (result.error) {
         throw new Error(result.error);
       }
@@ -134,8 +147,8 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQui
         clearTimeout(timerId);
         if (!mountedRef.current) return;
         setStage('complete');
-        toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions.` });
-        onQuestionsGenerated(result.questions, result.difficulty, dataUri, questionCount);
+        toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions from ${files.length} document(s).` });
+        onQuestionsGenerated(result.questions, result.difficulty, dataUris[0], questionCount, category);
       } else {
         throw new Error("AI_FAILED");
       }
@@ -148,27 +161,27 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQui
       if (msg.includes("AI_FAILED")) {
         msg = "Unable to generate questions. Please retry.";
       } else if (msg.includes("PDF_IMAGE_ONLY")) {
-        msg = "This PDF contains scanned images and no selectable text. Please upload a text-based PDF.";
+        msg = "This document contains scanned images with no selectable text. Images are processed via AI vision — please retry if the AI can interpret them.";
       } else if (msg.includes("PDF_CONTENT_TOO_SHORT")) {
-        msg = "No extractable text was found in the PDF. This usually happens with scanned documents. Please upload a text-based PDF.";
+        msg = "Not enough content was extracted. Ensure your files contain sufficient text for question generation.";
       } else if (msg.includes("PDF_EXTRACTION_TIMEOUT")) {
-        msg = "PDF extraction timed out. Try a smaller or simpler PDF.";
+        msg = "Content extraction timed out. Try smaller or simpler files.";
       } else if (msg.includes("PDF_EXTRACTION_FAILED")) {
-        msg = "Unable to read the PDF. The file may be corrupted or uses an unsupported format. Please try a different PDF.";
+        msg = "Unable to read a file. It may be corrupted or use an unsupported format.";
       } else if (msg.includes("PDF_ENCRYPTED")) {
-        msg = "This PDF is encrypted or password-protected. Please upload an unencrypted PDF.";
+        msg = "A PDF is encrypted or password-protected. Please upload unencrypted files.";
       } else if (msg.includes("PDF_CORRUPTED")) {
-        msg = "This PDF appears to be corrupted. Please try a different file.";
+        msg = "A file appears to be corrupted. Please try a different file.";
       } else if (msg.includes("PDF_UNSUPPORTED")) {
-        msg = "This file does not appear to be a valid PDF. Please check the file and try again.";
+        msg = "An unsupported file format was uploaded. Please check the files and try again.";
       } else if (msg.includes("UNAUTHORIZED")) {
         msg = "Your session has expired. Please log out and log back in.";
       } else if (msg.includes("PDF_TOO_LARGE")) {
-        msg = "The uploaded PDF exceeds the maximum size limit on the server.";
+        msg = "A file exceeds the maximum size limit on the server.";
       } else if (msg.includes("PDF_FORGE_RATE_LIMITED")) {
         msg = "Rate limit reached (5 per minute). Please wait before trying again.";
       } else if (msg.includes("INVALID_PDF_DATA")) {
-        msg = "Invalid PDF data. Please try uploading the file again.";
+        msg = "Invalid file data. Please try uploading the file again.";
       } else if (msg.includes("quota_exceeded")) {
         msg = "AI generation quota temporarily exhausted. Please wait a few minutes before retrying.";
       } else if (msg.includes("all_models_failed") || msg.includes("AI generation") || msg.includes("temporarily unavailable")) {
@@ -190,7 +203,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQui
           <Sparkles className="w-6 h-6 text-primary" />
           <div>
             <CardTitle className="text-2xl font-headline text-primary uppercase">AI PDF Forge</CardTitle>
-            <CardDescription>Upload a PDF to automatically generate quiz questions.</CardDescription>
+            <CardDescription>Upload documents (PDF, DOCX, TXT, MD, images) to automatically generate quiz questions.</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -214,15 +227,16 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQui
         )}
 
         <div className="space-y-4">
-          <Label className="text-lg font-medium">1. Source Material (PDF)</Label>
-          {!file ? (
+          <Label className="text-lg font-medium">1. Source Material ({files.length > 0 ? `${files.length} file(s)` : ''})</Label>
+          {files.length === 0 ? (
             <div className={cn(
               "border-2 border-dashed border-border/30 rounded-lg p-12 transition-all hover:border-primary/30 cursor-pointer flex flex-col items-center justify-center gap-4 text-center relative",
               error && !error.includes("API key") && "border-destructive/30 bg-destructive/5"
             )}>
               <input 
                 type="file" 
-                accept=".pdf" 
+                accept={ACCEPTED_TYPES}
+                multiple
                 onChange={handleFileChange} 
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                 disabled={isGenerating}
@@ -231,36 +245,57 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQui
                 <Upload className="w-8 h-8 text-primary" />
               </div>
               <div>
-                <p className="font-semibold text-lg">Upload your PDF material</p>
-                <p className="text-sm text-muted-foreground">Max size 10MB. Text-based PDFs only.</p>
+                <p className="font-semibold text-lg">Upload document(s)</p>
+                <p className="text-sm text-muted-foreground">Max 10MB each. Supports PDF, DOCX, TXT, MD, and images (PNG, JPG, GIF, WebP).</p>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between p-4 bg-background/50 border border-border/20 rounded-lg">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className="bg-primary/5 p-2 rounded-lg">
-                  <FileText className="w-6 h-6 text-primary" />
+            <div className="space-y-2">
+              {files.map((f, idx) => (
+                <div key={idx} className="flex items-center justify-between p-4 bg-background/50 border border-border/20 rounded-lg">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="bg-primary/5 p-2 rounded-lg">
+                      <FileText className="w-6 h-6 text-primary" />
+                    </div>
+                    <div className="flex flex-col truncate">
+                      <span className="font-medium truncate">{f.name}</span>
+                      <span className="text-xs text-muted-foreground">{(f.size / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => removeFile(idx)} 
+                    disabled={isGenerating}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
                 </div>
-                <div className="flex flex-col truncate">
-                  <span className="font-medium truncate">{file.name}</span>
-                  <span className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
-                </div>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={removeFile} 
-                disabled={isGenerating}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <X className="w-5 h-5" />
-              </Button>
+              ))}
+              <label className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-border/30 rounded-lg cursor-pointer hover:bg-accent/30 text-sm text-muted-foreground transition-colors">
+                <Upload className="w-4 h-4" />
+                <span>Add more files</span>
+                <input type="file" accept={ACCEPTED_TYPES} multiple onChange={handleFileChange} className="hidden" disabled={isGenerating} />
+              </label>
             </div>
           )}
         </div>
 
+        {showCategorySelector && (
+          <div className="space-y-4">
+            <Label className="text-lg font-medium">Category</Label>
+            <Input
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              placeholder="e.g. General, Physics, History"
+              className="max-w-md"
+            />
+          </div>
+        )}
+
         <div className="space-y-4">
-          <Label className="text-lg font-medium">2. Difficulty</Label>
+          <Label className="text-lg font-medium">{showCategorySelector ? '3' : '2'}. Difficulty</Label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               { id: 'easy', label: 'Easy', emoji: '🟢', desc: 'Recall & Terminology' },
@@ -288,7 +323,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQui
 
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <Label className="text-lg font-medium">3. Question Count</Label>
+            <Label className="text-lg font-medium">{showCategorySelector ? '4' : '3'}. Question Count</Label>
             <span className="bg-primary/10 text-primary font-bold px-3 py-1 rounded text-sm">
               {questionCount} QUESTIONS
             </span>
@@ -306,7 +341,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQui
         <div className="pt-4">
           <Button
             onClick={handleGenerate}
-            disabled={isGenerating || !file || !difficulty}
+            disabled={isGenerating || !files.length || !difficulty}
             size="lg"
             className="w-full h-20 text-xl font-headline"
           >
@@ -332,7 +367,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange }: PDFQui
                 Generation Failed
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">{error}</p>
-              <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating || !file || !difficulty} className="w-fit">
+              <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating || !files.length || !difficulty} className="w-fit">
                 <RefreshCw className="w-3 h-3 mr-2" /> Retry
               </Button>
             </div>

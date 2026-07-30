@@ -1,18 +1,19 @@
 'use server';
 /**
- * @fileOverview AI flow for generating multiple-choice questions from a PDF.
+ * @fileOverview AI flow for generating multiple-choice questions from PDF, DOCX, TXT, MD, and images.
  * Engine: Google Gemini (Genkit Plugin) — free tier, with multi-model fallback.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
+import * as zlib from 'zlib';
 
 import { PdfReader } from 'pdfreader';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 
-const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const EXTRACTION_TIMEOUT_MS = 30000;
 const GEMINI_TIMEOUT_MS = 30000;
 
@@ -24,7 +25,7 @@ const QuizQuestionOutputSchema = z.object({
 });
 
 const GenerateQuizFromPDFInputSchema = z.object({
-  pdfDataUri: z.string().describe("A PDF as a data URI (base64)."),
+  pdfDataUri: z.string().describe("Documents as data URIs (base64), multiple joined by ||PDF_SEPARATOR||."),
   difficulty: z.enum(['easy', 'moderate', 'hard']).describe('Difficulty of the questions.'),
   questionCount: z.number().min(1).max(30).describe('Number of questions to generate.'),
   idToken: z.string().describe('Firebase ID token for authentication.'),
@@ -47,9 +48,7 @@ const modelFallbackChain = async (): Promise<string[]> => {
     const snap = await getAdminDb().collection('platform_settings').doc('global').get();
     const stored = snap.data()?.ai?.defaultModel;
     if (stored && typeof stored === 'string') return [stored, 'gemini-2.0-flash'];
-  } catch {
-    // fall through to default
-  }
+  } catch { }
   return ['gemini-2.0-flash'];
 };
 
@@ -102,7 +101,6 @@ type GeminiResult =
 function repairJson(raw: string): string {
   let cleaned = raw.trim();
 
-  // Strip markdown fences
   if (cleaned.startsWith('```')) {
     const firstNewline = cleaned.indexOf('\n');
     if (firstNewline > 0) {
@@ -118,31 +116,20 @@ function repairJson(raw: string): string {
     JSON.parse(cleaned);
     return cleaned;
   } catch {
-    // Attempt repairs
     let repaired = cleaned;
-
-    // Replace single quotes with double quotes (for keys and string values)
     repaired = repaired.replace(/'/g, '"');
-
-    // Remove trailing commas before closing braces/brackets
     repaired = repaired.replace(/,(\s*[}\]])/g, '$1');
-
-    // Ensure property names are double-quoted
     repaired = repaired.replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
-
-    // Try parsing repaired version
     try {
       JSON.parse(repaired);
       return repaired;
     } catch {
-      // If still invalid, try to extract a JSON object from the text
       const objectMatch = repaired.match(/\{[\s\S]*\}/);
       if (objectMatch) {
         try {
           JSON.parse(objectMatch[0]);
           return objectMatch[0];
         } catch {
-          // Remove any remaining problematic characters
           let cleanedAgain = objectMatch[0]
             .replace(/[\u0000-\u001F]+/g, ' ')
             .replace(/\s+/g, ' ')
@@ -167,7 +154,6 @@ function tryParseQuestions(raw: string): { questions: QuizQuestions } | null {
     if (parsed.questions && Array.isArray(parsed.questions)) {
       return parsed as { questions: QuizQuestions };
     }
-    // Some models wrap questions differently
     if (Array.isArray(parsed)) {
       return { questions: parsed as QuizQuestions };
     }
@@ -183,7 +169,7 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await withTimeout(
+      const _response = await withTimeout(
         ai.generate({
           model: googleAI.model(modelName),
           prompt: promptText,
@@ -197,11 +183,8 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
         `Gemini:${modelName}`
       );
 
-      if (!response.output) {
-        throw new Error(`EMPTY_OUTPUT_${modelName}`);
-      }
-
-      const raw = response.text;
+      const genResponse = _response as { output?: Record<string, unknown>; text?: string };
+      const raw = genResponse.text;
       if (raw) {
         const repaired = repairJson(raw);
         const parsed = tryParseQuestions(repaired);
@@ -210,8 +193,7 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
         }
       }
 
-      // Use the structured output directly if available
-      const output = response.output as { questions: QuizQuestions } | undefined;
+      const output = genResponse.output as { questions: QuizQuestions } | undefined;
       if (output?.questions?.length) {
         return { ok: true, output, engine: modelName };
       }
@@ -225,12 +207,10 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
         throw err;
       }
 
-      // On last attempt, don't continue
       if (attempt === maxAttempts) {
         return { ok: false, reason: 'all_models_failed', errors };
       }
 
-      // Wait before retry with exponential backoff
       await new Promise((r) => setTimeout(r, 1000 * attempt));
     }
   }
@@ -290,8 +270,8 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 
     const rawBase64 = input.pdfDataUri.split(',')[1] || input.pdfDataUri;
     const decodedBytes = Buffer.from(rawBase64, 'base64').length;
-    if (decodedBytes > MAX_PDF_SIZE_BYTES) {
-      console.error('[Forge] PDF too large:', decodedBytes);
+    if (decodedBytes > MAX_FILE_SIZE_BYTES) {
+      console.error('[Forge] File too large:', decodedBytes);
       return { questions: [], difficulty: input.difficulty, error: 'PDF_TOO_LARGE' };
     }
     return await generateQuizFromPDFFlow(input);
@@ -302,25 +282,75 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
   }
 }
 
-function detectPdfIssue(buffer: Buffer): string | null {
-  // Check PDF header
-  const header = buffer.slice(0, 8).toString('ascii');
-  if (!header.startsWith('%PDF-')) {
-    return 'PDF_UNSUPPORTED';
-  }
+// ── Multi-format extraction ──────────────────────────────────────────
 
-  // Check for encryption
-  const content = buffer.toString('latin1').toLowerCase();
-  if (content.includes('/encrypt')) {
-    return 'PDF_ENCRYPTED';
-  }
+const SEPARATOR = '||PDF_SEPARATOR||';
 
-  // Check for empty file (header only, no objects)
-  if (buffer.length < 100) {
-    return 'PDF_CORRUPTED';
-  }
+function detectFileType(dataUri: string): 'pdf' | 'docx' | 'txt' | 'md' | 'image' | 'unknown' {
+  const lower = dataUri.slice(0, 100).toLowerCase();
+  if (lower.startsWith('data:application/pdf') || lower.includes('%pdf')) return 'pdf';
+  if (lower.startsWith('data:application/vnd.openxmlformats-officedocument.wordprocessingml') || lower.includes('application/vnd.openxmlformats')) return 'docx';
+  if (lower.startsWith('data:text/plain') || lower.startsWith('data:text/markdown')) return 'txt';
+  if (lower.startsWith('data:image/')) return 'image';
+  if (lower.startsWith('data:text/')) return 'txt';
+  return 'unknown';
+}
 
-  return null;
+function extractTextFromTxt(dataUri: string): string {
+  const base64 = dataUri.split(',')[1] || dataUri;
+  return Buffer.from(base64, 'base64').toString('utf-8');
+}
+
+function extractTextFromDocxBuffer(buffer: Buffer): string {
+  try {
+    let offset = 0;
+    const entries: { name: string; data: Buffer }[] = [];
+
+    while (offset < buffer.length - 30) {
+      const sig = buffer.readUInt32LE(offset);
+      if (sig !== 0x04034b50) break;
+
+      const compression = buffer.readUInt16LE(offset + 8);
+      const nameLength = buffer.readUInt16LE(offset + 26);
+      const extraLength = buffer.readUInt16LE(offset + 28);
+      const compressedSize = buffer.readUInt32LE(offset + 18);
+      const dataOffset = offset + 30 + nameLength + extraLength;
+
+      const name = buffer.toString('utf8', offset + 30, offset + 30 + nameLength);
+
+      let data: Buffer;
+      if (compression === 0) {
+        data = buffer.slice(dataOffset, dataOffset + compressedSize);
+      } else if (compression === 8) {
+        data = zlib.inflateRawSync(buffer.slice(dataOffset, dataOffset + compressedSize));
+      } else {
+        offset = dataOffset + compressedSize;
+        continue;
+      }
+
+      entries.push({ name, data });
+      offset = dataOffset + compressedSize;
+    }
+
+    const docEntry = entries.find(e => e.name === 'word/document.xml');
+    if (!docEntry) return '';
+
+    const xml = docEntry.data.toString('utf8');
+    const matches = xml.match(/<w:t[^>]*>([^<]+)<\/w:t>/g);
+    if (!matches) return '';
+
+    return matches
+      .map(m => m.replace(/<[^>]+>/g, ''))
+      .join(' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+  } catch (e) {
+    console.error('[DocxExtract] Error:', e);
+    return '';
+  }
 }
 
 async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
@@ -328,7 +358,6 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
   numpages: number;
   isImageOnly: boolean;
 }> {
-  // Quick validation
   const issue = detectPdfIssue(buffer);
   if (issue) {
     throw new Error(issue);
@@ -361,7 +390,6 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
           settled = true;
           const totalPages = Math.max(maxPage, 1);
 
-          // Build text per page
           const pageTexts: string[] = [];
           let pagesWithText = 0;
           for (let i = 1; i <= totalPages; i++) {
@@ -401,69 +429,245 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
   });
 }
 
+function detectPdfIssue(buffer: Buffer): string | null {
+  const header = buffer.slice(0, 8).toString('ascii');
+  if (!header.startsWith('%PDF-')) {
+    return 'PDF_UNSUPPORTED';
+  }
+
+  const content = buffer.toString('latin1').toLowerCase();
+  if (content.includes('/encrypt')) {
+    return 'PDF_ENCRYPTED';
+  }
+
+  if (buffer.length < 100) {
+    return 'PDF_CORRUPTED';
+  }
+
+  return null;
+}
+
+async function extractTextFromDocument(dataUri: string): Promise<string> {
+  const rawBase64 = dataUri.split(',')[1] || dataUri;
+  const fileType = detectFileType(dataUri);
+
+  try {
+    switch (fileType) {
+      case 'txt':
+      case 'md':
+        return extractTextFromTxt(dataUri);
+
+      case 'docx': {
+        const buffer = Buffer.from(rawBase64, 'base64');
+        return extractTextFromDocxBuffer(buffer);
+      }
+
+      case 'pdf': {
+        const buffer = Buffer.from(rawBase64, 'base64');
+        const result = await extractTextFromPdfBuffer(buffer);
+        if (result.isImageOnly && result.text.length < 20) {
+          return ''; // Will be handled as image
+        }
+        return result.text;
+      }
+
+      case 'image':
+        return ''; // Images are passed as vision input
+
+      default:
+        throw new Error('PDF_UNSUPPORTED');
+    }
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    throw err;
+  }
+}
+
+async function extractTextFromAllDocuments(dataUris: string[]): Promise<{
+  combinedText: string;
+  imageDataUris: string[];
+}> {
+  const texts: string[] = [];
+  const imageDataUris: string[] = [];
+
+  for (const dataUri of dataUris) {
+    const fileType = detectFileType(dataUri);
+    if (fileType === 'image') {
+      imageDataUris.push(dataUri);
+      continue;
+    }
+
+    try {
+      const text = await extractTextFromDocument(dataUri);
+      if (text.trim().length > 0) {
+        texts.push(text.trim());
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === 'PDF_IMAGE_ONLY' || msg === 'PDF_CONTENT_TOO_SHORT') {
+        continue;
+      }
+      throw e;
+    }
+  }
+
+  return {
+    combinedText: texts.join('\n\n---\n\n'),
+    imageDataUris,
+  };
+}
+
+// ── Gemini vision for images ─────────────────────────────────────────
+
+async function generatePromptWithImages(
+  textContent: string,
+  imageDataUris: string[],
+  difficulty: string,
+  questionCount: number
+): Promise<GeminiResult> {
+  const difficultyMap: Record<string, string> = {
+    easy: 'Beginner (Factual Recall)',
+    moderate: 'Intermediate (Concept Application)',
+    hard: 'Advanced (Critical Synthesis)',
+  };
+
+  const MAX_INPUT_CHARS = 40000;
+  let truncated = textContent;
+  if (textContent.length > MAX_INPUT_CHARS) {
+    const target = textContent.lastIndexOf('. ', MAX_INPUT_CHARS);
+    const target2 = textContent.lastIndexOf('\n', MAX_INPUT_CHARS);
+    const breakAt = Math.max(target, target2);
+    if (breakAt > MAX_INPUT_CHARS * 0.5) {
+      truncated = textContent.slice(0, breakAt + 1);
+    } else {
+      truncated = textContent.slice(0, MAX_INPUT_CHARS);
+    }
+  }
+
+  const errors: string[] = [];
+  const chain = await modelFallbackChain();
+
+  for (const modelName of chain) {
+    for (let attempt = 1; attempt <= MAX_RETRIES_PER_MODEL; attempt++) {
+      try {
+        const promptText = `Generate exactly ${questionCount} high-quality multiple-choice questions based on the following content${imageDataUris.length > 0 ? ' and the provided image(s)' : ''}.
+
+Difficulty: ${difficultyMap[difficulty]}
+- Questions must be derived ONLY from the provided content.
+- Provide exactly 4 options for each question.
+- Ensure distractors are plausible but incorrect.
+- Include a clear explanation for the correct answer.
+
+Output format MUST be a JSON object with a "questions" array:
+{
+  "questions": [
+    {
+      "text": "The question string",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswerIndex": 0,
+      "explanation": "Why this is correct"
+    }
+  ]
+}
+
+Content:
+${truncated}`;
+
+        const parts: any[] = [{ text: promptText }];
+        for (const imgUri of imageDataUris) {
+          parts.push({ inlineData: { data: imgUri.split(',')[1], mimeType: 'image/png' } });
+        }
+
+        const _response = await withTimeout(
+          ai.generate({
+            model: googleAI.model(modelName),
+            prompt: parts,
+            output: {
+              schema: z.object({
+                questions: z.array(QuizQuestionOutputSchema),
+              }),
+            },
+          }),
+          GEMINI_TIMEOUT_MS,
+          `Gemini:${modelName}`
+        );
+
+        const genResponse = _response as { output?: Record<string, unknown>; text?: string };
+        const raw = genResponse.text;
+        if (raw) {
+          const repaired = repairJson(raw);
+          const parsed = tryParseQuestions(repaired);
+          if (parsed) {
+            return { ok: true, output: parsed, engine: modelName };
+          }
+        }
+
+        const output = genResponse.output as { questions: QuizQuestions } | undefined;
+        if (output?.questions?.length) {
+          return { ok: true, output, engine: modelName };
+        }
+
+        throw new Error(`PARSE_FAILED_${modelName}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`${modelName} attempt ${attempt}: ${msg}`);
+
+        if (isAuthError(err)) throw err;
+        if (attempt < MAX_RETRIES_PER_MODEL) {
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
+        }
+      }
+    }
+  }
+
+  return { ok: false, reason: 'all_models_failed', errors };
+}
+
+// ── Main flow ────────────────────────────────────────────────────────
+
 const generateQuizFromPDFFlow = ai.defineFlow(
   {
     name: 'generateQuizFromPDFFlow',
     inputSchema: GenerateQuizFromPDFInputSchema,
     outputSchema: GenerateQuizFromPDFOutputSchema,
   },
-  async (input) => {
-    const parts = input.pdfDataUri.split(',');
-    const base64Data = parts[parts.length - 1];
-    if (!base64Data) throw new Error('INVALID_PDF_DATA');
+  async (input: GenerateQuizFromPDFInput) => {
+    const dataUris: string[] = input.pdfDataUri.includes(SEPARATOR)
+      ? input.pdfDataUri.split(SEPARATOR)
+      : [input.pdfDataUri];
 
-    const buffer = Buffer.from(base64Data, 'base64');
+    const { combinedText, imageDataUris } = await extractTextFromAllDocuments(dataUris);
 
-    let extracted;
-    try {
-      extracted = await extractTextFromPdfBuffer(buffer);
-    } catch (e) {
-      const err = e instanceof Error ? e : new Error(String(e));
-      const code = err.message;
-      // Pass through known error codes
-      if (
-        code === 'PDF_IMAGE_ONLY' ||
-        code === 'PDF_ENCRYPTED' ||
-        code === 'PDF_CORRUPTED' ||
-        code === 'PDF_UNSUPPORTED' ||
-        code === 'PDF_EXTRACTION_TIMEOUT' ||
-        code === 'PDF_CONTENT_TOO_SHORT' ||
-        code.startsWith('PDF_EXTRACTION_FAILED')
-      ) {
-        throw err;
-      }
-      throw new Error(`PDF_EXTRACTION_FAILED: ${err.message}`);
-    }
+    const text = combinedText.replace(/\s+/g, ' ').trim();
 
-    const text = extracted.text.replace(/\s+/g, ' ').trim();
-
-    if (text.length < 20) {
-      if (extracted.isImageOnly) {
-        throw new Error('PDF_IMAGE_ONLY');
-      }
+    if (text.length < 20 && imageDataUris.length === 0) {
       throw new Error('PDF_CONTENT_TOO_SHORT');
     }
 
-    const difficultyMap = {
-      easy: 'Beginner (Factual Recall)',
-      moderate: 'Intermediate (Concept Application)',
-      hard: 'Advanced (Critical Synthesis)',
-    };
+    let result: GeminiResult;
+    if (imageDataUris.length > 0) {
+      result = await generatePromptWithImages(text, imageDataUris, input.difficulty, input.questionCount);
+    } else {
+      const difficultyMap: Record<string, string> = {
+        easy: 'Beginner (Factual Recall)',
+        moderate: 'Intermediate (Concept Application)',
+        hard: 'Advanced (Critical Synthesis)',
+      };
 
-    const MAX_INPUT_CHARS = 40000;
-    let truncated = text;
-    if (text.length > MAX_INPUT_CHARS) {
-      const target = text.lastIndexOf('. ', MAX_INPUT_CHARS);
-      const target2 = text.lastIndexOf('\n', MAX_INPUT_CHARS);
-      const breakAt = Math.max(target, target2);
-      if (breakAt > MAX_INPUT_CHARS * 0.5) {
-        truncated = text.slice(0, breakAt + 1);
-      } else {
-        truncated = text.slice(0, MAX_INPUT_CHARS);
+      const MAX_INPUT_CHARS = 40000;
+      let truncated = text;
+      if (text.length > MAX_INPUT_CHARS) {
+        const target = text.lastIndexOf('. ', MAX_INPUT_CHARS);
+        const target2 = text.lastIndexOf('\n', MAX_INPUT_CHARS);
+        const breakAt = Math.max(target, target2);
+        if (breakAt > MAX_INPUT_CHARS * 0.5) {
+          truncated = text.slice(0, breakAt + 1);
+        } else {
+          truncated = text.slice(0, MAX_INPUT_CHARS);
+        }
       }
-    }
 
-    const promptText = `Generate exactly ${input.questionCount} high-quality multiple-choice questions based on the following content.
+      const promptText = `Generate exactly ${input.questionCount} high-quality multiple-choice questions based on the following content.
 
 Difficulty: ${difficultyMap[input.difficulty]}
 - Questions must be derived ONLY from the provided content.
@@ -486,7 +690,9 @@ Output format MUST be a JSON object with a "questions" array:
 Content:
 ${truncated}`;
 
-    const result = await callGeminiWithFallback(promptText);
+      result = await callGeminiWithFallback(promptText);
+    }
+
     if (!result.ok) {
       let errorMsg: string;
       switch (result.reason) {
@@ -494,7 +700,7 @@ ${truncated}`;
           errorMsg = 'AI generation temporarily unavailable due to quota limits.';
           break;
         case 'timeout':
-          errorMsg = 'AI generation timed out. Your PDF may be too large or complex. Try with fewer questions or a smaller PDF.';
+          errorMsg = 'AI generation timed out. Your documents may be too large or complex. Try with fewer questions or smaller files.';
           break;
         default:
           errorMsg = 'AI generation failed. Please try again.';

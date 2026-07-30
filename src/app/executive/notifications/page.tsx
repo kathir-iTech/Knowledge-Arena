@@ -13,6 +13,7 @@ import {
   Shield, BookOpen, Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BulkSelection, BulkSelectionCheckbox } from '@/components/ui/bulk-selection';
 
 interface Notification {
   id: string;
@@ -63,6 +64,7 @@ export default function ExecutiveNotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -121,6 +123,39 @@ export default function ExecutiveNotificationsPage() {
     }
   };
 
+  const handleBulkDelete = async (ids: string[]) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+      await Promise.all(ids.map(id =>
+        fetch(`/api/executive/notifications/${id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => { if (!r.ok) throw new Error('Failed'); })
+      ));
+      setNotifications(prev => prev.filter(n => !ids.includes(n.id)));
+      setUnreadCount(prev => Math.max(0, prev - ids.filter(id => !notifications.find(n => n.id === id)?.read).length));
+      setSelectedIds([]);
+    } catch {}
+  };
+
+  const handleBulkMarkRead = async (ids: string[]) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+      await Promise.all(ids.map(id =>
+        fetch('/api/executive/notifications', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ markAllRead: true }),
+        }).then(r => { if (!r.ok) throw new Error('Failed'); })
+      ));
+      setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - ids.length));
+      setSelectedIds([]);
+    } catch {}
+  };
+
   if (loading) {
     return (
       <div className="page-container animate-in space-y-4">
@@ -150,6 +185,20 @@ export default function ExecutiveNotificationsPage() {
         )}
       </div>
 
+      {notifications.length > 0 && (
+        <div className="mb-3">
+          <BulkSelection
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            allIds={notifications.map(n => n.id)}
+            actions={[
+              { label: 'Mark Read', icon: CheckCheck, onClick: handleBulkMarkRead, variant: 'default' },
+              { label: 'Delete', icon: Trash2, onClick: handleBulkDelete, variant: 'destructive' },
+            ]}
+          />
+        </div>
+      )}
+
       {notifications.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
@@ -165,19 +214,22 @@ export default function ExecutiveNotificationsPage() {
             return (
               <Card key={n.id} className={cn(!n.read && 'border-primary/20 bg-primary/[0.02]')}>
                 <CardContent className="p-4 flex items-start gap-3">
-                  <div className={cn("shrink-0 w-9 h-9 rounded-[8px] flex items-center justify-center", config.color)}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{n.title}</span>
-                      {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0" />}
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <BulkSelectionCheckbox id={n.id} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
+                    <div className={cn("shrink-0 w-9 h-9 rounded-[8px] flex items-center justify-center", config.color)}>
+                      <Icon className="w-4 h-4" />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{n.description}</p>
-                    <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {formatTime(n.createdAt)}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium">{n.title}</span>
+                        {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{n.description}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {formatTime(n.createdAt)}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {n.link && (

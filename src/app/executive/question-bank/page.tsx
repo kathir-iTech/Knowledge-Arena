@@ -3,11 +3,12 @@
 import React, { useState, useRef, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Sparkles } from 'lucide-react';
+import { ChevronLeft, Sparkles, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 const PDFQuizGenerator = dynamic(() => import('@/components/quiz/PDFQuizGenerator').then(m => m.PDFQuizGenerator), { ssr: false });
 const ExecutiveQuestionReviewPanel = dynamic(() => import('@/components/quiz/ExecutiveQuestionReviewPanel').then(m => m.ExecutiveQuestionReviewPanel), { ssr: false });
@@ -24,12 +25,14 @@ export default function QuestionBankPage() {
   const { toast } = useToast();
   const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestion[] | null>(null);
   const [forgeDifficulty, setForgeDifficulty] = useState('');
+  const [forgeCategory, setForgeCategory] = useState('General');
   const [showForgeWithPreserved, setShowForgeWithPreserved] = useState(false);
   const forgeParams = useRef<{ pdfDataUri: string; diff: 'easy' | 'moderate' | 'hard'; count: number } | null>(null);
 
-  const handleQuestionsGenerated = (qList: GeneratedQuestion[], diff: string, dataUri?: string, questionCount?: number) => {
+  const handleQuestionsGenerated = (qList: GeneratedQuestion[], diff: string, dataUri?: string, questionCount?: number, category?: string) => {
     setGeneratedQuestions(qList);
     setForgeDifficulty(diff);
+    if (category) setForgeCategory(category);
     setShowForgeWithPreserved(false);
     if (dataUri && questionCount) {
       forgeParams.current = { pdfDataUri: dataUri, diff: diff as 'easy' | 'moderate' | 'hard', count: questionCount };
@@ -88,38 +91,77 @@ export default function QuestionBankPage() {
   };
 
   return (
-    <div className="page-container safe-top safe-bottom animate-in">
-      <div className="flex items-center justify-between mb-6">
-        <div className="space-y-1.5">
-          <h1 className="text-page-title font-headline tracking-tight text-primary">
-            <Sparkles className="inline-block w-6 h-6 mr-2 text-amber-500" />
-            AI PDF Forge
-          </h1>
-          <p className="text-base text-muted-foreground">Generate quiz questions from PDF documents using AI.</p>
+    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/10">
+      <div className={cn(
+        "page-container safe-top safe-bottom animate-in",
+        generatedQuestions && !showForgeWithPreserved ? "py-4 md:py-6" : "py-6 md:py-10"
+      )}>
+        <div className="flex items-center justify-between mb-6 md:mb-8">
+          <div className="space-y-1.5">
+            <h1 className="text-page-title font-headline tracking-tight flex items-center gap-3">
+              <span className="bg-amber-500/10 p-2 rounded-lg inline-flex">
+                <Sparkles className="w-6 h-6 text-amber-500" />
+              </span>
+              AI PDF Forge
+            </h1>
+            <p className="text-base text-muted-foreground ml-12">
+              Generate quiz questions from PDF, DOCX, TXT, Markdown, and images using AI.
+            </p>
+          </div>
+          {generatedQuestions && !showForgeWithPreserved && (
+            <Button variant="outline" size="sm" onClick={handleRegenerate} className="hidden md:inline-flex gap-2">
+              <ChevronLeft className="w-4 h-4" /> Back to Upload
+            </Button>
+          )}
         </div>
-      </div>
 
-      {generatedQuestions && !showForgeWithPreserved ? (
-        <div className="space-y-4">
-          <Button variant="ghost" onClick={handleRegenerate} className="h-9 mb-2">
-            <ChevronLeft className="mr-2 h-4 w-4" /> Back to PDF Upload
-          </Button>
-          <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
-            <ExecutiveQuestionReviewPanel
-              initialQuestions={generatedQuestions}
-              difficulty={forgeDifficulty}
-              onRegenerate={handleRegenerate}
-              onEditSettings={handleEditSettings}
-              onRegenerateQuestion={forgeParams.current ? handleRegenerateQuestion : undefined}
-              onImportComplete={handleImportComplete}
-            />
-          </Suspense>
-        </div>
-      ) : (
-        <Suspense fallback={<div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />}>
-          <PDFQuizGenerator onQuestionsGenerated={handleQuestionsGenerated} />
-        </Suspense>
-      )}
+        {generatedQuestions && !showForgeWithPreserved ? (
+          <div className="space-y-4">
+            <div className="md:hidden">
+              <Button variant="ghost" size="sm" onClick={handleRegenerate} className="mb-2">
+                <ChevronLeft className="mr-2 h-4 w-4" /> Back to Upload
+              </Button>
+            </div>
+            <Suspense fallback={
+              <div className="space-y-4">
+                {[1,2,3].map(i => (
+                  <div key={i} className="h-48 bg-secondary/10 rounded-xl animate-pulse" />
+                ))}
+              </div>
+            }>
+              <ExecutiveQuestionReviewPanel
+                initialQuestions={generatedQuestions}
+                difficulty={forgeDifficulty}
+                category={forgeCategory}
+                onRegenerate={handleRegenerate}
+                onEditSettings={handleEditSettings}
+                onRegenerateQuestion={forgeParams.current ? handleRegenerateQuestion : undefined}
+                onImportComplete={handleImportComplete}
+              />
+            </Suspense>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto">
+            <div className="mb-8 flex items-center gap-4 p-4 bg-primary/5 rounded-lg border border-primary/10">
+              <div className="bg-primary/10 p-2 rounded-lg shrink-0">
+                <FileText className="w-5 h-5 text-primary" />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Upload PDF, DOCX, TXT, Markdown, or image files. The AI will extract content and generate quiz questions based on your parameters.
+              </p>
+            </div>
+            <Suspense fallback={
+              <div className="h-96 bg-secondary/10 rounded-xl animate-pulse" />
+            }>
+              <PDFQuizGenerator
+                onQuestionsGenerated={handleQuestionsGenerated}
+                initialCategory={forgeCategory}
+                showCategorySelector={true}
+              />
+            </Suspense>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
