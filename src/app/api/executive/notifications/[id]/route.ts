@@ -20,7 +20,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const ref = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).doc(id);
     const snap = await ref.get();
     if (!snap.exists) return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
-    if (snap.data().userId !== auth.uid) {
+    const data = snap.data();
+    if (!data || data.userId !== auth.uid) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     await notificationService.delete(id);
