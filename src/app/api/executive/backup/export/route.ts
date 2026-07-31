@@ -15,6 +15,7 @@ interface BackupData {
     collections: string[];
   };
   data: Record<string, { id: string; [key: string]: unknown }[]>;
+  warnings: string[];
 }
 
 export async function POST(req: NextRequest) {
@@ -42,14 +43,17 @@ export async function POST(req: NextRequest) {
         collections,
       },
       data: {},
+      warnings: [],
     };
 
     for (const name of collections) {
       try {
         const snap = await db.collection(name).get();
         backup.data[name] = snap.docs.map(d => ({ id: d.id, ...d.data() })) as { id: string; [key: string]: unknown }[];
-      } catch {
+      } catch (err: any) {
+        console.error(`[Backup Export] Failed to export collection "${name}":`, err?.message);
         backup.data[name] = [];
+        backup.warnings.push(`Failed to export collection "${name}": ${err?.message || 'unknown error'}`);
       }
     }
 

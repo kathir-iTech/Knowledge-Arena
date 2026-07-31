@@ -4,31 +4,30 @@ import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 
-async function getSystemHealth() {
-  const checks: Record<string, { status: 'healthy' | 'warning' | 'offline'; latency?: number }> = {};
+interface HealthCheck {
+  status: 'healthy' | 'warning' | 'offline';
+  latency?: number;
+}
 
-  // Authentication
+async function getSystemHealth() {
+  const checks: Record<string, HealthCheck> = {};
+
+  // Authentication — use listUsers(1) as a real, cheap Admin Auth probe
   try {
     const start = Date.now();
-    await getAdminAuth().getUser('nonexistent').catch(() => {});
+    await getAdminAuth().listUsers(1);
     checks.auth = { status: 'healthy', latency: Date.now() - start };
   } catch {
     checks.auth = { status: 'offline' };
   }
 
-  // Firestore
+  // Firestore / Database
   try {
     const start = Date.now();
-    await getAdminDb().collection('_health_').doc('_check_').get();
+    await getAdminDb().collection('users').limit(1).get();
     checks.firestore = { status: 'healthy', latency: Date.now() - start };
   } catch {
-    try {
-      const start = Date.now();
-      await getAdminDb().collection('users').limit(1).get();
-      checks.firestore = { status: 'healthy', latency: Date.now() - start };
-    } catch {
-      checks.firestore = { status: 'offline' };
-    }
+    checks.firestore = { status: 'offline' };
   }
 
   // Messaging — verify conversations collection is accessible
@@ -37,7 +36,7 @@ async function getSystemHealth() {
     await getAdminDb().collection('conversations').limit(1).get();
     checks.messaging = { status: 'healthy', latency: Date.now() - start };
   } catch {
-    checks.messaging = { status: 'warning', latency: undefined };
+    checks.messaging = { status: 'warning' };
   }
 
   // AI — check Genkit is configured (env vars present)
@@ -63,6 +62,7 @@ export async function GET(req: NextRequest) {
     dayStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(dayStart);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const dayMs = 86400000;
 
     const [
       executivesSnap,
@@ -74,16 +74,20 @@ export async function GET(req: NextRequest) {
       announcementsSnap,
       auditSnap,
       requestsSnap,
+      aiLogsSnap,
+      securitySnap,
     ] = await Promise.all([
       getAdminDb().collection('users').where('role', '==', 'executive').select('createdAt').get(),
-      getAdminDb().collection('users').where('role', '==', 'commander').select('displayName', 'disabled', 'deleted', 'createdAt', 'lastActive').get(),
-      getAdminDb().collection('users').where('role', '==', 'gladiator').select('disabled', 'createdAt').get(),
-      getAdminDb().collection('question_bank').select('createdBy', 'source').get(),
-      getAdminDb().collection('quizzes').select('title','status','created_by','created_at','finished_at','participantCount','question_count','difficulty').limit(2000).get(),
+      getAdminDb().collection('users').where('role', '==', 'commander').select('displayName', 'name', 'disabled', 'deleted', 'createdAt', 'lastActive').get(),
+      getAdminDb().collection('users').where('role', '==', 'gladiator').select('displayName', 'name', 'disabled', 'createdAt', 'lastActive').get(),
+      getAdminDb().collection('question_bank').select('createdBy', 'source', 'category', 'createdAt').limit(5000).get(),
+      getAdminDb().collection('quizzes').select('title', 'status', 'created_by', 'created_at', 'finished_at', 'participantCount', 'question_count', 'difficulty').limit(2000).get(),
       getAdminDb().collection('conversations').select('messageCount').get(),
       getAdminDb().collection('announcements').get(),
       getAdminDb().collection('auditLogs').orderBy('timestamp', 'desc').limit(50).get(),
       getAdminDb().collection('executive_requests').select('status', 'createdAt', 'title', 'commanderId', 'commanderEmail', 'type').get(),
+      getAdminDb().collection('ai_logs').orderBy('createdAt', 'desc').limit(200).get(),
+      getAdminDb().collection('security_logs').orderBy('createdAt', 'desc').limit(100).get(),
     ]);
 
     const totalCommanders = commandersSnap.docs.length;
@@ -92,41 +96,30 @@ export async function GET(req: NextRequest) {
 
     const totalGladiators = gladiatorsSnap.docs.length;
     const activeGladiators = gladiatorsSnap.docs.filter(d => !d.data().disabled).length;
+    const disabledGladiators = totalGladiators - activeGladiators;
 
     const totalBattles = quizzesSnap.docs.length;
     const completedBattles = quizzesSnap.docs.filter(d => d.data().status === 'finished').length;
     const activeBattles = quizzesSnap.docs.filter(d => d.data().status === 'live').length;
-    const waitingBattles = quizzesSnap.docs.filter(d => d.data().status === 'waiting').length;
+    const waitingBattles = quizzesSnap.docs.filter(d => d.data().status === 'waiting' || d.data().status === 'ready').length;
+    const pausedBattles = quizzesSnap.docs.filter(d => d.data().status === 'paused').length;
 
-    // Battles today / this week
-    const battlesToday = quizzesSnap.docs.filter(d => {
-      const t = d.data().created_at || 0;
-      return t >= dayStart.getTime();
-    }).length;
+    const battlesToday = quizzesSnap.docs.filter(d => (d.data().created_at || 0) >= dayStart.getTime()).length;
+    const battlesThisWeek = quizzesSnap.docs.filter(d => (d.data().created_at || 0) >= weekStart.getTime()).length;
 
-    const battlesThisWeek = quizzesSnap.docs.filter(d => {
-      const t = d.data().created_at || 0;
-      return t >= weekStart.getTime();
-    }).length;
-
-    // New users today / this week
     const allUserDocs = [...executivesSnap.docs, ...commandersSnap.docs, ...gladiatorsSnap.docs];
-    const newUsersToday = allUserDocs.filter(d => {
-      const t = d.data().createdAt || 0;
-      return t >= dayStart.getTime();
-    }).length;
+    const newUsersToday = allUserDocs.filter(d => (d.data().createdAt || 0) >= dayStart.getTime()).length;
+    const newUsersThisWeek = allUserDocs.filter(d => (d.data().createdAt || 0) >= weekStart.getTime()).length;
 
-    const newUsersThisWeek = allUserDocs.filter(d => {
-      const t = d.data().createdAt || 0;
-      return t >= weekStart.getTime();
-    }).length;
-
-    // Questions imported (from question_bank)
+    // Questions imported (from question_bank) — any source other than manually added
     const aiImportedCount = questionsSnap.docs.filter(d => {
       const data = d.data();
-      return data.createdBy === 'ai_import' || data.source === 'ai' || data.source === 'pdf';
+      return data.createdBy === 'ai_import' || ['ai', 'ai_pdf_forge', 'pdf'].includes(data.source);
     }).length;
-    const aiGeneratedCount = aiImportedCount;
+    const questionsAddedThisWeek = questionsSnap.docs.filter(d => {
+      const t = d.data().createdAt?.toMillis?.() ?? d.data().createdAt ?? 0;
+      return t >= weekStart.getTime();
+    }).length;
 
     // Most active commander
     const commanderArenaCount: Record<string, { count: number; name: string }> = {};
@@ -136,18 +129,18 @@ export async function GET(req: NextRequest) {
       if (creator) {
         if (!commanderArenaCount[creator]) {
           const userDoc = commandersSnap.docs.find(c => c.id === creator);
-          commanderArenaCount[creator] = { count: 0, name: userDoc?.data()?.displayName || 'Commander' };
+          const uData = userDoc?.data() || {};
+          commanderArenaCount[creator] = { count: 0, name: uData.displayName || uData.name || 'Commander' };
         }
         commanderArenaCount[creator].count++;
       }
     });
-    const sortedCommanders = Object.entries(commanderArenaCount)
-      .sort(([, a], [, b]) => b.count - a.count);
+    const sortedCommanders = Object.entries(commanderArenaCount).sort(([, a], [, b]) => b.count - a.count);
     const mostActiveCommander = sortedCommanders[0]
       ? { uid: sortedCommanders[0][0], name: sortedCommanders[0][1].name, arenaCount: sortedCommanders[0][1].count }
       : null;
 
-    // Average battle score
+    // Average battle score — includes zero scores so the average is not inflated
     let totalScore = 0;
     let scoredParticipants = 0;
     const finishedQuizIds = quizzesSnap.docs
@@ -166,11 +159,8 @@ export async function GET(req: NextRequest) {
         for (const result of partResults) {
           if (result.status === 'fulfilled') {
             result.value.docs.forEach(p => {
-              const score = p.data().score || 0;
-              if (score > 0) {
-                totalScore += score;
-                scoredParticipants++;
-              }
+              totalScore += p.data().score || 0;
+              scoredParticipants++;
             });
           } else {
             console.error('[Workspace] Failed to fetch participants:', result.reason?.name, result.reason?.message);
@@ -195,23 +185,23 @@ export async function GET(req: NextRequest) {
       : 0;
 
     const messagesCount = conversationsSnap.docs.reduce((sum, d) => {
-      const data = d.data();
-      return sum + (data.messageCount || 0);
+      return sum + (d.data().messageCount || 0);
     }, 0);
 
     const unreadRequests = requestsSnap.docs.filter(d => d.data().status === 'pending').length;
 
-    // Recent battles (last 5 finished)
+    // Recent battles (last 5 by created_at, any status)
     const sortedQuizzes = [...quizzesSnap.docs]
       .sort((a, b) => (b.data().created_at || 0) - (a.data().created_at || 0))
       .slice(0, 5);
     const recentBattles = sortedQuizzes.map(d => {
       const data = d.data();
       const creatorDoc = commandersSnap.docs.find(c => c.id === data.created_by);
+      const uData = creatorDoc?.data() || {};
       return {
         id: d.id,
         title: data.title || 'Untitled Battle',
-        commanderName: creatorDoc?.data()?.displayName || 'Unknown Commander',
+        commanderName: uData.displayName || uData.name || 'Unknown Commander',
         status: data.status || 'unknown',
         participantCount: data.participantCount || 0,
         createdAt: data.created_at || 0,
@@ -242,10 +232,11 @@ export async function GET(req: NextRequest) {
     const recentRequests = sortedRequests.map(d => {
       const data = d.data();
       const commanderDoc = commandersSnap.docs.find(c => c.id === data.commanderId);
+      const uData = commanderDoc?.data() || {};
       return {
         id: d.id,
         title: data.title || 'Untitled Request',
-        commanderName: commanderDoc?.data()?.displayName || data.commanderEmail || 'Unknown',
+        commanderName: uData.displayName || uData.name || data.commanderEmail || 'Unknown',
         status: data.status || 'pending',
         createdAt: data.createdAt || 0,
         type: data.type || 'general',
@@ -265,6 +256,75 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    // Last backup (from audit trail)
+    const lastBackupAt = auditSnap.docs
+      .map(d => ({ action: d.data().action, timestamp: d.data().timestamp || 0 }))
+      .find(a => a.action === 'backup_created')?.timestamp ?? null;
+
+    // AI summary (30-day window from last 200 logs)
+    const aiLogs = aiLogsSnap.docs
+      .map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? 0,
+          success: !!data.success,
+          model: data.model || 'unknown',
+          durationMs: data.durationMs || 0,
+          error: data.error || null,
+        };
+      })
+      .filter(l => l.createdAt >= now - 30 * dayMs);
+    const aiFailures = aiLogs.filter(l => !l.success);
+    const aiSummary = {
+      total: aiLogs.length,
+      failures: aiFailures.length,
+      successRate: aiLogs.length > 0 ? Math.round(((aiLogs.length - aiFailures.length) / aiLogs.length) * 100) : null,
+      avgDurationMs: aiLogs.length > 0 ? Math.round(aiLogs.reduce((s, l) => s + l.durationMs, 0) / aiLogs.length) : 0,
+      topModel: aiLogs.length > 0
+        ? Object.entries(aiLogs.reduce<Record<string, number>>((acc, l) => {
+            acc[l.model] = (acc[l.model] || 0) + 1;
+            return acc;
+          }, {})).sort(([, a], [, b]) => b - a)[0][0]
+        : null,
+    };
+
+    // Security summary (last 100 entries)
+    const securityEntries = securitySnap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        event: data.event,
+        actor: data.actor,
+        actorRole: data.actorRole || null,
+        target: data.target || null,
+        detail: data.detail || null,
+        metadata: data.metadata || {},
+        timestamp: data.createdAt?.toMillis?.() ?? data.timestamp ?? null,
+      };
+    });
+    const failedLogins24h = securityEntries.filter(s => s.event === 'login_failed' && s.timestamp && s.timestamp >= now - dayMs).length;
+    const recentSecurityEvents = securityEntries.slice(0, 5);
+
+    // Realtime: playing participants across live quizzes
+    const liveQuizIds = quizzesSnap.docs
+      .filter(d => d.data().status === 'live')
+      .map(d => d.id);
+    let realtimeConnections = 0;
+    if (liveQuizIds.length > 0) {
+      const db = getAdminDb();
+      const partResults = await Promise.allSettled(
+        liveQuizIds.map(quizId =>
+          db.collection('quizzes').doc(quizId).collection('participants').select('status').get()
+        )
+      );
+      partResults.forEach(result => {
+        if (result.status === 'fulfilled') {
+          realtimeConnections += result.value.docs.filter(p => p.data().status !== 'blocked').length;
+        }
+      });
+    }
+
     const totalUsers = totalCommanders + totalGladiators + executivesSnap.docs.length;
 
     const systemHealth = await getSystemHealth();
@@ -276,18 +336,20 @@ export async function GET(req: NextRequest) {
       disabledCommanders,
       gladiators: totalGladiators,
       activeGladiators,
+      disabledGladiators,
       totalUsers,
       questionBank: questionsSnap.docs.length,
+      questionsImported: aiImportedCount,
+      questionsAddedThisWeek,
       battles: totalBattles,
       completedBattles,
       activeBattles,
       waitingBattles,
+      pausedBattles,
       battlesToday,
       battlesThisWeek,
       newUsersToday,
       newUsersThisWeek,
-      questionsImported: aiImportedCount,
-      aiGeneratedQuestions: aiGeneratedCount,
       mostActiveCommander,
       averageBattleScore,
       averageBattleDuration: avgDurationMinutes,
@@ -299,6 +361,24 @@ export async function GET(req: NextRequest) {
       activeCommandersList,
       recentRequests,
       recentActivity,
+      latestAiFailures: aiFailures.slice(0, 5).map(f => ({
+        id: f.id,
+        model: f.model,
+        error: f.error,
+        createdAt: f.createdAt,
+      })),
+      aiSummary,
+      failedLogins24h,
+      recentSecurityEvents,
+      lastBackupAt,
+      realtime: {
+        liveBattles: liveQuizIds.length,
+        connections: realtimeConnections,
+      },
+      storage: {
+        configured: !!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        bucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || null,
+      },
       systemHealth,
     });
   } catch (err: any) {

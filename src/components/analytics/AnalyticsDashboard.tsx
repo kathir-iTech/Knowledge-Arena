@@ -62,17 +62,21 @@ export function AnalyticsDashboard() {
 
   useEffect(() => {
     if (user?.role !== 'executive') return;
-    fetch('/api/executive/settings', {
-      headers: user ? { Authorization: `Bearer ${user.id}` } : {},
-    })
-      .then(res => res.json())
+    auth.currentUser?.getIdToken()
+      .then(token => {
+        if (!token) return null;
+        return fetch('/api/executive/settings', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      })
+      .then(res => (res ? res.json() : null))
       .then(data => {
         if (data?.settings?.exportPreferences) {
           setExportPrefs(data.settings.exportPreferences);
         }
       })
       .catch(() => {});
-  }, [user]);
+  }, [user, auth]);
 
   const fetchCharts = useCallback(async () => {
     if (!user || user.role !== 'executive') return;

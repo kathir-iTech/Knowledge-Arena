@@ -84,15 +84,21 @@ export async function PATCH(req: NextRequest) {
       target: id,
       metadata: { status, comment: comment || null },
     });
-    await notificationService.create({
-      type: status === 'approved' ? 'gladiator_registration' : 'operation_failed',
-      title: `Request ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-      description: `Executive ${status} the request.`,
-      createdAt: Date.now(),
-      userId: auth.uid,
-      link: '/executive/requests',
-      metadata: { requestId: id, status },
-    });
+
+    // Notify the requesting commander, not the executive themselves.
+    const requestData = existingDoc.data();
+    const commanderId = requestData?.commanderId || null;
+    if (commanderId) {
+      await notificationService.create({
+        type: 'commander_request',
+        title: `Request ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+        description: `Your request "${requestData?.title || id}" was ${status} by the executive team.`,
+        createdAt: Date.now(),
+        userId: commanderId,
+        link: '/commander/requests',
+        metadata: { requestId: id, status },
+      });
+    }
 
     return NextResponse.json({ success: true, id, status });
   } catch (err: any) {

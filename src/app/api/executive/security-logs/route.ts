@@ -6,6 +6,10 @@ import { COLLECTIONS } from '@/lib/constants';
 export const runtime = 'nodejs';
 
 const PAGE_SIZE = 50;
+// When filters are applied, we fetch a bounded window of the most recent logs
+// and filter in memory. This keeps filter correctness for recent data without
+// requiring new composite indexes per (event, timestamp) combo.
+const FILTER_WINDOW = 1000;
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,54 +19,77 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const event = searchParams.get('event');
-    const actor = searchParams.get('actor');
+    const event = searchParams.get('event')?.trim() || '';
+    const actor = searchParams.get('actor')?.trim() || '';
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
     const cursor = searchParams.get('cursor');
+    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
 
-    let query = getAdminDb().collection(COLLECTIONS.SECURITY_LOGS).orderBy('createdAt', 'desc').limit(PAGE_SIZE + 1);
-    if (cursor) {
-      const cursorDoc = await getAdminDb().collection(COLLECTIONS.SECURITY_LOGS).doc(cursor).get();
-      if (cursorDoc.exists) {
-        query = query.startAfter(cursorDoc);
+    const hasFilters = !!(event || actor || dateFrom || dateTo);
+    const db = getAdminDb();
+
+    let snap;
+    if (hasFilters) {
+      snap = await db.collection(COLLECTIONS.SECURITY_LOGS).orderBy('createdAt', 'desc').limit(FILTER_WINDOW).get();
+    } else {
+      let query = db.collection(COLLECTIONS.SECURITY_LOGS).orderBy('createdAt', 'desc').limit(PAGE_SIZE + 1);
+      if (cursor) {
+        const cursorDoc = await db.collection(COLLECTIONS.SECURITY_LOGS).doc(cursor).get();
+        if (cursorDoc.exists) {
+          query = query.startAfter(cursorDoc);
+        }
       }
+      snap = await query.get();
     }
-    const snap = await query.get();
 
-    const hasMore = snap.docs.length > PAGE_SIZE;
-    const docs = snap.docs.slice(0, PAGE_SIZE);
+    const docs = snap.docs;
+
+    const allEvents = new Set<string>();
+    const from = dateFrom ? parseInt(dateFrom, 10) : null;
+    const to = dateTo ? parseInt(dateTo, 10) : null;
 
     let logs = docs.map(d => {
       const data = d.data();
-      return {
+      const timestamp = data.createdAt?.toMillis?.() ?? data.timestamp ?? null;
+      const log = {
         id: d.id,
-        event: data.event,
-        actor: data.actor,
-        actorRole: data.actorRole,
-        target: data.target,
-        detail: data.detail,
+        event: data.event || '',
+        actor: data.actor || '',
+        actorRole: data.actorRole || '',
+        target: data.target || '',
+        detail: data.detail || '',
         metadata: data.metadata || {},
-        timestamp: data.createdAt?.toMillis?.() ?? data.timestamp ?? null,
+        timestamp,
       };
+      if (log.event) allEvents.add(log.event);
+      return log;
     });
 
     if (event) logs = logs.filter(l => l.event === event);
-    if (actor) logs = logs.filter(l => (l.actor || '').toLowerCase().includes(actor.toLowerCase()));
-    if (dateFrom) logs = logs.filter(l => l.timestamp && l.timestamp >= parseInt(dateFrom, 10));
-    if (dateTo) logs = logs.filter(l => l.timestamp && l.timestamp <= parseInt(dateTo, 10));
+    if (actor) logs = logs.filter(l => l.actor.toLowerCase().includes(actor.toLowerCase()));
+    if (from) logs = logs.filter(l => l.timestamp && l.timestamp >= from);
+    if (to) logs = logs.filter(l => l.timestamp && l.timestamp <= to);
 
-    const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : null;
+    let paginated: typeof logs;
+    let hasMore: boolean;
+    let nextCursor: string | null = null;
 
-    const allEvents = new Set<string>();
-    logs.forEach(l => {
-      if (l.event) allEvents.add(l.event);
-    });
+    if (hasFilters) {
+      const startIdx = (page - 1) * PAGE_SIZE;
+      paginated = logs.slice(startIdx, startIdx + PAGE_SIZE);
+      hasMore = startIdx + PAGE_SIZE < logs.length;
+    } else {
+      hasMore = docs.length > PAGE_SIZE;
+      paginated = logs.slice(0, PAGE_SIZE);
+      nextCursor = hasMore && paginated.length > 0 ? paginated[paginated.length - 1].id : null;
+    }
 
     return NextResponse.json({
-      logs,
+      logs: paginated,
       nextCursor,
       hasMore,
+      page,
       filters: {
         events: Array.from(allEvents).sort(),
       },

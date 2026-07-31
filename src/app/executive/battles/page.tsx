@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Download, Swords, Users, Calendar, Trophy, Star, ExternalLink, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Search, Download, Swords, Users, Calendar, Trophy, Star, ChevronDown, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 
 interface BattleSummary {
@@ -25,48 +25,58 @@ interface BattleSummary {
   winner: { name: string; score: number } | null;
 }
 
+const PAGE_SIZE = 50;
+
 export default function ExecutiveBattlesPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const [battles, setBattles] = useState<BattleSummary[]>([]);
   const [totalBattles, setTotalBattles] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
-  const fetchBattles = useCallback(async () => {
+  const fetchBattles = useCallback(async (offset: number, append: boolean) => {
     if (!user) return;
     try {
-      setError(null);
+      if (append) setLoadingMore(true); else setError(null);
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
       const params = new URLSearchParams();
       if (search.trim()) params.set('q', search.trim());
+      params.set('offset', String(offset));
       const res = await fetch(`/api/executive/battles?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setBattles(data.battles || []);
+        setBattles(prev => append ? [...prev, ...(data.battles || [])] : (data.battles || []));
         setTotalBattles(data.totalBattles || 0);
+        setHasMore(!!data.hasMore);
       } else {
         const data = await res.json().catch(() => null);
         setError(data?.error || 'Failed to load battle history.');
-        setBattles([]);
+        if (!append) setBattles([]);
       }
     } catch {
       setError('Network error. Check your connection and try again.');
-      setBattles([]);
+      if (!append) setBattles([]);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [user, auth, search]);
 
   useEffect(() => {
     setLoading(true);
-    const t = setTimeout(fetchBattles, 250);
+    setBattles([]);
+    const t = setTimeout(() => fetchBattles(0, false), 250);
     return () => clearTimeout(t);
   }, [search, fetchBattles]);
+
+  const loadMore = () => fetchBattles(battles.length, true);
 
   const exportCSV = () => {
     const rows = [['Title', 'Commander', 'Date', 'Difficulty', 'Participants', 'Avg Score', 'Winner', 'Winner Score']];
@@ -127,7 +137,7 @@ export default function ExecutiveBattlesPage() {
             <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-4" />
             <p className="text-base font-medium mb-1">Failed to load battle history</p>
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
-            <Button variant="outline" onClick={() => { setLoading(true); fetchBattles(); }}>
+            <Button variant="outline" onClick={() => { setLoading(true); fetchBattles(0, false); }}>
               <RefreshCw className="w-4 h-4 mr-2" /> Retry
             </Button>
           </CardContent>
@@ -173,14 +183,25 @@ export default function ExecutiveBattlesPage() {
                     <p className="text-xs text-muted-foreground mt-1.5">Hosted by {b.commanderName}</p>
                   </div>
                   <Button asChild size="sm" variant="outline" className="shrink-0">
-                    <Link href={`/battle/${b.id}`}>
-                      <ExternalLink className="w-3.5 h-3.5 mr-1" /> View
+                    <Link href={`/executive/battles/${b.id}`}>
+                      <ChevronRight className="w-3.5 h-3.5 mr-1" /> Details
                     </Link>
                   </Button>
                 </div>
               </CardContent>
             </Card>
           ))}
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? (
+                  <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Loading...</>
+                ) : (
+                  <><ChevronDown className="w-4 h-4 mr-2" /> Load More ({Math.min(PAGE_SIZE, totalBattles - battles.length)} more)</>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

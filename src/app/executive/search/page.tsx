@@ -8,7 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
-import { Search, Users, Shield, BookOpen, Layers, Swords, ClipboardList, MessageSquare, Megaphone, ArrowRight, AlertTriangle, RefreshCw } from 'lucide-react';
+import {
+  Search, Users, Shield, BookOpen, Swords, ClipboardList,
+  MessageSquare, Megaphone, ArrowRight, AlertTriangle, RefreshCw,
+  ShieldAlert, BrainCircuit, Bell, Inbox,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SearchResult {
@@ -25,11 +29,14 @@ const typeIcons: Record<string, React.ElementType> = {
   Gladiator: Users,
   Executive: Shield,
   Question: BookOpen,
-  'Question Set': Layers,
   Battle: Swords,
   'Audit Log': ClipboardList,
+  'Security Log': ShieldAlert,
+  'AI Log': BrainCircuit,
   Conversation: MessageSquare,
   Announcement: Megaphone,
+  Notification: Bell,
+  Request: Inbox,
 };
 
 const typeColors: Record<string, string> = {
@@ -37,12 +44,28 @@ const typeColors: Record<string, string> = {
   Gladiator: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800',
   Executive: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800',
   Question: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
-  'Question Set': 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800',
   Battle: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800',
   'Audit Log': 'text-slate-600 bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800',
+  'Security Log': 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
+  'AI Log': 'text-purple-600 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800',
   Conversation: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800',
   Announcement: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800',
+  Notification: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800',
+  Request: 'text-teal-600 bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800',
 };
+
+function HighlightedTitle({ title, highlight }: { title: string; highlight?: { start: number; end: number } | null }) {
+  if (!highlight || highlight.start < 0 || highlight.end <= highlight.start || highlight.end > title.length) {
+    return <span className="text-sm font-medium truncate">{title}</span>;
+  }
+  return (
+    <span className="text-sm font-medium truncate">
+      {title.slice(0, highlight.start)}
+      <mark className="bg-primary/15 text-primary rounded-[3px] px-0.5">{title.slice(highlight.start, highlight.end)}</mark>
+      {title.slice(highlight.end)}
+    </span>
+  );
+}
 
 export default function ExecutiveSearchPage() {
   const { user } = useAuth();
@@ -117,14 +140,14 @@ export default function ExecutiveSearchPage() {
     <div className="page-container animate-in space-y-6 safe-bottom">
       <div className="space-y-1.5">
         <h1 className="text-page-title font-headline tracking-tight">Global Search</h1>
-        <p className="text-base text-muted-foreground">Search across all platform data.</p>
+        <p className="text-base text-muted-foreground">Search across users, questions, battles, logs, notifications, requests and more.</p>
       </div>
 
       <div className="relative max-w-2xl">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input
           ref={inputRef}
-          placeholder="Search commanders, gladiators, questions, battles..."
+          placeholder="Search commanders, gladiators, questions, battles, logs..."
           value={query}
           onChange={e => setQuery(e.target.value)}
           className="pl-12 h-12 text-base rounded-xl"
@@ -179,27 +202,30 @@ export default function ExecutiveSearchPage() {
                   <Badge variant="outline" className="text-[10px] h-5">{items.length}</Badge>
                 </div>
                 <div className="space-y-2">
-                  {items.map(item => (
-                    <Link key={`${item.type}-${item.id}`} href={item.href}>
-                      <Card className="hover:bg-muted/30 transition-colors cursor-pointer">
-                        <CardContent className="p-4 flex items-center gap-3">
-                          <div className="shrink-0 w-9 h-9 rounded-[8px] bg-muted flex items-center justify-center">
-                            <Icon className="w-4 h-4 text-muted-foreground" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium truncate">{item.title}</span>
-                              <Badge variant="outline" className={cn("text-[10px] h-5 font-normal shrink-0", colorClass)}>
-                                {item.type}
-                              </Badge>
+                  {items.map(item => {
+                    const highlight = item.metadata?.highlight as { start: number; end: number } | null | undefined;
+                    return (
+                      <Link key={`${item.type}-${item.id}`} href={item.href}>
+                        <Card className="hover:bg-muted/30 transition-colors cursor-pointer">
+                          <CardContent className="p-4 flex items-center gap-3">
+                            <div className="shrink-0 w-9 h-9 rounded-[8px] bg-muted flex items-center justify-center">
+                              <Icon className="w-4 h-4 text-muted-foreground" />
                             </div>
-                            <p className="text-xs text-muted-foreground truncate mt-0.5">{item.subtitle}</p>
-                          </div>
-                          <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <HighlightedTitle title={item.title} highlight={highlight} />
+                                <Badge variant="outline" className={cn("text-[10px] h-5 font-normal shrink-0", colorClass)}>
+                                  {item.type}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">{item.subtitle}</p>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             );

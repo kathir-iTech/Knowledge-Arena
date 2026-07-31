@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar, Key, Trash2, CheckSquare } from 'lucide-react';
+import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar, Key, Trash2, CheckSquare, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -66,6 +67,7 @@ export default function CommanderManagementPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const { toast } = useToast();
+  const router = useRouter();
   const [commanders, setCommanders] = useState<Commander[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -359,9 +361,13 @@ export default function CommanderManagementPage() {
                     <Shield className="w-5 h-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-medium truncate">
+                    <button
+                      onClick={() => router.push(`/executive/commanders/${c.uid}`)}
+                      className="font-medium truncate group-hover:text-primary transition-colors hover:text-primary hover:underline underline-offset-2 text-left"
+                      title="View profile"
+                    >
                       {c.displayName}
-                    </p>
+                    </button>
                     <p className="text-sm text-muted-foreground truncate">{c.email}</p>
                   </div>
                 </div>
@@ -380,6 +386,14 @@ export default function CommanderManagementPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push(`/executive/commanders/${c.uid}`)}
+                    title="View Profile"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
                   {!c.deleted && (
                     <>
                       <Badge variant={c.disabled ? 'secondary' : 'default'}>

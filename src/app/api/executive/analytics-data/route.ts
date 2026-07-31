@@ -17,9 +17,9 @@ export async function GET(req: NextRequest) {
     const last30Days = now - 30 * dayMs;
 
     const [usersSnap, quizzesSnap, questionsSnap, conversationsSnap] = await Promise.all([
-      db.collection('users').select('role', 'createdAt').get(),
-      db.collection('quizzes').select('created_at', 'created_by', 'participantsCount', 'status').get(),
-      db.collection('question_bank').select('subject', 'category', 'createdBy', 'source', 'created_at').get(),
+      db.collection('users').select('role', 'createdAt', 'name', 'displayName').get(),
+      db.collection('quizzes').select('created_at', 'created_by', 'participantCount', 'status').get(),
+      db.collection('question_bank').select('subject', 'category', 'createdBy', 'source', 'created_at', 'createdAt').get(),
       db.collection('conversations').select('createdAt', 'messageCount').get(),
     ]);
 
@@ -28,7 +28,10 @@ export async function GET(req: NextRequest) {
     const questions: Record<string, any>[] = questionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const conversations: Record<string, any>[] = conversationsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const getDateStr = (ts: number) => new Date(ts).toISOString().split('T')[0];
+    const localDateStr = (ts: number) => {
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
 
     const dailyBattles: Record<string, number> = {};
     const weeklyBattles: Record<string, number> = {};
@@ -39,21 +42,28 @@ export async function GET(req: NextRequest) {
     const aiUsage: Record<string, number> = {};
     const messageActivity: Record<string, number> = {};
 
+    const isAiQuestion = (q: Record<string, any>): boolean => {
+      const source = (q.source as string) || '';
+      const createdBy = (q.createdBy as string) || '';
+      return createdBy === 'ai_import' || ['ai', 'ai_pdf_forge', 'pdf'].includes(source);
+    };
+
     for (const q of quizzes) {
       const created = (q.created_at as number) || 0;
       if (created >= last30Days) {
-        const ds = getDateStr(created);
+        const ds = localDateStr(created);
         dailyBattles[ds] = (dailyBattles[ds] || 0) + 1;
       }
       const weekStart = new Date(created);
       weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-      const weekStr = weekStart.toISOString().split('T')[0];
+      weekStart.setHours(0, 0, 0, 0);
+      const weekStr = localDateStr(weekStart.getTime());
       weeklyBattles[weekStr] = (weeklyBattles[weekStr] || 0) + 1;
       const creator = q.created_by as string;
       if (creator) commanderActivity[creator] = (commanderActivity[creator] || 0) + 1;
-      const pc = q.participantsCount as number;
-      if (pc) {
-        const ds = getDateStr(created);
+      const pc = q.participantCount as number;
+      if (pc && created) {
+        const ds = localDateStr(created);
         gladiatorParticipation[ds] = (gladiatorParticipation[ds] || 0) + pc;
       }
     }
@@ -61,7 +71,7 @@ export async function GET(req: NextRequest) {
     for (const u of users) {
       const created = (u.createdAt as number) || 0;
       if (created >= last30Days) {
-        const ds = getDateStr(created);
+        const ds = localDateStr(created);
         monthlyUsers[ds] = (monthlyUsers[ds] || 0) + 1;
       }
     }
@@ -69,19 +79,19 @@ export async function GET(req: NextRequest) {
     for (const q of questions) {
       const cat = (q.subject || q.category || 'General') as string;
       categoryUsage[cat] = (categoryUsage[cat] || 0) + 1;
-      if ((q.createdBy as string) === 'ai_import' || (q.source as string) === 'ai') {
-        const created = (q.created_at as number) || 0;
+      if (isAiQuestion(q)) {
+        const created = (q.createdAt as any)?.toMillis?.() ?? (q.createdAt as number) ?? (q.created_at as number) ?? 0;
         if (created >= last30Days) {
-          const ds = getDateStr(created);
+          const ds = localDateStr(created);
           aiUsage[ds] = (aiUsage[ds] || 0) + 1;
         }
       }
     }
 
     for (const c of conversations) {
-      const created = (c.createdAt as number) || 0;
+      const created = (c.createdAt as any)?.toMillis?.() ?? (c.createdAt as number) ?? 0;
       if (created >= last30Days) {
-        const ds = getDateStr(created);
+        const ds = localDateStr(created);
         messageActivity[ds] = (messageActivity[ds] || 0) + ((c.messageCount as number) || 1);
       }
     }
@@ -90,7 +100,7 @@ export async function GET(req: NextRequest) {
       const result: { date: string; value: number }[] = [];
       for (let i = days - 1; i >= 0; i--) {
         const d = new Date(now - i * dayMs);
-        const ds = d.toISOString().split('T')[0];
+        const ds = localDateStr(d.getTime());
         result.push({ date: ds, value: data[ds] || 0 });
       }
       return result;
@@ -105,7 +115,7 @@ export async function GET(req: NextRequest) {
       monthlyUsers: fillDateRange(monthlyUsers, 30),
       commanderActivity: Object.entries(commanderActivity).sort(([, a], [, b]) => b - a).slice(0, 10).map(([id, count]) => {
         const u = users.find(us => us.id === id);
-        return { name: ((u?.name as string) || id).slice(0, 20), value: count };
+        return { name: ((u?.displayName as string) || (u?.name as string) || id).slice(0, 20), value: count };
       }),
       gladiatorParticipation: fillDateRange(gladiatorParticipation, 30),
       categoryUsage: Object.entries(categoryUsage).sort(([, a], [, b]) => b - a).slice(0, 10).map(([name, value]) => ({ name, value })),
