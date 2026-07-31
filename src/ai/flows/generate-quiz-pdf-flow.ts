@@ -12,6 +12,7 @@ import * as zlib from 'zlib';
 import { PdfReader } from 'pdfreader';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
+import { aiLogService } from '@/services/ai-log.service';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const EXTRACTION_TIMEOUT_MS = 30000;
@@ -37,6 +38,7 @@ const GenerateQuizFromPDFOutputSchema = z.object({
   difficulty: z.string(),
   engine: z.string().optional(),
   error: z.string().optional(),
+  warnings: z.array(z.string()).optional(),
 });
 export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutputSchema>;
 
@@ -252,7 +254,64 @@ async function callGeminiWithFallback(promptText: string): Promise<GeminiResult>
   return { ok: false, reason: 'all_models_failed', errors };
 }
 
+function validateQuestions(questions: QuizQuestions): string[] {
+  const warnings: string[] = [];
+  const seenTexts = new Set<string>();
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    if (!q.text || q.text.trim().length < 10) {
+      warnings.push(`Question ${i + 1}: text is too short (min 10 chars).`);
+    }
+    const normalized = q.text.trim().toLowerCase();
+    if (seenTexts.has(normalized)) {
+      warnings.push(`Question ${i + 1}: duplicate text with another question.`);
+    }
+    seenTexts.add(normalized);
+    if (!q.options || q.options.length < 2) {
+      warnings.push(`Question ${i + 1}: must have at least 2 options.`);
+    }
+    if (q.correctAnswerIndex < 0 || q.correctAnswerIndex >= (q.options?.length || 0)) {
+      warnings.push(`Question ${i + 1}: correctAnswerIndex out of range.`);
+    }
+    const uniqueOptions = new Set(q.options?.map(o => o.trim().toLowerCase()));
+    if (uniqueOptions.size !== (q.options?.length || 0)) {
+      warnings.push(`Question ${i + 1}: has duplicate options.`);
+    }
+    for (let j = 0; j < (q.options?.length || 0); j++) {
+      if (!q.options[j] || q.options[j].trim().length === 0) {
+        warnings.push(`Question ${i + 1}: option ${String.fromCharCode(65 + j)} is empty.`);
+      }
+    }
+  }
+  return warnings;
+}
+
+function chunkText(text: string, maxChunkSize: number): string[] {
+  if (text.length <= maxChunkSize) return [text];
+  const chunks: string[] = [];
+  const sentences = text.match(/[^.!?\n]+[.!?\n]*/g) || [text];
+  let current = '';
+  for (const sentence of sentences) {
+    if ((current + sentence).length > maxChunkSize && current.length > 0) {
+      chunks.push(current.trim());
+      current = sentence;
+    } else {
+      current += sentence;
+    }
+  }
+  if (current.trim().length > 0) chunks.push(current.trim());
+  return chunks;
+}
+
+function detectFileTypes(dataUri: string): string[] {
+  const uris = dataUri.includes(SEPARATOR) ? dataUri.split(SEPARATOR) : [dataUri];
+  return uris.map(detectFileType);
+}
+
 export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Promise<GenerateQuizFromPDFOutput> {
+  const startTime = Date.now();
+  const fileTypes = detectFileTypes(input.pdfDataUri);
+
   try {
     const execAuth = await verifyFirebaseTokenWithRole(input.idToken, 'executive');
     const cmdAuth = !execAuth ? await verifyFirebaseTokenWithRole(input.idToken, 'commander') : null;
@@ -261,6 +320,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
       return { questions: [], difficulty: input.difficulty, error: 'UNAUTHORIZED' };
     }
     const uid = execAuth?.uid || cmdAuth!.uid;
+    const role = execAuth ? 'executive' : 'commander';
 
     const rl = rateLimiter.check(`ai:pdf:${uid}`, { maxRequests: 5, windowMs: 60000, message: 'PDF Forge rate limit exceeded (5/min).' });
     if (!rl.allowed) {
@@ -274,10 +334,46 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
       console.error('[Forge] File too large:', decodedBytes);
       return { questions: [], difficulty: input.difficulty, error: 'PDF_TOO_LARGE' };
     }
-    return await generateQuizFromPDFFlow(input);
+    const result = await generateQuizFromPDFFlow(input);
+
+    const durationMs = Date.now() - startTime;
+    aiLogService.record({
+      userId: uid,
+      userRole: role,
+      model: result.engine || 'unknown',
+      fileCount: fileTypes.length,
+      fileTypes,
+      questionCount: result.questions?.length || 0,
+      difficulty: input.difficulty,
+      success: !result.error && (result.questions?.length || 0) > 0,
+      durationMs,
+      error: result.error || undefined,
+    });
+
+    if (result.questions && result.questions.length > 0) {
+      const warnings = validateQuestions(result.questions);
+      if (warnings.length > 0 && !result.error) {
+        (result as any).warnings = warnings;
+      }
+    }
+
+    return result;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Forge] Fatal error:', msg);
+    const durationMs = Date.now() - startTime;
+    aiLogService.record({
+      userId: 'unknown',
+      userRole: 'unknown',
+      model: 'unknown',
+      fileCount: fileTypes.length,
+      fileTypes,
+      questionCount: 0,
+      difficulty: input.difficulty,
+      success: false,
+      durationMs,
+      error: msg,
+    });
     return { questions: [], difficulty: input.difficulty, error: msg };
   }
 }
@@ -531,18 +627,8 @@ async function generatePromptWithImages(
     hard: 'Advanced (Critical Synthesis)',
   };
 
-  const MAX_INPUT_CHARS = 40000;
-  let truncated = textContent;
-  if (textContent.length > MAX_INPUT_CHARS) {
-    const target = textContent.lastIndexOf('. ', MAX_INPUT_CHARS);
-    const target2 = textContent.lastIndexOf('\n', MAX_INPUT_CHARS);
-    const breakAt = Math.max(target, target2);
-    if (breakAt > MAX_INPUT_CHARS * 0.5) {
-      truncated = textContent.slice(0, breakAt + 1);
-    } else {
-      truncated = textContent.slice(0, MAX_INPUT_CHARS);
-    }
-  }
+  const MAX_CHUNK = 40000;
+  const chunks = chunkText(textContent, MAX_CHUNK);
 
   const errors: string[] = [];
   const chain = await modelFallbackChain();
@@ -571,7 +657,7 @@ Output format MUST be a JSON object with a "questions" array:
 }
 
 Content:
-${truncated}`;
+${chunks[0]}`;
 
         const parts: any[] = [{ text: promptText }];
         for (const imgUri of imageDataUris) {
@@ -623,6 +709,36 @@ ${truncated}`;
   return { ok: false, reason: 'all_models_failed', errors };
 }
 
+function buildPrompt(text: string, difficulty: string, questionCount: number): string {
+  const difficultyMap: Record<string, string> = {
+    easy: 'Beginner (Factual Recall)',
+    moderate: 'Intermediate (Concept Application)',
+    hard: 'Advanced (Critical Synthesis)',
+  };
+  return `Generate exactly ${questionCount} high-quality multiple-choice questions based on the following content.
+
+Difficulty: ${difficultyMap[difficulty]}
+- Questions must be derived ONLY from the provided content.
+- Provide exactly 4 options for each question.
+- Ensure distractors are plausible but incorrect.
+- Include a clear explanation for the correct answer.
+
+Output format MUST be a JSON object with a "questions" array:
+{
+  "questions": [
+    {
+      "text": "The question string",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswerIndex": 0,
+      "explanation": "Why this is correct"
+    }
+  ]
+}
+
+Content:
+${text}`;
+}
+
 // ── Main flow ────────────────────────────────────────────────────────
 
 const generateQuizFromPDFFlow = ai.defineFlow(
@@ -648,49 +764,32 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     if (imageDataUris.length > 0) {
       result = await generatePromptWithImages(text, imageDataUris, input.difficulty, input.questionCount);
     } else {
-      const difficultyMap: Record<string, string> = {
-        easy: 'Beginner (Factual Recall)',
-        moderate: 'Intermediate (Concept Application)',
-        hard: 'Advanced (Critical Synthesis)',
-      };
+      const MAX_CHUNK = 40000;
+      const chunks = chunkText(text, MAX_CHUNK);
+      const chunkCount = chunks.length;
 
-      const MAX_INPUT_CHARS = 40000;
-      let truncated = text;
-      if (text.length > MAX_INPUT_CHARS) {
-        const target = text.lastIndexOf('. ', MAX_INPUT_CHARS);
-        const target2 = text.lastIndexOf('\n', MAX_INPUT_CHARS);
-        const breakAt = Math.max(target, target2);
-        if (breakAt > MAX_INPUT_CHARS * 0.5) {
-          truncated = text.slice(0, breakAt + 1);
-        } else {
-          truncated = text.slice(0, MAX_INPUT_CHARS);
+      if (chunkCount > 1) {
+        const perChunk = Math.max(1, Math.ceil(input.questionCount / chunkCount));
+        const allQuestions: QuizQuestions = [];
+        let lastEngine = '';
+        for (let ci = 0; ci < chunks.length; ci++) {
+          const chunkResult = await callGeminiWithFallback(
+            buildPrompt(chunks[ci], input.difficulty, ci === chunks.length - 1 ? input.questionCount - allQuestions.length : perChunk)
+          );
+          if (chunkResult.ok) {
+            allQuestions.push(...chunkResult.output.questions);
+            lastEngine = chunkResult.engine;
+          }
+          if (allQuestions.length >= input.questionCount) break;
         }
+        if (allQuestions.length > 0) {
+          result = { ok: true, output: { questions: allQuestions.slice(0, input.questionCount) }, engine: lastEngine };
+        } else {
+          result = { ok: false, reason: 'all_models_failed', errors: ['All chunks failed'] };
+        }
+      } else {
+        result = await callGeminiWithFallback(buildPrompt(text, input.difficulty, input.questionCount));
       }
-
-      const promptText = `Generate exactly ${input.questionCount} high-quality multiple-choice questions based on the following content.
-
-Difficulty: ${difficultyMap[input.difficulty]}
-- Questions must be derived ONLY from the provided content.
-- Provide exactly 4 options for each question.
-- Ensure distractors are plausible but incorrect.
-- Include a clear explanation for the correct answer.
-
-Output format MUST be a JSON object with a "questions" array:
-{
-  "questions": [
-    {
-      "text": "The question string",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswerIndex": 0,
-      "explanation": "Why this is correct"
-    }
-  ]
-}
-
-Content:
-${truncated}`;
-
-      result = await callGeminiWithFallback(promptText);
     }
 
     if (!result.ok) {

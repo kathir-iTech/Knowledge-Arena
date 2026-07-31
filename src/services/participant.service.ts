@@ -52,15 +52,17 @@ export const participantService = {
     return snap.docs.map(d => ({ user_id: d.id, ...d.data() } as ValidatedParticipant));
   },
 
-  async joinQuiz(quizId: string, userId: string, name?: string): Promise<void> {
+  async joinQuiz(quizId: string, userId: string, name?: string, sessionToken?: string): Promise<void> {
     if (!quizId || quizId.length !== ROOM_CODE_LENGTH) throw new Error('Invalid quiz code');
     if (!userId) throw new Error('User ID required');
     const db = getFirestore();
     const quizRef = doc(db, COLLECTIONS.QUIZZES, quizId);
     await runTransaction(db, async (transaction) => {
       const quizSnap = await transaction.get(quizRef);
-      if (!quizSnap.exists()) throw new Error('Quiz not found');
-      if (quizSnap.data().status !== QUIZ_WAITING) throw new Error('This battle has already started. Late joining is not permitted.');
+      if (!quizSnap.exists) throw new Error('Quiz not found');
+      if (quizSnap.data().status !== QUIZ_WAITING && quizSnap.data().status !== 'ready') {
+        throw new Error('This battle has already started. Late joining is not permitted.');
+      }
 
       const userRef = doc(db, COLLECTIONS.USERS, userId);
       const userSnap = await transaction.get(userRef);
@@ -73,22 +75,40 @@ export const participantService = {
       if (existingPartSnap.exists() && existingPartSnap.data()?.status === PS_BLOCKED) {
         throw new Error('You have been removed from this arena by the Commander.');
       }
+      if (existingPartSnap.exists()) {
+        const update: Record<string, unknown> = {
+          lastSeen: serverTimestamp(),
+        };
+        if (sessionToken) update.session_token = sessionToken;
+        transaction.update(participantRef, update);
+        return;
+      }
       const data: Record<string, unknown> = {
         user_id: userId,
         score: 0,
         status: PS_PLAYING,
         violations_count: 0,
+        ready: false,
         lastSeen: serverTimestamp(),
       };
+      if (sessionToken) data.session_token = sessionToken;
       if (name) data.name = name;
       transaction.set(participantRef, data);
     });
   },
 
+  async setReady(quizId: string, userId: string, ready: boolean): Promise<void> {
+    const db = getFirestore();
+    const ref = doc(db, participantPath(quizId, userId));
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Participant not found');
+    await updateDoc(ref, { ready });
+  },
+
   async updateParticipant(
     quizId: string,
     userId: string,
-    data: { violations_count?: number; status?: 'playing' | 'blocked' | 'finished' }
+    data: { violations_count?: number; status?: 'playing' | 'blocked' | 'finished'; ready?: boolean }
   ): Promise<void> {
     const db = getFirestore();
     const ref = doc(db, participantPath(quizId, userId));
@@ -141,11 +161,13 @@ export const participantService = {
     await deleteDoc(doc(db, participantPath(quizId, userId)));
   },
 
-  async heartbeat(quizId: string, userId: string): Promise<void> {
+  async heartbeat(quizId: string, userId: string, sessionToken?: string): Promise<void> {
     const db = getFirestore();
-    await updateDoc(doc(db, participantPath(quizId, userId)), {
+    const update: Record<string, unknown> = {
       lastSeen: serverTimestamp(),
-    });
+    };
+    if (sessionToken) update.session_token = sessionToken;
+    await updateDoc(doc(db, participantPath(quizId, userId)), update);
   },
 
   subscribeToParticipants(

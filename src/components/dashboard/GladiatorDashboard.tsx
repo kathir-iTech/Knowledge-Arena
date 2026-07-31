@@ -107,7 +107,8 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
         router.push(`/battle/${code}`);
       })
       .catch((err) => {
-        toast({ variant: 'destructive', title: 'Join Failed', description: err instanceof Error ? err.message : 'Unknown error' });
+        const denied = (err as { code?: string })?.code === 'permission-denied';
+        toast({ variant: 'destructive', title: 'Join Failed', description: denied ? 'Arena not found' : (err instanceof Error ? err.message : 'Unknown error') });
         setIsLoading(false);
       });
   }, [roomCode, user, toast, router]);
@@ -130,7 +131,8 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
       }
       router.push(`/battle/${code}`);
     } catch (err: unknown) {
-      toast({ variant: 'destructive', title: 'Join Failed', description: err instanceof Error ? err.message : "Unknown error" });
+      const denied = (err as { code?: string })?.code === 'permission-denied';
+      toast({ variant: 'destructive', title: 'Join Failed', description: denied ? 'Arena not found' : (err instanceof Error ? err.message : "Unknown error") });
       setIsLoading(false);
     }
   };

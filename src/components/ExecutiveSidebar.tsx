@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, BrainCircuit, LayoutDashboard, BarChart3, Shield, Users, BookOpen, Inbox, Settings, MessageSquare, ClipboardList, Activity, Database, Wifi, Search, Bell, User, Archive } from 'lucide-react';
+import { LogOut, BrainCircuit, LayoutDashboard, BarChart3, Shield, Users, BookOpen, Inbox, Settings, MessageSquare, ClipboardList, Activity, Database, Wifi, Search, Bell, User, Archive, Bot, Swords } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -76,6 +76,9 @@ const ExecutiveSidebar = () => {
     { href: '/executive/messages', label: 'Messages', icon: MessageSquare },
     { href: '/executive/notifications', label: 'Notifications', icon: Bell },
     { href: '/executive/audit-logs', label: 'Audit Logs', icon: ClipboardList },
+    { href: '/executive/security', label: 'Security Logs', icon: Shield },
+    { href: '/executive/ai-logs', label: 'AI Logs', icon: Bot },
+    { href: '/executive/battles', label: 'Battles', icon: Swords },
     { href: '/executive/settings', label: 'Settings', icon: Settings },
     { href: '/executive/backup', label: 'Backup', icon: Archive },
   ];

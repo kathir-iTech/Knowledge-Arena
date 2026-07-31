@@ -60,7 +60,8 @@ function escCsv(v: string): string {
 }
 
 function exportQuizCSV(quiz: ValidatedQuiz, participants: ValidatedParticipant[]) {
-  const students = participants.filter(p => p.user_id !== quiz.created_by);
+  const creatorId = quiz.created_by || '';
+  const students = participants.filter(p => p.user_id !== creatorId);
   const sorted = [...students].sort((a, b) => b.score - a.score);
   const rows = [['Rank', 'User ID', 'Name', 'Score', 'Status']];
   sorted.forEach((p, i) => {
@@ -94,7 +95,9 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     const [showReplayDialog, setShowReplayDialog] = useState(false);
 
     useEffect(() => {
-        const sub = participantService.subscribeToParticipants(quiz.id, setParticipants);
+        const sub = participantService.subscribeToParticipants(quiz.id, setParticipants, (err) => {
+            console.error('Participant subscription error:', quiz.id, err);
+        });
         return () => { sub(); };
     }, [quiz.id]);
 
@@ -160,7 +163,8 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
       if (isExporting) return;
       setIsExporting('pdf');
       try {
-        const students = participants.filter(p => p.user_id !== quiz.created_by);
+        const creatorId = quiz.created_by || '';
+        const students = participants.filter(p => p.user_id !== creatorId);
         const sorted = [...students].sort((a, b) => b.score - a.score);
         const rows = sorted.map((p, i) => `<tr><td>${i + 1}</td><td>${escHtml(p.name || p.user_id.slice(0, 8))}</td><td>${p.score}</td><td>${escHtml(p.status)}</td></tr>`).join('');
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Arena Results - ${escHtml(quiz.title)}</title><style>body{font-family:system-ui,sans-serif;padding:40px;max-width:800px;margin:auto}h1{font-size:24px;margin-bottom:4px}.sub{color:#666;margin-bottom:24px}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}.rank{font-weight:bold;font-size:18px;color:#333}</style></head><body><h1>${escHtml(quiz.title)}</h1><p class="sub">Room: ${escHtml(quiz.id)} &mdash; ${sorted.length} gladiator(s)</p><table><thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
@@ -178,7 +182,8 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
       }
     };
 
-    const participantCount = participants?.filter(p => p.user_id !== quiz.created_by).length || 0;
+    const creatorId = quiz.created_by || '';
+    const participantCount = participants?.filter(p => p.user_id !== creatorId).length || 0;
     const isStaleLive = quiz.status === 'live' && quiz.created_at && Date.now() - quiz.created_at > 3600000;
     const isStaleWaiting = quiz.status === 'waiting' && quiz.created_at && Date.now() - quiz.created_at > 7200000;
 
@@ -677,7 +682,9 @@ export default function CommanderDashboard() {
         <div className="space-y-4">
           {filteredAndSorted.map((q, i) => (
             <div key={q.id} className="animate-in" style={{ animationDelay: `${i * 50}ms` }}>
-              <QuizCard quiz={q} onUpdate={fetchQuizzes} />
+              <QuizCardErrorBoundary quizId={q.id}>
+                <QuizCard quiz={q} onUpdate={fetchQuizzes} />
+              </QuizCardErrorBoundary>
             </div>
           ))}
           {filteredAndSorted.length === 0 && (
@@ -692,6 +699,25 @@ export default function CommanderDashboard() {
       </section>
     </div>
   );
+}
+
+class QuizCardErrorBoundary extends React.Component<{ children: React.ReactNode; quizId: string }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode; quizId: string }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error('QuizCard crash:', this.props.quizId, error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return null;
+    }
+    return this.props.children;
+  }
 }
 
 function statBgClass(color: string | undefined): string {

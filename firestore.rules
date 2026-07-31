@@ -20,9 +20,6 @@ service cloud.firestore {
       return isSignedIn() && getRole() == 'executive';
     }
 
-    function isTeacher() {
-      return isSignedIn() && getRole() == 'commander';
-    }
     
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
@@ -50,6 +47,32 @@ service cloud.firestore {
       return isSignedIn() && exists(partPath);
     }
 
+    // Battle Engine state machine: every status transition is validated.
+    function isLegalStatusTransition(from, to) {
+      return (from == 'draft' && to == 'waiting') ||
+        (from == 'waiting' && (to == 'ready' || to == 'starting' || to == 'live')) ||
+        (from == 'ready' && (to == 'waiting' || to == 'starting' || to == 'live')) ||
+        (from == 'starting' && (to == 'live' || to == 'waiting')) ||
+        (from == 'live' && (to == 'paused' || to == 'finished')) ||
+        (from == 'paused' && (to == 'live' || to == 'finished')) ||
+        (from == 'finished' && (to == 'archived' || to == 'waiting')) ||
+        from == to;
+    }
+
+    // Client creators may only mutate a whitelist of fields, and only along
+    // validated transitions. created_by (ownership) is server-only.
+    function isLegalQuizUpdate(quizId) {
+      return isQuizCreator(quizId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'archived', 'status', 'current_question_index', 'question_start_at',
+          'commanderLastSeen', 'battle_mode', 'start_config', 'scoring_config',
+          'paused_at', 'paused_ms', 'started_at', 'ended_at', 'skipped_question_ids',
+          'owner_transferred_at',
+        ]) &&
+        isLegalStatusTransition(resource.data.status, request.resource.data.status) &&
+        request.resource.data.status in ['waiting', 'ready', 'starting', 'live', 'paused', 'finished', 'archived'];
+    }
+
     function canReadArena(quizId) {
       let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
       return isSignedIn() && exists(quizPath) && (
@@ -62,7 +85,8 @@ service cloud.firestore {
     // --- Rules ---
 
     match /users/{userId} {
-      allow read: if isSignedIn();
+      // Profiles may only be read by the owner, commanders (roster) and executives (admin).
+      allow read: if isOwner(userId) || isCommander() || isExecutive();
       // Self-signup: only gladiator role allowed (no privilege escalation)
       allow create: if isOwner(userId) && request.resource.data.role == 'gladiator';
       // Commander/Executive creation bypasses public rules — done via Admin SDK / API
@@ -71,9 +95,13 @@ service cloud.firestore {
     }
 
     match /quizzes/{quizId} {
-      allow read: if isSignedIn();
+      // Arena metadata: any signed-in user may read an arena that is not finished
+      // (needed for the join flow); finished arenas are restricted to creator,
+      // participants and executives. Executives retain read-all oversight.
+      allow read: if isExecutive() || canReadArena(quizId);
       allow create: if isSignedIn() && (getRole() == 'commander' || getRole() == 'executive');
-      allow update, delete: if isQuizCreator(quizId);
+      allow update: if isLegalQuizUpdate(quizId);
+      allow delete: if isQuizCreator(quizId);
 
       match /questions/{questionId} {
         allow read: if isExecutive() || canReadArena(quizId);
@@ -84,7 +112,10 @@ service cloud.firestore {
 
         match /submissions/{userId} {
           allow read: if isExecutive() || isQuizCreator(quizId) || isOwner(userId);
+          // Submissions are only accepted while the battle is live (canSubmitAnswer
+          // semantics enforced server-side as well) and only by the owner.
           allow create: if isOwner(userId) && isNotBlocked(quizId, userId)
+            && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live'
             && request.resource.data.selected_option >= 0
             && request.resource.data.selected_option <= 3
             && request.resource.data.keys().hasOnly(['question_id', 'selected_option', 'submittedAt', 'clientTime'])
@@ -116,10 +147,11 @@ service cloud.firestore {
           && isNotBlocked(quizId, userId)
           && request.resource.data.user_id == userId
           && request.resource.data.lastSeen == request.time
-          && getAfter(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'waiting';
-        // Teacher can update everyone (block/reset), students can only increment violations
-        // or block themselves (violations_count + status=blocked) in a single write,
-        // or send heartbeat (lastSeen) updates.
+          && getAfter(/databases/$(database)/documents/quizzes/$(quizId)).data.status in ['waiting', 'ready'];
+        // Commander can update everyone (block/reset). Gladiators can only:
+        //  - increment violations (or block themselves) in a single write
+        //  - send heartbeat (lastSeen) updates, optionally with their session token
+        //  - toggle the ready flag while the arena is waiting/ready
         allow update: if isQuizCreator(quizId) || (
           isOwner(userId) && (
             (
@@ -132,8 +164,20 @@ service cloud.firestore {
                 )
               )
             ) ||
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen'])
-            && request.resource.data.lastSeen == request.time
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen']) &&
+              request.resource.data.lastSeen == request.time
+            ) ||
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen', 'session_token']) &&
+              request.resource.data.lastSeen == request.time &&
+              request.resource.data.session_token is string
+            ) ||
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ready']) &&
+              request.resource.data.ready is bool &&
+              get(/databases/$(database)/documents/quizzes/$(quizId)).data.status in ['waiting', 'ready']
+            )
           )
         );
         allow delete: if isQuizCreator(quizId) || (
@@ -155,7 +199,9 @@ service cloud.firestore {
 
   // --- Question Bank ---
   match /question_bank/{questionId} {
-    allow read: if isSignedIn();
+    // The question bank is internal: only commanders (AI import source) and
+    // executives may read it. Gladiators never need direct access.
+    allow read: if isExecutive() || isCommander();
     allow create, update, delete: if isSignedIn() && getRole() == 'executive';
   }
 
@@ -186,9 +232,10 @@ service cloud.firestore {
 
   // --- Notifications ---
   match /notifications/{notifId} {
-    allow read: if isSignedIn();
-    allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-    allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    // Notifications are server-written and served through API routes;
+    // clients may only read their own.
+    allow read: if isOwner(resource.data.userId) || isExecutive();
+    allow write: if false;
   }
 
   // --- Audit Logs ---
@@ -197,10 +244,43 @@ service cloud.firestore {
     allow write: if false;
   }
 
+  // --- Battle Logs ---
+  match /battle_logs/{logId} {
+    allow read: if isSignedIn() && (
+      isExecutive() ||
+      isQuizCreator(resource.data.quizId) ||
+      isQuizParticipant(resource.data.quizId, request.auth.uid)
+    );
+    // Client-side entries are restricted to the participant-originated events
+    // and must be self-authored; all server events are written via Admin SDK.
+    allow create: if isSignedIn() &&
+      request.resource.data.keys().hasOnly(['quizId', 'event', 'actor', 'actorRole', 'timestamp', 'metadata', 'createdAt']) &&
+      request.resource.data.actor == request.auth.uid &&
+      request.resource.data.event in ['gladiator_joined', 'gladiator_left', 'gladiator_ready', 'gladiator_blocked', 'gladiator_unblocked'] &&
+      (isQuizCreator(request.resource.data.quizId) ||
+        isQuizParticipant(request.resource.data.quizId, request.auth.uid));
+    allow update, delete: if false;
+  }
+
+  // --- AI Logs (server-only writes via Admin SDK; read by executives) ---
+  match /ai_logs/{logId} {
+    allow read: if isExecutive();
+    allow write: if false;
+  }
+
+  // --- Security Logs (server-only; read by executives) ---
+  match /security_logs/{logId} {
+    allow read: if isExecutive();
+    allow write: if false;
+  }
+
   // --- Executive Requests subcollection ---
   match /executive_requests/{requestId}/responses/{responseId} {
-    allow read: if isSignedIn();
-    allow create: if isSignedIn();
+    allow read: if isExecutive() || (
+      isSignedIn() && getRole() == 'commander' &&
+      get(/databases/$(database)/documents/executive_requests/$(requestId)).data.commanderId == request.auth.uid
+    );
+    allow create: if isExecutive();
   }
 
   // Collection group queries for student history

@@ -85,6 +85,7 @@ export const arenaCreationService = {
         question_count: qCount,
         created_by: createdBy,
         created_at: Date.now(),
+        battle_mode: 'synchronized',
       },
     });
 

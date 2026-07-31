@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag, WifiOff } from 'lucide-react';
+import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag, WifiOff, Pause, Play, SkipForward, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -15,10 +15,12 @@ import { useFirebase } from '@/firebase';
 import { quizService } from '@/services/quiz.service';
 import { questionService, submissionService } from '@/services/game.service';
 import { participantService } from '@/services/participant.service';
+import { battleService, getSessionToken } from '@/services/battle.service';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useToast } from '@/hooks/use-toast';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { applyOptionShuffle } from '@/lib/battle-machine';
 
 interface LiveQuizQuestion {
   id: string;
@@ -113,13 +115,54 @@ const CountdownTimer = React.memo(({ timeLeft, totalSec }: { timeLeft: number; t
   );
 });
 
-const LiveLeaderboard = ({ participants, teacherId, currentUserId }: { participants: ValidatedParticipant[], teacherId: string, currentUserId: string }) => {
+function AnimatedScore({ value, className }: { value: number; className?: string }) {
+  const [display, setDisplay] = useState(0);
+  const prevRef = useRef(0);
+  useEffect(() => {
+    const from = prevRef.current;
+    const to = value;
+    if (to === from) { setDisplay(to); return; }
+    const duration = Math.min(900, Math.max(300, Math.abs(to - from) * 2));
+    const start = performance.now();
+    let frame: number;
+    const animate = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(from + (to - from) * eased));
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+    prevRef.current = to;
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+  return <span className={cn("font-mono font-semibold tabular-nums", className)}>{display} PTS</span>;
+}
+
+const LiveLeaderboard = React.memo(({ participants, teacherId, currentUserId }: { participants: ValidatedParticipant[], teacherId: string, currentUserId: string }) => {
     const sortedParticipants = useMemo(() => [...participants].sort((a,b) => b.score - a.score), [participants]);
     const [presenceNow, setPresenceNow] = useState(() => Date.now());
+    const [rankDeltas, setRankDeltas] = useState<Record<string, number>>({});
+    const prevRanksRef = useRef<Record<string, number>>({});
+
     useEffect(() => {
       const interval = setInterval(() => setPresenceNow(Date.now()), 5000);
       return () => clearInterval(interval);
     }, []);
+
+    useEffect(() => {
+      const nextRanks: Record<string, number> = {};
+      sortedParticipants.forEach((p, idx) => { nextRanks[p.user_id] = idx + 1; });
+      const deltas: Record<string, number> = {};
+      for (const uid of Object.keys(nextRanks)) {
+        const prev = prevRanksRef.current[uid];
+        if (prev && prev !== nextRanks[uid]) {
+          deltas[uid] = prev > nextRanks[uid] ? 1 : -1;
+        }
+      }
+      if (Object.keys(deltas).length > 0) setRankDeltas(deltas);
+      prevRanksRef.current = nextRanks;
+    }, [sortedParticipants]);
+
     const onlineParticipants = useMemo(() => sortedParticipants.filter(p => p.user_id === teacherId || isOnline(p.lastSeen, presenceNow, PARTICIPANT_TIMEOUT_MS)), [sortedParticipants, teacherId, presenceNow]);
     const students = onlineParticipants.filter(p => p.user_id !== teacherId);
     const total = students.length;
@@ -145,9 +188,10 @@ const LiveLeaderboard = ({ participants, teacherId, currentUserId }: { participa
                       const percentile = total > 0 ? Math.round(((total - rank) / total) * 100) : 0;
                       const isSelf = p.user_id === currentUserId;
                       const showPodium = idx < 3 && total >= 3;
+                      const delta = rankDeltas[p.user_id];
                       return (
                         <div key={p.user_id} className={cn(
-                          "flex items-center gap-2 md:gap-3 p-2 md:p-2.5 rounded-[12px] border transition-all duration-150",
+                          "flex items-center gap-2 md:gap-3 p-2 md:p-2.5 rounded-[12px] border transition-all duration-300",
                           isSelf ? "bg-primary/5 border-primary/20" : p.status === 'blocked' ? "bg-destructive/5 border-destructive/10 opacity-50" : showPodium ? "bg-warning/[0.03] border-warning/10" : "bg-card border-border/50"
                         )}>
                             <div className="relative shrink-0">
@@ -155,15 +199,17 @@ const LiveLeaderboard = ({ participants, teacherId, currentUserId }: { participa
                                   <AvatarFallback className="text-xs md:text-sm bg-secondary">{p.avatar || '🎮'}</AvatarFallback>
                               </Avatar>
                               <span className={cn(
-                                "absolute -bottom-1 -right-1 text-[9px] font-bold bg-background border border-border rounded-full w-4 h-4 flex items-center justify-center",
-                                rank === 1 ? "text-warning" : rank === 2 ? "text-muted-foreground" : rank === 3 ? "text-amber-700" : "text-muted-foreground"
-                              )} aria-label={`Rank ${rank}`}>{rank}</span>
+                                "absolute -bottom-1 -right-1 text-[9px] font-bold bg-background border border-border rounded-full w-4 h-4 flex items-center justify-center transition-colors duration-300",
+                                rank === 1 ? "text-warning" : rank === 2 ? "text-muted-foreground" : rank === 3 ? "text-amber-700" : "text-muted-foreground",
+                                delta === 1 && "bg-success/20 border-success/40 text-success",
+                                delta === -1 && "bg-destructive/20 border-destructive/40 text-destructive"
+                              )} aria-label={`Rank ${rank}`}>
+                                {delta === 1 ? '▲' : delta === -1 ? '▼' : rank}
+                              </span>
                             </div>
                             <div className="flex flex-col min-w-0">
                                 <span className="text-xs md:text-sm font-semibold truncate max-w-[60px] md:max-w-[80px]">{isSelf ? 'You' : p.name || p.user_id.slice(0, 6)}</span>
-                                <span className={cn('text-[10px] md:text-xs font-mono font-semibold', p.status === 'blocked' ? 'text-destructive' : 'text-primary')}>
-                                  {p.status === 'blocked' ? 'BLOCKED' : `${p.score} PTS`}
-                                </span>
+                                <AnimatedScore value={p.score} className={cn('text-[10px] md:text-xs', p.status === 'blocked' ? 'text-destructive' : 'text-primary')} />
                                 {isSelf && p.status !== 'blocked' && (
                                   <span className="text-[9px] text-muted-foreground">Top {percentile}%</span>
                                 )}
@@ -175,14 +221,16 @@ const LiveLeaderboard = ({ participants, teacherId, currentUserId }: { participa
             </CardContent>
         </Card>
     );
-};
+});
 
-const ParticipantStats = ({ participants, teacherId, submittedCount, onUnblock, unblockingId }: {
+const ParticipantStats = ({ participants, teacherId, submittedCount, finishedCount, onUnblock, unblockingId, independent }: {
   participants: ValidatedParticipant[];
   teacherId: string;
   submittedCount: number;
+  finishedCount: number;
   onUnblock: (userId: string) => void;
   unblockingId: string | null;
+  independent: boolean;
 }) => {
   const students = participants.filter(p => p.user_id !== teacherId);
   const playing = students.filter(p => p.status === 'playing').length;
@@ -202,11 +250,19 @@ const ParticipantStats = ({ participants, teacherId, submittedCount, onUnblock, 
         <span className="font-semibold text-success">{playing}</span>
         <span className="text-muted-foreground">active</span>
       </div>
-      <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[12px] text-xs">
-        <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-        <span className="font-semibold text-primary">{submittedCount}</span>
-        <span className="text-muted-foreground">answered</span>
-      </div>
+      {independent ? (
+        <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[12px] text-xs">
+          <Trophy className="w-3.5 h-3.5 text-primary" />
+          <span className="font-semibold text-primary">{finishedCount}</span>
+          <span className="text-muted-foreground">finished</span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[12px] text-xs">
+          <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+          <span className="font-semibold text-primary">{submittedCount}</span>
+          <span className="text-muted-foreground">answered</span>
+        </div>
+      )}
       {blocked > 0 && (
         <div className="flex items-center gap-1.5 bg-destructive/5 px-3 py-1.5 rounded-[12px] text-xs">
           <Ban className="w-3.5 h-3.5 text-destructive" />
@@ -214,7 +270,7 @@ const ParticipantStats = ({ participants, teacherId, submittedCount, onUnblock, 
           <span className="text-muted-foreground">blocked</span>
         </div>
       )}
-      {finished > 0 && (
+      {finished > 0 && !independent && (
         <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[12px] text-xs">
           <span className="font-semibold text-primary">{finished}</span>
           <span className="text-muted-foreground">done</span>
@@ -244,6 +300,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const router = useRouter();
   const { toast } = useToast();
   const commanderOnline = useCommanderPresence(quiz);
+  const independent = quiz.battle_mode === 'independent';
 
   const [questions, setQuestions] = useState<LiveQuizQuestion[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
@@ -258,7 +315,11 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const [timeLeft, setTimeLeft] = useState(0);
   const [submittedCount, setSubmittedCount] = useState(0);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
   const endingRef = useRef(false);
   const lastViolationRef = useRef(0);
   const prevViolationsRef = useRef<Record<string, number>>({});
@@ -266,6 +327,8 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const confirmedQuestionIds = useRef(new Set<string>());
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const operationLock = useRef(false);
+  const timeUpAttemptsRef = useRef<Record<string, number>>({});
+  const autoEndedRef = useRef<string | null>(null);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { firestore } = useFirebase();
@@ -295,7 +358,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   useEffect(() => {
     if (!isTeacher && user) {
       const send = () => {
-        participantService.heartbeat(quiz.id, user.id).catch(() => {});
+        participantService.heartbeat(quiz.id, user.id, getSessionToken(quiz.id)).catch(() => {});
       };
       send();
       heartbeatRef.current = setInterval(send, 15000);
@@ -380,17 +443,43 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     return () => { mounted = false; pSub(); };
   }, [quiz.id, isTeacher, quiz.created_by, toast]);
 
+  const myQuestionOrder = independent ? (participant.question_order ?? null) : null;
+  const myIndex = myQuestionOrder ? (participant.current_question_index ?? 0) : (quiz.current_question_index ?? -1);
+
   const currentQuestion = useMemo(() => {
-    if (!questions.length || (quiz.current_question_index ?? -1) < 0) return null;
-    return questions[quiz.current_question_index ?? 0];
-  }, [questions, quiz.current_question_index]);
+    if (!questions.length) return null;
+    if (myQuestionOrder) {
+      const qid = myQuestionOrder[myIndex];
+      if (!qid) return null;
+      return questions.find(q => q.id === qid) ?? null;
+    }
+    if ((quiz.current_question_index ?? -1) < 0) return null;
+    return questions[quiz.current_question_index ?? 0] ?? null;
+  }, [questions, myQuestionOrder, myIndex, quiz.current_question_index]);
+
+  const displayedOptions = useMemo(() => {
+    if (!currentQuestion) return [];
+    if (independent && participant.option_shuffle?.[currentQuestion.id]) {
+      return applyOptionShuffle(currentQuestion.options, participant.option_shuffle[currentQuestion.id]);
+    }
+    return currentQuestion.options;
+  }, [currentQuestion, independent, participant.option_shuffle]);
+
+  const answerStartAt = useMemo(() => {
+    if (independent) {
+      return typeof participant.question_start_at === 'number' ? participant.question_start_at : Date.now();
+    }
+    return typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
+  }, [independent, participant.question_start_at, quiz.question_start_at]);
+
+  const isQuestionTimerActive = quiz.status === 'live' && (!isTeacher || !independent);
 
   useEffect(() => {
-    if (!currentQuestion) return;
-    const start = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
+    if (!isQuestionTimerActive || !currentQuestion) return;
+    if (!isTeacher && independent && participant.status !== 'playing') return;
     const durationMs = currentQuestion.timer * 1000;
     const totalSec = currentQuestion.timer;
-    const deadline = start + durationMs;
+    const deadline = answerStartAt + durationMs;
 
     const interval = setInterval(() => {
       const now = Date.now();
@@ -400,23 +489,21 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       if (clamped <= 0) clearInterval(interval);
     }, 200);
     return () => clearInterval(interval);
-  }, [quiz.current_question_index, quiz.question_start_at, currentQuestion?.timer]);
+  }, [isQuestionTimerActive, currentQuestion?.id, currentQuestion?.timer, answerStartAt, isTeacher, independent, participant.status]);
 
-  const prevQuestionIdxRef = useRef<number | null>(null);
+  const questionKey = currentQuestion?.id ?? null;
+
   useEffect(() => {
-    const idx = quiz.current_question_index ?? -1;
-    if (idx >= 0 && idx !== prevQuestionIdxRef.current) {
-      prevQuestionIdxRef.current = idx;
-      setIsTransitioning(true);
-      setSelectedAnswer(null);
-      setHasAnswered(false);
-      setAnswerSynced(false);
-      setShowViolationWarning(false);
-      setAdvanceStage('idle');
-      const timer = setTimeout(() => setIsTransitioning(false), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [quiz.current_question_index]);
+    if (!questionKey) return;
+    setIsTransitioning(true);
+    setSelectedAnswer(null);
+    setHasAnswered(false);
+    setAnswerSynced(false);
+    setShowViolationWarning(false);
+    setAdvanceStage('idle');
+    const timer = setTimeout(() => setIsTransitioning(false), 300);
+    return () => clearTimeout(timer);
+  }, [questionKey]);
 
   useEffect(() => {
     if (isTeacher || !currentQuestion || !user || !firestore) return;
@@ -431,10 +518,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       }
     }, () => {});
     return () => { unsub(); };
-  }, [quiz.current_question_index, isTeacher, user?.id, firestore, quiz.id]);
+  }, [currentQuestion?.id, isTeacher, user?.id, firestore, quiz.id]);
 
   useEffect(() => {
-    if (!isTeacher || !firestore) return;
+    if (!isTeacher || !firestore || independent) return;
     const qId = currentQuestion?.id;
     if (!qId || !quiz.id) return;
     const subsRef = collection(firestore, 'quizzes', quiz.id, 'questions', qId, 'submissions');
@@ -442,7 +529,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       setSubmittedCount(snap.docs.filter(d => d.data()?.selected_option !== undefined).length);
     });
     return () => { unsub(); };
-  }, [isTeacher, currentQuestion?.id, quiz.id, firestore]);
+  }, [isTeacher, currentQuestion?.id, quiz.id, firestore, independent]);
 
   const onMalpractice = useCallback(async () => {
     if (isTeacher || !user || participant.status === 'blocked' || quiz.status !== 'live') return;
@@ -478,7 +565,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
   const handleAnswerSubmit = async (idx: number) => {
     const qId = currentQuestion?.id;
-    if (!qId || hasAnswered || isTeacher || !user || timeLeft === 0 || participant.status === 'blocked' || isAdvancing) return;
+    if (!qId || hasAnswered || isTeacher || !user || timeLeft === 0 || quiz.status !== 'live' || participant.status === 'blocked' || isAdvancing) return;
     if (confirmedQuestionIds.current.has(qId)) return;
     setHasAnswered(true);
     setSelectedAnswer(idx);
@@ -492,6 +579,15 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       });
       setAnswerSynced(true);
       confirmedQuestionIds.current.add(qId);
+      if (independent) {
+        try {
+          await battleService.evaluateSelf(quiz.id, qId);
+        } catch (e) {
+          if (!(e instanceof Error && e.message.includes('not live'))) {
+            toast({ variant: 'destructive', title: 'Sync Issue', description: 'Answer saved. Retrying evaluation...' });
+          }
+        }
+      }
     } catch (e) {
       if (e instanceof Error && e.message.includes('permission')) {
         setAnswerSynced(true);
@@ -504,25 +600,46 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     }
   };
 
+  useEffect(() => {
+    if (independent && !isTeacher && currentQuestion && quiz.status === 'live' && participant.status === 'playing') {
+      if (hasAnswered || timeLeft > 0) return;
+      const qid = currentQuestion.id;
+      const lastAttempt = timeUpAttemptsRef.current[qid] ?? 0;
+      if (Date.now() - lastAttempt < 8000) return;
+      timeUpAttemptsRef.current[qid] = Date.now();
+      const t = setTimeout(() => {
+        battleService.evaluateSelf(quiz.id, qid).catch(() => {});
+      }, 1200);
+      return () => clearTimeout(t);
+    }
+  }, [independent, isTeacher, currentQuestion?.id, quiz.status, participant.status, hasAnswered, timeLeft, quiz.id]);
+
+  useEffect(() => {
+    if (!independent && quiz.status === 'live' && timeLeft === 0 && currentQuestion && !isTeacher) {
+      const qIndex = quiz.current_question_index ?? 0;
+      const qCount = quiz.question_count ?? 0;
+      if (qIndex < qCount - 1) return;
+      if (advancingRef.current || endingRef.current || autoEndedRef.current === currentQuestion.id) return;
+      autoEndedRef.current = currentQuestion.id;
+      const t = setTimeout(() => {
+        battleService.endBattle(quiz.id).catch(() => {});
+      }, 2000);
+      return () => clearTimeout(t);
+    }
+  }, [independent, quiz.status, timeLeft, currentQuestion?.id, quiz.current_question_index, quiz.question_count, isTeacher, quiz.id]);
+
   const handleNext = async () => {
-    if (!isTeacher || advancingRef.current || operationLock.current) return;
+    if (!isTeacher || independent || advancingRef.current || operationLock.current) return;
     advancingRef.current = true;
     operationLock.current = true;
     setIsAdvancing(true);
     setAdvanceStage('evaluating');
     try {
       if (currentQuestion) {
-        const startTime = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
-        await questionService.evaluateQuestion(quiz.id, currentQuestion.id, startTime);
+        await battleService.evaluateQuestion(quiz.id, currentQuestion.id);
       }
       setAdvanceStage('advancing');
-      const nextIdx = (quiz.current_question_index ?? 0) + 1;
-      if (nextIdx < (quiz.question_count ?? 0)) {
-        await quizService.advanceToQuestion(quiz.id, nextIdx);
-      } else {
-        await quizService.updateQuizStatus(quiz.id, 'finished');
-        await participantService.markAllFinished(quiz.id, quiz.created_by);
-      }
+      await battleService.advanceQuestion(quiz.id);
     } catch (e) {
       console.error('[handleNext] Failed to advance:', e);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to advance. Please try again.' });
@@ -535,12 +652,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     operationLock.current = true;
     setIsEnding(true);
     try {
-      if (currentQuestion) {
-        const startTime = typeof quiz.question_start_at === 'number' ? quiz.question_start_at : Date.now();
-        await questionService.evaluateQuestion(quiz.id, currentQuestion.id, startTime);
-      }
-      await quizService.updateQuizStatus(quiz.id, 'finished');
-      await participantService.markAllFinished(quiz.id, quiz.created_by);
+      await battleService.endBattle(quiz.id);
       toast({ title: 'Battle Ended', description: 'The battle has been finalized.' });
     } catch (e) {
       console.error('[handleEndBattle] Failed to end:', e);
@@ -549,6 +661,53 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       endingRef.current = false;
       operationLock.current = false;
       setIsEnding(false);
+    }
+  };
+
+  const handlePause = async () => {
+    if (!isTeacher || operationLock.current || isPausing) return;
+    operationLock.current = true;
+    setIsPausing(true);
+    try {
+      await battleService.pauseBattle(quiz.id);
+      toast({ title: 'Battle Paused', description: 'Timers and answers are frozen.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to pause the battle.' });
+    } finally {
+      setIsPausing(false);
+      operationLock.current = false;
+    }
+  };
+
+  const handleResume = async () => {
+    if (!isTeacher || operationLock.current || isResuming) return;
+    operationLock.current = true;
+    setIsResuming(true);
+    try {
+      await battleService.resumeBattle(quiz.id);
+      toast({ title: 'Battle Resumed', description: 'Timers restored to their exact remaining time.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to resume the battle.' });
+    } finally {
+      setIsResuming(false);
+      operationLock.current = false;
+    }
+  };
+
+  const handleSkip = async () => {
+    if (!isTeacher || operationLock.current || isSkipping) return;
+    operationLock.current = true;
+    setIsSkipping(true);
+    setShowSkipConfirm(false);
+    try {
+      const res = await battleService.skipQuestion(quiz.id);
+      toast({ title: 'Question Skipped', description: res?.ended ? 'That was the final question. Battle complete.' : 'Everyone moved safely to the next question.' });
+    } catch (e) {
+      console.error('[handleSkip] Failed:', e);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to skip the question.' });
+    } finally {
+      setIsSkipping(false);
+      operationLock.current = false;
     }
   };
 
@@ -566,13 +725,29 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   };
 
   if (isLoadingQuestions) return <LoadingScreen message="Loading questions..." />;
-  if (!currentQuestion) return null;
 
   const studentCount = participants.filter(p => p.user_id !== quiz.created_by).length;
-  const showCommanderOffline = !isTeacher && !commanderOnline && quiz.status === 'live';
+  const showCommanderOffline = !isTeacher && !commanderOnline && (quiz.status === 'live' || quiz.status === 'paused');
+  const finishedCount = participants.filter(p => p.user_id !== quiz.created_by && p.status === 'finished').length;
+  const isGladiatorFinished = !isTeacher && independent && participant.status === 'finished';
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-3 md:p-4 bg-background overflow-x-hidden animate-in safe-top safe-bottom">
+      {quiz.status === 'paused' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
+          <div className="relative bg-card border border-warning/20 rounded-[18px] shadow-elevation-medium p-6 max-w-sm w-full space-y-4 text-center animate-in">
+            <div className="flex items-center justify-center w-12 h-12 rounded-[14px] bg-warning/10 mx-auto">
+              <Pause className="w-6 h-6 text-warning" />
+            </div>
+            <h2 className="font-headline text-xl font-semibold">Battle Paused</h2>
+            <p className="text-sm text-muted-foreground">
+              The Commander has paused the battle. Timers and answers are frozen and will resume exactly where they left off.
+            </p>
+          </div>
+        </div>
+      )}
+
       {showViolationWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setShowViolationWarning(false)} />
@@ -608,52 +783,91 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
       {isTeacher && (
         <div className="flex items-center gap-2 mb-4 w-full max-w-4xl justify-between">
-          <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} onUnblock={handleUnblock} unblockingId={unblockingId} />
+          <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} finishedCount={finishedCount} onUnblock={handleUnblock} unblockingId={unblockingId} independent={independent} />
         </div>
       )}
 
-      {!isTeacher && (
-        <CountdownTimer timeLeft={timeLeft} totalSec={currentQuestion.timer} />
+      {isGladiatorFinished && (
+        <div className="w-full max-w-4xl mb-4">
+          <Card className="border-success/20 bg-success/5 shadow-elevation-small">
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="flex items-center justify-center w-12 h-12 rounded-[14px] bg-success/10 shrink-0">
+                <Trophy className="w-6 h-6 text-success" />
+              </div>
+              <div>
+                <h2 className="font-headline text-lg font-semibold">You&apos;ve Finished!</h2>
+                <p className="text-sm text-muted-foreground">Your score has been recorded. Waiting for the remaining gladiators to complete the battle...</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
+      {!isTeacher && !isGladiatorFinished && (
+        <CountdownTimer timeLeft={timeLeft} totalSec={currentQuestion?.timer ?? 0} />
+      )}
+
+      {!isGladiatorFinished && (
       <Card className="w-full max-w-4xl card-hover shadow-elevation-small">
         <CardHeader className={cn(
           "text-center pt-10 pb-4 md:pb-6 px-5 md:px-10 transition-opacity duration-300",
           isTransitioning ? "opacity-50" : "opacity-100"
         )}>
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Question {(quiz.current_question_index ?? 0) + 1} / {quiz.question_count ?? 0}
-            </span>
-            <div className="flex gap-1" aria-hidden="true">
-              {Array.from({ length: quiz.question_count ?? 0 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "w-2 h-2 rounded-full transition-all duration-300",
-                    i < (quiz.current_question_index ?? 0) ? "bg-primary" :
-                    i === (quiz.current_question_index ?? 0) ? "bg-primary/60 scale-125" :
-                    "bg-muted-foreground/20"
-                  )}
-                />
-              ))}
+          {isTeacher && independent ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-center gap-3">
+                <Trophy className="w-5 h-5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Independent Mode
+                </span>
+              </div>
+              <CardTitle className="text-xl sm:text-2xl font-headline tracking-tight">
+                Gladiators are progressing at their own pace
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Question order and options are shuffled per gladiator. Scores update in real time below.
+              </p>
             </div>
-          </div>
-          <CardTitle className="text-xl sm:text-3xl md:text-4xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
-          {isTeacher && (
-            <div className="flex items-center justify-center gap-2 mt-4">
-              <Clock className="w-4 h-4 text-muted-foreground" />
-              <span className={cn("font-mono text-lg font-bold tabular-nums", timeLeft <= 5 ? "text-destructive" : "text-foreground")} aria-live="polite" aria-atomic="true">{timeLeft}<span className="text-sm font-normal text-muted-foreground ml-0.5">s</span></span>
-            </div>
+          ) : currentQuestion ? (
+            <>
+              <div className="flex items-center justify-center gap-3 mb-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Question {myIndex + 1} / {quiz.question_count ?? 0}
+                </span>
+                <div className="flex gap-1" aria-hidden="true">
+                  {Array.from({ length: quiz.question_count ?? 0 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "w-2 h-2 rounded-full transition-all duration-300",
+                        i < myIndex ? "bg-primary" :
+                        i === myIndex ? "bg-primary/60 scale-125" :
+                        "bg-muted-foreground/20"
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+              <CardTitle className="text-xl sm:text-3xl md:text-4xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
+              {isTeacher && !independent && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <span className={cn("font-mono text-lg font-bold tabular-nums", timeLeft <= 5 ? "text-destructive" : "text-foreground")} aria-live="polite" aria-atomic="true">{timeLeft}<span className="text-sm font-normal text-muted-foreground ml-0.5">s</span></span>
+                </div>
+              )}
+            </>
+          ) : (
+            <CardTitle className="text-xl sm:text-2xl font-headline tracking-tight">Preparing question...</CardTitle>
           )}
         </CardHeader>
+        {currentQuestion && !isTeacher && (
         <CardContent className="pb-10 md:pb-14 px-5 md:px-10">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-            {currentQuestion.options.map((opt: string, i: number) => (
+            {displayedOptions.map((opt: string, i: number) => (
               <button
                 key={i}
                 onClick={() => handleAnswerSubmit(i)}
-                disabled={hasAnswered || isTeacher || timeLeft === 0 || participant.status === 'blocked'}
+                disabled={hasAnswered || isTeacher || timeLeft === 0 || quiz.status !== 'live' || participant.status === 'blocked'}
                 className={cn(
                   "group relative flex flex-col gap-2 p-3 md:p-5 rounded-[14px] border-2 text-left transition-all duration-150 min-h-[3.5rem] md:min-h-[5.5rem]",
                   selectedAnswer === i
@@ -661,7 +875,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                     : hasAnswered
                       ? "border-border/30 bg-muted/10 opacity-40"
                       : "border-border/50 bg-card hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-elevation-small hover:-translate-y-0.5 cursor-pointer active:scale-[0.98]",
-                  (hasAnswered || isTeacher || timeLeft === 0) && "cursor-default"
+                  (hasAnswered || isTeacher || timeLeft === 0 || quiz.status !== 'live') && "cursor-default"
                 )}
                 aria-label={`Option ${String.fromCharCode(65 + i)}: ${opt}`}
               >
@@ -689,33 +903,16 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
               <span className="font-medium text-primary">Answer Locked</span>
               <span className="text-muted-foreground mx-1">·</span>
               {answerSynced ? (
-                <span className="text-muted-foreground">Waiting for the Commander...</span>
+                independent ? (
+                  <span className="text-muted-foreground">Score saved. Next question coming up...</span>
+                ) : (
+                  <span className="text-muted-foreground">Waiting for the Commander...</span>
+                )
               ) : (
                 <span className="text-warning font-medium flex items-center gap-1">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   Answer sync pending
                 </span>
-              )}
-            </div>
-          )}
-
-          {isTeacher && (
-            <div className="flex flex-col items-center pt-6 md:pt-8 gap-2">
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <Button onClick={handleNext} disabled={isAdvancing || isEnding} size="lg" className="w-full sm:w-auto min-w-[200px]" aria-busy={isAdvancing}>
-                  {isAdvancing && advanceStage === 'evaluating' ? <Loader2 className="animate-spin mr-2" /> : isAdvancing && advanceStage === 'advancing' ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
-                  {isAdvancing && advanceStage === 'evaluating' ? 'Evaluating answers...' :
-                   isAdvancing && advanceStage === 'advancing' ? 'Advancing...' :
-                   (quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
-                </Button>
-                <Button onClick={() => setShowEndConfirm(true)} variant="outline" disabled={isAdvancing || isEnding} size="lg" className="w-full sm:w-auto">
-                  {isEnding ? <Loader2 className="animate-spin mr-2" /> : <Flag className="mr-2 h-5 w-5" />}
-                  End Battle
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">{submittedCount} / {studentCount} gladiators answered</p>
-              {studentCount > 0 && submittedCount < studentCount && (
-                <p className="text-xs text-muted-foreground/60">Waiting for {studentCount - submittedCount} more gladiator{(studentCount - submittedCount) !== 1 ? 's' : ''}</p>
               )}
             </div>
           )}
@@ -728,7 +925,68 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
              </div>
           )}
         </CardContent>
+        )}
       </Card>
+      )}
+
+      {isTeacher && !independent && currentQuestion && (
+        <div className="flex flex-col items-center pt-6 md:pt-8 gap-2 w-full max-w-4xl">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button onClick={handleNext} disabled={isAdvancing || isEnding || isSkipping || isPausing || isResuming} size="lg" className="w-full sm:w-auto min-w-[200px]" aria-busy={isAdvancing}>
+              {isAdvancing && advanceStage === 'evaluating' ? <Loader2 className="animate-spin mr-2" /> : isAdvancing && advanceStage === 'advancing' ? <Loader2 className="animate-spin mr-2" /> : <ArrowRight className="mr-2 h-5 w-5" />}
+              {isAdvancing && advanceStage === 'evaluating' ? 'Evaluating answers...' :
+               isAdvancing && advanceStage === 'advancing' ? 'Advancing...' :
+               (quiz.current_question_index ?? 0) === (quiz.question_count ?? 0) - 1 ? 'Reveal Podium' : 'Evaluate & Next'}
+            </Button>
+            {quiz.status === 'paused' ? (
+              <Button onClick={handleResume} variant="outline" disabled={isResuming || isEnding || isSkipping} size="lg" className="w-full sm:w-auto">
+                {isResuming ? <Loader2 className="animate-spin mr-2" /> : <Play className="mr-2 h-5 w-5" />}
+                Resume
+              </Button>
+            ) : (
+              <Button onClick={handlePause} variant="outline" disabled={isPausing || isEnding || isSkipping || isAdvancing} size="lg" className="w-full sm:w-auto">
+                {isPausing ? <Loader2 className="animate-spin mr-2" /> : <Pause className="mr-2 h-5 w-5" />}
+                Pause
+              </Button>
+            )}
+            <Button onClick={() => setShowSkipConfirm(true)} variant="outline" disabled={isSkipping || isEnding || isAdvancing} size="lg" className="w-full sm:w-auto">
+              {isSkipping ? <Loader2 className="animate-spin mr-2" /> : <SkipForward className="mr-2 h-5 w-5" />}
+              Skip
+            </Button>
+            <Button onClick={() => setShowEndConfirm(true)} variant="outline" disabled={isAdvancing || isEnding || isSkipping} size="lg" className="w-full sm:w-auto">
+              {isEnding ? <Loader2 className="animate-spin mr-2" /> : <Flag className="mr-2 h-5 w-5" />}
+              End Battle
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">{submittedCount} / {studentCount} gladiators answered</p>
+          {studentCount > 0 && submittedCount < studentCount && (
+            <p className="text-xs text-muted-foreground/60">Waiting for {studentCount - submittedCount} more gladiator{(studentCount - submittedCount) !== 1 ? 's' : ''}</p>
+          )}
+        </div>
+      )}
+
+      {isTeacher && independent && (
+        <div className="flex flex-col items-center pt-6 md:pt-8 gap-2 w-full max-w-4xl">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {quiz.status === 'paused' ? (
+              <Button onClick={handleResume} variant="outline" disabled={isResuming || isEnding} size="lg" className="w-full sm:w-auto">
+                {isResuming ? <Loader2 className="animate-spin mr-2" /> : <Play className="mr-2 h-5 w-5" />}
+                Resume
+              </Button>
+            ) : (
+              <Button onClick={handlePause} variant="outline" disabled={isPausing || isEnding} size="lg" className="w-full sm:w-auto">
+                {isPausing ? <Loader2 className="animate-spin mr-2" /> : <Pause className="mr-2 h-5 w-5" />}
+                Pause
+              </Button>
+            )}
+            <Button onClick={() => setShowEndConfirm(true)} variant="outline" disabled={isEnding} size="lg" className="w-full sm:w-auto">
+              {isEnding ? <Loader2 className="animate-spin mr-2" /> : <Flag className="mr-2 h-5 w-5" />}
+              End Battle
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">{finishedCount} / {studentCount} gladiators finished</p>
+        </div>
+      )}
 
       <LiveLeaderboard participants={participants} teacherId={quiz.created_by} currentUserId={user?.id || ''} />
 
@@ -745,6 +1003,24 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
             <AlertDialogAction onClick={() => { setShowEndConfirm(false); handleEndBattle(); }} disabled={isEnding} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {isEnding ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
               End Battle
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showSkipConfirm} onOpenChange={(o) => { if (!o && !isSkipping) setShowSkipConfirm(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Skip this Question?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The question will be marked as skipped for every gladiator. No scores are awarded for it and everyone moves to the next question safely.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSkipping}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSkip} disabled={isSkipping}>
+              {isSkipping ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+              Skip Question
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

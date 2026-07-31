@@ -1,0 +1,522 @@
+# KNOWLEDGE ARENA — COMPLETE ARCHITECTURAL ASSESSMENT
+
+---
+
+## 1. ARCHITECTURE UNDERSTANDING
+
+```
+Browser (React 19 / Next.js 15 App Router)
+  ├─ Client Components (useState, useEffect, useMemo)
+  ├─ Server Components (minimal - mostly client-driven)
+  ├─ Server Actions (AI PDF Forge only)
+  └─ API Routes (REST: admin, executive, commander, gladiator, messaging, AI)
+       │
+       ├── Firebase Web SDK (client-side: Auth, Firestore realtime)
+       ├── Firebase Admin SDK (server-side: API routes, AI engines)
+       └── Genkit + Gemini (AI PDF Forge, Knowledge, Prediction, Decision Support)
+            └── pdfreader (PDF extraction)
+```
+
+**Key characteristics:**
+- **Monolithic Next.js deployment** — single codebase, no microservices
+- **Client-heavy architecture** — most business logic runs in browser components
+- **Direct Firestore access from client** — services call Firestore Web SDK directly
+- **Dual role naming** — DB stores `teacher`/`student`, AuthContext maps to `commander`/`gladiator`
+- **No shared service layer** — server routes reimplement logic from scratch with Admin SDK
+- **No state management library** — everything is `useState` in React context
+- **No test infrastructure** — zero tests exist
+- **In-memory rate limiting** — not suitable for multi-instance production
+
+---
+
+## 2. CURRENT IMPLEMENTATION STATUS
+
+### Fully Implemented
+| Area | Status | Evidence |
+|------|--------|----------|
+| Firebase Auth (email/password) | ✅ | AuthContext.tsx + Firebase SDK |
+| Google Sign-In | ✅ | signInWithRedirect flow |
+| Role-based routing | ✅ | ClientLayout + middleware |
+| Arena creation (manual) | ✅ | QuizCreatorForm + arena-creation.service |
+| AI PDF Forge | ✅ | generate-quiz-pdf-flow.ts (722 lines) |
+| Multi-format extraction | ✅ | PDF, DOCX, TXT, MD, images |
+| Model fallback chain | ✅ | 2.5-flash → 2.0-flash |
+| Waiting room | ✅ | WaitingRoom.tsx (442 lines) |
+| Live quiz battle | ✅ | LiveQuiz.tsx (754 lines) |
+| Time-based scoring | ✅ | game.service.ts evaluateQuestion |
+| Malpractice detection | ✅ | Tab focus loss → block at 2 violations |
+| Results/Leaderboard | ✅ | QuizResults.tsx + QuizReview.tsx |
+| Arena CRUD | ✅ | Create, duplicate, delete, reset |
+| CSV/HTML export | ✅ | Client-side generation |
+| Commander dashboard | ✅ | CommanderDashboard.tsx (724 lines) |
+| Gladiator dashboard | ✅ | GladiatorDashboard.tsx |
+| AI Knowledge Engine | ✅ | knowledge-engine.ts |
+| AI Prediction Engine | ✅ | prediction-engine.ts |
+| AI Decision Support | ✅ | decision-support-engine.ts |
+| Rate limiting | ✅ | SlidingWindowLimiter |
+| Firestore security rules | ✅ | Comprehensive per-collection rules |
+| Audit logging | ✅ | audit.service.ts |
+| Notifications | ✅ | notification.service.ts + API |
+| Messaging (conversations) | ✅ | Full API + UI |
+| Announcements | ✅ | Full API + UI |
+| Executive workspace | ✅ | 660-line dashboard with health checks |
+| Executive commanders | ✅ | 567-line CRUD (add, disable, delete, reset password) |
+| Executive settings | ✅ | 455-line settings form (institution, auth, battle, AI, messaging prefs) |
+| Executive students | ✅ | Full management with filters |
+| Executive question bank | ✅ | Browse + filter |
+| Executive requests | ✅ | Approve/reject/complete |
+| Executive messages | ✅ | 1094-line messaging UI |
+| Executive notifications | ✅ | Full notification center |
+| Executive audit logs | ✅ | Filtered with cursor pagination |
+| Executive search | ✅ | Global search across entities |
+| Executive backup | ✅ | Export/import JSON |
+| Executive profile | ✅ | Edit + recent activity |
+| Firestore indexes | ✅ | 8 composite indexes |
+
+### Partially Implemented / Has Issues
+| Area | Status | Details |
+|------|--------|---------|
+| Role system | ⚠️ | DB uses `teacher`/`student`, code maps to `commander`/`gladiator`. Inconsistent. |
+| genkit:dev script | ❌ | References non-existent `src/ai/dev.ts` |
+| Commander presence | ⚠️ | Heartbeat-based (15s), no structured disconnect recovery |
+| Auto-end battle | ⚠️ | Setting `autoEndBattle` exists in platform_settings but NOT enforced in game logic |
+| Executive analytics | ⚠️ | Same component as Executive Dashboard (duplicate route) |
+| Error boundaries | ⚠️ | Page-level error.tsx but edge cases unhandled |
+
+---
+
+## 3. WHAT MATCHES THE PRODUCT VISION
+
+### FORGE Alignment ✅
+- AI PDF Processing: **EXISTS** (multi-format: PDF, DOCX, TXT, MD, images)
+- Question Generation: **EXISTS** (via Gemini with structured output)
+- Question Validation: **PARTIAL** (Zod schema, repairJson, tryParse)
+- Model Fallback: **EXISTS** (2.5-flash → 2.0-flash)
+
+### BATTLE Alignment ✅
+- Arena (Core): **EXISTS** (waiting → live → finished state machine)
+- Commander Flow: **EXISTS** (Commander controls start, advance, finish)
+- Waiting Room: **EXISTS** (QR code, room code, participant list)
+- Scoring Engine: **EXISTS** (time-based 500 + 500 bonus)
+- Leaderboard: **EXISTS** (results view)
+
+### COMMAND Alignment ✅
+- Commander Dashboard: **EXISTS** (724-line component)
+- Executive Dashboard: **EXISTS** (660-line workspace)
+- Analytics: **EXISTS** (ad-hoc computation on demand)
+- Battle Archive: **PARTIAL** (history pages)
+- Arena History: **EXISTS** (per-gladiator collection group query)
+
+---
+
+## 4. WHAT PARTIALLY MATCHES
+
+| Vision Feature | Current State | Gap |
+|---|---|---|
+| **Provider Abstraction** | Genkit is hardcoded as the only AI provider | No provider interface, no pluggable architecture |
+| **Automatic Provider Selection** | Simple linear fallback chain | No intelligent selection based on task/cost/latency |
+| **Chunk Generation** | Entire document sent in one prompt | No document chunking for large files |
+| **Background Retry** | Synchronous retries with 1s backoff | No queue system, blocks request until complete |
+| **AI Scheduler** | No scheduler | Every AI call happens synchronously on request |
+| **Quality Validation** | Basic Zod schema + JSON repair | No semantic validation, no question dedup, no difficulty calibration |
+| **Question Balancing** | Single difficulty applies to all questions | No per-question difficulty distribution |
+| **Live Commander Mode** | Commander-led advance | No pause, resume, skip, rewind, or auto-advance |
+| **Independent Battle Mode** | Not implemented | Gladiators cannot self-pace through questions |
+| **Ready System** | All participants auto-join on page load | No explicit ready state per gladiator |
+| **Question Shuffle** | Questions in sort_index order | No randomization of question order |
+| **Option Shuffle** | Options in created order | No randomization of option order |
+| **Single Device Enforcement** | Tab focus detection only | No device session token, can open multiple tabs |
+| **Reconnect Recovery** | Firestore SDK handles reconnection | No state restoration on rejoin mid-battle |
+| **Join Approval** | Auto-join on page load | No Commander approval gate |
+| **Email Domain Restriction** | Teacher/student domain check at signup | Not enforced per-arena |
+| **Arena Integrity** | Tab focus violations tracked | No server-side answer validation, no timing attack prevention |
+| **Replay** | Arena reset exists | No structured replay with timestamps, no step-through |
+| **Animated Leaderboard** | Basic AnimatedValue component | No podium animation, no celebration effects |
+
+---
+
+## 5. WHAT COMPLETELY CONFLICTS
+
+| Conflict | Current Implementation | Product Vision |
+|---|---|---|
+| **Role naming** | `teacher`/`student` in Firestore, mapped to `commander`/`gladiator` | Native `commander`/`gladiator`/`executive` roles everywhere |
+| **Quiz terminology** | `quizzes` collection, `QuizCreatorForm`, `QuizResults` | `Arena` terminology throughout |
+| **Client-side game logic** | Game flow entirely in browser components | Server-authoritative game engine |
+| **Ad-hoc analytics** | Compute on every request from raw Firestore | Persisted aggregated analytics |
+| **No question_bank integration** | PDF Forge → directly to arena | PDF Forge → question_bank → arena creation |
+| **Scoring timer** | Single `question_start_at` for all participants | Per-user timing with individual start/stop |
+| **In-memory rate limiter** | Resets on restart, per-instance | Distributed rate limiting (Firestore/Redis) |
+
+---
+
+## 6. TECHNICAL DEBT
+
+### Critical
+| Debt | Location | Impact |
+|------|----------|--------|
+| `teacher`/`student` legacy roles | Firestore DB + AuthContext + firestore.rules | Every query normalizes roles; rules check `isTeacher()` |
+| No shared service layer | src/services/* (client) vs src/app/api/* (admin) | Business logic duplicated across client and server |
+| Monolithic CommanderDashboard | 724 lines | Hard to maintain, test, or extend |
+| Monolithic LiveQuiz | 754 lines | Same issues |
+| Monolithic Executive Messages | 1094 lines | Extreme maintainability risk |
+| No type sharing between client/server | Duplicated interfaces | Types drift over time |
+| Zero test coverage | No tests anywhere | Every change risks regression |
+
+### Moderate
+| Debt | Location | Impact |
+|------|----------|--------|
+| Genkit default model hardcoded | src/ai/genkit.ts:7 | `gemini-2.5-flash` hardcoded, not respecting platform_settings |
+| In-memory rate limiter | src/lib/rate-limiter.ts | Lost on restart, multi-instance unsafe |
+| `serverTimestamp()` in client code | Services + components | Relies on client SDK latency |
+| `any` types throughout API routes | All route.ts files | Type safety gaps, implicit error handling |
+| Duplicate executive/analytics and executive/dashboard | Both routes | Same component rendered twice |
+| No loading/error states for AI engines | knowledge-engine.ts, etc. | Brittle — no fallback if Genkit is down |
+| `any` type in `globalForFirebase` | firebase-admin.ts:78 | Unsafe global caching |
+
+### Low
+| Debt | Location | Impact |
+|------|----------|--------|
+| Hardcoded API key in config.ts | src/firebase/config.ts | Standard Firebase practice but technically exposed |
+| `console.error` scattered everywhere | Multiple files | No structured logging |
+| No CSP headers in Next.js config | next.config.ts | Security hardening missing |
+
+---
+
+## 7. MISSING BACKEND ARCHITECTURE
+
+| Component | Required For | Current State |
+|-----------|-------------|---------------|
+| AI Provider Interface | Multiple AI providers (OpenAI, Anthropic, local) | Nothing — Genkit is the only path |
+| AI Scheduler Service | Background generation queue | Nothing — all synchronous |
+| AI Quality Validation Service | Semantic question validation | Nothing beyond Zod |
+| Question Bank Service | Store/retrieve/reuse AI-generated questions | Collection exists but no integration |
+| Arena Engine (Server-side) | Authoritative game logic | Everything runs on client |
+| Battle State Machine (Server) | Battle validation, pause, resume, skip | Nothing |
+| Timer Engine (Server-side) | Server-authoritative timers | Client-side only (serverTimestamp in Firestore) |
+| Scoring Engine (Server-side) | Verified scoring, anti-tamper | Client-side `evaluateQuestion` runs from Commander's browser |
+| Reconnect Service | Mid-battle state recovery | Nothing |
+| Analytics Aggregation Service | Pre-computed analytics | Ad-hoc computation |
+| Log Service (Structured) | AI logs, security logs, battle logs | Only flat audit logs exist |
+| Rate Limiter (Distributed) | Multi-instance production | In-memory only |
+| Notification Dispatch Service | Push notifications, email | Firestore-only notifications |
+
+---
+
+## 8. MISSING FRONTEND ARCHITECTURE
+
+| Component | Required For | Current State |
+|-----------|-------------|---------------|
+| Arena Engine UI (Commander) | Pause, resume, skip, rewind | Nothing beyond advance/finish |
+| Independent Battle Mode UI | Gladiator self-pace | Nothing |
+| Ready System UI | "Ready" button per gladiator | Nothing |
+| Join Approval UI | Commander approve/reject | Nothing |
+| Replay UI | Step-through replay with timeline | Nothing |
+| Question Shuffle UI | Randomize order toggle | Nothing |
+| Option Shuffle UI | Randomize options toggle | Nothing |
+| Reconnect UI | Rejoin mid-battle | Nothing |
+| Podium Animation | Leaderboard reveal | Celebration.tsx (basic) |
+| Commander Warnings UI | Low quality PDF warnings | Nothing |
+| AI Logs UI | Browse AI generation history | Nothing |
+| Battle Archive UI | Structured archive browsing | Basic history only |
+| Security Logs UI | Authentication attempts, violations | Nothing separate from audit logs |
+| Monitoring Dashboard | Live system monitoring | System health in workspace only |
+
+---
+
+## 9. MISSING FIRESTORE COLLECTIONS
+
+| Collection | Purpose | Current State |
+|-----------|---------|---------------|
+| `ai_providers/{providerId}` | Provider configuration (model, API key, rate limits) | NOT EXISTS |
+| `ai_jobs/{jobId}` | Background AI generation queue | NOT EXISTS |
+| `ai_logs/{logId}` | AI generation history with metadata | NOT EXISTS |
+| `arena_archive/{archiveId}` | Structured battle records for replay | NOT EXISTS |
+| `battle_logs/{logId}` | Per-battle event log | NOT EXISTS |
+| `security_logs/{logId}` | Auth attempts, violations, suspicious activity | NOT EXISTS — auditLogs serves general purpose |
+| `question_versions/{versionId}` | Question version history | NOT EXISTS |
+| `commander_warnings/{warningId}` | Warning system for commanders | NOT EXISTS |
+| `replay_events/{eventId}` | Battle replay event stream | NOT EXISTS |
+| `arena_templates/{templateId}` | Arena templates for quick creation | NOT EXISTS |
+
+---
+
+## 10. MISSING APIs
+
+| Endpoint | Purpose | Current State |
+|----------|---------|---------------|
+| `PUT /api/commander/profile/rename` | Rename commander | NOT EXISTS |
+| `POST /api/arena/pause` | Pause live battle | NOT EXISTS |
+| `POST /api/arena/resume` | Resume paused battle | NOT EXISTS |
+| `POST /api/arena/skip` | Skip current question | NOT EXISTS |
+| `POST /api/arena/auto-end` | Automatic end trigger | NOT EXISTS |
+| `POST /api/arena/approve-join` | Commander approves gladiator | NOT EXISTS |
+| `POST /api/arena/transfer-ownership` | Transfer arena to another commander | NOT EXISTS |
+| `POST /api/arena/shuffle` | Shuffle questions/options | NOT EXISTS |
+| `POST /api/arena/reconnect` | Reconnect recovery | NOT EXISTS |
+| `GET /api/arena/state` | Full authoritative arena state | NOT EXISTS |
+| `POST /api/ai/generate-batch` | Background generation | NOT EXISTS |
+| `POST /api/ai/cancel` | Cancel generation job | NOT EXISTS |
+| `GET /api/ai/jobs` | List AI jobs | NOT EXISTS |
+| `GET /api/ai/logs` | AI generation logs | NOT EXISTS |
+| `GET /api/analytics/precomputed` | Cached analytics | NOT EXISTS |
+| `GET /api/battle-logs` | Per-battle event logs | NOT EXISTS |
+| `GET /api/security-logs` | Security event logs | NOT EXISTS |
+| `POST /api/arena/replay/{id}` | Start replay session | NOT EXISTS |
+| `POST /api/arena/replay/{id}/seek` | Seek to timestamp in replay | NOT EXISTS |
+
+---
+
+## 11. REQUIRED REFACTORS
+
+### Priority 1 (Architecture Foundation)
+1. **Role system normalization** — Replace all `teacher`/`student` references with `commander`/`gladiator`/`executive` in DB, code, and rules
+2. **Terminology migration** — `quiz` → `arena`, `question` → `round` where appropriate
+3. **Server-side arena engine** — Move all game logic to server API routes with Admin SDK
+4. **Shared types package** — Extract shared types used by both client and server
+
+### Priority 2 (Business Logic)
+5. **Service layer unification** — Create `src/services/server/` directory with Admin SDK-based implementations
+6. **AI provider abstraction** — Create `src/ai/providers/` interface with Genkit implementation
+7. **AI scheduler** — Background job queue for AI generation
+8. **Question bank integration** — PDF Forge → question_bank → arena creation workflow
+
+### Priority 3 (Feature Completion)
+9. **Battle feature set** — Pause, resume, skip, auto-end, ready system, shuffle, reconnect
+10. **Scoring engine** — Server-authoritative with per-user timing
+11. **Analytics pipeline** — Pre-computed aggregation with periodic refresh
+12. **Structured logging** — AI logs, battle logs, security logs
+
+### Priority 4 (Quality)
+13. **Monolith decomposition** — Split large components into smaller units
+14. **Error handling** — Structured error hierarchy, consistent responses
+15. **Testing** — Unit + integration + E2E
+
+### Priority 5 (Operations)
+16. **Distributed rate limiting** — Firestore or Redis-based
+17. **Security hardening** — CSP headers, request validation, CSRF protection
+18. **Monitoring** — Health dashboard, performance metrics, alerting
+
+---
+
+## 12. DEPENDENCY GRAPH
+
+```
+                    ┌────────────────────────┐
+                    │   AuthContext (React)   │
+                    │   src/contexts/         │
+                    └──────────┬─────────────┘
+                               │ depends on
+                               ▼
+┌──────────────────────────────────────────────────────┐
+│                  Firebase Layer                       │
+│  src/firebase/{config, index, provider, errors,      │
+│  error-emitter, client-provider}                      │
+└────────┬──────────────────────────────────┬──────────┘
+         │                                  │
+         ▼                                  ▼
+┌──────────────────┐            ┌──────────────────────┐
+│ Client Services   │            │   Server API Routes  │
+│ (use 'use client')│            │   src/app/api/*      │
+│ src/services/*    │            │   (Admin SDK)        │
+│                   │            │                      │
+│ quiz.service      │            │ admin/users          │
+│ game.service      │            │ executive/*          │
+│ participant.service│           │ commander/*          │
+│ analytics.service │            │ messaging/*          │
+│ arena-creation    │            │ ai engines           │
+└────────┬──────────┘            └──────────┬───────────┘
+         │                                  │
+         ▼                                  ▼
+┌──────────────────┐            ┌──────────────────────┐
+│ Client UI         │            │   AI Layer            │
+│ src/components/*  │            │   src/ai/*            │
+│ src/app/*/page.tsx│            │                      │
+│                   │            │ genkit.ts            │
+│ LiveQuiz (754L)   │            │ flows/ (server action)│
+│ WaitingRoom (442L)│            │ engines/* (API routes)│
+│ CommanderDash(724L)│           └──────────┬───────────┘
+│ ExecMsgs (1094L)  │                       │
+└──────────────────┘                       ▼
+                                    ┌──────────────────┐
+                                    │  Google Gemini    │
+                                    │  (via Genkit)     │
+                                    └──────────────────┘
+```
+
+---
+
+## 13. RECOMMENDED IMPLEMENTATION ORDER
+
+### Phase 0 (Immediate — 1-2 days)
+- Fix known bugs (Commander Dashboard crash, messaging edge cases, rename Commander, settings initialization)
+- Fix genkit:dev script (create src/ai/dev.ts)
+- Complete this audit
+
+### Phase 1 (Weeks 1-2) — Foundation
+- Role normalization (teacher → commander, student → gladiator)
+- Terminology alignment (quiz → arena where semantically correct)
+- Shared types package
+- Server-side arena engine (move game logic to API routes)
+
+### Phase 2 (Weeks 3-4) — Forge Expansion
+- AI provider abstraction interface
+- AI scheduler (background job queue)
+- Question bank integration
+- Quality validation improvements
+- AI logs collection
+
+### Phase 3 (Weeks 5-6) — Battle Expansion
+- Pause/resume/skip/auto-end
+- Independent Battle Mode
+- Ready system + Join approval
+- Question/option shuffle
+- Reconnect recovery
+- Server-authoritative scoring
+
+### Phase 4 (Weeks 7-8) — Command Expansion
+- Analytics aggregation pipeline
+- Battle archive with replay
+- Structured log system (AI, battle, security)
+- Monitoring dashboard
+- Commander warnings
+
+### Phase 5 (Weeks 9-10) — Quality
+- Monolith decomposition
+- Testing suite
+- Error handling overhaul
+- Distributed rate limiting
+- Security hardening
+
+---
+
+## 14. PARALLELIZABLE IMPLEMENTATION GROUPS
+
+| Group | Tasks | Can Run In Parallel With |
+|-------|-------|--------------------------|
+| **A** | Role normalization, terminology migration | B, C |
+| **B** | Shared types, service layer refactor | A, C |
+| **C** | Server-side arena engine foundation | A, B |
+| **D** | AI provider interface, AI scheduler | E, F |
+| **E** | Question bank integration | D, F |
+| **F** | Quality validation improvements | D, E |
+| **G** | Pause/resume/skip/auto-end | H, I |
+| **H** | Independent Battle Mode | G, I |
+| **I** | Shuffle, ready system, join approval | G, H |
+| **J** | Analytics aggregation | K |
+| **K** | Battle archive + replay | J, L |
+| **L** | Structured logging | K |
+| **M** | Monolith decomposition | N |
+| **N** | Testing | M, O |
+| **O** | Security hardening | M, N |
+
+---
+
+## 15. ESTIMATED COMPLEXITY PER PHASE
+
+| Phase | Complexity | Rationale |
+|-------|-----------|-----------|
+| **0 — Bug Fixes** | Low (1-2 days) | Targeted fixes, known issues |
+| **1 — Foundation** | Medium-High (2 weeks) | Role normalization touches every file; service layer refactor requires careful planning |
+| **2 — Forge** | High (2 weeks) | Provider abstraction requires interface design; scheduler requires job infrastructure |
+| **3 — Battle** | Very High (2-3 weeks) | State machine overhaul; pause/resume affects all real-time subscriptions |
+| **4 — Command** | High (2 weeks) | Analytics pipeline requires aggregation logic; replay needs event sourcing |
+| **5 — Quality** | Medium (2 weeks) | Decomposition is labor-intensive; testing requires infrastructure setup |
+
+**Total estimated effort: 10-12 weeks for a single developer**
+
+---
+
+## 16. POTENTIAL RISKS
+
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| Role normalization breaks Firestore rules | Medium | High | Migrate in phases; write new rules alongside legacy rules; dual-write during transition |
+| Terminology migration creates merge conflicts | High | Medium | Do as single refactor PR; update all files atomically |
+| Real-time game state migration | High | High | Old battles continue on old system; new battles use new engine; feature-flag rollout |
+| AI provider abstraction misses Genkit edge cases | Medium | Medium | Keep Genkit as default; test alternative provider after abstraction |
+| Background AI scheduler conflicts with in-memory rate limiter | Low | Medium | Implement distributed rate limiting before scheduler |
+| Server-side arena engine introduces latency | Medium | Medium | Use Firestore triggers + Optimistic UI updates |
+| Testing infrastructure setup | Low | High | Start with Playwright E2E (already in deps), add unit tests incrementally |
+
+---
+
+## 17. MIGRATION STRATEGY
+
+### Data Migration
+1. **Role migration**: Add `migrated` field; new code writes `commander`/`gladiator`/`executive`; migration script converts existing `teacher` → `commander`, `student` → `gladiator`
+2. **No immediate collection restructuring** — Keep `quizzes` collection; add `arenas` as alias; migrate gradually
+3. **question_bank population**: Backfill from existing quizzes; deduplicate by question text hash
+
+### Code Migration
+1. **Feature flags**: Use `NEXT_PUBLIC_FEATURE_FLAGS` env var to gate new server-side engine
+2. **Dual-write period**: Write both old and new formats during transition
+3. **API versioning**: `/api/v2/*` for new endpoints alongside legacy `/api/*`
+
+---
+
+## 18. REGRESSION RISKS
+
+| Change | Regression Risk | Safeguard |
+|--------|----------------|-----------|
+| Role normalization | Auth breaks for existing users | Dual-read role field; fallback to legacy 'teacher'/'student' |
+| Arena engine rewrite | Live battles corrupted | Feature-gate: old code for ongoing battles, new for new battles |
+| Service layer refactor | Client imports break | Named exports preserved; deprecation warnings |
+| Terminology rename | Bookmarked URLs break | Redirects from old paths (`/create-quiz` → `/commander/forge`) |
+| AI scheduler | Blocking generation fails | Keep synchronous fallback path |
+| Question bank integration | AI flow disrupted | Gate behind feature flag |
+
+---
+
+## 19. SCALABILITY REVIEW
+
+### Current Bottlenecks
+1. **Ad-hoc analytics** — Every executive workspace load queries ALL quizzes + participants + submissions (15-20 Firestore reads per request, grows linearly with data)
+2. **In-memory rate limiter** — Lost on restart, not shared across instances
+3. **No pagination on workspace API** — `limit(2000)` on quizzes snapshot
+4. **Client-side subscriptions** — Every battle participant maintains a Firestore `onSnapshot` listener
+5. **Single-instance Server Actions** — PDF generation blocks the Node.js event loop during extraction + AI call
+6. **No Firestore usage optimization** — No caching, no denormalized counts, no aggregation documents
+
+### Scalability Thresholds
+- **Users**: ~500 before analytics queries become noticeably slow (ad-hoc computation O(n) on all entities)
+- **Concurrent battles**: ~50 before client-side subscription volume affects Firestore costs
+- **PDF generation**: ~10 concurrent before Server Action execution queue saturates
+
+### Recommendations
+1. Pre-compute analytics on write (Firestore triggers or scheduled functions)
+2. Distributed rate limiting (Firestore-based)
+3. Paginate workspace API responses
+4. Reduce subscription scope — only subscribe to needed fields
+5. Offload PDF extraction to background job (Cloud Tasks or similar)
+6. Add aggregation documents (`arena_stats/global`, `arena_stats/daily`)
+
+---
+
+## 20. FINAL READINESS ASSESSMENT
+
+### Current State: **ALPHA — 45% toward MVP Vision**
+
+| Pillar | Completion | Assessment |
+|--------|-----------|------------|
+| **FORGE** | 30% | PDF processing works but no provider abstraction, no scheduler, no quality validation, no question bank integration |
+| **BATTLE** | 40% | Core arena flow works but missing pause, resume, skip, auto-end, shuffle, ready system, join approval, independent mode, reconnect |
+| **COMMAND** | 55% | Executive dashboard is robust; Commander dashboard exists but has known crash; analytics are unoptimized; logs are basic |
+
+### What Must Ship Before Production Readiness
+1. ❌ Fix Commander Dashboard crash
+2. ❌ Fix messaging edge cases (user docs missing)
+3. ❌ Rename Commander capability
+4. ❌ Settings initialization
+5. ❌ Server-authoritative arena engine (prevents cheating, enables pause/resume)
+6. ❌ Distributed rate limiting (multi-instance requirement)
+7. ❌ Error boundary on every page (currently partial)
+8. ❌ Analytics caching (currently O(n) on every load)
+9. ❌ Question bank + AI generation storage
+10. ❌ Automated testing (no test suite exists)
+
+### Verdict
+The repository has a **solid foundation** with comprehensive API surfaces, good Firestore security rules, and a working core battle flow. However, it has **significant structural debt** (dual role naming, client-driven game logic, monolithic components, zero tests) and **major feature gaps** (pause/resume/skip, replay, AI scheduler, question bank, analytics pipeline).
+
+The product vision demands three well-separated pillars (FORGE, BATTLE, COMMAND). The current codebase has no such separation — everything is mixed into a single Next.js app. A **minimum 2-month refactoring effort** is required to align with the vision before production deployment.
+
+**Next action:** Phase 0 — fix the known bugs and concrete errors identified above, then proceed with the structured refactoring plan.

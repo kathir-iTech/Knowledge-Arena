@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
       const participantNames: Record<string, string> = {};
       for (const uid of allUids) {
         const user = userMap[uid];
-        participantNames[uid] = user?.displayName || user?.email || (user?.role === 'commander' ? 'Commander' : 'Executive') || 'User';
+        participantNames[uid] = user?.displayName || user?.email || 'Unknown User';
       }
 
       conversations = conversations.map((conv: any) => ({
@@ -70,6 +71,9 @@ export async function POST(req: NextRequest) {
   if (!executiveAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const rateLimitResponse = enforceRateLimit(`messaging:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
+  if (rateLimitResponse) return rateLimitResponse;
 
   try {
     const { commanderId } = await req.json();
@@ -132,7 +136,7 @@ export async function POST(req: NextRequest) {
       description: `New conversation with commander.`,
       createdAt: Date.now(),
       userId: commanderId,
-      link: '/executive/messages',
+      link: '/commander/messages',
       metadata: { conversationId: result.id },
     });
 

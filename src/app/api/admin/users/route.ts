@@ -239,7 +239,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { uid, disabled, password, resetPassword } = await req.json();
+    const { uid, disabled, password, resetPassword, displayName } = await req.json();
 
     if (!uid) {
       return NextResponse.json({ error: 'uid is required' }, { status: 400 });
@@ -302,6 +302,33 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ success: true, uid, passwordReset: true });
       }
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+    }
+
+    if (displayName && typeof displayName === 'string') {
+      const trimmed = displayName.trim();
+      if (trimmed.length < 2) {
+        return NextResponse.json({ error: 'Display name must be at least 2 characters' }, { status: 400 });
+      }
+      await getAdminAuth().updateUser(uid, { displayName: trimmed });
+      await getAdminDb().collection('users').doc(uid).set({ displayName: trimmed }, { merge: true });
+      await auditService.record({
+        timestamp: Date.now(),
+        actor: auth.uid,
+        actorRole: 'executive',
+        action: 'commander_renamed',
+        target: uid,
+        metadata: { displayName: trimmed },
+      });
+      await notificationService.create({
+        type: 'system_warning',
+        title: 'Commander Renamed',
+        description: `Commander renamed to ${trimmed}.`,
+        createdAt: Date.now(),
+        userId: auth.uid,
+        link: '/executive/commanders',
+        metadata: { commanderId: uid, displayName: trimmed },
+      });
+      return NextResponse.json({ success: true, uid, displayName: trimmed });
     }
 
     return NextResponse.json({ error: 'No valid operation specified' }, { status: 400 });
