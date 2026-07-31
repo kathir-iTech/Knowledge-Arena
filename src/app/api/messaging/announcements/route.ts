@@ -3,6 +3,7 @@ import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +41,8 @@ export async function POST(req: NextRequest) {
   if (!executiveAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const rateLimitResponse = enforceRateLimit(`msg:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
+  if (rateLimitResponse) return rateLimitResponse;
 
   try {
     const { text, targetCommanderId } = await req.json();
@@ -116,6 +119,8 @@ export async function PUT(req: NextRequest) {
   if (!executiveAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const rateLimitResponse = enforceRateLimit(`msg:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
+  if (rateLimitResponse) return rateLimitResponse;
 
   try {
     const { id, text } = await req.json();
@@ -159,6 +164,8 @@ export async function DELETE(req: NextRequest) {
   if (!executiveAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const rateLimitResponse = enforceRateLimit(`msg:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
+  if (rateLimitResponse) return rateLimitResponse;
 
   try {
     const { searchParams } = new URL(req.url);

@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
 
     const participantsSnap = await getAdminDb().collectionGroup('participants')
       .where('user_id', '==', auth.uid)
+      .select('user_id', 'score', 'status')
       .get();
 
     const totalBattles = participantsSnap.docs.length;

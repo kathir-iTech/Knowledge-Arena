@@ -162,7 +162,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       window.removeEventListener('pageshow', handlePageShow);
       unsubQuiz();
     };
-  }, [quiz.id, quiz.created_by, isTeacher, user]);
+  }, [quiz.id, quiz.created_by, isTeacher, user?.id]);
 
   const studentParticipants = useMemo(() => {
     return participants.filter(p => {

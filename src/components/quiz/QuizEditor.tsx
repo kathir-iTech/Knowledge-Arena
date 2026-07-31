@@ -131,7 +131,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/commander/dashboard')}>
+        <Button variant="ghost" size="icon" onClick={() => router.push('/commander/dashboard')} aria-label="Back to dashboard">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -174,7 +174,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
                   <span className="text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary px-3 py-1 rounded-full">QUESTION {index + 1}</span>
                 </div>
 
-                <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && setDeleteConfirm(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5" disabled={fields.length <= 1}><Trash2 className="h-4 w-4" /></Button>
+                <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && setDeleteConfirm(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5" disabled={fields.length <= 1} aria-label="Delete question"><Trash2 className="h-4 w-4" /></Button>
 
                 <CardContent className="space-y-6">
                   <FormField control={form.control} name={`questions.${index}.text`} render={({ field }) => (

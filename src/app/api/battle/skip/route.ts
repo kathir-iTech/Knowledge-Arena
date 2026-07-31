@@ -10,7 +10,7 @@ import {
   QUIZ_FINISHED,
   PS_BLOCKED,
 } from '@/lib/constants';
-import { writeBattleLog, isCreator, normalizeSkipConfig } from '@/lib/battle-server';
+import { writeBattleLog, isCreator, normalizeSkipConfig, battleErrorResponse } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -113,8 +113,7 @@ export async function POST(req: NextRequest) {
       await writeBattleLog({ quizId, event: 'battle_finished', actor: auth.uid, actorRole: 'commander', metadata: { reason: 'question_skipped_last' } });
     }
     return NextResponse.json({ ok: true, ended });
-  } catch (err: any) {
-    console.error('[Battle/skip]', err?.message);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 });
+  } catch (err: unknown) {
+    return battleErrorResponse(err);
   }
 }

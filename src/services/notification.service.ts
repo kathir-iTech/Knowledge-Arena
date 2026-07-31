@@ -30,42 +30,46 @@ export const notificationService = {
   },
 
   async getAll(options?: { limit?: number; unreadOnly?: boolean; userId?: string }): Promise<Notification[]> {
-    let query: Query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS)
-      .orderBy('createdAt', 'desc')
-      .limit(options?.limit || DEFAULT_PAGE_LIMIT);
+    let query: Query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS);
     if (options?.userId) {
-      query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS)
-        .where('userId', '==', options.userId)
-        .orderBy('createdAt', 'desc')
-        .limit(options?.limit || DEFAULT_PAGE_LIMIT);
+      query = query.where('userId', '==', options.userId);
     }
-    const snap = await query.get();
-    let results = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() || d.data().createdAt } as Notification));
+    const snap = await query.limit(500).get();
+    let results = snap.docs
+      .map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() || d.data().createdAt } as Notification))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      .slice(0, options?.limit || DEFAULT_PAGE_LIMIT);
     if (options?.unreadOnly) {
       results = results.filter(n => !n.read);
     }
     return results;
   },
 
-  async markRead(ids: string[]): Promise<void> {
-    const batch = getAdminDb().batch();
-    for (const id of ids) {
-      batch.update(getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).doc(id), { read: true });
+  async markRead(ids: string[], userId?: string): Promise<void> {
+    const db = getAdminDb();
+    const batch = db.batch();
+    for (const id of ids.slice(0, 100)) {
+      const ref = db.collection(COLLECTIONS.NOTIFICATIONS).doc(id);
+      if (userId) {
+        const snap = await ref.get().catch(() => null);
+        if (!snap?.exists) continue;
+        if (snap.data().userId !== userId) continue;
+      }
+      batch.update(ref, { read: true });
     }
     await batch.commit();
   },
 
   async markAllRead(userId?: string): Promise<void> {
-    let query: Query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS)
-      .where('read', '==', false)
-      .limit(500);
+    let query: Query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS);
     if (userId) {
       query = query.where('userId', '==', userId);
     }
-    const snap = await query.get();
-    if (snap.empty) return;
+    const snap = await query.limit(500).get();
+    const unread = snap.docs.filter(d => !d.data().read);
+    if (unread.length === 0) return;
     const batch = getAdminDb().batch();
-    snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+    unread.forEach(d => batch.update(d.ref, { read: true }));
     await batch.commit();
   },
 
@@ -74,13 +78,11 @@ export const notificationService = {
   },
 
   async getUnreadCount(userId?: string): Promise<number> {
-    let query: Query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS)
-      .where('read', '==', false)
-      .limit(500);
+    let query: Query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS);
     if (userId) {
       query = query.where('userId', '==', userId);
     }
-    const snap = await query.get();
-    return snap.docs.length;
+    const snap = await query.limit(500).get();
+    return snap.docs.filter(d => !d.data().read).length;
   },
 };

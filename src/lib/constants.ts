@@ -69,6 +69,8 @@ export const COLLECTIONS = {
   AI_LOGS: 'ai_logs',
   BATTLE_LOGS: 'battle_logs',
   SECURITY_LOGS: 'security_logs',
+  PLATFORM_SETTINGS: 'platform_settings',
+  REQUEST_RESPONSES: 'responses',
 } as const;
 
 export const NOTIFICATION_TYPES = [

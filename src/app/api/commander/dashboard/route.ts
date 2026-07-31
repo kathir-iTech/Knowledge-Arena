@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     const participantPromises = allQuizzes
       .filter(q => q.status === 'finished')
       .map(q =>
-        getAdminDb().collection('quizzes').doc(q.id).collection('participants').get()
+        getAdminDb().collection('quizzes').doc(q.id).collection('participants').select('user_id', 'score').get()
           .then(snap => {
             snap.docs.forEach(p => {
               totalParticipants.add(p.data().user_id);

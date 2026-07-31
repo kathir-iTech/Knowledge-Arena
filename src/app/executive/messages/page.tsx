@@ -125,7 +125,6 @@ export default function ExecutiveMessagesPage() {
   const [convError, setConvError] = useState(false);
   const [announcementsError, setAnnouncementsError] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingWriteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingUnsubRef = useRef<(() => void) | null>(null);
 

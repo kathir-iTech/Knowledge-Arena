@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
     const cutoff = now - WINDOW_MS;
 
     const [aiSnap, securitySnap] = await Promise.all([
-      getAdminDb().collection(COLLECTIONS.AI_LOGS).orderBy('createdAt', 'desc').limit(1000).get(),
-      getAdminDb().collection(COLLECTIONS.SECURITY_LOGS).orderBy('createdAt', 'desc').limit(1000).get(),
+      getAdminDb().collection(COLLECTIONS.AI_LOGS).orderBy('createdAt', 'desc').select('createdAt', 'success', 'durationMs', 'questionCount', 'model').limit(1000).get(),
+      getAdminDb().collection(COLLECTIONS.SECURITY_LOGS).orderBy('createdAt', 'desc').select('createdAt', 'event').limit(1000).get(),
     ]);
 
     // --- AI insights (last 30 days) ---

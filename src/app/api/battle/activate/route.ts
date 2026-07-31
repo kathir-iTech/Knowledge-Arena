@@ -3,7 +3,7 @@ import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS, QUIZ_STARTING, QUIZ_LIVE, STARTING_TRANSITION_MS } from '@/lib/constants';
-import { writeBattleLog, getMs } from '@/lib/battle-server';
+import { writeBattleLog, getMs, isCreator, battleErrorResponse } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +24,16 @@ export async function POST(req: NextRequest) {
       const snap = await tx.get(quizRef);
       if (!snap.exists) throw new Error('Arena not found');
       const quiz = snap.data() as Record<string, any>;
+      // Activation fires from multiple clients when the countdown ends, so any
+      // arena member may trigger it — but the caller must belong to the arena.
+      if (!isCreator(quiz, auth.uid)) {
+        const memberSnap = await tx.get(
+          db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.PARTICIPANTS).where('user_id', '==', auth.uid).limit(1)
+        );
+        if (memberSnap.empty) {
+          throw new Error('You are not a member of this arena');
+        }
+      }
       // Multiple clients fire activation when the countdown ends; the first
       // successful transition wins and the rest see the arena already live.
       if (quiz.status === QUIZ_LIVE) return;
@@ -39,8 +49,7 @@ export async function POST(req: NextRequest) {
 
     await writeBattleLog({ quizId, event: 'battle_activated', actor: auth.uid, actorRole: auth.role });
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error('[Battle/activate]', err?.message);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 });
+  } catch (err: unknown) {
+    return battleErrorResponse(err);
   }
 }

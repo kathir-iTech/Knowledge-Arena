@@ -9,7 +9,7 @@ import {
   QUIZ_FINISHED,
   PS_BLOCKED,
 } from '@/lib/constants';
-import { writeBattleLog, isCreator } from '@/lib/battle-server';
+import { writeBattleLog, isCreator, battleErrorResponse } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -90,8 +90,7 @@ export async function POST(req: NextRequest) {
       });
     }
     return NextResponse.json({ ok: true, ended, nextIndex });
-  } catch (err: any) {
-    console.error('[Battle/advance]', err?.message);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 });
+  } catch (err: unknown) {
+    return battleErrorResponse(err);
   }
 }

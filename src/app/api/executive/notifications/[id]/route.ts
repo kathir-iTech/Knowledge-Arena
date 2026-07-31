@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { notificationService } from '@/services/notification.service';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { COLLECTIONS } from '@/lib/constants';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -9,9 +12,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
+  if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await params;
   try {
+    const ref = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
+    if (snap.data().userId !== auth.uid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     await notificationService.delete(id);
     return NextResponse.json({ success: true });
   } catch (err: any) {

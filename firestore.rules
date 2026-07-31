@@ -48,14 +48,15 @@ service cloud.firestore {
     }
 
     // Battle Engine state machine: every status transition is validated.
+    // Mirrors ALLOWED_QUIZ_TRANSITIONS in src/lib/constants.ts (plus no-op).
     function isLegalStatusTransition(from, to) {
       return (from == 'draft' && to == 'waiting') ||
-        (from == 'waiting' && (to == 'ready' || to == 'starting' || to == 'live')) ||
-        (from == 'ready' && (to == 'waiting' || to == 'starting' || to == 'live')) ||
+        (from == 'waiting' && (to == 'ready' || to == 'starting')) ||
+        (from == 'ready' && (to == 'waiting' || to == 'starting')) ||
         (from == 'starting' && (to == 'live' || to == 'waiting')) ||
         (from == 'live' && (to == 'paused' || to == 'finished')) ||
         (from == 'paused' && (to == 'live' || to == 'finished')) ||
-        (from == 'finished' && (to == 'archived' || to == 'waiting')) ||
+        (from == 'finished' && to == 'archived') ||
         from == to;
     }
 

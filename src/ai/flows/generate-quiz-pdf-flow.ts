@@ -12,6 +12,7 @@ import * as zlib from 'zlib';
 import { PdfReader } from 'pdfreader';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
+import { COLLECTIONS } from '@/lib/constants';
 import { aiLogService } from '@/services/ai-log.service';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -47,7 +48,7 @@ const MAX_RETRIES_PER_MODEL = 3;
 const modelFallbackChain = async (): Promise<string[]> => {
   try {
     const { getAdminDb } = await import('@/lib/firebase-admin');
-    const snap = await getAdminDb().collection('platform_settings').doc('global').get();
+    const snap = await getAdminDb().collection(COLLECTIONS.PLATFORM_SETTINGS).doc('global').get();
     const stored = snap.data()?.ai?.defaultModel;
     if (stored && typeof stored === 'string') return [stored, 'gemini-2.0-flash'];
   } catch { }

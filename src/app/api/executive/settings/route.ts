@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { COLLECTIONS } from '@/lib/constants';
 import { auditService } from '@/services/audit.service';
 import { getRecommendedModel, resolveModel } from '@/config/gemini-models';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -46,7 +48,7 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const docRef = getAdminDb().collection('platform_settings').doc(SETTINGS_DOC_ID);
+    const docRef = getAdminDb().collection(COLLECTIONS.PLATFORM_SETTINGS).doc(SETTINGS_DOC_ID);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
@@ -81,6 +83,8 @@ export async function PUT(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
     const { settings } = await req.json();
     if (!settings) {
       return NextResponse.json({ error: 'settings are required' }, { status: 400 });
@@ -91,7 +95,7 @@ export async function PUT(req: NextRequest) {
     }
 
     await getAdminDb()
-      .collection('platform_settings')
+      .collection(COLLECTIONS.PLATFORM_SETTINGS)
       .doc(SETTINGS_DOC_ID)
       .set(settings, { merge: true });
 

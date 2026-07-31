@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -12,6 +13,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const auth = executiveAuth || commanderAuth!;
+    const rateLimitResponse = enforceRateLimit(`msg:${auth.uid}`, Limits.MESSAGE_POST_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
 
     const { id, messageId } = await params;
     const db = getAdminDb();
@@ -65,6 +68,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const auth = executiveAuth || commanderAuth!;
+    const rateLimitResponse = enforceRateLimit(`msg:${auth.uid}`, Limits.MESSAGE_POST_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
 
     const { id, messageId } = await params;
     const db = getAdminDb();

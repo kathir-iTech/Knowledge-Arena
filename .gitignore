@@ -39,6 +39,7 @@ next-env.d.ts
 
 .genkit/*
 .env*
+!.env.example
 
 # firebase
 firebase-debug.log
@@ -47,6 +48,7 @@ firestore-debug.log
 # audit reports
 result.html
 results.txt
+result.txt
 
 # Firebase service account credentials — NEVER COMMIT
 service-account.json

@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
         const chunk = finishedQuizIds.slice(i, i + 30);
         const partResults = await Promise.allSettled(
           chunk.map(quizId =>
-            db.collection('quizzes').doc(quizId).collection('participants').get()
+            db.collection('quizzes').doc(quizId).collection('participants').select('score').get()
           )
         );
         for (const result of partResults) {

@@ -9,9 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Download, Swords, Users, Calendar, Trophy, Star, ExternalLink } from 'lucide-react';
+import { Search, Download, Swords, Users, Calendar, Trophy, Star, ExternalLink, AlertTriangle, RefreshCw } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
-import { useToast } from '@/hooks/use-toast';
 
 interface BattleSummary {
   id: string;
@@ -29,15 +28,16 @@ interface BattleSummary {
 export default function ExecutiveBattlesPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
-  const { toast } = useToast();
   const [battles, setBattles] = useState<BattleSummary[]>([]);
   const [totalBattles, setTotalBattles] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   const fetchBattles = useCallback(async () => {
     if (!user) return;
     try {
+      setError(null);
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
       const params = new URLSearchParams();
@@ -50,14 +50,17 @@ export default function ExecutiveBattlesPage() {
         setBattles(data.battles || []);
         setTotalBattles(data.totalBattles || 0);
       } else {
-        toast({ variant: 'destructive', title: 'Error', description: 'Failed to load battle history.' });
+        const data = await res.json().catch(() => null);
+        setError(data?.error || 'Failed to load battle history.');
+        setBattles([]);
       }
     } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load battle history.' });
+      setError('Network error. Check your connection and try again.');
+      setBattles([]);
     } finally {
       setLoading(false);
     }
-  }, [user, auth, search, toast]);
+  }, [user, auth, search]);
 
   useEffect(() => {
     setLoading(true);
@@ -118,6 +121,17 @@ export default function ExecutiveBattlesPage() {
             <Skeleton key={i} className="h-24 w-full" />
           ))}
         </div>
+      ) : error ? (
+        <Card className="border-destructive/40">
+          <CardContent className="py-14 text-center">
+            <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-4" />
+            <p className="text-base font-medium mb-1">Failed to load battle history</p>
+            <p className="text-sm text-muted-foreground mb-4">{error}</p>
+            <Button variant="outline" onClick={() => { setLoading(true); fetchBattles(); }}>
+              <RefreshCw className="w-4 h-4 mr-2" /> Retry
+            </Button>
+          </CardContent>
+        </Card>
       ) : battles.length === 0 ? (
         <EmptyState icon={Swords}
           title={search ? 'No Battles Match' : 'No Completed Battles'}

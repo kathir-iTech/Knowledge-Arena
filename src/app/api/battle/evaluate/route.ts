@@ -8,6 +8,7 @@ import {
   evaluateQuestionForUser,
   endBattleIfAllFinished,
   isCreator,
+  battleErrorResponse,
 } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
@@ -54,8 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  } catch (err: any) {
-    console.error('[Battle/evaluate]', err?.message);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 });
+  } catch (err: unknown) {
+    return battleErrorResponse(err);
   }
 }
