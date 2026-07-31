@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/constants';
+import { AiLogEntry } from '@/services/ai-log.service';
 
 export const runtime = 'nodejs';
 
@@ -23,15 +24,18 @@ export async function GET(req: NextRequest) {
     ]);
 
     // --- AI insights (last 30 days) ---
-    const aiLogs = aiSnap.docs
+    const aiLogs: Array<Pick<AiLogEntry, 'success' | 'durationMs' | 'questionCount' | 'model'> & { createdAt: number }> = aiSnap.docs
       .map(d => {
         const data = d.data();
         return {
-          ...data,
-          createdAt: data.createdAt?.toMillis?.() || data.createdAt,
+          success: data.success === true,
+          durationMs: typeof data.durationMs === 'number' ? data.durationMs : 0,
+          questionCount: typeof data.questionCount === 'number' ? data.questionCount : 0,
+          model: typeof data.model === 'string' ? data.model : 'unknown',
+          createdAt: data.createdAt?.toMillis?.() ?? (typeof data.createdAt === 'number' ? data.createdAt : 0),
         };
       })
-      .filter(l => (l.createdAt || 0) >= cutoff);
+      .filter(l => l.createdAt >= cutoff);
 
     const aiTotal = aiLogs.length;
     const aiSuccess = aiLogs.filter(l => l.success).length;
@@ -61,15 +65,15 @@ export async function GET(req: NextRequest) {
     });
 
     // --- Security insights (last 30 days) ---
-    const securityLogs = securitySnap.docs
+    const securityLogs: Array<{ event: string; timestamp: number }> = securitySnap.docs
       .map(d => {
         const data = d.data();
         return {
-          ...data,
-          timestamp: data.createdAt?.toMillis?.() ?? data.timestamp ?? null,
+          event: typeof data.event === 'string' ? data.event : 'unknown',
+          timestamp: data.createdAt?.toMillis?.() ?? (typeof data.timestamp === 'number' ? data.timestamp : 0),
         };
       })
-      .filter(l => (l.timestamp || 0) >= cutoff);
+      .filter(l => l.timestamp >= cutoff);
 
     const perEvent: Record<string, number> = {};
     securityLogs.forEach(l => {

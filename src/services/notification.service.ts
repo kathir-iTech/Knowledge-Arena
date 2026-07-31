@@ -53,7 +53,8 @@ export const notificationService = {
       if (userId) {
         const snap = await ref.get().catch(() => null);
         if (!snap?.exists) continue;
-        if (snap.data().userId !== userId) continue;
+        const data = snap.data();
+        if (!data || data.userId !== userId) continue;
       }
       batch.update(ref, { read: true });
     }
