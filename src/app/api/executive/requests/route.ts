@@ -4,6 +4,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
 import { validateAttachments } from '@/lib/file-security';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +41,8 @@ export async function PATCH(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
     const body = await req.json();
     const { id, status, comment, replyAttachments } = body;
 
@@ -104,6 +107,8 @@ export async function DELETE(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');

@@ -1,5 +1,6 @@
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { NextResponse } from 'next/server';
 import {
   COLLECTIONS,
   QUIZ_LIVE,
@@ -58,6 +59,26 @@ export async function loadQuizDoc(quizId: string) {
 
 export function isCreator(quiz: Record<string, any>, uid: string): boolean {
   return !!quiz.created_by && quiz.created_by === uid;
+}
+
+// Maps domain errors thrown by battle logic to proper HTTP status codes.
+// Unknown errors return a generic 500 without leaking internals.
+const DOMAIN_ERROR_STATUS: Array<[RegExp, number]> = [
+  [/Arena not found|Question not found|Answer key not found|Participant not found/, 404],
+  [/Only the Commander can|You are not a member of this arena|not a participant in this arena|blocked from this arena/, 403],
+  [/not a registered user/, 400],
+  [/already owns this arena|Cannot (activate|start|pause|resume|skip|advance|archive|end|transfer)|Invalid battle state transition|Battle is not live|Battle can only end|Question timer has not expired|Battle has not finished/, 409],
+];
+
+export function battleErrorResponse(err: unknown): NextResponse {
+  const message = err instanceof Error ? err.message : '';
+  for (const [pattern, status] of DOMAIN_ERROR_STATUS) {
+    if (pattern.test(message)) {
+      return NextResponse.json({ error: message }, { status });
+    }
+  }
+  console.error('[Battle] Unhandled error:', err);
+  return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 }
 
 export function normalizeSkipConfig(

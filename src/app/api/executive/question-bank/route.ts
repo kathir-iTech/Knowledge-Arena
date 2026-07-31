@@ -4,6 +4,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 import { auditService } from '@/services/audit.service';
 import { COLLECTIONS } from '@/lib/constants';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,8 @@ export async function POST(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
 
     const { questions, category, difficulty, tags, source } = await req.json();
 

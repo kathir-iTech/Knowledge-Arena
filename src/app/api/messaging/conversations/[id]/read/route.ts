@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +12,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const auth = executiveAuth || commanderAuth!;
+  const rateLimitResponse = enforceRateLimit(`msg:${auth.uid}`, Limits.MESSAGE_POST_PER_USER);
+  if (rateLimitResponse) return rateLimitResponse;
 
   try {
     const url = new URL(req.url);

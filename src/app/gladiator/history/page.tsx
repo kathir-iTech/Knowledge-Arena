@@ -1,32 +1,36 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { participantService } from '@/services/participant.service';
-import { Swords, ExternalLink, ArrowLeft } from 'lucide-react';
+import { Swords, ExternalLink, ArrowLeft, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
 export default function GladiatorHistoryPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const { toast } = useToast();
   const [history, setHistory] = useState<Array<{ quizId: string; title: string; score: number; status: string; created_at: number }>>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchHistory = useCallback(() => {
     if (!user) return;
+    setLoading(true);
+    setError(null);
     participantService.getStudentHistory(user.id)
       .then(setHistory)
-      .catch(() => { toast({ variant: 'destructive', title: 'Error', description: 'Failed to load battle history.' }); })
+      .catch(() => { setError('Failed to load battle history. Please try again.'); setHistory([]); })
       .finally(() => setLoading(false));
   }, [user]);
+
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
   if (loading) {
     return (
@@ -47,7 +51,18 @@ export default function GladiatorHistoryPage() {
         <span className="text-sm text-muted-foreground ml-auto">{history.length} battle{history.length !== 1 ? 's' : ''}</span>
       </div>
 
-      {history.length === 0 ? (
+      {error ? (
+        <Card className="border-destructive/40">
+          <CardContent className="py-14 text-center">
+            <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-4" />
+            <p className="text-base font-medium mb-1">Failed to load battle history</p>
+            <p className="text-sm text-muted-foreground mb-4">{error}</p>
+            <Button variant="outline" onClick={fetchHistory}>
+              <RefreshCw className="w-4 h-4 mr-2" /> Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : history.length === 0 ? (
         <EmptyState icon={Swords} title="No Battles Fought Yet" description="Join a battle from your dashboard to start your journey." action={<Button asChild><Link href="/gladiator/dashboard">Join a Battle</Link></Button>} />
       ) : (
         <div className="-mx-4 md:mx-0 overflow-x-auto rounded-none md:rounded-[14px] border-x-0 md:border border-border/50 mobile-hide-overflow">

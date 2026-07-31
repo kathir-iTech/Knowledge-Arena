@@ -435,6 +435,30 @@ Paginated audit log listing with cursor.
 
 ---
 
+### GET `/api/executive/battles`
+Paginated finished battles with per-arena participant stats. Fetches at most 1000 arenas; `limit` caps the returned page.
+
+**Query params:** `?q=search&limit=50`
+
+**Response `200`:**
+```json
+{ "battles": [{ "id": "...", "title": "...", "commanderName": "...", "averageScore": 650, "winner": { "name": "...", "score": 800 } }], "totalBattles": 12, "hasMore": false }
+```
+
+### GET `/api/executive/insights`
+30-day AI and security log rollups (model breakdown, event breakdown, daily activity).
+
+### GET `/api/executive/ai-logs`
+Paginated AI generation logs (success/failure, duration, model, question count).
+
+### GET `/api/executive/security-logs`
+Paginated security events (violations, auth failures, suspicious reconnects, rate limiting).
+
+### GET `/api/executive/question-bank`
+Question bank listing with category/difficulty filters and pagination. Executives may also POST (create), PATCH (edit) and DELETE questions.
+
+---
+
 ### GET `/api/executive/export`
 Export data in CSV or JSON format.
 
@@ -611,31 +635,52 @@ AI-generated prediction summary.
 
 ---
 
-### POST `/api/debug-pdf`
-Debug PDF parsing — validates base64 PDF data and returns extraction diagnostics.
+## Battle Engine
 
-**Auth:** Required  
-**Role:** Executive
+All battle endpoints are role-checked (Commander or Executive) and rate limited (30/min per user). Errors use a shared mapper: 404 (not found), 403 (not allowed / not a member), 409 (invalid state transition).
+
+### POST `/api/battle/start`
+Transition an arena `waiting`/`ready` → `starting`. Creator only.
 
 **Request Body:**
 ```json
-{
-  "pdfDataUri": "data:application/pdf;base64,JVBERi0..."
-}
+{ "quizId": "arena-id" }
 ```
 
 **Response `200`:**
 ```json
-{
-  "success": true,
-  "pages": 3,
-  "textLength": 4500,
-  "pagesWithNoText": 0,
-  "isImageOnly": false,
-  "first300": "Extracted text first 300 chars...",
-  "logs": ["[DEBUG] Data URI length: 12345", "..."]
-}
+{ "success": true, "status": "starting" }
 ```
+
+### POST `/api/battle/activate`
+Transition `starting` → `live` (after the 4s countdown). Creator or an enrolled participant may activate; unknown users are rejected.
+
+### POST `/api/battle/pause`
+Transition `live` → `paused`. Creator only.
+
+### POST `/api/battle/resume`
+Transition `paused` → `live`. Creator only.
+
+### POST `/api/battle/skip`
+Skip the current question for a participant (applies skip penalty). Creator or the participant themselves.
+
+### POST `/api/battle/advance`
+Move to the next question. Creator only.
+
+### POST `/api/battle/evaluate`
+Score a submitted answer with elapsed-time scoring (time decay, wrong/skip penalties). Creator or the participant.
+
+### POST `/api/battle/end`
+End the battle early: `live`/`paused`/`starting` → `finished`, finalizes participants and writes battle log. Creator only.
+
+### POST `/api/battle/archive`
+`finished` → `archived`. Creator only.
+
+### POST `/api/battle/transfer-ownership`
+Transfer arena ownership to another participant. Creator only.
+
+### POST `/api/battle/reconnect`
+Heartbeat/ownership check for reconnecting clients; returns arena state and enforces presence window.
 
 ---
 

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
-import { Search, Users, Shield, BookOpen, Layers, Swords, ClipboardList, MessageSquare, Megaphone, ArrowRight } from 'lucide-react';
+import { Search, Users, Shield, BookOpen, Layers, Swords, ClipboardList, MessageSquare, Megaphone, ArrowRight, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SearchResult {
@@ -52,6 +52,7 @@ export default function ExecutiveSearchPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -63,14 +64,19 @@ export default function ExecutiveSearchPage() {
       setResults([]);
       setTotal(0);
       setSearched(false);
+      setError(null);
       return;
     }
 
     setLoading(true);
     setSearched(true);
+    setError(null);
     try {
       const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
+      if (!token) {
+        setError('You are not signed in. Please sign in and try again.');
+        return;
+      }
       const res = await fetch(`/api/executive/search?q=${encodeURIComponent(q)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -78,9 +84,16 @@ export default function ExecutiveSearchPage() {
         const data = await res.json();
         setResults(data.results || []);
         setTotal(data.total || 0);
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || 'Search failed. Please try again.');
+        setResults([]);
+        setTotal(0);
       }
     } catch {
-      // silently fail
+      setError('Network error. Check your connection and try again.');
+      setResults([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -126,7 +139,24 @@ export default function ExecutiveSearchPage() {
         </div>
       )}
 
-      {!loading && searched && results.length === 0 && (
+      {!loading && error && (
+        <Card className="border-destructive/40">
+          <CardContent className="py-10 text-center">
+            <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-4" />
+            <p className="text-base font-medium mb-1">Search failed</p>
+            <p className="text-sm text-muted-foreground mb-4">{error}</p>
+            <button
+              onClick={() => doSearch(query)}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && !error && searched && results.length === 0 && (
         <Card>
           <CardContent className="py-16 text-center">
             <Search className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
@@ -135,7 +165,7 @@ export default function ExecutiveSearchPage() {
         </Card>
       )}
 
-      {!loading && results.length > 0 && (
+      {!loading && !error && results.length > 0 && (
         <div className="space-y-6">
           <p className="text-sm text-muted-foreground">{total} result{total !== 1 ? 's' : ''} for &quot;{query}&quot;</p>
           {sortedGroups.map(([type, items]) => {

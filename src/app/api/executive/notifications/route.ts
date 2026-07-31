@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { notificationService } from '@/services/notification.service';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -13,8 +14,8 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
-    const notifications = await notificationService.getAll({ limit: 100, unreadOnly });
-    const unreadCount = await notificationService.getUnreadCount();
+    const notifications = await notificationService.getAll({ limit: 100, unreadOnly, userId: auth.uid });
+    const unreadCount = await notificationService.getUnreadCount(auth.uid);
     return NextResponse.json({ notifications, unreadCount });
   } catch (err: any) {
     console.error('[Notifications GET] Error:', err?.name, err?.message);
@@ -28,12 +29,17 @@ export async function PATCH(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
 
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
     if (body.markAllRead) {
-      await notificationService.markAllRead();
+      await notificationService.markAllRead(auth.uid);
     } else if (body.ids && Array.isArray(body.ids)) {
-      await notificationService.markRead(body.ids);
+      await notificationService.markRead(body.ids, auth.uid);
     } else {
       return NextResponse.json({ error: 'Provide markAllRead or ids array' }, { status: 400 });
     }

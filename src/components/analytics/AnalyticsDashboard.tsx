@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { QuizOverviewCards } from './QuizOverviewCards';
@@ -58,6 +58,7 @@ export function AnalyticsDashboard() {
   const [exportPrefs, setExportPrefs] = useState<ExportPreferences>(defaultExportPrefs);
   const [chartData, setChartData] = useState<AnalyticsChartData | null>(null);
   const [chartsLoading, setChartsLoading] = useState(true);
+  const [chartsError, setChartsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.role !== 'executive') return;
@@ -73,27 +74,38 @@ export function AnalyticsDashboard() {
       .catch(() => {});
   }, [user]);
 
-  useEffect(() => {
+  const fetchCharts = useCallback(async () => {
     if (!user || user.role !== 'executive') return;
-    const fetchCharts = async () => {
-      try {
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) return;
-        const res = await fetch('/api/executive/analytics-data', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const d = await res.json();
-          setChartData(d);
-        }
-      } catch {
-        // silently fail
-      } finally {
-        setChartsLoading(false);
+    try {
+      setChartsLoading(true);
+      setChartsError(null);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        setChartsError('You are not signed in.');
+        return;
       }
-    };
-    fetchCharts();
+      const res = await fetch('/api/executive/analytics-data', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setChartData(d);
+      } else {
+        const d = await res.json().catch(() => null);
+        setChartsError(d?.error || 'Failed to load chart data.');
+        setChartData(null);
+      }
+    } catch {
+      setChartsError('Network error. Check your connection and try again.');
+      setChartData(null);
+    } finally {
+      setChartsLoading(false);
+    }
   }, [user, auth]);
+
+  useEffect(() => {
+    fetchCharts();
+  }, [fetchCharts]);
 
   if (isLoading) return <LoadingScreen />;
 
@@ -164,6 +176,18 @@ export function AnalyticsDashboard() {
           </DropdownMenu>
         </div>
       </div>
+
+      {!chartsLoading && chartsError && (
+        <Card className="border-destructive/40">
+          <CardContent className="py-10 text-center">
+            <p className="text-destructive mb-2 text-sm font-medium" role="alert">Failed to load chart data</p>
+            <p className="text-xs text-muted-foreground mb-4">{chartsError}</p>
+            <Button onClick={fetchCharts} variant="outline" size="sm">
+              <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" /> Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {!chartsLoading && chartData && (
         <>

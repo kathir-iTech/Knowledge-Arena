@@ -8,10 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/hooks/use-toast';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { Swords, Users, Calendar, ArrowLeft, Search, Download, Star, Trophy } from 'lucide-react';
+import { Swords, Users, Calendar, ArrowLeft, Search, Download, Star, Trophy, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
@@ -19,16 +18,18 @@ import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 export default function CommanderHistoryPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const { toast } = useToast();
   const [quizzes, setQuizzes] = useState<ValidatedQuiz[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   const fetchQuizzes = useCallback(() => {
     if (!user) return;
+    setLoading(true);
+    setError(null);
     quizService.getQuizzesByCreator(user.id)
       .then(setQuizzes)
-      .catch(() => { toast({ variant: 'destructive', title: 'Error', description: 'Failed to load battle history.' }); })
+      .catch(() => { setError('Failed to load battle history. Please try again.'); setQuizzes([]); })
       .finally(() => setLoading(false));
   }, [user]);
 
@@ -65,7 +66,18 @@ export default function CommanderHistoryPage() {
         />
       </div>
 
-      {finishedQuizzes.length === 0 ? (
+      {error ? (
+        <Card className="border-destructive/40">
+          <CardContent className="py-14 text-center">
+            <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-4" />
+            <p className="text-base font-medium mb-1">Failed to load battle history</p>
+            <p className="text-sm text-muted-foreground mb-4">{error}</p>
+            <Button variant="outline" onClick={fetchQuizzes}>
+              <RefreshCw className="w-4 h-4 mr-2" /> Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : finishedQuizzes.length === 0 ? (
         <div className="py-16 text-center border-2 border-dashed border-border/50 rounded-[18px]">
           <Swords className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
           <p className="text-base text-muted-foreground mb-4">

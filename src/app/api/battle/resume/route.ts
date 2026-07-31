@@ -3,7 +3,7 @@ import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS, QUIZ_LIVE, QUIZ_PAUSED, BATTLE_MODE_INDEPENDENT } from '@/lib/constants';
-import { writeBattleLog, isCreator, getMs } from '@/lib/battle-server';
+import { writeBattleLog, isCreator, getMs, battleErrorResponse } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -66,8 +66,7 @@ export async function POST(req: NextRequest) {
       metadata: { pausedMs },
     });
     return NextResponse.json({ ok: true, pausedMs });
-  } catch (err: any) {
-    console.error('[Battle/resume]', err?.message);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 });
+  } catch (err: unknown) {
+    return battleErrorResponse(err);
   }
 }

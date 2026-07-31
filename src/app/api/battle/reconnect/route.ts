@@ -3,7 +3,7 @@ import { verifyFirebaseToken } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { COLLECTIONS, RECONNECT_SUSPICION_WINDOW_MS } from '@/lib/constants';
-import { writeBattleLog, getMs } from '@/lib/battle-server';
+import { writeBattleLog, getMs, battleErrorResponse } from '@/lib/battle-server';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { logSecurityViolation } from '@/lib/security-log';
 
@@ -68,9 +68,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, suspicious, sessionReplaced });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal error';
-    console.error('[Battle/reconnect]', message);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } catch (err: unknown) {
+    return battleErrorResponse(err);
   }
 }

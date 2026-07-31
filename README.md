@@ -120,8 +120,8 @@ knowledge-arena/
 │   │   ├── api/                # API route handlers
 │   │   │   ├── admin/          # User management
 │   │   │   ├── audit/          # Audit logging
+│   │   │   ├── battle/         # Battle engine (start, activate, advance, end, ...)
 │   │   │   ├── commander/      # Commander dashboard & requests
-│   │   │   ├── debug-pdf/      # PDF debugging utility
 │   │   │   ├── decision-support/ # AI decision support
 │   │   │   ├── executive/      # Executive workspace, analytics, export, backup
 │   │   │   ├── gladiator/      # Gladiator dashboard

@@ -60,8 +60,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Step 7: Create Accounts
 
-1. Sign up with an email ending in `@staffs.com` to get the **teacher** role
-2. Sign up with any other email to get the **student** role
+1. The platform uses three roles: **Executive** (admin), **Commander** (quiz creator/host), **Gladiator** (participant)
+2. Gladiators self-register with any email and are assigned the `gladiator` role
+3. Commander and Executive accounts are provisioned by an existing Executive (or the first Executive via the admin API) — there is no public self-signup for privileged roles
+4. Emails ending in `@knowledgearena.app` are treated as staff accounts (see `STAFF_EMAIL_DOMAIN` in `src/lib/constants.ts`)
 
 ## AI Features (Optional)
 

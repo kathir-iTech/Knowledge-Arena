@@ -12,12 +12,12 @@ Powered by [Genkit](https://firebase.google.com/docs/genkit) with Google Gemini.
 ### `generateQuizFromPDF` (`src/ai/flows/generate-quiz-pdf-flow.ts`)
 
 Server action that:
-1. Accepts a PDF file upload (FormData)
-2. Extracts text using `pdf-parse`
-3. Calls Gemini to generate quiz questions
-4. Falls back through multiple parsing strategies if initial response is invalid
+1. Accepts a PDF (or DOCX/TXT/MD/image) uploaded as a **data URI**
+2. Extracts text using `pdfreader` (images are passed through to the model)
+3. Calls Gemini (via Genkit) to generate quiz questions with multi-model fallback and retry logic
+4. Validates the structured output against Zod schemas (`repairJson` / `tryParseQuestions` for malformed responses)
 
-**Input**: PDF file (max 20MB)
+**Input**: PDF file (max 10MB)
 **Output**: `GenerateQuizFromPDFOutput` (questions, difficulty, answer keys)
 
 ## Engines
@@ -49,14 +49,9 @@ Generates strategic teaching advice without reading database:
 
 Called via: `GET /api/decision-support/summary`
 
-### Copilot Engine (`src/ai/engines/copilot-engine.ts`)
+### Copilot Engine
 
-Chat-powered teacher assistant that:
-- Answers questions about the platform
-- Helps design quizzes
-- Provides teaching suggestions
-
-Called via: `POST /api/copilot/chat`
+> **Note:** The copilot engine was removed. Executive question generation uses `generateQuizFromPDF` above (or `src/ai/dev.ts` for local development).
 
 ## Architecture
 
@@ -65,9 +60,8 @@ src/ai/
   genkit.ts              Genkit instance configuration
   dev.ts                 Development entry point for genkit CLI
   flows/
-    generate-quiz-pdf-flow.ts   PDF quiz generation flow
+    generate-quiz-pdf-flow.ts   PDF/quiz generation flow
   engines/
-    copilot-engine.ts           Teacher copilot chat
     decision-support-engine.ts  Strategic advice
     knowledge-engine.ts         Knowledge gap analysis
     prediction-engine.ts        Performance predictions

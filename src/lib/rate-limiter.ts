@@ -71,6 +71,7 @@ export const Limits = {
   SECURITY_LOG_PER_USER: { maxRequests: 10, windowMs: 60000, message: 'Too many security events. Please wait.' },
   AUDIT_WRITE_PER_USER: { maxRequests: 10, windowMs: 60000, message: 'Too many audit writes. Please slow down.' },
   MESSAGE_POST_PER_USER: { maxRequests: 20, windowMs: 60000, message: 'Too many messages. Please slow down.' },
+  WRITE_PER_USER: { maxRequests: 15, windowMs: 60000, message: 'Too many operations. Please slow down.' },
   ADMIN_WRITE_PER_IP: { maxRequests: 10, windowMs: 60000, message: 'Too many account operations. Please wait.' },
   EXECUTIVE_EXPORT_PER_USER: { maxRequests: 5, windowMs: 60000, message: 'Export limit reached (5/min). Please wait.' },
 } as const;

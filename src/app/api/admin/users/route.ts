@@ -18,9 +18,9 @@ async function authenticateExecutive(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
-    const rl = rateLimiter.check(`admin:${ip}`, Limits.LOGIN_PER_IP);
+    const rl = rateLimiter.check(`admin:${ip}`, Limits.ADMIN_WRITE_PER_IP);
     if (!rl.allowed) {
-      return NextResponse.json({ error: Limits.LOGIN_PER_IP.message }, { status: 429, headers: buildRateLimitHeaders(rl) });
+      return NextResponse.json({ error: Limits.ADMIN_WRITE_PER_IP.message }, { status: 429, headers: buildRateLimitHeaders(rl) });
     }
 
     const auth = await authenticateExecutive(req);

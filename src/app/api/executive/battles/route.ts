@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const quizIds = pageDocs.map(d => d.id);
     const participantSnaps = await Promise.allSettled(
       quizIds.map(quizId =>
-        db.collection('quizzes').doc(quizId).collection('participants').get()
+        db.collection('quizzes').doc(quizId).collection('participants').select('user_id', 'name', 'score').get()
       )
     );
 

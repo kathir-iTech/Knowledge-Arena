@@ -35,6 +35,9 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
 
   const selectedQ = selected ? questions.find(q => q.questionId === selected) : null;
 
+  const hardest = useMemo(() => [...questions].sort((a, b) => a.correctPercent - b.correctPercent).slice(0, 5), [questions]);
+  const easiest = useMemo(() => [...questions].sort((a, b) => b.correctPercent - a.correctPercent).slice(0, 5), [questions]);
+
   if (!questions.length) {
     return (
       <Card>
@@ -43,9 +46,6 @@ export function QuestionAnalyticsSection({ questions }: { questions: QuestionAna
       </Card>
     );
   }
-
-  const hardest = useMemo(() => [...questions].sort((a, b) => a.correctPercent - b.correctPercent).slice(0, 5), [questions]);
-  const easiest = useMemo(() => [...questions].sort((a, b) => b.correctPercent - a.correctPercent).slice(0, 5), [questions]);
 
   return (
     <div className="space-y-6">

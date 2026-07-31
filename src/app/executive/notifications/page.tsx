@@ -10,10 +10,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Bell, CheckCheck, Trash2, UserPlus, UserCheck, Swords, Zap,
   Megaphone, MessageSquare, AlertTriangle, AlertCircle, Clock,
-  Shield, BookOpen, Lock,
+  Shield, BookOpen, Lock, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BulkSelection, BulkSelectionCheckbox } from '@/components/ui/bulk-selection';
+import { toast } from '@/hooks/use-toast';
 
 interface Notification {
   id: string;
@@ -63,13 +64,18 @@ export default function ExecutiveNotificationsPage() {
   const { auth } = useFirebase();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const fetchNotifications = useCallback(async () => {
     try {
+      setError(null);
       const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
+      if (!token) {
+        setError('You are not signed in.');
+        return;
+      }
       const res = await fetch('/api/executive/notifications', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -77,9 +83,14 @@ export default function ExecutiveNotificationsPage() {
         const data = await res.json();
         setNotifications(data.notifications || []);
         setUnreadCount(data.unreadCount || 0);
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || 'Failed to load notifications.');
+        setNotifications([]);
       }
     } catch {
-      // silently fail
+      setError('Network error. Check your connection and try again.');
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -99,11 +110,14 @@ export default function ExecutiveNotificationsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ markAllRead: true }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        toast({ title: 'Failed to mark notifications as read', variant: 'destructive' });
+        return;
+      }
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch {
-      // silently fail
+      toast({ title: 'Failed to mark notifications as read', variant: 'destructive' });
     }
   };
 
@@ -115,11 +129,14 @@ export default function ExecutiveNotificationsPage() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        toast({ title: 'Failed to delete notification', variant: 'destructive' });
+        return;
+      }
       setNotifications(prev => prev.filter(n => n.id !== id));
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch {
-      // silently fail
+      toast({ title: 'Failed to delete notification', variant: 'destructive' });
     }
   };
 
@@ -136,7 +153,9 @@ export default function ExecutiveNotificationsPage() {
       setNotifications(prev => prev.filter(n => !ids.includes(n.id)));
       setUnreadCount(prev => Math.max(0, prev - ids.filter(id => !notifications.find(n => n.id === id)?.read).length));
       setSelectedIds([]);
-    } catch {}
+    } catch {
+      toast({ title: 'Failed to delete notifications', variant: 'destructive' });
+    }
   };
 
   const handleBulkMarkRead = async (ids: string[]) => {
@@ -153,7 +172,9 @@ export default function ExecutiveNotificationsPage() {
       setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, read: true } : n));
       setUnreadCount(prev => Math.max(0, prev - ids.length));
       setSelectedIds([]);
-    } catch {}
+    } catch {
+      toast({ title: 'Failed to mark notifications as read', variant: 'destructive' });
+    }
   };
 
   if (loading) {
@@ -161,6 +182,28 @@ export default function ExecutiveNotificationsPage() {
       <div className="page-container animate-in space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (error && notifications.length === 0) {
+    return (
+      <div className="page-container animate-in space-y-4 safe-bottom">
+        <div className="space-y-1.5">
+          <h1 className="text-page-title font-headline tracking-tight">Notifications</h1>
+          <p className="text-base text-muted-foreground">Platform alerts and updates.</p>
+        </div>
+        <Card className="border-destructive/40">
+          <CardContent className="py-16 text-center">
+            <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-4" />
+            <p className="text-base font-medium mb-1">Failed to load notifications</p>
+            <p className="text-sm text-muted-foreground mb-4">{error}</p>
+            <Button onClick={() => { setLoading(true); fetchNotifications(); }}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -233,11 +276,11 @@ export default function ExecutiveNotificationsPage() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {n.link && (
-                      <Button variant="ghost" size="icon" className="w-7 h-7" asChild>
+                      <Button variant="ghost" size="icon" className="w-7 h-7" asChild aria-label="Open notification">
                         <a href={n.link}><Bell className="w-3.5 h-3.5" /></a>
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(n.id)}>
+                    <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(n.id)} aria-label="Delete notification">
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>

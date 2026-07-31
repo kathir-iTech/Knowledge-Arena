@@ -3,7 +3,7 @@ import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS, PS_BLOCKED } from '@/lib/constants';
-import { writeBattleLog, isCreator } from '@/lib/battle-server';
+import { writeBattleLog, isCreator, battleErrorResponse } from '@/lib/battle-server';
 import { notificationService } from '@/services/notification.service';
 
 export const runtime = 'nodejs';
@@ -84,8 +84,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error('[Battle/transfer-ownership]', err?.message);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 });
+  } catch (err: unknown) {
+    return battleErrorResponse(err);
   }
 }

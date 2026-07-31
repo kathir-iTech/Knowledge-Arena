@@ -16,11 +16,11 @@ Variables prefixed with `NEXT_PUBLIC_` are exposed to client-side code.
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `GOOGLE_GENERATIVE_AI_API_KEY` | ✅ | Google Generative AI API key for Genkit AI features. Used for quiz generation from PDFs, AI predictions, copilot, decision-support summaries, and knowledge summaries. | `AIzaSy...` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | ✅ | Google Generative AI API key for Genkit AI features. Used for quiz generation from PDFs and the health checks in the executive workspace. | `AIzaSy...` |
 
 **Where to get it:** [Google AI Studio](https://aistudio.google.com/app/apikey) → Create API key.
 
-**Note:** This key is auto-detected by the Genkit library. The app does not read `process.env.GOOGLE_GENERATIVE_AI_API_KEY` directly — it is used by `@genkit-ai/googleai`.
+**Note:** This key is auto-detected by the Genkit library; the app also reads `process.env.GOOGLE_GENERATIVE_AI_API_KEY` directly for workspace health checks.
 
 ---
 
@@ -68,11 +68,11 @@ Variables prefixed with `NEXT_PUBLIC_` are exposed to client-side code.
 
 ## Script-Only Variables
 
-These are only used by CLI scripts in `src/scripts/`. Not required for normal app operation.
+These are only used by CLI scripts in `scripts/`. Not required for normal app operation.
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `SERVICE_ACCOUNT_PATH` | ❌ (script) | Path to a local service-account JSON file on disk. Alternative to `FIREBASE_SERVICE_ACCOUNT_KEY` for CLI scripts. | `/home/user/service-account.json` |
+| `SERVICE_ACCOUNT_PATH` | ❌ (script) | Path to a local service-account JSON file on disk. Alternative to `FIREBASE_SERVICE_ACCOUNT_KEY` (also used by the app as a fallback). | `/home/user/service-account.json` |
 | `EXECUTIVE_SEQ` | ❌ (script) | Bootstrap executive account sequence number (used by `scripts/bootstrap-executive.ts`). | `001` |
 | `EXECUTIVE_PASSWORD` | ❌ (script) | Bootstrap executive account password. | `1234567` |
 | `EXECUTIVE_NAME` | ❌ (script) | Bootstrap executive display name. | `Admin` |
@@ -111,9 +111,9 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 
 # ─── Script-Only Variables ─────────────────────────────────────
 SERVICE_ACCOUNT_PATH=
-EXECUTIVE_SEQ=001
-EXECUTIVE_PASSWORD=1234567
-EXECUTIVE_NAME=
+# EXECUTIVE_SEQ=001
+# EXECUTIVE_PASSWORD=1234567
+# EXECUTIVE_NAME=
 ```
 
 ---

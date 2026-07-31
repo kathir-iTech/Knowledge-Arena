@@ -3,7 +3,7 @@ import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS, QUIZ_LIVE, QUIZ_PAUSED } from '@/lib/constants';
-import { evaluateQuestionForAll, finishBattle, isCreator, getMs } from '@/lib/battle-server';
+import { evaluateQuestionForAll, finishBattle, isCreator, getMs, battleErrorResponse } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -55,8 +55,7 @@ export async function POST(req: NextRequest) {
     }
     await finishBattle(quizId, auth.uid, 'commander');
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error('[Battle/end]', err?.message);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 });
+  } catch (err: unknown) {
+    return battleErrorResponse(err);
   }
 }
