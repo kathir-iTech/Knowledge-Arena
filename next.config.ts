@@ -1,4 +1,5 @@
 import type {NextConfig} from 'next';
+import path from 'path';
 
 const FIREBASE_AUTH_BACKEND = 'studio-4092189688-c74a7.firebaseapp.com';
 
@@ -66,6 +67,28 @@ const nextConfig: NextConfig = {
         destination: `https://${FIREBASE_AUTH_BACKEND}/__/:path*`,
       },
     ];
+  },
+  webpack(config, { isServer }) {
+    if (isServer) {
+      // The ESM builds of the Firebase client SDK are bundled by webpack
+      // into server chunks with broken export interop (missing named
+      // exports) on some platforms. Use the CJS builds for the server
+      // compilation, which resolve and execute reliably in Node.
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        'firebase/app': path.join(process.cwd(), 'node_modules/firebase/app/dist/index.cjs.js'),
+        'firebase/auth': path.join(process.cwd(), 'node_modules/firebase/auth/dist/index.cjs.js'),
+        'firebase/firestore': path.join(process.cwd(), 'node_modules/firebase/firestore/dist/index.cjs.js'),
+        'firebase/storage': path.join(process.cwd(), 'node_modules/firebase/storage/dist/index.cjs.js'),
+        'firebase/messaging': path.join(process.cwd(), 'node_modules/firebase/messaging/dist/index.cjs.js'),
+        'firebase/functions': path.join(process.cwd(), 'node_modules/firebase/functions/dist/index.cjs.js'),
+        'firebase/analytics': path.join(process.cwd(), 'node_modules/firebase/analytics/dist/index.cjs.js'),
+        'firebase/remote-config': path.join(process.cwd(), 'node_modules/firebase/remote-config/dist/index.cjs.js'),
+        'firebase/performance': path.join(process.cwd(), 'node_modules/firebase/performance/dist/index.cjs.js'),
+        'firebase/database': path.join(process.cwd(), 'node_modules/firebase/database/dist/index.cjs.js'),
+      };
+    }
+    return config;
   },
   poweredByHeader: false,
 };

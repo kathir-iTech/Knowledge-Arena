@@ -8,6 +8,60 @@ import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
+const PAGE_SIZE = 50;
+
+export async function GET(req: NextRequest) {
+  try {
+    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const q = searchParams.get('q')?.trim().toLowerCase() || '';
+    const category = searchParams.get('category')?.trim() || '';
+    const difficulty = searchParams.get('difficulty')?.trim() || '';
+    const cursor = searchParams.get('cursor');
+
+    let query = getAdminDb().collection(COLLECTIONS.QUESTION_BANK).orderBy('createdAt', 'desc').limit(PAGE_SIZE + 1);
+    if (category) query = query.where('category', '==', category);
+    if (difficulty) query = query.where('difficulty', '==', difficulty);
+    if (cursor) {
+      const cursorDoc = await getAdminDb().collection(COLLECTIONS.QUESTION_BANK).doc(cursor).get();
+      if (cursorDoc.exists) {
+        query = query.startAfter(cursorDoc);
+      }
+    }
+
+    const snap = await query.get();
+    const hasMore = snap.docs.length > PAGE_SIZE;
+    const docs = snap.docs.slice(0, PAGE_SIZE);
+
+    const questions = docs
+      .filter(d => !q || (d.data().text || '').toLowerCase().includes(q) || (d.data().category || '').toLowerCase().includes(q))
+      .map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          text: data.text || data.question_text || '',
+          category: data.category || data.subject || 'General',
+          difficulty: data.difficulty || 'medium',
+          source: data.source || 'manual',
+          createdBy: data.createdBy || null,
+          createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? null,
+          questionCount: null,
+        };
+      });
+
+    const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : null;
+
+    return NextResponse.json({ questions, nextCursor, hasMore });
+  } catch (err: any) {
+    console.error('[QuestionBank GET] Error:', err?.name, err?.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const auth = await verifyFirebaseTokenWithRole(req, 'executive');

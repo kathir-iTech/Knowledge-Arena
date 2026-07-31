@@ -105,6 +105,7 @@ export default function SecurityLogsPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
 
   const fetchLogs = useCallback(async (append = false) => {
     if (!user) return;
@@ -113,7 +114,10 @@ export default function SecurityLogsPage() {
       if (!token) return;
       const params = new URLSearchParams();
       if (eventFilter) params.set('event', eventFilter);
-      if (append && nextCursor) params.set('cursor', nextCursor);
+      if (append) {
+        if (eventFilter) params.set('page', String(page + 1));
+        else if (nextCursor) params.set('cursor', nextCursor);
+      }
       const res = await fetch(`/api/executive/security-logs?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -123,6 +127,7 @@ export default function SecurityLogsPage() {
         setNextCursor(data.nextCursor || null);
         setHasMore(data.hasMore || false);
         setAvailableEvents(data.filters?.events || []);
+        if (append && data.page) setPage(data.page);
       }
     } catch {
       // silently fail
@@ -130,9 +135,10 @@ export default function SecurityLogsPage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [user, auth, eventFilter, nextCursor]);
+  }, [user, auth, eventFilter, nextCursor, page]);
 
   useEffect(() => {
+    setPage(1);
     fetchLogs(false);
   }, [eventFilter]);
 

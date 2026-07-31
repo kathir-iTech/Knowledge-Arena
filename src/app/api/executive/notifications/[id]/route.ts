@@ -7,6 +7,34 @@ import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id } = await params;
+  try {
+    const ref = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
+    const data = snap.data();
+    if (!data || data.userId !== auth.uid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json({
+      notification: {
+        id,
+        ...data,
+        createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? null,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Notification GET] Error:', err?.name, err?.message);
+    return NextResponse.json({ error: 'Failed to fetch notification' }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await verifyFirebaseTokenWithRole(req, 'executive');
   if (!auth) {

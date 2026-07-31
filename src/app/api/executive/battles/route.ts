@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q')?.trim().toLowerCase() || '';
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10), 0);
 
     const db = getAdminDb();
 
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const pageDocs = finished.slice(0, limit);
+    const pageDocs = finished.slice(offset, offset + limit);
 
     const quizIds = pageDocs.map(d => d.id);
     const participantSnaps = await Promise.allSettled(
@@ -56,10 +57,12 @@ export async function GET(req: NextRequest) {
       const participants = result.status === 'fulfilled' ? result.value.docs : [];
 
       const studentParticipants = participants.filter(p => p.data().user_id !== data.created_by);
-      const scores = studentParticipants.map(p => p.data().score || 0).filter(s => s > 0);
+      const scores = studentParticipants.map(p => p.data().score || 0);
+      const positiveScores = scores.filter(s => s > 0);
       const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0;
 
-      const sorted = [...studentParticipants].sort((a, b) => (b.data().score || 0) - (a.data().score || 0));
+      const scored = studentParticipants.filter(p => (p.data().score || 0) > 0);
+      const sorted = [...(scored.length > 0 ? scored : studentParticipants)].sort((a, b) => (b.data().score || 0) - (a.data().score || 0));
       const winner = sorted[0];
 
       return {
@@ -72,15 +75,15 @@ export async function GET(req: NextRequest) {
         questionCount: data.question_count || 0,
         difficulty: data.difficulty || 'medium',
         averageScore: avgScore,
-        winner: winner
-          ? { name: winner.data().name || winner.data().user_id?.slice(0, 8), score: winner.data().score || 0 }
+        winner: winner && winner.data().score > 0
+          ? { name: winner.data().name || winner.data().user_id?.slice(0, 8), score: winner.data().score }
           : null,
       };
     });
 
     const totalBattles = finished.length;
 
-    return NextResponse.json({ battles, totalBattles, hasMore: finished.length > limit });
+    return NextResponse.json({ battles, totalBattles, hasMore: offset + limit < finished.length });
   } catch (err: any) {
     console.error('[ExecutiveBattles] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

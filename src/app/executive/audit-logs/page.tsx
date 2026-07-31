@@ -110,6 +110,7 @@ export default function AuditLogsPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
 
   const fetchLogs = useCallback(async (append = false) => {
     if (!user) return;
@@ -119,7 +120,10 @@ export default function AuditLogsPage() {
       const params = new URLSearchParams();
       if (actionFilter) params.set('action', actionFilter);
       if (roleFilter) params.set('actorRole', roleFilter);
-      if (append && nextCursor) params.set('cursor', nextCursor);
+      if (append) {
+        if (actionFilter || roleFilter) params.set('page', String(page + 1));
+        else if (nextCursor) params.set('cursor', nextCursor);
+      }
       const res = await fetch(`/api/executive/audit-logs?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -134,6 +138,7 @@ export default function AuditLogsPage() {
         setHasMore(data.hasMore || false);
         setAvailableActions(data.filters?.actions || []);
         setAvailableRoles(data.filters?.roles || []);
+        if (append && data.page) setPage(data.page);
       }
     } catch {
       // silently fail
@@ -141,9 +146,10 @@ export default function AuditLogsPage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [user, auth, actionFilter, roleFilter, nextCursor]);
+  }, [user, auth, actionFilter, roleFilter, nextCursor, page]);
 
   useEffect(() => {
+    setPage(1);
     fetchLogs(false);
   }, [actionFilter, roleFilter]);
 

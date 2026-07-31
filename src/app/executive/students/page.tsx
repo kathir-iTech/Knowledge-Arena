@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Search, Users, User, Ban, Check, Swords, Star, Clock, Trash2 } from 'lucide-react';
+import { Search, Users, User, Ban, Check, Swords, Star, Clock, Trash2, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -45,6 +46,7 @@ export default function StudentManagementPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const { toast } = useToast();
+  const router = useRouter();
   const [gladiators, setGladiators] = useState<Gladiator[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -288,7 +290,13 @@ export default function StudentManagementPage() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{g.displayName}</p>
+                    <button
+                      onClick={() => router.push(`/executive/students/${g.uid}`)}
+                      className="font-medium truncate group-hover:text-primary transition-colors hover:text-primary hover:underline underline-offset-2 text-left"
+                      title="View full profile"
+                    >
+                      {g.displayName}
+                    </button>
                     <p className="text-sm text-muted-foreground truncate">{g.email}</p>
                   </div>
                 </div>
@@ -311,8 +319,17 @@ export default function StudentManagementPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setSelectedGladiator(g)}
+                    title="Quick profile"
                   >
                     <User className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push(`/executive/students/${g.uid}`)}
+                    title="View full profile"
+                  >
+                    <ChevronRight className="w-4 h-4" />
                   </Button>
                   <Badge variant={g.disabled ? 'secondary' : 'default'}>
                     {g.disabled ? 'Disabled' : 'Active'}
@@ -381,6 +398,9 @@ export default function StudentManagementPage() {
                   <p className="font-semibold">{selectedGladiator.lastActive ? formatDate(selectedGladiator.lastActive) : 'Never'}</p>
                 </div>
               </div>
+              <Button className="w-full" onClick={() => { const uid = selectedGladiator.uid; setSelectedGladiator(null); router.push(`/executive/students/${uid}`); }}>
+                View Full Profile
+              </Button>
             </div>
           )}
         </DialogContent>

@@ -162,15 +162,17 @@ export default function ExecutiveNotificationsPage() {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      await Promise.all(ids.map(id =>
-        fetch('/api/executive/notifications', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ markAllRead: true }),
-        }).then(r => { if (!r.ok) throw new Error('Failed'); })
-      ));
+      const res = await fetch('/api/executive/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        toast({ title: 'Failed to mark notifications as read', variant: 'destructive' });
+        return;
+      }
       setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, read: true } : n));
-      setUnreadCount(prev => Math.max(0, prev - ids.length));
+      setUnreadCount(prev => Math.max(0, prev - ids.filter(id => !notifications.find(n => n.id === id)?.read).length));
       setSelectedIds([]);
     } catch {
       toast({ title: 'Failed to mark notifications as read', variant: 'destructive' });
