@@ -289,7 +289,44 @@ export function ExecutiveQuestionReviewPanel({
   const handleImport = async () => {
     setIsSubmitting(true);
     try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) throw new Error('UNAUTHORIZED');
+
+      const approvedQuestions = questions.filter(q => approvedIds.has(q.id)).map(q => ({
+        text: q.text,
+        options: q.options,
+        correctAnswerIndex: q.correctAnswerIndex,
+        explanation: q.explanation,
+      }));
+
+      if (approvedQuestions.length === 0) {
+        toast({ variant: 'destructive', title: 'No Questions Approved', description: 'Please approve at least one question before importing.' });
+        return;
+      }
+
+      const res = await fetch('/api/executive/question-bank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          questions: approvedQuestions,
+          category: globalCategory,
+          difficulty: globalDifficulty,
+          tags: globalTags,
+          source: 'ai_pdf_forge',
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to save to question bank');
+      }
+
+      const data = await res.json();
+      toast({ title: 'Import Complete', description: `${data.saved} question${data.saved !== 1 ? 's' : ''} saved to question bank.` });
       onImportComplete();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast({ variant: 'destructive', title: 'Import Failed', description: msg });
     } finally {
       setIsSubmitting(false);
     }

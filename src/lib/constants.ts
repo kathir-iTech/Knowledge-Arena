@@ -5,11 +5,15 @@ export const ROLE_EXECUTIVE: Role = 'executive';
 export const ROLE_COMMANDER: Role = 'commander';
 export const ROLE_GLADIATOR: Role = 'gladiator';
 
-export const QUIZ_STATUSES = ['draft', 'waiting', 'live', 'finished'] as const;
+export const QUIZ_STATUSES = ['draft', 'waiting', 'ready', 'starting', 'live', 'paused', 'finished', 'archived'] as const;
 export type QuizStatus = (typeof QUIZ_STATUSES)[number];
 export const QUIZ_WAITING: QuizStatus = 'waiting';
+export const QUIZ_READY: QuizStatus = 'ready';
+export const QUIZ_STARTING: QuizStatus = 'starting';
 export const QUIZ_LIVE: QuizStatus = 'live';
+export const QUIZ_PAUSED: QuizStatus = 'paused';
 export const QUIZ_FINISHED: QuizStatus = 'finished';
+export const QUIZ_ARCHIVED: QuizStatus = 'archived';
 export const QUIZ_DRAFT: QuizStatus = 'draft';
 
 export const PARTICIPANT_STATUSES = ['playing', 'finished', 'blocked'] as const;
@@ -18,12 +22,35 @@ export const PS_PLAYING: ParticipantStatus = 'playing';
 export const PS_FINISHED: ParticipantStatus = 'finished';
 export const PS_BLOCKED: ParticipantStatus = 'blocked';
 
-export const ALLOWED_QUIZ_TRANSITIONS: Record<string, string[]> = {
+export const BATTLE_MODES = ['synchronized', 'independent'] as const;
+export type BattleMode = (typeof BATTLE_MODES)[number];
+export const BATTLE_MODE_SYNCHRONIZED: BattleMode = 'synchronized';
+export const BATTLE_MODE_INDEPENDENT: BattleMode = 'independent';
+
+export const ALLOWED_QUIZ_TRANSITIONS: Record<string, readonly string[]> = {
   draft: ['waiting'],
-  waiting: ['live'],
-  live: ['finished'],
-  finished: [],
+  waiting: ['ready', 'starting'],
+  ready: ['waiting', 'starting'],
+  starting: ['live', 'waiting'],
+  live: ['paused', 'finished'],
+  paused: ['live', 'finished'],
+  finished: ['archived'],
+  archived: [],
 };
+
+export const DEFAULT_SCORE_MAX = 1000;
+export const DEFAULT_SCORE_MIN = 100;
+export const DEFAULT_WRONG_PENALTY = 0;
+export const DEFAULT_SKIP_PENALTY = 0;
+export const DEFAULT_TIME_DECAY = true;
+export const DEFAULT_REQUIRE_ALL_READY = false;
+export const STARTING_TRANSITION_MS = 4000;
+export const PRESENCE_WINDOW_MS = 30000;
+export const COMMANDER_PRESENCE_WINDOW_MS = 45000;
+export const RECONNECT_SUSPICION_WINDOW_MS = 60000;
+export const ANSWER_GRACE_MS = 3000;
+export const ANSWER_VIOLATION_MARGIN_MS = 15000;
+export const SUBMIT_CLOCK_SKEW_TOLERANCE_MS = 5000;
 
 export const COLLECTIONS = {
   USERS: 'users',
@@ -39,6 +66,9 @@ export const COLLECTIONS = {
   CONVERSATIONS: 'conversations',
   MESSAGES: 'messages',
   ANNOUNCEMENTS: 'announcements',
+  AI_LOGS: 'ai_logs',
+  BATTLE_LOGS: 'battle_logs',
+  SECURITY_LOGS: 'security_logs',
 } as const;
 
 export const NOTIFICATION_TYPES = [
@@ -50,6 +80,7 @@ export const NOTIFICATION_TYPES = [
   'new_message',
   'operation_failed',
   'system_warning',
+  'ownership_transferred',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

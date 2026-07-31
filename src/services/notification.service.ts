@@ -1,5 +1,5 @@
 import { getAdminDb } from '@/lib/firebase-admin';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, Query } from 'firebase-admin/firestore';
 import { COLLECTIONS, DEFAULT_PAGE_LIMIT } from '@/lib/constants';
 import type { NotificationType } from '@/lib/constants';
 
@@ -29,11 +29,17 @@ export const notificationService = {
     }
   },
 
-  async getAll(options?: { limit?: number; unreadOnly?: boolean }): Promise<Notification[]> {
-    const snap = await getAdminDb().collection(COLLECTIONS.NOTIFICATIONS)
+  async getAll(options?: { limit?: number; unreadOnly?: boolean; userId?: string }): Promise<Notification[]> {
+    let query: Query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS)
       .orderBy('createdAt', 'desc')
-      .limit(options?.limit || DEFAULT_PAGE_LIMIT)
-      .get();
+      .limit(options?.limit || DEFAULT_PAGE_LIMIT);
+    if (options?.userId) {
+      query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS)
+        .where('userId', '==', options.userId)
+        .orderBy('createdAt', 'desc')
+        .limit(options?.limit || DEFAULT_PAGE_LIMIT);
+    }
+    const snap = await query.get();
     let results = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toMillis?.() || d.data().createdAt } as Notification));
     if (options?.unreadOnly) {
       results = results.filter(n => !n.read);
@@ -49,8 +55,14 @@ export const notificationService = {
     await batch.commit();
   },
 
-  async markAllRead(): Promise<void> {
-    const snap = await getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).where('read', '==', false).limit(500).get();
+  async markAllRead(userId?: string): Promise<void> {
+    let query: Query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS)
+      .where('read', '==', false)
+      .limit(500);
+    if (userId) {
+      query = query.where('userId', '==', userId);
+    }
+    const snap = await query.get();
     if (snap.empty) return;
     const batch = getAdminDb().batch();
     snap.docs.forEach(d => batch.update(d.ref, { read: true }));
@@ -61,8 +73,14 @@ export const notificationService = {
     await getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).doc(id).delete();
   },
 
-  async getUnreadCount(): Promise<number> {
-    const snap = await getAdminDb().collection(COLLECTIONS.NOTIFICATIONS).where('read', '==', false).limit(500).get();
+  async getUnreadCount(userId?: string): Promise<number> {
+    let query: Query = getAdminDb().collection(COLLECTIONS.NOTIFICATIONS)
+      .where('read', '==', false)
+      .limit(500);
+    if (userId) {
+      query = query.where('userId', '==', userId);
+    }
+    const snap = await query.get();
     return snap.docs.length;
   },
 };

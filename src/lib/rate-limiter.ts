@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+
 export interface RateLimitConfig {
   maxRequests: number;
   windowMs: number;
@@ -65,13 +67,27 @@ export const Limits = {
   LOGIN_PER_EMAIL: { maxRequests: 5, windowMs: 60000, message: 'Too many login attempts for this account. Please wait 1 minute.' },
   SIGNUP_PER_IP: { maxRequests: 5, windowMs: 60000, message: 'Too many signup attempts. Please wait 1 minute.' },
   AI_API_PER_USER: { maxRequests: 10, windowMs: 60000, message: 'AI request limit reached (10/min). Please wait.' },
+  BATTLE_ACTION_PER_USER: { maxRequests: 30, windowMs: 60000, message: 'Too many battle actions. Please slow down.' },
+  SECURITY_LOG_PER_USER: { maxRequests: 10, windowMs: 60000, message: 'Too many security events. Please wait.' },
+  AUDIT_WRITE_PER_USER: { maxRequests: 10, windowMs: 60000, message: 'Too many audit writes. Please slow down.' },
+  MESSAGE_POST_PER_USER: { maxRequests: 20, windowMs: 60000, message: 'Too many messages. Please slow down.' },
+  ADMIN_WRITE_PER_IP: { maxRequests: 10, windowMs: 60000, message: 'Too many account operations. Please wait.' },
+  EXECUTIVE_EXPORT_PER_USER: { maxRequests: 5, windowMs: 60000, message: 'Export limit reached (5/min). Please wait.' },
 } as const;
 
 export function getClientIp(req: Request): string {
+  const vercel = req.headers.get('x-vercel-forwarded-for');
+  if (vercel) return vercel.split(',')[0].trim();
   const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
+  if (forwarded) {
+    const parts = forwarded
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
   const cf = req.headers.get('cf-connecting-ip');
-  if (cf) return cf;
+  if (cf) return cf.trim();
   return '127.0.0.1';
 }
 
@@ -80,4 +96,16 @@ export function buildRateLimitHeaders(result: { remaining: number; resetAt: numb
     'X-RateLimit-Remaining': String(result.remaining),
     'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000)),
   };
+}
+
+export function enforceRateLimit(key: string, config: RateLimitConfig): NextResponse | null {
+  const result = rateLimiter.check(key, config);
+  if (result.allowed) return null;
+  return NextResponse.json(
+    {
+      error: config.message ?? 'Rate limit exceeded.',
+      retryAfter: Math.ceil((result.resetAt - Date.now()) / 1000),
+    },
+    { status: 429, headers: buildRateLimitHeaders(result) }
+  );
 }

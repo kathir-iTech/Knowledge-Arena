@@ -7,6 +7,7 @@ import { QuizOverviewCards } from './QuizOverviewCards';
 import { StudentAnalyticsSection } from './StudentAnalyticsSection';
 import { QuestionAnalyticsSection } from './QuestionAnalyticsSection';
 import { QuizAnalyticsSection } from './QuizAnalyticsSection';
+import { SystemInsightsSection } from './SystemInsightsSection';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingScreen } from '@/components/LoadingScreen';
@@ -253,6 +254,7 @@ export function AnalyticsDashboard() {
       )}
 
       <QuizOverviewCards overview={data.overview} />
+      <SystemInsightsSection getToken={() => auth.currentUser?.getIdToken() ?? null} />
       <StudentAnalyticsSection students={data.students} />
       <QuestionAnalyticsSection questions={data.questions} />
       <QuizAnalyticsSection quizzes={data.quizzes} />

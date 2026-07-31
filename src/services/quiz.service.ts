@@ -24,11 +24,16 @@ import {
   QUIZ_WAITING,
   QUIZ_LIVE,
   QUIZ_FINISHED,
+  QUIZ_READY,
+  QUIZ_STARTING,
+  QUIZ_PAUSED,
+  QUIZ_ARCHIVED,
   ALLOWED_QUIZ_TRANSITIONS,
   ROOM_CODE_RETRIES,
   MIN_TITLE_LENGTH,
   MIN_QUESTIONS,
   ROOM_CODE_LENGTH,
+  type QuizStatus,
 } from '@/lib/constants';
 
 function getFirestore() {
@@ -76,7 +81,7 @@ export const quizService = {
 
     if (!data.id || data.id.length !== ROOM_CODE_LENGTH) throw new Error('Invalid quiz ID');
     if (!data.title || data.title.length < MIN_TITLE_LENGTH) throw new Error('Title must be at least 3 characters');
-    if (![QUIZ_WAITING, QUIZ_LIVE, QUIZ_FINISHED].includes(data.status as any)) throw new Error('Invalid status');
+    if (![QUIZ_WAITING, QUIZ_READY, QUIZ_STARTING, QUIZ_LIVE, QUIZ_PAUSED, QUIZ_FINISHED, QUIZ_ARCHIVED].includes(data.status as any)) throw new Error('Invalid status');
     if (data.question_count < MIN_QUESTIONS) throw new Error('Question count must be at least 1');
     if (data.current_question_index < -1) throw new Error('Invalid question index');
     if (!data.created_by) throw new Error('Creator ID required');
@@ -96,7 +101,7 @@ export const quizService = {
     await setDoc(doc(db, COLLECTIONS.QUIZZES, data.id), quizData);
   },
 
-  async updateQuizStatus(id: string, status: 'waiting' | 'live' | 'finished'): Promise<void> {
+  async updateQuizStatus(id: string, status: QuizStatus): Promise<void> {
     const db = getFirestore();
     const quizRef = doc(db, COLLECTIONS.QUIZZES, id);
     try {
@@ -247,11 +252,26 @@ export const quizService = {
     }, (error) => onError?.(error));
   },
 
-  async updateQuiz(id: string, data: { title?: string; archived?: boolean }): Promise<void> {
+  async updateQuiz(id: string, data: {
+    title?: string;
+    archived?: boolean;
+    battle_mode?: 'synchronized' | 'independent';
+    start_config?: { require_all_ready?: boolean };
+    scoring_config?: {
+      score_max?: number;
+      score_min?: number;
+      wrong_penalty?: number;
+      skip_penalty?: number;
+      time_decay?: boolean;
+    };
+  }): Promise<void> {
     const db = getFirestore();
     const updateData: Record<string, unknown> = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.archived !== undefined) updateData.archived = data.archived;
+    if (data.battle_mode !== undefined) updateData.battle_mode = data.battle_mode;
+    if (data.start_config !== undefined) updateData.start_config = data.start_config;
+    if (data.scoring_config !== undefined) updateData.scoring_config = data.scoring_config;
     await updateDoc(doc(db, COLLECTIONS.QUIZZES, id), updateData);
   },
 

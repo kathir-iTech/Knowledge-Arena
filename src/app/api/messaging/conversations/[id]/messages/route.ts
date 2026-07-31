@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
 import { validateAttachments } from '@/lib/file-security';
@@ -90,6 +91,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const rateLimitResponse = enforceRateLimit(`messaging:${verified.auth.uid}`, Limits.MESSAGE_POST_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { text, attachments, idempotencyKey } = await req.json();
     console.log('[MSG-API] POST message, conv:', convId, 'text:', text?.substring(0, 50), 'attachments:', attachments?.length, 'idempotencyKey:', idempotencyKey);
     if (!text?.trim() && (!attachments || attachments.length === 0)) {
@@ -163,20 +167,25 @@ export async function POST(req: NextRequest) {
     });
     const msgText = text?.trim() || '';
     const notifDesc = msgText ? `${msgText.slice(0, 80)}${msgText.length > 80 ? '...' : ''}` : '📎 File attachment';
-    const receiverId = await getAdminDb().runTransaction(async (tx) => {
+    const receiverInfo = await getAdminDb().runTransaction(async (tx) => {
       const convSnap = await tx.get(verified.convRef);
       if (!convSnap.exists) return null;
-      const participants: string[] = convSnap.data()!.participants || [];
-      return participants.find((p: string) => p !== verified.auth.uid) || null;
+      const convData = convSnap.data()!;
+      const participants: string[] = convData.participants || [];
+      const receiverId = participants.find((p: string) => p !== verified.auth.uid);
+      if (!receiverId) return null;
+      const role = (convData.participantRoles as Record<string, string>)?.[receiverId] || 'commander';
+      return { receiverId, role };
     });
-    if (receiverId) {
+    if (receiverInfo) {
+      const link = receiverInfo.role === 'executive' ? '/executive/messages' : '/commander/messages';
       await notificationService.create({
         type: 'new_message',
         title: 'New Message',
         description: notifDesc,
         createdAt: Date.now(),
-        userId: receiverId,
-        link: '/executive/messages',
+        userId: receiverInfo.receiverId,
+        link,
         metadata: { conversationId: convId },
       });
     }

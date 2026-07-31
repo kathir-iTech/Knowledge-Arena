@@ -7,14 +7,17 @@ import QRCode from 'react-qr-code';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, Copy, Users, Clock, Loader2 } from 'lucide-react';
+import { ShieldCheck, Copy, Users, Clock, Loader2, CheckCircle2, Hand } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
+import { battleService, getSessionToken } from '@/services/battle.service';
+import { battleLogService } from '@/services/battle-log.service';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface WaitingRoomProps {
@@ -34,6 +37,12 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const [presenceNow, setPresenceNow] = useState(() => Date.now());
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [selfReady, setSelfReady] = useState(false);
+  const [isReadyToggling, setIsReadyToggling] = useState(false);
+  const [requireAllReady, setRequireAllReady] = useState(quiz.start_config?.require_all_ready ?? false);
+  const [independentMode, setIndependentMode] = useState(quiz.battle_mode === 'independent');
+  const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
+  const joinedLoggedRef = useRef(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -63,7 +72,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       heartbeatRef.current = setInterval(send, 15000);
     } else if (!isTeacher && user) {
       const send = () => {
-        participantService.heartbeat(quiz.id, user.id).catch(() => {});
+        participantService.heartbeat(quiz.id, user.id, getSessionToken(quiz.id)).catch(() => {});
       };
       send();
       heartbeatRef.current = setInterval(send, 15000);
@@ -74,6 +83,22 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       unsubRef.current = participantService.subscribeToParticipants(quiz.id, (parts) => {
         if (!mountedRef.current) return;
         setParticipants(parts);
+        if (!isTeacher && user) {
+          const self = parts.find(p => p.user_id === user.id);
+          if (self) {
+            setSelfReady(self.ready === true);
+            if (!joinedLoggedRef.current && self.status !== 'blocked') {
+              joinedLoggedRef.current = true;
+              battleLogService.record({
+                quizId: quiz.id,
+                event: 'gladiator_joined',
+                actor: user.id,
+                actorRole: 'gladiator',
+                timestamp: Date.now(),
+              });
+            }
+          }
+        }
         setIsLoading(false);
         setIsReconnecting(false);
       }, () => {
@@ -104,14 +129,14 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       if (isTeacher && user) {
         quizService.commanderHeartbeat(quiz.id).catch(() => {});
       } else if (!isTeacher && user) {
-        participantService.heartbeat(quiz.id, user.id).catch(() => {});
+        participantService.heartbeat(quiz.id, user.id, getSessionToken(quiz.id)).catch(() => {});
       }
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       const hbUserId = user?.id;
       if (hbUserId) {
         const send = isTeacher
           ? () => quizService.commanderHeartbeat(quiz.id).catch(() => {})
-          : () => participantService.heartbeat(quiz.id, hbUserId).catch(() => {});
+          : () => participantService.heartbeat(quiz.id, hbUserId, getSessionToken(quiz.id)).catch(() => {});
         send();
         heartbeatRef.current = setInterval(send, 15000);
       }
@@ -182,6 +207,14 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     setIsKicking(true);
     try {
       await participantService.blockParticipant(quiz.id, kickingId);
+      await battleLogService.record({
+        quizId: quiz.id,
+        event: 'gladiator_blocked',
+        actor: user?.id || '',
+        actorRole: 'commander',
+        timestamp: Date.now(),
+        metadata: { target: kickingId },
+      });
       toast({ title: 'Gladiator Kicked', description: 'Participant has been removed from this arena.' });
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to kick gladiator.' });
@@ -195,6 +228,14 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     setUnblockingId(userId);
     try {
       await participantService.unblockParticipant(quiz.id, userId);
+      await battleLogService.record({
+        quizId: quiz.id,
+        event: 'gladiator_unblocked',
+        actor: user?.id || '',
+        actorRole: 'commander',
+        timestamp: Date.now(),
+        metadata: { target: userId },
+      });
       toast({ title: 'Unblocked', description: 'Gladiator has been unblocked.' });
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to unblock gladiator.' });
@@ -203,11 +244,72 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     }
   };
 
+  const handleToggleReady = async () => {
+    if (!user || isReadyToggling) return;
+    const next = !selfReady;
+    setIsReadyToggling(true);
+    setSelfReady(next);
+    try {
+      await participantService.setReady(quiz.id, user.id, next);
+      await battleLogService.record({
+        quizId: quiz.id,
+        event: 'gladiator_ready',
+        actor: user.id,
+        actorRole: 'gladiator',
+        timestamp: Date.now(),
+        metadata: { ready: next },
+      });
+    } catch {
+      setSelfReady(!next);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update readiness.' });
+    } finally {
+      setIsReadyToggling(false);
+    }
+  };
+
+  const handleRequireAllReadyChange = async (next: boolean) => {
+    if (!isTeacher || isUpdatingConfig) return;
+    setIsUpdatingConfig(true);
+    const prev = requireAllReady;
+    setRequireAllReady(next);
+    try {
+      await quizService.updateQuiz(quiz.id, { start_config: { require_all_ready: next } });
+    } catch {
+      setRequireAllReady(prev);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update battle configuration.' });
+    } finally {
+      setIsUpdatingConfig(false);
+    }
+  };
+
+  const handleModeChange = async (next: boolean) => {
+    if (!isTeacher || isUpdatingConfig) return;
+    setIsUpdatingConfig(true);
+    const prev = independentMode;
+    setIndependentMode(next);
+    try {
+      await quizService.updateQuiz(quiz.id, { battle_mode: next ? 'independent' : 'synchronized' });
+      toast({ title: 'Mode Updated', description: next ? 'Independent mode: each gladiator progresses at their own pace.' : 'Synchronized mode: everyone shares the same question flow.' });
+    } catch {
+      setIndependentMode(prev);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update battle mode.' });
+    } finally {
+      setIsUpdatingConfig(false);
+    }
+  };
+
   const handleLeave = async () => {
     if (isTeacher || !user || isLeaving) return;
     setIsLeaving(true);
     try {
       await participantService.leaveQuiz(quiz.id, user.id);
+      await battleLogService.record({
+        quizId: quiz.id,
+        event: 'gladiator_left',
+        actor: user.id,
+        actorRole: 'gladiator',
+        timestamp: Date.now(),
+      });
       toast({ title: 'Arena Left', description: 'You can rejoin this arena from the dashboard.' });
       router.push('/gladiator/dashboard');
     } catch {
@@ -226,18 +328,21 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
 
   const handleStartQuiz = async () => {
     if (!isTeacher || !user || isStarting) return;
+    if (requireAllReady && readyCount < studentCount) return;
     setIsStarting(true);
     try {
-        await quizService.startQuiz(quiz.id);
-        setIsStarting(false);
+      await battleService.startBattle(quiz.id);
+      setIsStarting(false);
     } catch {
-        toast({ variant: 'destructive', title: 'Error', description: 'Failed to start quiz.' });
-        setIsStarting(false);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to start battle.' });
+      setIsStarting(false);
     }
   };
 
   const studentCount = studentParticipants.length;
   const areParticipantsLoading = isLoading;
+  const readyCount = studentParticipants.filter(p => p.ready === true).length;
+  const readyGate = requireAllReady && readyCount < studentCount;
 
   return (
     <div className="flex flex-col items-center min-h-screen p-4 md:p-8 animate-in safe-top safe-bottom">
@@ -260,6 +365,13 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
             <span className="font-semibold">{studentCount}</span>
             <span className="text-muted-foreground">connected</span>
           </div>
+          {isTeacher && (
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-success" />
+              <span className="font-semibold">{readyCount}</span>
+              <span className="text-muted-foreground">ready</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 text-sm">
               {teacherOnline ? (
                 <><span className="w-2 h-2 rounded-full bg-success" /><span className="text-success font-medium">Commander Online</span></>
@@ -300,7 +412,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                 <Users className="w-5 h-5 text-primary" />
                 Participants
             </CardTitle>
-            <CardDescription className="text-sm">{isTeacher ? `${studentCount} gladiator${studentCount !== 1 ? 's' : ''} have joined.` : "See who's ready for battle."}</CardDescription>
+            <CardDescription className="text-sm">{isTeacher ? `${studentCount} gladiator${studentCount !== 1 ? 's' : ''} have joined. ${readyCount} ready.` : "See who's ready for battle."}</CardDescription>
           </CardHeader>
           <CardContent>
                 <div className="flex flex-wrap justify-center gap-4">
@@ -314,12 +426,21 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
                   ) : studentParticipants.length > 0 ? studentParticipants.map(p => (
                     <div key={p.user_id} className="flex flex-col items-center gap-2 text-center group">
                       <div className="relative">
-                        <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-border ring-offset-2 ring-offset-card shadow-elevation-small">
+                        <Avatar className={cn("h-14 w-14 md:h-16 md:w-16 ring-2 ring-offset-2 ring-offset-card shadow-elevation-small", p.ready ? "ring-success/60" : "ring-border")}>
                           <AvatarFallback className="text-2xl bg-secondary">{p.avatar || '🎮'}</AvatarFallback>
                         </Avatar>
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-success rounded-full border-2 border-card" />
+                        {p.ready ? (
+                          <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center w-5 h-5 bg-success rounded-full border-2 border-card" title="Ready">
+                            <CheckCircle2 className="w-3 h-3 text-white" />
+                          </span>
+                        ) : (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-muted-foreground/40 rounded-full border-2 border-card" title="Not ready" />
+                        )}
                       </div>
                       <span className="text-xs font-medium max-w-20 truncate">{p.name || p.user_id.slice(0, 8)}</span>
+                      <span className={cn("text-[10px] font-semibold", p.ready ? "text-success" : "text-muted-foreground")}>
+                        {p.ready ? 'READY' : 'NOT READY'}
+                      </span>
                       {isTeacher && p.user_id !== quiz.created_by && (
                         <Button
                           variant="destructive"
@@ -364,11 +485,69 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
         </Card>
 
         {isTeacher && (
+          <Card className="shadow-elevation-small">
+            <CardHeader className="pb-3">
+              <CardTitle className="font-headline flex items-center gap-2.5 text-lg">
+                <ShieldCheck className="w-5 h-5 text-primary" />
+                Battle Configuration
+              </CardTitle>
+              <CardDescription className="text-sm">Configure how this battle starts and how gladiators progress.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between gap-4 rounded-[12px] border border-border/50 p-3.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Require everyone ready</p>
+                  <p className="text-xs text-muted-foreground">Only allow start when every gladiator is ready. {readyCount}/{studentCount} ready.</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={requireAllReady}
+                  aria-label="Require all gladiators ready before starting"
+                  disabled={isUpdatingConfig}
+                  onClick={() => handleRequireAllReadyChange(!requireAllReady)}
+                  className={cn(
+                    "relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200 disabled:opacity-50",
+                    requireAllReady ? "bg-primary" : "bg-muted-foreground/30"
+                  )}
+                >
+                  <span className={cn(
+                    "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-background shadow-elevation-small transition-transform duration-200",
+                    requireAllReady && "translate-x-5"
+                  )} />
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-[12px] border border-border/50 p-3.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Independent mode</p>
+                  <p className="text-xs text-muted-foreground">Each gladiator gets their own timer and question flow. Question order and options are shuffled.</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={independentMode}
+                  aria-label="Enable independent battle mode"
+                  disabled={isUpdatingConfig}
+                  onClick={() => handleModeChange(!independentMode)}
+                  className={cn(
+                    "relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200 disabled:opacity-50",
+                    independentMode ? "bg-primary" : "bg-muted-foreground/30"
+                  )}
+                >
+                  <span className={cn(
+                    "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-background shadow-elevation-small transition-transform duration-200",
+                    independentMode && "translate-x-5"
+                  )} />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {isTeacher && (
           <Button 
             size="lg" 
             className="w-full text-base font-headline font-semibold touch-target" 
             onClick={handleStartQuiz}
-            disabled={studentCount === 0 || areParticipantsLoading || isStarting}
+            disabled={studentCount === 0 || areParticipantsLoading || isStarting || readyGate}
           >
             {isStarting ? <Loader2 className="mr-2.5 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2.5 h-5 w-5" />}
              {isStarting
@@ -377,6 +556,8 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
               ? 'Loading participants...'
               : studentCount === 0 
               ? 'Waiting for gladiators to join...'
+              : readyGate
+              ? `Waiting for ${studentCount - readyCount} more gladiator${studentCount - readyCount !== 1 ? 's' : ''} to be ready...`
                : `Start Battle for ${studentCount} Gladiator${studentCount !== 1 ? 's' : ''}`}
           </Button>
         )}
@@ -390,6 +571,16 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
 
         {!isTeacher && (
           <>
+            <Button
+              size="lg"
+              variant={selfReady ? 'default' : 'outline'}
+              className="w-full text-base font-headline font-semibold touch-target"
+              onClick={handleToggleReady}
+              disabled={isReadyToggling}
+            >
+              {isReadyToggling ? <Loader2 className="mr-2.5 h-5 w-5 animate-spin" /> : selfReady ? <CheckCircle2 className="mr-2.5 h-5 w-5" /> : <Hand className="mr-2.5 h-5 w-5" />}
+              {selfReady ? "Ready! Awaiting the Commander..." : "I'm Ready"}
+            </Button>
             <Button variant="outline" className="w-full" onClick={() => setShowLeaveDialog(true)} disabled={isLeaving}>
               Leave Arena
             </Button>

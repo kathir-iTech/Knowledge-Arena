@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 
@@ -21,6 +22,9 @@ export async function POST(req: NextRequest) {
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const rateLimitResponse = enforceRateLimit(`executive:backup:${auth.uid}`, Limits.EXECUTIVE_EXPORT_PER_USER);
+  if (rateLimitResponse) return rateLimitResponse;
 
   try {
     const db = getAdminDb();

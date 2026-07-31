@@ -1,8 +1,21 @@
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { logAuthFailure } from '@/lib/security-log';
 
 interface AuthResult {
   uid: string;
   email: string | null;
+}
+
+function isRequest(value: unknown): value is Request {
+  return typeof value === 'object' && value !== null && 'headers' in value;
+}
+
+function failureKey(tokenOrRequest: string | Request): string {
+  if (isRequest(tokenOrRequest)) {
+    const forwarded = tokenOrRequest.headers.get('x-forwarded-for');
+    return forwarded ? forwarded : 'unknown-ip';
+  }
+  return 'raw-token';
 }
 
 export async function verifyFirebaseToken(token: string): Promise<AuthResult | null>;
@@ -14,7 +27,10 @@ export async function verifyFirebaseToken(tokenOrRequest: string | Request): Pro
     idToken = tokenOrRequest;
   } else {
     const authHeader = tokenOrRequest.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) return null;
+    if (!authHeader?.startsWith('Bearer ')) {
+      logAuthFailure(`auth:${failureKey(tokenOrRequest)}`, 'missing_bearer_header');
+      return null;
+    }
     idToken = authHeader.slice(7);
   }
 
@@ -24,6 +40,9 @@ export async function verifyFirebaseToken(tokenOrRequest: string | Request): Pro
     const decoded = await getAdminAuth().verifyIdToken(idToken);
     return { uid: decoded.uid, email: decoded.email ?? null };
   } catch {
+    if (typeof tokenOrRequest !== 'string') {
+      logAuthFailure(`auth:${failureKey(tokenOrRequest)}`, 'invalid_token');
+    }
     return null;
   }
 }
@@ -38,7 +57,10 @@ export async function verifyFirebaseTokenWithRole(
     idToken = tokenOrRequest;
   } else {
     const authHeader = tokenOrRequest.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) return null;
+    if (!authHeader?.startsWith('Bearer ')) {
+      logAuthFailure(`auth:${failureKey(tokenOrRequest)}`, 'missing_bearer_header');
+      return null;
+    }
     idToken = authHeader.slice(7);
   }
 
@@ -48,6 +70,9 @@ export async function verifyFirebaseTokenWithRole(
   try {
     decoded = await getAdminAuth().verifyIdToken(idToken);
   } catch {
+    if (typeof tokenOrRequest !== 'string') {
+      logAuthFailure(`auth:${failureKey(tokenOrRequest)}`, 'invalid_token');
+    }
     return null;
   }
 
@@ -55,10 +80,60 @@ export async function verifyFirebaseTokenWithRole(
     const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
     if (!userDoc.exists) return null;
     const role = userDoc.data()?.role;
-    if (role !== requiredRole) return null;
+    if (role !== requiredRole) {
+      if (typeof tokenOrRequest !== 'string') {
+        logAuthFailure(`role:${decoded.uid}`, `role_mismatch:expected_${requiredRole}`);
+      }
+      return null;
+    }
   } catch {
     return null;
   }
 
   return { uid: decoded.uid, email: decoded.email ?? null };
+}
+
+export async function verifyFirebaseTokenWithAnyRole(
+  tokenOrRequest: string | Request,
+  roles: readonly ('executive' | 'commander' | 'gladiator')[],
+): Promise<(AuthResult & { role: string }) | null> {
+  let idToken: string | null = null;
+
+  if (typeof tokenOrRequest === 'string') {
+    idToken = tokenOrRequest;
+  } else {
+    const authHeader = tokenOrRequest.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      logAuthFailure(`auth:${failureKey(tokenOrRequest)}`, 'missing_bearer_header');
+      return null;
+    }
+    idToken = authHeader.slice(7);
+  }
+
+  if (!idToken) return null;
+
+  let decoded;
+  try {
+    decoded = await getAdminAuth().verifyIdToken(idToken);
+  } catch {
+    if (typeof tokenOrRequest !== 'string') {
+      logAuthFailure(`auth:${failureKey(tokenOrRequest)}`, 'invalid_token');
+    }
+    return null;
+  }
+
+  try {
+    const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
+    if (!userDoc.exists) return null;
+    const role = userDoc.data()?.role as string;
+    if (!roles.includes(role as any)) {
+      if (typeof tokenOrRequest !== 'string') {
+        logAuthFailure(`role:${decoded.uid}`, `role_mismatch:allowed_${roles.join('|')}`);
+      }
+      return null;
+    }
+    return { uid: decoded.uid, email: decoded.email ?? null, role };
+  } catch {
+    return null;
+  }
 }
