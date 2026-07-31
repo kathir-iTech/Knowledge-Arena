@@ -249,6 +249,17 @@ export async function evaluateQuestionForUser(
       ? skipped
       : [...skipped, questionId];
 
+    // Idempotency guard: if this question was already scored, timed out or
+    // skipped for this participant, re-evaluating it must not double-apply
+    // score, penalties or index advancement (e.g. on client retry).
+    if (
+      answered.includes(questionId) ||
+      timedOut.includes(questionId) ||
+      skipped.includes(questionId)
+    ) {
+      return;
+    }
+
     if (!skipped.includes(questionId)) {
       const subRef = submissionRef(quizId, questionId, targetUserId);
       const subSnap = await tx.get(subRef);
@@ -369,6 +380,10 @@ export async function evaluateQuestionForAll(
     .get();
 
   await db.runTransaction(async (tx) => {
+    // Re-check the scored flag inside the transaction so two concurrent
+    // evaluations cannot both pass the pre-check and double-score.
+    const scoredSnap = await tx.get(questionRef);
+    if (scoredSnap.data()?.scored === true) return;
     for (const p of partsSnap.docs) {
       const pSnap = await tx.get(p.ref);
       if (!pSnap.exists || pSnap.data()?.status === PS_BLOCKED) continue;
