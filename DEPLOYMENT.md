@@ -1,270 +1,175 @@
-# Knowledge Arena — Deployment Guide
+# Knowledge Arena — Production Deployment Guide
 
-## Prerequisites
+**Applies to:** commit `ff1aec7`+ · Next.js 15 (App Router) · Firebase (Auth, Firestore, Storage) · Genkit/Gemini
 
-- **Node.js** v20+ and **npm** v10+
-- **Firebase project** with the following services enabled:
-  - [Authentication](https://console.firebase.google.com/project/_/authentication) (Email/Password + Google Sign-In)
-  - [Cloud Firestore](https://console.firebase.google.com/project/_/firestore) (native mode)
-  - [Cloud Storage](https://console.firebase.google.com/project/_/storage) (optional, for file uploads)
-- **Google AI API key** from [Google AI Studio](https://aistudio.google.com/app/apikey)
-- **Vercel account** (or alternative hosting supporting Node.js standalone output)
-- **GitHub repository** (for CI/CD)
+This guide covers everything needed to run Knowledge Arena in production: environment configuration, Firebase setup, hosting, and the operational checklists (production, security, monitoring, backup, disaster recovery, rollback).
 
 ---
 
-## Firebase Configuration
+## 1. Required Environment Variables
 
-### 1. Create a Firebase Project
+Copy `.env.example` → `.env` (deployment platform) or `.env.local` (local dev). **Never commit the real values.**
 
-1. Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project (or use an existing one).
-2. Enable **Authentication** with **Email/Password** and **Google** sign-in providers.
-3. Create a **Cloud Firestore** database in native mode.
-4. (Optional) Enable **Cloud Storage**.
+| Variable | Scope | Required | Purpose |
+|---|---|---|---|
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | client | Yes | Firebase Auth domain; must match the project's auth domain (custom domain supported) |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | client | Yes* | Storage bucket for attachments (set to `<project>.appspot.com`; only needed if attachments used) |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | server | One of 3 | Service account JSON as a single-line string |
+| `SERVICE_ACCOUNT_PATH` | server | One of 3 | Filesystem path to a service account JSON |
+| *(none — fallback)* | server | — | `service-account.json` in the project root, or Application Default Credentials |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | server | Yes | Gemini API key — used by AI Forge (PDF/quiz generation) and read directly by the workspace health check |
 
-### 2. Get Firebase Client Config
-
-In Firebase Console → Project Settings → General → Your apps → Web app:
-
-```javascript
-const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef..."
-};
-```
-
-Update `src/firebase/config.ts` with these values.
-
-### 3. Generate a Service Account Key
-
-Firebase Console → Project Settings → Service Accounts → Generate new private key.
-
-This downloads a JSON file. **Minify it to a single line** and set it as the `FIREBASE_SERVICE_ACCOUNT_KEY` environment variable.
-
-### 4. Deploy Firestore Security Rules & Indexes
-
-```bash
-npm install -g firebase-tools
-firebase login
-firebase use --add
-firebase deploy --only firestore
-```
-
-This deploys:
-- `firestore.rules` — security rules
-- `firestore.indexes.json` — composite indexes
-
-If you change the `.firebaserc` project ID, also update `firebaseConfig.projectId` in `src/firebase/config.ts`.
-
-### 5. (Optional) Deploy Storage Rules
-
-```bash
-firebase deploy --only storage
-```
+The Firebase **client config** (project id, API key, app id, sender id) is embedded in `src/firebase/config.ts`; the API key is public by design (Firebase client keys are not secrets).
 
 ---
 
-## Environment Variables
+## 2. Firebase Configuration
 
-Create a `.env.production` file (or set in Vercel dashboard):
+### 2.1 Project setup (one-time)
 
-```bash
-# Required: Google AI API key
-GOOGLE_GENERATIVE_AI_API_KEY=your-key-here
+1. Create/enable the Firebase project. Current config references `studio-4092189688-c74a7`; for a fresh project, update `src/firebase/config.ts` (projectId, appId, apiKey, messagingSenderId).
+2. **Authentication**: enable Email/Password and Google sign-in. Set the auth domain (custom domains supported via `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`).
+3. **Firestore**: deploy rules and indexes:
+   ```bash
+   firebase deploy --only firestore:rules
+   firebase deploy --only firestore:indexes
+   ```
+   Rules live in `firestore.rules` (validated transition map, role-based access, server-only writes for all log collections). Indexes live in `firestore.indexes.json` (11 composite indexes + participants `user_id` collection-group override). Check index status in the console and wait for "Enabled" before release — queries fail until indexes build.
+4. **Storage**: deploy `storage.rules` (`firebase deploy --only storage`).
+5. **Service account**: create one in *Project Settings → Service Accounts* (Firebase Admin SDK), download the JSON, and provide it via one of the three mechanisms above. Grant it the minimum roles (Firestore, Auth Admin, Storage as needed).
 
-# Required for production: Firebase Admin service account key (minified JSON, single line)
-FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"..."}
+### 2.2 Accounts bootstrap
 
-# Optional: Custom auth domain for same-domain OAuth redirects
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-custom-domain.com
-
-# Optional: Firebase Storage bucket
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-```
-
-See [ENVIRONMENT.md](./ENVIRONMENT.md) for detailed descriptions.
-
----
-
-## Build & Deploy to Vercel
-
-### Option A: Vercel Dashboard (Recommended)
-
-1. Push your repository to GitHub.
-2. Go to [vercel.com](https://vercel.com) and import your GitHub repository.
-3. Configure the project:
-   - **Framework Preset:** Next.js
-   - **Root Directory:** `./`
-   - **Build Command:** `npm run build`
-   - **Output Directory:** `.next`
-4. Add all environment variables from `.env.production` in Vercel's **Environment Variables** section.
-5. Click **Deploy**.
-
-### Option B: Vercel CLI
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Login
-vercel login
-
-# Deploy to production
-vercel --prod
-
-# Add environment variables
-vercel env add GOOGLE_GENERATIVE_AI_API_KEY
-vercel env add FIREBASE_SERVICE_ACCOUNT_KEY
-# ... etc
-```
-
-### Option C: Docker
-
-The project includes a `Dockerfile` for containerized deployment:
-
-```bash
-# Build the Docker image
-docker build -t knowledge-arena .
-
-# Run the container
-docker run -p 3000:3000 \
-  -e GOOGLE_GENERATIVE_AI_API_KEY=your-key \
-  -e FIREBASE_SERVICE_ACCOUNT_KEY='{"..."}' \
-  knowledge-arena
-```
+There is **no self-signup for staff**: 
+- **Gladiators** self-register via Google sign-in (profile auto-created with `role: 'gladiator'`).
+- **Commanders** are created via the executive's admin panel (`/executive` → Admin → `/api/admin/users`, server-side Admin SDK `createUser`).
+- **Executives** are created with the bootstrap script:
+  ```bash
+  npx tsx scripts/bootstrap-executive.ts
+  ```
+- All staff accounts are subject to the force-password-change gate on first login. Emails ending in `@knowledgearena.app` are treated as staff (`STAFF_EMAIL_DOMAIN`).
 
 ---
 
-## Vercel Configuration Notes
+## 3. Hosting Recommendations
 
-### next.config.ts
+The app is a **Node.js server** (API routes + server actions + Genkit flows). `next.config.ts` emits `output: 'standalone'`, so it runs as a plain Node process.
 
-Key settings already configured:
-- `output: 'standalone'` — Enables standalone deployment (required for Docker, optional for Vercel)
-- `experimental.serverActions.bodySizeLimit: '20mb'` — Allows large PDF uploads
-- Security headers (HSTS, X-Frame-Options, etc.)
-- Firebase Auth rewrite: `__/:path*` → `firebaseapp.com/__/:path*`
+> ⚠️ **Do not use Firebase Hosting static hosting.** The `hosting` block in `firebase.json` (`public: ".next"`, SPA rewrites) is a Firebase Studio export artifact and does not fit this app — there is no static export, and API routes require a server. Use it only as a CDN edge in front of Cloud Run if desired.
 
-### Serverless Function Region
+### Option A — Google Cloud Run (recommended)
 
-If your Firestore database is in a specific region, set the Vercel project's **Functions Region** to the same or nearest region in Vercel Project Settings → Functions.
+1. `npm ci && npm run build` (produces `.next/standalone`).
+2. Containerize with a minimal image (example):
+   ```dockerfile
+   FROM node:22-slim AS runner
+   WORKDIR /app
+   ENV NODE_ENV=production PORT=8080
+   COPY --from=build /app/.next/standalone ./
+   COPY --from=build /app/.next/static ./.next/static
+   COPY --from=build /app/public ./public
+   EXPOSE 8080
+   CMD ["node", "server.js"]
+   ```
+   (Turbopack dev-only; production uses the standalone server. If PDF parsing needs native binaries, build on the platform or use `--platform=linux/amd64`.)
+3. Deploy:
+   ```bash
+   gcloud builds submit --tag gcr.io/<project>/knowledge-arena
+   gcloud run deploy knowledge-arena --image gcr.io/<project>/knowledge-arena \
+     --region <region> --allow-unauthenticated \
+     --cpu 1 --memory 1Gi --min-instances 0 --max-instances 10 \
+     --set-env-vars "GOOGLE_GENERATIVE_AI_API_KEY=...,FIREBASE_SERVICE_ACCOUNT_KEY=..."
+   ```
+4. Set `NEXT_PUBLIC_*` variables via the platform (server values are read at runtime; the client bundle embeds public ones at build time — rebuild on change).
 
-### Build Settings
+### Option B — Vercel
 
-| Setting | Value |
+1. Import the repo; add all variables from §1 (public and private).
+2. Framework preset: Next.js. `output: 'standalone'` is ignored on Vercel (their runtime handles it).
+3. `getClientIp` prefers `x-vercel-forwarded-for` automatically.
+
+### Option C — Traditional VM / Node host
+
+Standalone build + a process manager (systemd/pm2) + a reverse proxy (nginx/Caddy). Recommended proxy hardening:
+- Terminate TLS, forward `X-Forwarded-For`/`X-Forwarded-Proto`.
+- **Strip inbound `X-Forwarded-For` at the edge** so clients cannot spoof the last hop used by the rate limiter (`getClientIp`).
+- Set `server_tokens off` / hide framework headers.
+
+---
+
+## 4. Production Checklist
+
+- [ ] All 5 env vars set; `GOOGLE_GENERATIVE_AI_API_KEY` verified with a test generation
+- [ ] `firebase deploy --only firestore:rules,firestore:indexes,storage` succeeded and indexes show **Enabled**
+- [ ] At least one executive bootstrapped (`scripts/bootstrap-executive.ts`) and one commander created
+- [ ] `npm ci && npm run build` passes on a clean machine with network access
+- [ ] Smoke test: login (staff + gladiator Google), create arena, join, start→activate→evaluate→end→archive
+- [ ] Attachment upload + PDF import (< 10 MB) works against real Storage/Firestore
+- [ ] Custom auth domain resolves (`NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` + `firebase.json` hosting rewrites for `/__/*` if using Firebase Auth on a custom domain)
+- [ ] Health check: `/api/executive/workspace` reports Gemini key + storage bucket present
+- [ ] CDN caching rules as intended (static assets immutable, HTML revalidated)
+- [ ] Rollback plan known (see §9)
+
+---
+
+## 5. Security Checklist
+
+- [ ] **Secrets**: service account + API key never committed; rotate quarterly; restrict IAM on the service account
+- [ ] **Rules audit**: `firestore.rules` deployed and reviewed — client writes only where allowed (participants, submissions, messages, battle logs self-authored); all log collections are server-write-only
+- [ ] **Rate limits active**: 34 call sites across 29 routes (battle 30/min, messages 20/min, writes 15/min, admin 10/IP, exports 5/min, AI 10/min). Note: the limiter is in-memory — per-warm-instance on scaled platforms (see §6 for the follow-up)
+- [ ] **Auth**: every API route verifies the Bearer ID token + role (`verifyFirebaseTokenWithRole`); Firestore rules enforce roles per request; password change forced for staff accounts
+- [ ] **Headers**: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, HSTS, `Permissions-Policy` served by `next.config.ts`
+- [ ] **Monitoring alerts** on `security_logs` growth and 401/429 spikes (see §7)
+- [ ] Session timeout (30 min) and force-password-change enabled (client gates — documented limitation, see report)
+- [ ] Storage rules restrict uploads to expected types/sizes and ownership
+
+---
+
+## 6. Monitoring Checklist
+
+- [ ] **Logs**: Next.js/Cloud Run logs stream `console` output; API routes log domain errors via `battleErrorResponse`, audit events via `/api/audit/log`, security events via `security_logs`, AI runs via `ai_logs`, battle events via `battle_logs`
+- [ ] **Dashboards**: executive pages — Security Logs (`/executive/security`), AI Logs (`/executive/ai-logs`), Audit Logs, System Insights (30-day AI + security metrics)
+- [ ] **Metrics to watch**: request error rate (5xx), 429 rate-limit responses, Firestore reads/writes per minute, egress (PDF imports), Gemini quota errors (`quota_exceeded`), index usage
+- [ ] **Alerting** (recommendations): 5xx > 1% over 5 min; 429 spike (potential abuse); `security_logs` violation rate > threshold; Gemini 429s (quota exhaustion); service account key expiry; Firestore cost > budget
+- [ ] **Optional**: Sentry/ErrorBoundary integration for client/server exception tracking (no APM currently wired — see Roadmap)
+- [ ] Uptime check on the public homepage (e.g., Cloud Monitoring synthetic probe)
+
+---
+
+## 7. Backup Recommendations
+
+Firestore's managed backups (console or `firestore backups` CLI) are the primary mechanism:
+
+- Enable **continuous (PITR)** backups for the last 7 days; take **scheduled daily** full backups with 30–365 day retention.
+- Scope: all collections (users, quizzes + subcollections, logs).
+- Export manually before any destructive release (rules/index changes, migrations):
+  ```bash
+  gcloud firestore export gs://<bucket>/backups/YYYY-MM-DD --project <project>
+  ```
+- Store backups in a **different region** than the primary database.
+- Verify restoration **regularly** (test restore into a scratch project).
+- Storage: enable versioning + lifecycle rules; Gemini/Auth data (accounts) live in Firebase — no export needed but document the console export path.
+
+---
+
+## 8. Disaster Recovery Recommendations
+
+| Scenario | Response |
 |---|---|
-| Node.js Version | 20.x |
-| Build Command | `npm run build` |
-| Output Directory | `.next` |
-| Install Command | `npm ci` |
+| Database corruption / bad migration | Restore latest backup into the same project (or a scratch project); point app at restored data via service-account switch or DNS |
+| Regional outage | If multi-region Firestore isn't enabled, use the latest cross-region backup export to re-import into a second project; keep a warm container image |
+| Gemini quota/outage | AI routes degrade gracefully (fallback chain, per-model retries, `quota_exceeded`/`all_models_failed` errors surfaced to UI); battle engine is AI-independent and unaffected |
+| Service account compromise | Revoke/rotate key immediately (`firebase projects` / IAM), re-issue, redeploy; check `security_logs` + audit logs |
+| Abuse/attack | Rate limits (in-memory) + `security_logs` provide visibility; scale down max instances; block via CDN rules; revert to previous deploy |
 
-### Environment Variables in Vercel
-
-Add these to **Vercel Project Settings → Environment Variables**:
-
-| Name | Scope | Value |
-|---|---|---|
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Production | Your Google AI API key |
-| `FIREBASE_SERVICE_ACCOUNT_KEY` | Production | Minified service account JSON |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Production | Your custom domain (if used) |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Production | Your storage bucket URL |
-
-All `NEXT_PUBLIC_*` variables are also needed in **Preview** and **Development** environments if you deploy preview branches.
+**RTO/RPO targets (recommended):** RPO ≤ 24 h (daily backups) or ≤ 5 min (PITR); RTO ≤ 4 h for single-project restore (backup export → import), ≤ 1 h for redeploy from image.
 
 ---
 
-## Post-Deployment Verification
+## 9. Rollback Strategy
 
-### 1. Health Check
-
-Navigate to your deployed URL. The executive workspace (`/executive`) contains a **system health** panel that verifies:
-- ✅ Firebase Auth connectivity and latency
-- ✅ Firestore read/write access and latency
-- ✅ Messaging collections accessibility
-- ✅ AI API key presence
-- ✅ Firebase Storage bucket configuration
-
-### 2. Test Authentication
-
-1. Open the landing page.
-2. Sign in with a pre-configured Executive or Commander account (email/password).
-3. Verify role-based redirects:
-   - Executive → `/executive`
-   - Commander → `/commander`
-   - Gladiator → `/gladiator` (via Google Sign-In)
-
-### 3. Test Quiz Creation & Battle
-
-1. Sign in as a Commander.
-2. Create a quiz manually or use the AI PDF Forge.
-3. Share the room code with a Gladiator account.
-4. Start the battle and verify real-time question delivery.
-5. Submit answers and verify scoring.
-6. End the battle and verify the leaderboard.
-
-### 4. Test Analytics
-
-1. Sign in as an Executive.
-2. Navigate to the analytics dashboard.
-3. Verify chart data is populated.
-4. Test CSV/HTML export.
-
-### 5. Verify Rate Limiting
-
-Attempt multiple rapid logins to verify the rate limiter returns `429` status.
-
----
-
-## Troubleshooting
-
-### "Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY is not set"
-
-Ensure `FIREBASE_SERVICE_ACCOUNT_KEY` is set in Vercel environment variables (not `.env.local`). The value must be a single-line, minified JSON string.
-
-### "Service account project does not match client project"
-
-The project ID in your service account key must match `projectId` in `src/firebase/config.ts`. Verify both are the same Firebase project.
-
-### "AI generation failed"
-
-- Check that `GOOGLE_GENERATIVE_AI_API_KEY` is set and valid.
-- Verify the Gemini API is enabled in [Google Cloud Console](https://console.cloud.google.com/apis/library).
-- Check rate limits: PDF Forge allows 5 requests/minute per user.
-
-### "401 Unauthorized" on API calls
-
-- Ensure the Firebase ID token is included in the `Authorization: Bearer <token>` header.
-- Verify the user has the required role in their Firestore user document.
-- Tokens expire after 1 hour; the client should refresh them automatically.
-
-### Firestore permission denied
-
-- Check `firestore.rules` are deployed: `firebase deploy --only firestore`
-- Verify the authenticated user has the correct role matching the rules.
-
----
-
-## CI/CD Pipeline
-
-The project is designed for GitHub + Vercel continuous deployment:
-
-1. Push to `main` triggers an automatic Vercel deployment.
-2. Environment variables are injected by Vercel.
-3. Preview deployments are created for PR branches.
-4. Pre-deploy checks: `npm run lint` + `npm run typecheck` are run in your CI.
-
----
-
-## Security Checklist
-
-- [ ] `GOOGLE_GENERATIVE_AI_API_KEY` is restricted to your app's referrer in Google AI Studio
-- [ ] Firestore security rules are deployed and restrict access by role
-- [ ] Firebase Auth email/password sign-in is configured (not anonymous)
-- [ ] CORS is not over-permissive (Next.js API routes handle this)
-- [ ] File upload MIME type validation is active
-- [ ] Rate limiting is enforced for auth and AI endpoints
-- [ ] HSTS headers are enabled via `next.config.ts`
+1. **Immutable deploys**: every release is a new image/build artifact (Cloud Run revision, Vercel immutable deploy). Rollback = point traffic at the previous revision/deploy — no code revert needed.
+2. **Pre-flight check before rollback**: run the previous artifact's health check (`/api/executive/workspace`) against production env vars (env vars are shared — keep them backwards compatible, add-only).
+3. **Data compatibility**: the schema is additive in practice (new fields have defaults via `??` reads). If a release introduced schema migrations, rollback the **code first**, then leave data in place (reads tolerate missing fields).
+4. **Firestore rules/indexes**: deploy rules independently from code. If new rules break clients, deploy the previous `firestore.rules` immediately (index rollback is destructive — only roll back indexes if the new index caused a cost incident).
+5. **Full revert**: `git revert <sha>` is only needed for source-level fixes; image/revision rollback is the standard path.
