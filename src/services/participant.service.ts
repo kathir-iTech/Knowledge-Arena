@@ -59,8 +59,9 @@ export const participantService = {
     const quizRef = doc(db, COLLECTIONS.QUIZZES, quizId);
     await runTransaction(db, async (transaction) => {
       const quizSnap = await transaction.get(quizRef);
-      if (!quizSnap.exists) throw new Error('Quiz not found');
-      if (quizSnap.data().status !== QUIZ_WAITING && quizSnap.data().status !== 'ready') {
+      const quizData = quizSnap.data();
+      if (!quizSnap.exists || !quizData) throw new Error('Quiz not found');
+      if (quizData.status !== QUIZ_WAITING && quizData.status !== 'ready') {
         throw new Error('This battle has already started. Late joining is not permitted.');
       }
 
