@@ -278,7 +278,7 @@ export function AnalyticsDashboard() {
       )}
 
       <QuizOverviewCards overview={data.overview} />
-      <SystemInsightsSection getToken={() => auth.currentUser?.getIdToken() ?? null} />
+      <SystemInsightsSection getToken={async () => auth.currentUser?.getIdToken() ?? null} />
       <StudentAnalyticsSection students={data.students} />
       <QuestionAnalyticsSection questions={data.questions} />
       <QuizAnalyticsSection quizzes={data.quizzes} />
