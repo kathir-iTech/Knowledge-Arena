@@ -361,7 +361,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
     return result;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[Forge] Fatal error:', msg);
+    console.error('[Forge] Fatal error:', msg, '\n', err instanceof Error ? err.stack : '');
     const durationMs = Date.now() - startTime;
     aiLogService.record({
       userId: 'unknown',
