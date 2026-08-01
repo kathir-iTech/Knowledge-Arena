@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 
 const PDFQuizGenerator = dynamic(() => import('@/components/quiz/PDFQuizGenerator').then(m => m.PDFQuizGenerator), { ssr: false });
 const ExecutiveQuestionReviewPanel = dynamic(() => import('@/components/quiz/ExecutiveQuestionReviewPanel').then(m => m.ExecutiveQuestionReviewPanel), { ssr: false });
+const QuestionBankManager = dynamic(() => import('@/components/quiz/QuestionBankManager').then(m => m.QuestionBankManager), { ssr: false });
 
 interface GeneratedQuestion {
   text: string;
@@ -27,6 +28,7 @@ export default function QuestionBankPage() {
   const [forgeDifficulty, setForgeDifficulty] = useState('');
   const [forgeCategory, setForgeCategory] = useState('General');
   const [showForgeWithPreserved, setShowForgeWithPreserved] = useState(false);
+  const [listRefreshKey, setListRefreshKey] = useState(0);
   const forgeParams = useRef<{ pdfDataUri: string; diff: 'easy' | 'moderate' | 'hard'; count: number } | null>(null);
 
   const handleQuestionsGenerated = (qList: GeneratedQuestion[], diff: string, dataUri?: string, questionCount?: number, category?: string) => {
@@ -88,6 +90,7 @@ export default function QuestionBankPage() {
     setGeneratedQuestions(null);
     setShowForgeWithPreserved(false);
     forgeParams.current = null;
+    setListRefreshKey(k => k + 1);
   };
 
   return (
@@ -161,6 +164,14 @@ export default function QuestionBankPage() {
             </Suspense>
           </div>
         )}
+
+        <div className={cn('mt-8 md:mt-10', generatedQuestions && !showForgeWithPreserved ? 'hidden' : '')}>
+          <Suspense fallback={
+            <div className="h-64 bg-secondary/10 rounded-xl animate-pulse" />
+          }>
+            <QuestionBankManager refreshKey={listRefreshKey} />
+          </Suspense>
+        </div>
       </div>
     </div>
   );
