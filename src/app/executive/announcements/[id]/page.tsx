@@ -10,8 +10,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import {
   Megaphone, CheckCircle2, AlertTriangle, RefreshCw, Users, User, Clock,
+  ArrowLeft, Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 interface AnnouncementDetail {
   id: string;
@@ -36,6 +38,7 @@ function formatDate(ts?: number | null): string {
 export default function ExecutiveAnnouncementDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { user } = useAuth();
   const { auth } = useFirebase();
+  const router = useRouter();
   const [announcement, setAnnouncement] = useState<AnnouncementDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,15 +109,28 @@ export default function ExecutiveAnnouncementDetailPage({ params }: { params: Pr
   return (
     <div className="page-container animate-in space-y-6 safe-bottom">
       {/* Header */}
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-3">
-          <h1 className="text-page-title font-headline tracking-tight">Announcement</h1>
-          <Badge variant="outline" className="text-[10px] h-5">{announcement.readCount ?? 0} read</Badge>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Button variant="ghost" size="icon" onClick={() => router.push('/executive/announcements')} aria-label="Back to announcements" className="shrink-0">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-3">
+              <h1 className="text-page-title font-headline tracking-tight">Announcement</h1>
+              <Badge variant="outline" className="text-[10px] h-5 shrink-0">
+                <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" />
+                {announcement.readCount ?? 0} read
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Sent by {announcement.sender?.name || 'Unknown'} · {formatDate(announcement.createdAt)}
+              {announcement.editedAt ? ` · edited ${formatDate(announcement.editedAt)}` : ''}
+            </p>
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Sent by {announcement.sender?.name || 'Unknown'} · {formatDate(announcement.createdAt)}
-          {announcement.editedAt ? ` · edited ${formatDate(announcement.editedAt)}` : ''}
-        </p>
+        <Button variant="outline" onClick={fetchAnnouncement} disabled={loading}>
+          <RefreshCw className="w-4 h-4 mr-2" /> Refresh
+        </Button>
       </div>
 
       {/* Message */}
@@ -126,21 +142,27 @@ export default function ExecutiveAnnouncementDetailPage({ params }: { params: Pr
         </CardHeader>
         <CardContent className="pt-4">
           <div className="flex items-start gap-3">
-            <div className="shrink-0 w-9 h-9 rounded-[10px] bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center">
-              <Megaphone className="w-4 h-4 text-orange-600" />
+            <div className="shrink-0 w-10 h-10 rounded-[12px] bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center">
+              <Megaphone className="w-5 h-5 text-orange-600" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-base whitespace-pre-wrap">{announcement.text || 'No message text'}</p>
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <Badge variant="outline" className="text-[10px]">
-                  <Users className="w-3 h-3 mr-1" /> Target: {targetLabel}
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <Badge variant="outline" className="text-[10px] gap-1.5">
+                  <Send className="w-3 h-3 text-primary" /> {announcement.sender?.name || 'Unknown'}
+                </Badge>
+                <Badge variant="outline" className="text-[10px] gap-1.5">
+                  <Users className="w-3 h-3 text-primary" /> Target: {targetLabel}
                 </Badge>
                 {announcement.targetRole === 'specific' && announcement.targetCommander && (
-                  <Badge variant="outline" className="text-[10px]">
-                    <User className="w-3 h-3 mr-1" /> {announcement.targetCommander.name}
+                  <Badge variant="outline" className="text-[10px] gap-1.5">
+                    <User className="w-3 h-3 text-primary" /> {announcement.targetCommander.name}
                   </Badge>
                 )}
+                <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-1 ml-auto">
+                  <Clock className="w-3 h-3" /> Sent {formatDate(announcement.createdAt)}
+                </span>
               </div>
+              <p className="text-base whitespace-pre-wrap leading-relaxed">{announcement.text || 'No message text'}</p>
             </div>
           </div>
         </CardContent>
@@ -167,11 +189,6 @@ export default function ExecutiveAnnouncementDetailPage({ params }: { params: Pr
             </div>
           ) : (
             <EmptyState icon={CheckCircle2} title="No Read Receipts" description="No commanders have read this announcement yet." />
-          )}
-          {announcement.createdAt && (
-            <p className="text-[10px] text-muted-foreground font-mono flex items-center gap-1 mt-3">
-              <Clock className="w-3 h-3" /> Sent {formatDate(announcement.createdAt)}
-            </p>
           )}
         </CardContent>
       </Card>

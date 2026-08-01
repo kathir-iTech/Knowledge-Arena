@@ -4,6 +4,21 @@ import { getAdminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs';
 
+// Runs a helper and degrades to a fallback value instead of ever 500ing.
+// Errors are logged with a stack so the exact failing query can be found.
+async function safeQuery<T>(
+  label: string,
+  run: () => Promise<T>,
+  fallback: T
+): Promise<T> {
+  try {
+    return await run();
+  } catch (err: any) {
+    console.error(`[BattleDetail GET] ${label} failed, degrading gracefully:`, err?.name, err?.message, '\n', err?.stack);
+    return fallback;
+  }
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = await verifyFirebaseTokenWithRole(req, 'executive');
@@ -31,17 +46,36 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    // Questions + answer keys
-    const [questionsSnap, keysSnap] = await Promise.all([
-      quizRef.collection('questions').orderBy('sort_index', 'asc').get(),
-      quizRef.collection('answerKeys').get(),
+    // Questions + answer keys. Questions are ordered by sort_index; legacy
+    // quizzes created before sort_index existed can lack the automatic
+    // single-field index, which makes the ordered query fail with
+    // FAILED_PRECONDITION. Fall back to an unordered fetch + in-memory sort.
+    const [questionsDocs, keysDocs] = await Promise.all([
+      safeQuery(
+        'questions',
+        async () => {
+          try {
+            const snap = await quizRef.collection('questions').orderBy('sort_index', 'asc').get();
+            return snap.docs;
+          } catch (err: any) {
+            if (err?.code !== 'FAILED_PRECONDITION') throw err;
+            console.warn('[BattleDetail GET] questions sort_index index missing, falling back to in-memory sort:', err?.message);
+            const snap = await quizRef.collection('questions').get();
+            const docs = snap.docs.slice();
+            docs.sort((a, b) => (a.data().sort_index ?? Number.MAX_SAFE_INTEGER) - (b.data().sort_index ?? Number.MAX_SAFE_INTEGER));
+            return docs;
+          }
+        },
+        [] as FirebaseFirestore.QueryDocumentSnapshot[]
+      ),
+      safeQuery('answerKeys', async () => (await quizRef.collection('answerKeys').get()).docs, [] as FirebaseFirestore.QueryDocumentSnapshot[]),
     ]);
     const keys = new Map<string, number>();
-    keysSnap.docs.forEach(k => {
+    keysDocs.forEach(k => {
       const idx = k.data().correct_option_index;
       if (typeof idx === 'number') keys.set(k.id, idx);
     });
-    const questions = questionsSnap.docs.map(d => {
+    const questions = questionsDocs.map(d => {
       const data = d.data();
       const correctIndex = keys.get(d.id);
       return {
@@ -55,9 +89,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       };
     });
 
-    // Participants + submissions
-    const participantsSnap = await quizRef.collection('participants').get();
-    const participantPromises = participantsSnap.docs.map(async p => {
+    // Participants + submissions. Submissions are read per participant in
+    // parallel (one failed sub-read cannot fail the whole request).
+    const participantDocs = await safeQuery('participants', async () => (await quizRef.collection('participants').get()).docs, [] as FirebaseFirestore.QueryDocumentSnapshot[]);
+    const participantPromises = participantDocs.map(async p => {
       const data = p.data();
       const userId = data.user_id || p.id;
       const submissions: Array<{ questionId: string | null; selectedOption: number | null; submittedAt: number | null }> = [];
@@ -109,13 +144,30 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const participants = await Promise.all(participantPromises);
     const leaderboard = [...participants].sort((a, b) => b.score - a.score);
 
-    // Battle logs timeline
-    const battleLogsSnap = await db.collection('battle_logs')
-      .where('quizId', '==', id)
-      .orderBy('createdAt', 'desc')
-      .limit(200)
-      .get();
-    const timeline = battleLogsSnap.docs.map(d => {
+    // Battle logs timeline. battle_logs are written with a numeric `timestamp`
+    // (plus a serverTimestamp `createdAt`). Query by quizId + timestamp desc;
+    // if the composite index has not been deployed yet, fall back to an
+    // equality-only fetch and sort in memory.
+    let battleLogsSnap: FirebaseFirestore.QuerySnapshot;
+    try {
+      battleLogsSnap = await db.collection('battle_logs')
+        .where('quizId', '==', id)
+        .orderBy('timestamp', 'desc')
+        .limit(200)
+        .get();
+    } catch (err: any) {
+      if (err?.code !== 'FAILED_PRECONDITION') throw err;
+      console.warn('[BattleDetail GET] battle_logs index missing, falling back to in-memory sort:', err?.message);
+      battleLogsSnap = await db.collection('battle_logs')
+        .where('quizId', '==', id)
+        .get();
+      battleLogsSnap.docs.sort((a, b) => {
+        const ta = typeof a.data().timestamp === 'number' ? a.data().timestamp : a.data().createdAt?.toMillis?.() ?? 0;
+        const tb = typeof b.data().timestamp === 'number' ? b.data().timestamp : b.data().createdAt?.toMillis?.() ?? 0;
+        return tb - ta;
+      });
+    }
+    const timeline = battleLogsSnap.docs.slice(0, 200).map(d => {
       const data = d.data();
       return {
         id: d.id,
@@ -184,7 +236,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
   } catch (err: any) {
-    console.error('[BattleDetail GET] Error:', err?.name, err?.message);
+    console.error('[BattleDetail GET] Error:', err?.name, err?.message, '\n', err?.stack);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

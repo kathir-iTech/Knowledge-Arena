@@ -1,8 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
+import type { Firestore, Query } from 'firebase-admin/firestore';
 
 export const runtime = 'nodejs';
+
+// Runs an ordered query first. If the composite index is not deployed yet,
+// Firestore fails with FAILED_PRECONDITION; we then fall back to an
+// equality-only query (which only needs automatic single-field indexes)
+// and sort in memory. This keeps the detail pages working even before
+// the indexes declared in firestore.indexes.json are deployed.
+interface RecentDoc {
+  id: string;
+  data: FirebaseFirestore.DocumentData;
+}
+
+async function queryRecent(
+  db: Firestore,
+  buildOrdered: () => Query,
+  buildUnordered: () => Query,
+  sortValue: (data: FirebaseFirestore.DocumentData) => number,
+  cap: number
+): Promise<RecentDoc[]> {
+  try {
+    const snap = await buildOrdered().limit(cap).get();
+    return snap.docs.map(d => ({ id: d.id, data: d.data() }));
+  } catch (err: any) {
+    if (err?.code !== 'FAILED_PRECONDITION') throw err;
+    console.warn('[UserDetail GET] Composite index missing, falling back to in-memory sort:', err?.message);
+    const snap = await buildUnordered().get();
+    return snap.docs
+      .map(d => ({ id: d.id, data: d.data() }))
+      .sort((a, b) => (sortValue(b.data) || 0) - (sortValue(a.data) || 0))
+      .slice(0, cap);
+  }
+}
+
+// Runs a helper and degrades to a fallback value instead of ever 500ing.
+// Errors are logged with a stack so the exact failing query can be found.
+async function safeQuery<T>(
+  label: string,
+  run: () => Promise<T>,
+  fallback: T
+): Promise<T> {
+  try {
+    return await run();
+  } catch (err: any) {
+    console.error(`[UserDetail GET] ${label} failed, degrading gracefully:`, err?.name, err?.message, '\n', err?.stack);
+    return fallback;
+  }
+}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ uid: string }> }) {
   try {
@@ -30,34 +77,65 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
       authInfo = { exists: false };
     }
 
-    // Audit trail, security events, notifications (may not exist for this uid)
-    const [auditSnap, securitySnap, notificationsSnap, aiLogsSnap, battleLogsSnap] = await Promise.all([
-      db.collection('auditLogs').where('actor', '==', uid).orderBy('timestamp', 'desc').limit(100).get(),
-      db.collection('security_logs').where('actor', '==', uid).orderBy('createdAt', 'desc').limit(100).get(),
-      db.collection('notifications').where('userId', '==', uid).orderBy('createdAt', 'desc').limit(100).get(),
-      db.collection('ai_logs').where('userId', '==', uid).orderBy('createdAt', 'desc').limit(50).get(),
-      db.collection('battle_logs').where('actor', '==', uid).orderBy('createdAt', 'desc').limit(100).get(),
+    // Audit trail, security events, notifications (may not exist for this uid).
+    // Each query falls back to an unordered fetch + in-memory sort when the
+    // composite index has not been deployed yet, so a missing index can never
+    // take the whole profile page down.
+    const [auditSnap, securitySnap, notificationsSnap, aiLogsSnap, battleLogsSnap] = await Promise.allSettled([
+      queryRecent(
+        db,
+        () => db.collection('auditLogs').where('actor', '==', uid).orderBy('timestamp', 'desc'),
+        () => db.collection('auditLogs').where('actor', '==', uid),
+        d => (typeof d.timestamp === 'number' ? d.timestamp : 0),
+        100
+      ),
+      queryRecent(
+        db,
+        () => db.collection('security_logs').where('actor', '==', uid).orderBy('createdAt', 'desc'),
+        () => db.collection('security_logs').where('actor', '==', uid),
+        d => d.createdAt?.toMillis?.() ?? d.timestamp ?? 0,
+        100
+      ),
+      queryRecent(
+        db,
+        () => db.collection('notifications').where('userId', '==', uid).orderBy('createdAt', 'desc'),
+        () => db.collection('notifications').where('userId', '==', uid),
+        d => d.createdAt?.toMillis?.() ?? 0,
+        100
+      ),
+      queryRecent(
+        db,
+        () => db.collection('ai_logs').where('userId', '==', uid).orderBy('createdAt', 'desc'),
+        () => db.collection('ai_logs').where('userId', '==', uid),
+        d => d.createdAt?.toMillis?.() ?? 0,
+        50
+      ),
+      queryRecent(
+        db,
+        () => db.collection('battle_logs').where('actor', '==', uid).orderBy('timestamp', 'desc'),
+        () => db.collection('battle_logs').where('actor', '==', uid),
+        d => (typeof d.timestamp === 'number' ? d.timestamp : d.createdAt?.toMillis?.() ?? 0),
+        100
+      ),
     ]);
 
-    const auditTrail = auditSnap.docs.map(d => {
-      const data = d.data();
-      return { id: d.id, timestamp: data.timestamp, actor: data.actor, actorRole: data.actorRole, action: data.action, target: data.target, metadata: data.metadata || {} };
+    const unwrap = <T>(result: PromiseSettledResult<T[]>, fallback: T[]): T[] =>
+      result.status === 'fulfilled' ? result.value : fallback;
+
+    const auditTrail = unwrap(auditSnap, []).map(({ id, data }) => {
+      return { id, timestamp: data.timestamp, actor: data.actor, actorRole: data.actorRole, action: data.action, target: data.target, metadata: data.metadata || {} };
     });
-    const securityEvents = securitySnap.docs.map(d => {
-      const data = d.data();
-      return { id: d.id, event: data.event, actor: data.actor, target: data.target, detail: data.detail, metadata: data.metadata || {}, timestamp: data.createdAt?.toMillis?.() ?? data.timestamp ?? null };
+    const securityEvents = unwrap(securitySnap, []).map(({ id, data }) => {
+      return { id, event: data.event, actor: data.actor, target: data.target, detail: data.detail, metadata: data.metadata || {}, timestamp: data.createdAt?.toMillis?.() ?? data.timestamp ?? null };
     });
-    const notifications = notificationsSnap.docs.map(d => {
-      const data = d.data();
-      return { id: d.id, type: data.type, title: data.title, description: data.description, read: !!data.read, createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? null, link: data.link || null };
+    const notifications = unwrap(notificationsSnap, []).map(({ id, data }) => {
+      return { id, type: data.type, title: data.title, description: data.description, read: !!data.read, createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? null, link: data.link || null };
     });
-    const aiLogs = aiLogsSnap.docs.map(d => {
-      const data = d.data();
-      return { id: d.id, model: data.model, success: !!data.success, questionCount: data.questionCount || 0, createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? null, error: data.error || null };
+    const aiLogs = unwrap(aiLogsSnap, []).map(({ id, data }) => {
+      return { id, model: data.model, success: !!data.success, questionCount: data.questionCount || 0, createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? null, error: data.error || null };
     });
-    const battleLogs = battleLogsSnap.docs.map(d => {
-      const data = d.data();
-      return { id: d.id, quizId: data.quizId, event: data.event, timestamp: data.timestamp ?? data.createdAt?.toMillis?.() ?? null, metadata: data.metadata || {} };
+    const battleLogs = unwrap(battleLogsSnap, []).map(({ id, data }) => {
+      return { id, quizId: data.quizId, event: data.event, timestamp: data.timestamp ?? data.createdAt?.toMillis?.() ?? null, metadata: data.metadata || {} };
     });
 
     // Conversations involving this user
@@ -74,8 +152,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
           lastActivity: data.lastActivity?.toMillis?.() ?? data.lastActivity ?? null,
         };
       });
-    } catch {
-      // conversation query failed — leave empty
+    } catch (err: any) {
+      console.error('[UserDetail GET] conversations query failed (degraded to empty):', err?.name, err?.message);
     }
 
     const base = {
@@ -100,18 +178,30 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
     };
 
     if (role === 'commander' || role === 'executive') {
-      // Arenas + battles created by this user
-      const quizzesSnap = await db.collection('quizzes')
-        .where('created_by', '==', uid)
-        .select('title', 'status', 'created_at', 'finished_at', 'participantCount', 'question_count', 'difficulty')
-        .orderBy('created_at', 'desc')
-        .limit(200)
-        .get();
+      // Arenas + battles created by this user. The ordered query needs a
+      // composite index (created_by + created_at); if it is not deployed yet
+      // we fall back to an equality-only fetch and sort in memory, so the
+      // profile page can never be taken down by a missing index.
+      const quizzesRecent = await safeQuery(
+        'commander quizzes',
+        () => queryRecent(
+          db,
+          () => db.collection('quizzes')
+            .where('created_by', '==', uid)
+            .select('title', 'status', 'created_at', 'finished_at', 'participantCount', 'question_count', 'difficulty')
+            .orderBy('created_at', 'desc'),
+          () => db.collection('quizzes')
+            .where('created_by', '==', uid)
+            .select('title', 'status', 'created_at', 'finished_at', 'participantCount', 'question_count', 'difficulty'),
+          d => (typeof d.created_at === 'number' ? d.created_at : d.createdAt?.toMillis?.() ?? 0),
+          200
+        ),
+        []
+      );
 
-      const arenas = quizzesSnap.docs.map(d => {
-        const data = d.data();
+      const arenas = quizzesRecent.map(({ id, data }) => {
         return {
-          id: d.id,
+          id,
           title: data.title || 'Untitled Battle',
           status: data.status || 'unknown',
           createdAt: data.created_at || 0,
@@ -145,7 +235,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
             const data = d.data();
             return { id: d.id, title: data.title || 'Untitled Request', type: data.type || 'general', status: data.status || 'pending', createdAt: data.createdAt || 0 };
           });
-        } catch {
+        } catch (err: any) {
+          console.error('[UserDetail GET] commander requests query failed (degraded to empty):', err?.name, err?.message);
           requests = [];
         }
       }
@@ -162,52 +253,83 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
     }
 
     if (role === 'gladiator') {
-      // Battle history via participants collection group
-      const partSnap = await db.collectionGroup('participants')
-        .where('user_id', '==', uid)
-        .select('user_id', 'name', 'score', 'status', 'finished_at')
-        .orderBy('finished_at', 'desc')
-        .limit(100)
-        .get();
+      // Battle history via participants collection group. Collection group
+      // queries need a deployed collection-group index; when it is missing
+      // (FAILED_PRECONDITION) we retry with an equality-only query that only
+      // needs the automatic single-field collection-group index. If even that
+      // fails, the history section degrades to empty instead of 500ing.
+      const participantDocs = await safeQuery(
+        'gladiator participants collection-group',
+        async () => {
+          try {
+            const snap = await db.collectionGroup('participants')
+              .where('user_id', '==', uid)
+              .select('user_id', 'name', 'score', 'status', 'finished_at')
+              .orderBy('finished_at', 'desc')
+              .limit(100)
+              .get();
+            return snap.docs;
+          } catch (err: any) {
+            if (err?.code !== 'FAILED_PRECONDITION') throw err;
+            console.warn('[UserDetail GET] participants collection-group index missing, falling back to in-memory sort:', err?.message);
+            const snap = await db.collectionGroup('participants')
+              .where('user_id', '==', uid)
+              .select('user_id', 'name', 'score', 'status', 'finished_at')
+              .get();
+            const docs = snap.docs.slice();
+            docs.sort((a, b) => (b.data().finished_at || 0) - (a.data().finished_at || 0));
+            return docs.slice(0, 100);
+          }
+        },
+        []
+      );
 
-      const participantDocs = partSnap.docs;
       const quizIds = participantDocs.map(d => d.ref.parent.parent?.id).filter((x): x is string => !!x);
       const quizSnaps = await Promise.allSettled(
         quizIds.map(quizId => db.collection('quizzes').doc(quizId).get())
       );
 
-      // Accuracy: compare submissions against answer keys (last 10 battles max)
+      // Accuracy: compare submissions against answer keys (last 10 battles max).
+      // Every Firestore read is caught individually; the whole accuracy pass is
+      // wrapped so a single failing battle can never take the profile down.
       let correct = 0;
       let answered = 0;
       let battlesWithAnswers = 0;
-      const accuracyQuizIds = quizIds.slice(0, 10);
-      const accuracyPromises = accuracyQuizIds.map(async quizId => {
-        const keySnap = await db.collection('quizzes').doc(quizId).collection('answerKeys').get().catch(() => null);
-        if (!keySnap || keySnap.empty) return;
-        const keys = new Map<string, number>();
-        keySnap.docs.forEach(k => {
-          const idx = k.data().correct_option_index;
-          if (typeof idx === 'number') keys.set(k.id, idx);
-        });
-        if (keys.size === 0) return;
-        const questionsSnap = await db.collection('quizzes').doc(quizId).collection('questions').select('sort_index').get().catch(() => null);
-        if (!questionsSnap || questionsSnap.empty) return;
-        battlesWithAnswers++;
-        const correctKeyed = new Map<string, number>();
-        questionsSnap.docs.forEach(q => {
-          const idx = keys.get(q.id);
-          if (idx !== undefined) correctKeyed.set(q.id, idx);
-        });
-        for (const [qid, correctIdx] of correctKeyed.entries()) {
-          const sub = await db.collection('quizzes').doc(quizId).collection('questions').doc(qid).collection('submissions').doc(uid).get().catch(() => null);
-          if (!sub?.exists) continue;
-          const sData = sub.data();
-          if (!sData) continue;
-          answered++;
-          if (sData.selected_option === correctIdx) correct++;
-        }
-      });
-      await Promise.all(accuracyPromises);
+      await safeQuery(
+        'gladiator accuracy',
+        async () => {
+          const accuracyQuizIds = quizIds.slice(0, 10);
+          const accuracyPromises = accuracyQuizIds.map(async quizId => {
+            const keySnap = await db.collection('quizzes').doc(quizId).collection('answerKeys').get().catch(() => null);
+            if (!keySnap || keySnap.empty) return;
+            const keys = new Map<string, number>();
+            keySnap.docs.forEach(k => {
+              const idx = k.data().correct_option_index;
+              if (typeof idx === 'number') keys.set(k.id, idx);
+            });
+            if (keys.size === 0) return;
+            const questionsSnap = await db.collection('quizzes').doc(quizId).collection('questions').select('sort_index').get().catch(() => null);
+            if (!questionsSnap || questionsSnap.empty) return;
+            battlesWithAnswers++;
+            const correctKeyed = new Map<string, number>();
+            questionsSnap.docs.forEach(q => {
+              const idx = keys.get(q.id);
+              if (idx !== undefined) correctKeyed.set(q.id, idx);
+            });
+            for (const [qid, correctIdx] of correctKeyed.entries()) {
+              const sub = await db.collection('quizzes').doc(quizId).collection('questions').doc(qid).collection('submissions').doc(uid).get().catch(() => null);
+              if (!sub?.exists) continue;
+              const sData = sub.data();
+              if (!sData) continue;
+              answered++;
+              if (sData.selected_option === correctIdx) correct++;
+            }
+          });
+          await Promise.all(accuracyPromises);
+          return null;
+        },
+        null
+      );
 
       const battles = participantDocs.map((d, i) => {
         const data = d.data();
@@ -247,7 +369,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
 
     return NextResponse.json({ profile: base });
   } catch (err: any) {
-    console.error('[UserDetail GET] Error:', err?.name, err?.message);
+    console.error('[UserDetail GET] Error:', err?.name, err?.message, '\n', err?.stack);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

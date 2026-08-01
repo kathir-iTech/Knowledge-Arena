@@ -3,6 +3,7 @@ import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
+import { Timestamp } from 'firebase-admin/firestore';
 
 export const runtime = 'nodejs';
 
@@ -10,6 +11,33 @@ const ALLOWED_COLLECTIONS = new Set([
   'users', 'question_bank', 'quizzes',
   'auditLogs', 'announcements', 'conversations', 'platform_settings', 'executive_requests',
 ]);
+
+// Firestore Timestamps are serialized to JSON as { _seconds, _nanoseconds }.
+// Restore them as real Timestamps so imported documents keep queryable,
+// sortable date fields instead of corrupt map objects.
+function restoreTimestamps(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (Array.isArray(value)) {
+    return value.map(v => restoreTimestamps(v, seen));
+  }
+  if (value && typeof value === 'object') {
+    if (seen.has(value)) return value;
+    seen.add(value);
+    const obj = value as Record<string, unknown>;
+    if (
+      typeof obj._seconds === 'number' &&
+      typeof obj._nanoseconds === 'number' &&
+      Object.keys(obj).every(k => k === '_seconds' || k === '_nanoseconds')
+    ) {
+      return Timestamp.fromMillis(obj._seconds * 1000 + Math.round(obj._nanoseconds / 1000));
+    }
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(obj)) {
+      result[key] = restoreTimestamps(val, seen);
+    }
+    return result;
+  }
+  return value;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,7 +74,7 @@ export async function POST(req: NextRequest) {
       const docs = backup.data[name] as Array<{ id: string; [key: string]: unknown }> || [];
       for (const doc of docs) {
         const { id, ...data } = doc;
-        await db.collection(name).doc(id).set(data, { merge: true });
+        await db.collection(name).doc(id).set(restoreTimestamps(data) as Record<string, unknown>, { merge: true });
         totalDocs++;
       }
     }
