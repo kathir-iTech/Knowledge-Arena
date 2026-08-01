@@ -45,15 +45,42 @@ export type GenerateQuizFromPDFOutput = z.infer<typeof GenerateQuizFromPDFOutput
 
 const MAX_RETRIES_PER_MODEL = 3;
 
+// gemini-2.0-flash / gemini-2.0-flash-lite / all gemini-1.5 models were shut down by Google on 2026-06-01.
+// gemini-3.6-flash (GA 2026-07-21) is the current recommended workhorse model; gemini-3.5-flash is the prior GA.
+const SHUTDOWN_MODEL_PREFIXES = ['gemini-2.0', 'gemini-1.5', 'gemini-3-flash-preview'];
+const DEFAULT_MODEL_CHAIN = ['gemini-3.6-flash', 'gemini-3.5-flash'];
+
 const modelFallbackChain = async (): Promise<string[]> => {
   try {
     const { getAdminDb } = await import('@/lib/firebase-admin');
     const snap = await getAdminDb().collection(COLLECTIONS.PLATFORM_SETTINGS).doc('global').get();
     const stored = snap.data()?.ai?.defaultModel;
-    if (stored && typeof stored === 'string') return [stored, 'gemini-2.0-flash'];
+    if (stored && typeof stored === 'string') {
+      if (SHUTDOWN_MODEL_PREFIXES.some((p) => stored.startsWith(p))) {
+        console.warn(`[Forge] platform_settings defaultModel "${stored}" was shut down by Google (2026-06-01). Using ${DEFAULT_MODEL_CHAIN.join(', ')} instead.`);
+        return [...DEFAULT_MODEL_CHAIN];
+      }
+      return [stored, ...DEFAULT_MODEL_CHAIN];
+    }
   } catch { }
-  return ['gemini-2.0-flash'];
+  return [...DEFAULT_MODEL_CHAIN];
 };
+
+function formatError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const parts = [`${err.name}: ${err.message}`];
+  const status = (err as any).status;
+  if (status) parts.unshift(`STATUS: ${status}`);
+  if (err.stack) parts.push(`STACK: ${err.stack}`);
+  const cause = (err as any).cause;
+  if (cause) {
+    parts.push(`CAUSE: ${cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause)}`);
+    if (cause instanceof Error && cause.stack) parts.push(`CAUSE_STACK: ${cause.stack}`);
+  }
+  const raw = (err as any).rawResponse ?? (err as any).response ?? (err as any).details;
+  if (raw) parts.push(`RAW_RESPONSE: ${typeof raw === 'string' ? raw.slice(0, 2000) : JSON.stringify(raw).slice(0, 2000)}`);
+  return parts.join('\n');
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
@@ -205,6 +232,7 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${modelName} attempt ${attempt}: ${msg}`);
+      console.error(`[Forge] Gemini call failed (${modelName}, attempt ${attempt}/${maxAttempts})`, '\n' + formatError(err));
 
       if (isAuthError(err)) {
         throw err;
@@ -349,6 +377,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
       success: !result.error && (result.questions?.length || 0) > 0,
       durationMs,
       error: result.error || undefined,
+      metadata: result.error ? { rawErrors: result.error } : undefined,
     });
 
     if (result.questions && result.questions.length > 0) {
@@ -361,7 +390,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
     return result;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[Forge] Fatal error:', msg, '\n', err instanceof Error ? err.stack : '');
+    console.error('[Forge] Fatal error:', msg, '\n', formatError(err));
     const durationMs = Date.now() - startTime;
     aiLogService.record({
       userId: 'unknown',
@@ -374,6 +403,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
       success: false,
       durationMs,
       error: msg,
+      metadata: { fullError: err instanceof Error ? formatError(err) : String(err) },
     });
     return { questions: [], difficulty: input.difficulty, error: msg };
   }
@@ -698,6 +728,7 @@ ${chunks[0]}`;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         errors.push(`${modelName} attempt ${attempt}: ${msg}`);
+        console.error(`[Forge] Gemini vision call failed (${modelName}, attempt ${attempt}/${MAX_RETRIES_PER_MODEL})`, '\n' + formatError(err));
 
         if (isAuthError(err)) throw err;
         if (attempt < MAX_RETRIES_PER_MODEL) {
@@ -794,16 +825,18 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     }
 
     if (!result.ok) {
+      const rawErrors = result.errors.join(' || ');
+      console.error('[Forge] All models failed. RAW errors:', '\n' + rawErrors);
       let errorMsg: string;
       switch (result.reason) {
         case 'quota_exceeded':
-          errorMsg = 'AI generation temporarily unavailable due to quota limits.';
+          errorMsg = `AI generation temporarily unavailable due to quota limits. RAW: ${rawErrors}`;
           break;
         case 'timeout':
-          errorMsg = 'AI generation timed out. Your documents may be too large or complex. Try with fewer questions or smaller files.';
+          errorMsg = `AI generation timed out. RAW: ${rawErrors}`;
           break;
         default:
-          errorMsg = 'AI generation failed. Please try again.';
+          errorMsg = `AI generation failed. RAW: ${rawErrors}`;
       }
       return {
         questions: [],
