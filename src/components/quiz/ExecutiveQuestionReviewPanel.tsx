@@ -40,6 +40,7 @@ interface ExecutiveQuestionReviewPanelProps {
   initialQuestions: GeneratedQuestion[];
   difficulty: string;
   category?: string;
+  documentTitle?: string;
   onRegenerate: () => void;
   onEditSettings: () => void;
   onRegenerateQuestion?: (index: number) => Promise<void>;
@@ -50,6 +51,7 @@ export function ExecutiveQuestionReviewPanel({
   initialQuestions,
   difficulty,
   category,
+  documentTitle,
   onRegenerate,
   onEditSettings,
   onRegenerateQuestion,
@@ -313,6 +315,7 @@ export function ExecutiveQuestionReviewPanel({
           difficulty: globalDifficulty,
           tags: globalTags,
           source: 'ai_pdf_forge',
+          title: documentTitle || '',
         }),
       });
 

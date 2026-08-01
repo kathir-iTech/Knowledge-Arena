@@ -20,7 +20,7 @@ interface GeneratedQuestion {
 }
 
 interface PDFQuizGeneratorProps {
-  onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string, dataUri?: string, questionCount?: number, category?: string) => void;
+  onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string, dataUri?: string, questionCount?: number, category?: string, documentName?: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   initialCategory?: string;
   showCategorySelector?: boolean;
@@ -148,7 +148,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
         if (!mountedRef.current) return;
         setStage('complete');
         toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions from ${files.length} document(s).` });
-        onQuestionsGenerated(result.questions, result.difficulty, dataUris[0], questionCount, category);
+        onQuestionsGenerated(result.questions, result.difficulty, dataUris[0], questionCount, category, files.length > 1 ? `${files[0].name} +${files.length - 1} more` : files[0]?.name);
       } else {
         throw new Error("AI_FAILED");
       }

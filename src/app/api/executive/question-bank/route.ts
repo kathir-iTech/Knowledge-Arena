@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
+import { randomUUID } from 'crypto';
 import { auditService } from '@/services/audit.service';
 import { COLLECTIONS } from '@/lib/constants';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
@@ -71,10 +72,17 @@ export async function POST(req: NextRequest) {
     const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
-    const { questions, category, difficulty, tags, source } = await req.json();
+    const { questions, category, difficulty, tags, source, title, importSessionId } = await req.json();
 
     if (!questions || !Array.isArray(questions) || questions.length === 0) {
       return NextResponse.json({ error: 'questions array is required' }, { status: 400 });
+    }
+
+    if (title !== undefined && (typeof title !== 'string' || title.trim().length > 120)) {
+      return NextResponse.json({ error: 'title must be a string of at most 120 characters' }, { status: 400 });
+    }
+    if (importSessionId !== undefined && (typeof importSessionId !== 'string' || !importSessionId.trim() || importSessionId.length > 100)) {
+      return NextResponse.json({ error: 'importSessionId must be a string of at most 100 characters' }, { status: 400 });
     }
 
     for (const q of questions) {
@@ -92,6 +100,7 @@ export async function POST(req: NextRequest) {
     const db = getAdminDb();
     const batch = db.batch();
     const now = Date.now();
+    const sessionId = importSessionId || randomUUID();
     const savedIds: string[] = [];
 
     for (const q of questions) {
@@ -105,6 +114,8 @@ export async function POST(req: NextRequest) {
         difficulty: difficulty || 'medium',
         tags: tags || '',
         source: source || 'ai_pdf_forge',
+        title: title?.trim() || '',
+        importSessionId: sessionId,
         createdBy: auth.uid,
         createdAt: Timestamp.fromMillis(now),
         updatedAt: Timestamp.fromMillis(now),
@@ -120,10 +131,10 @@ export async function POST(req: NextRequest) {
       actorRole: 'executive',
       action: 'question_bank_import',
       target: 'question_bank',
-      metadata: { count: questions.length, category, difficulty, source: source || 'ai_pdf_forge' },
+      metadata: { count: questions.length, category, difficulty, source: source || 'ai_pdf_forge', importSessionId: sessionId },
     });
 
-    return NextResponse.json({ success: true, saved: savedIds.length, ids: savedIds });
+    return NextResponse.json({ success: true, saved: savedIds.length, ids: savedIds, importSessionId: sessionId });
   } catch (err: any) {
     console.error('[QuestionBank POST] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
