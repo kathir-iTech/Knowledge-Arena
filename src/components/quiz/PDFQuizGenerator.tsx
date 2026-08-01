@@ -184,8 +184,8 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
         msg = "Invalid file data. Please try uploading the file again.";
       } else if (msg.includes("quota_exceeded")) {
         msg = "AI generation quota temporarily exhausted. Please wait a few minutes before retrying.";
-      } else if (msg.includes("all_models_failed") || msg.includes("AI generation") || msg.includes("temporarily unavailable")) {
-        msg = "Unable to generate questions. Please retry.";
+      } else if (msg.includes("PARSE_FAILED_")) {
+        msg = "The AI returned unparseable output. Please retry.";
       }
       
       setError(msg);

@@ -23,9 +23,14 @@ function resolveGoogleAiApiKey(): string | undefined {
 
 const apiKey = resolveGoogleAiApiKey();
 
+const ENV_VAR_CANDIDATES = ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY'] as const;
+const envPresence = ENV_VAR_CANDIDATES.map(v => `${v}=${process.env[v] ? 'SET' : 'MISSING'}`).join(', ');
+console.log(`[Genkit] AI env var check: ${envPresence} | plugin key source: ${apiKey ? 'explicit (GOOGLE_GENERATIVE_AI_API_KEY or first available)' : 'none set'}`);
+
 export const ai = genkit({
   plugins: [
     googleAI(apiKey ? { apiKey } : undefined)
   ],
-  model: googleAI.model('gemini-2.0-flash'),
+  // gemini-2.0-flash was shut down by Google on 2026-06-01; gemini-3.6-flash is the current GA replacement.
+  model: googleAI.model('gemini-3.6-flash'),
 });
