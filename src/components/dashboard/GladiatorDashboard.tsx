@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { PageError } from '@/components/ui/page-error';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
+import { QuizRecommendations } from '@/components/dashboard/QuizRecommendations';
 import { Loader2, Swords, UserCircle, History, ExternalLink, Trophy, Star, TrendingUp, Zap, Bell, ChevronRight, Play, Sparkles, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -247,6 +248,9 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
           </CardContent>
         </Card>
       </section>
+
+      {/* AI Recommendations */}
+      <QuizRecommendations />
 
       {/* Recent Results + Notifications */}
       <div className="page-section grid grid-cols-1 lg:grid-cols-2 gap-6">
