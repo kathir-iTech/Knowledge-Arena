@@ -32,7 +32,7 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     }
 
     if (!user) {
-      if (currentPath !== '/') {
+      if (currentPath !== '/' && currentPath !== '/login') {
         router.replace('/');
       }
       redirecting.current = null;
@@ -69,6 +69,13 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       const base = dashboardMap[user.role] || '/gladiator/dashboard';
       const qs = searchParams.toString();
       target = qs ? `${base}?${qs}` : base;
+    } else if (currentPath === '/login') {
+      const dashboardMap: Record<string, string> = {
+        executive: '/executive/analytics',
+        commander: '/commander/dashboard',
+        gladiator: '/gladiator/dashboard',
+      };
+      target = dashboardMap[user.role] || '/gladiator/dashboard';
     } else {
       const isExecutivePage = currentPath.startsWith('/executive');
       const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/create-quiz');
@@ -101,12 +108,12 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       <OfflineDetector />
       {user && <SessionTimeout />}
       {skipNav}
-      <main id="main-content">{children}</main>
+      <main id="main-content" key={pathname} className="animate-in-fast">{children}</main>
     </>
   );
 
   if (specialPages.includes(pathname)) return shared;
-  if (!user && pathname === '/') return shared;
+  if (!user && (pathname === '/' || pathname === '/login')) return shared;
   if (user && pathname.startsWith('/battle')) return shared;
   if (user) return shared;
 

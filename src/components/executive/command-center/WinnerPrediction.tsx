@@ -37,7 +37,7 @@ export function WinnerPrediction({ battle }: Props) {
           </div>
           <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div
-              className={cn('h-full rounded-full', row.lead ? 'bg-amber-400' : 'bg-primary/50')}
+              className={cn('h-full rounded-full transition-all duration-700 ease-out', row.lead ? 'bg-amber-400' : 'bg-primary/50')}
               style={{ width: `${row.probability}%` }}
             />
           </div>
