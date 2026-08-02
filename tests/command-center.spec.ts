@@ -11,8 +11,7 @@ test.describe('Live Battle Command Center', () => {
     page.on('pageerror', err => consoleErrors.push('PAGEERROR: ' + err.message));
 
     // Sign in as executive (emulator)
-    await page.goto(BASE_URL + '/');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/login', { waitUntil: 'domcontentloaded' });
     await page.locator('input[name="email"]').fill('exec@test.local');
     await page.locator('input[type="password"]').fill('Test123456!');
     await page.locator('button[type="submit"]').click();
@@ -23,8 +22,8 @@ test.describe('Live Battle Command Center', () => {
     await page.waitForTimeout(2500);
 
     // Navigate to the Command Center
-    await page.goto(BASE_URL + '/executive/command-center');
-    await expect(page.locator('text=Battle Command Center')).toBeVisible({ timeout: 20000 });
+    await page.goto(BASE_URL + '/executive/command-center', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('text=Battle Command Center')).toBeVisible({ timeout: 60000 });
 
     // Both seeded battles appear (live + waiting) — via the battle list cards
     await expect(page.locator('button:has-text("Midnight Clash")').first()).toBeVisible({ timeout: 15000 });

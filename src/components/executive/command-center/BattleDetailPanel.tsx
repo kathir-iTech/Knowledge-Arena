@@ -96,9 +96,9 @@ export function BattleDetailPanel({ battle, now, events }: Props) {
             <div className="space-y-1">
               {leaderboard.map((p, idx) => (
                 <div key={p.uid} className={cn(
-                  'flex items-center gap-2.5 p-2 rounded-[10px] transition-colors',
+                  'flex items-center gap-2.5 p-2 rounded-[10px] transition-colors animate-in',
                   idx === 0 && p.score > 0 ? 'bg-amber-50/60 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-800/30' : 'hover:bg-muted/30'
-                )}>
+                )} style={{ animationDelay: `${Math.min(idx, 10) * 50}ms` }}>
                   <div className={cn(
                     'w-6 h-6 rounded-[8px] flex items-center justify-center text-[10px] font-bold shrink-0',
                     idx === 0 ? 'bg-amber-400 text-white' : idx === 1 ? 'bg-slate-300 text-slate-700' : 'bg-background text-muted-foreground border border-border/40'

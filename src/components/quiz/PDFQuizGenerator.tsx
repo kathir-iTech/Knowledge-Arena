@@ -359,6 +359,29 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
               </div>
             )}
           </Button>
+
+          {isGenerating && (
+            <div className="mt-4 rounded-xl border bg-background/60 p-4 animate-in" role="status" aria-live="polite">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                <p className="text-xs font-semibold text-foreground">{STAGE_LABELS[stage]}</p>
+              </div>
+              <div className="mt-3 space-y-2">
+                {[0, 1, 2].map(bar => (
+                  <div key={bar} className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-400/80 via-primary/70 to-accent/70 animate-pulse"
+                      style={{ width: `${[70, 45, 85][bar]}%`, animationDelay: `${bar * 200}ms` }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Crafting questions with the AI forge — this can take a minute or two.
+              </p>
+            </div>
+          )}
           
           {error && !error.includes("API key") && !error.includes("INVALID_PDF_DATA") && (
             <div className="mt-4 flex flex-col gap-3 bg-destructive/5 p-4 rounded-lg border border-destructive/10 animate-in">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -17,15 +17,24 @@ const loginSchema = z.object({
   password: z.string().min(1, { message: "Password is required." }),
 });
 
-export function LoginForm() {
+interface LoginFormProps {
+  initialValues?: { email?: string; password?: string };
+}
+
+export function LoginForm({ initialValues }: LoginFormProps = {}) {
   const { login, signInWithGoogle } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: initialValues?.email || '', password: initialValues?.password || '' },
   });
+
+  useEffect(() => {
+    if (initialValues?.email) loginForm.setValue('email', initialValues.email, { shouldDirty: true });
+    if (initialValues?.password) loginForm.setValue('password', initialValues.password, { shouldDirty: true });
+  }, [initialValues, loginForm]);
 
   const onLoginSubmit = async (values: z.infer<typeof loginSchema>) => {
     setIsLoading(true);

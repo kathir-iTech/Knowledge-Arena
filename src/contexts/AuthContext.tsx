@@ -17,6 +17,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { mapFirebaseAuthError } from '@/lib/firebase-auth-errors';
 import { mapStaffIdToEmail } from '@/lib/staff-login';
+import { getDemoAccount } from '@/lib/demo-accounts';
 
 interface AuthContextType {
   user: User | null;
@@ -233,10 +234,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const role = userDoc.data()?.role;
+      // Demo Mode: allow the seeded demo gladiator to sign in with a password on the
+      // local emulator only. Production (emulator flag off) keeps the Google-only rule.
+      const isDemoGladiator =
+        role === 'gladiator' &&
+        process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true' &&
+        email === getDemoAccount('gladiator')?.email;
       if (!role || !['executive', 'commander'].includes(role)) {
-        await signOut(auth);
-        toast({ variant: "destructive", title: "Access Denied", description: "Staff login is not available for this account. Gladiators must use Google Sign-In." });
-        throw new Error("Staff login is not available for this account.");
+        if (!isDemoGladiator) {
+          await signOut(auth);
+          toast({ variant: "destructive", title: "Access Denied", description: "Staff login is not available for this account. Gladiators must use Google Sign-In." });
+          throw new Error("Staff login is not available for this account.");
+        }
       }
     } catch (error: unknown) {
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
