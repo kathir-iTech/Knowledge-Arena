@@ -20,7 +20,10 @@ service cloud.firestore {
       return isSignedIn() && getRole() == 'executive';
     }
 
-    
+    function isGladiator() {
+      return isSignedIn() && getRole() == 'gladiator';
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -74,12 +77,27 @@ service cloud.firestore {
         request.resource.data.status in ['waiting', 'ready', 'starting', 'live', 'paused', 'finished', 'archived'];
     }
 
+    // Least-privilege arena read: executives see everything; commanders and
+    // gladiators may only read arenas they created or participate in. Open
+    // (waiting/ready) arenas are readable so gladiators can discover them via
+    // the join flow, but their questions remain restricted to participants.
     function canReadArena(quizId) {
       let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
       return isSignedIn() && exists(quizPath) && (
-        get(quizPath).data.status != 'finished' ||
         isQuizCreator(quizId) ||
-        isQuizParticipant(quizId, request.auth.uid)
+        isQuizParticipant(quizId, request.auth.uid) ||
+        get(quizPath).data.status in ['waiting', 'ready']
+      );
+    }
+
+    // Questions are only visible to arena participants, the creator and
+    // executives. Open arenas are listed for joining, but their question
+    // content is never exposed to non-participants.
+    function canReadArenaContent(quizId) {
+      return isSignedIn() && (
+        isQuizCreator(quizId) ||
+        isQuizParticipant(quizId, request.auth.uid) ||
+        isExecutive()
       );
     }
 
@@ -88,24 +106,26 @@ service cloud.firestore {
     match /users/{userId} {
       // Profiles may only be read by the owner, commanders (roster) and executives (admin).
       allow read: if isOwner(userId) || isCommander() || isExecutive();
-      // Self-signup: only gladiator role allowed (no privilege escalation)
-      allow create: if isOwner(userId) && request.resource.data.role == 'gladiator';
-      // Commander/Executive creation bypasses public rules — done via Admin SDK / API
+      // Self-signup: only gladiator role allowed (no privilege escalation),
+      // and only the profile fields a gladiator may set for themselves.
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'gladiator'
+        && request.resource.data.keys().hasOnly(['name', 'email', 'avatar', 'role']);
+      // Owners may only update their display name and avatar. Role, email,
+      // mustChangePassword, disabled and all other fields are server-only.
       allow update: if isOwner(userId)
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'avatar']);
     }
 
     match /quizzes/{quizId} {
-      // Arena metadata: any signed-in user may read an arena that is not finished
-      // (needed for the join flow); finished arenas are restricted to creator,
-      // participants and executives. Executives retain read-all oversight.
       allow read: if isExecutive() || canReadArena(quizId);
-      allow create: if isSignedIn() && (getRole() == 'commander' || getRole() == 'executive');
+      allow create: if isSignedIn() && (getRole() == 'commander' || getRole() == 'executive')
+        && request.resource.data.created_by == request.auth.uid;
       allow update: if isLegalQuizUpdate(quizId);
       allow delete: if isQuizCreator(quizId);
 
       match /questions/{questionId} {
-        allow read: if isExecutive() || canReadArena(quizId);
+        allow read: if canReadArenaContent(quizId);
         // isQuizCreatorAfter supports atomic writeBatch where parent quiz is created
         // in the same batch — getAfter() sees the pending parent.
         allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId);
@@ -139,6 +159,9 @@ service cloud.firestore {
       }
 
       match /participants/{userId} {
+        // Open arenas (waiting/ready) expose their roster so gladiators can
+        // see who is in the room before joining; live/finished arenas are
+        // restricted to members, the creator and executives.
         allow read: if isExecutive() || canReadArena(quizId);
         // isOwner(userId) handles both Commander creating their own participant in
         // the arena creation batch AND Gladiators joining later.
@@ -148,6 +171,7 @@ service cloud.firestore {
           && isNotBlocked(quizId, userId)
           && request.resource.data.user_id == userId
           && request.resource.data.lastSeen == request.time
+          && request.resource.data.keys().hasOnly(['user_id', 'score', 'status', 'violations_count', 'ready', 'lastSeen', 'session_token', 'name'])
           && getAfter(/databases/$(database)/documents/quizzes/$(quizId)).data.status in ['waiting', 'ready'];
         // Commander can update everyone (block/reset). Gladiators can only:
         //  - increment violations (or block themselves) in a single write
@@ -220,7 +244,10 @@ service cloud.firestore {
 
     match /messages/{msgId} {
       allow read: if isSignedIn() && get(/databases/$(database)/documents/conversations/$(convId)).data.participants.hasAny([request.auth.uid]);
-      allow create: if isSignedIn() && get(/databases/$(database)/documents/conversations/$(convId)).data.participants.hasAny([request.auth.uid]);
+      // Only self-authored messages from conversation participants.
+      allow create: if isSignedIn()
+        && get(/databases/$(database)/documents/conversations/$(convId)).data.participants.hasAny([request.auth.uid])
+        && request.resource.data.senderId == request.auth.uid;
       allow delete: if isExecutive() || (isSignedIn() && request.auth.uid == resource.data.senderId);
     }
   }
