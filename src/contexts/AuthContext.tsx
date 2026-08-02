@@ -28,6 +28,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateAvatar: (avatar: string) => Promise<void>;
   updateProfile: (data: { name?: string; avatar?: string }) => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -356,6 +357,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshUser = useCallback(async () => {
+    const uid = auth?.currentUser?.uid;
+    if (!uid || !firestore) return;
+    lastFetchedUid.current = null;
+    fetchInProgress.current = false;
+    fetchInProgressUid.current = null;
+    await fetchUserDocument(uid);
+  }, [auth, firestore, fetchUserDocument]);
+
   const contextValue = useMemo(() => ({
     user,
     isAuthenticated: !!user,
@@ -365,7 +375,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     updateAvatar,
     updateProfile,
-  }), [user, isLoading, signInWithGoogle]);
+    refreshUser,
+  }), [user, isLoading, signInWithGoogle, refreshUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>

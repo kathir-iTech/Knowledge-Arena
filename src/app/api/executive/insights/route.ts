@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/constants';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { AiLogEntry } from '@/services/ai-log.service';
 
 export const runtime = 'nodejs';
@@ -14,6 +15,8 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const rateLimitResponse = enforceRateLimit(`insights:${auth.uid}`, Limits.AI_API_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
 
     const now = Date.now();
     const cutoff = now - WINDOW_MS;

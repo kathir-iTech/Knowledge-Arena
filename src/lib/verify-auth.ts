@@ -86,6 +86,14 @@ export async function verifyFirebaseTokenWithRole(
       }
       return null;
     }
+    // Users under a forced password change may not use the platform until
+    // they set a new password through /api/auth/change-password.
+    if (userDoc.data()?.mustChangePassword === true) {
+      if (typeof tokenOrRequest !== 'string') {
+        logAuthFailure(`auth:${decoded.uid}`, 'must_change_password');
+      }
+      return null;
+    }
   } catch {
     return null;
   }
@@ -129,6 +137,14 @@ export async function verifyFirebaseTokenWithAnyRole(
     if (!roles.includes(role as any)) {
       if (typeof tokenOrRequest !== 'string') {
         logAuthFailure(`role:${decoded.uid}`, `role_mismatch:allowed_${roles.join('|')}`);
+      }
+      return null;
+    }
+    // Users under a forced password change may not use the platform until
+    // they set a new password through /api/auth/change-password.
+    if (userDoc.data()?.mustChangePassword === true) {
+      if (typeof tokenOrRequest !== 'string') {
+        logAuthFailure(`auth:${decoded.uid}`, 'must_change_password');
       }
       return null;
     }

@@ -11,14 +11,18 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const schema = z.object({
   currentPassword: z.string().min(1, { message: "Current password is required." }),
-  newPassword: z.string().min(6, { message: "New password must be at least 6 characters." }),
+  newPassword: z.string()
+    .min(8, { message: "New password must be at least 8 characters." })
+    .regex(/[a-z]/, { message: "New password must contain a lowercase letter." })
+    .regex(/[A-Z]/, { message: "New password must contain an uppercase letter." })
+    .regex(/[0-9]/, { message: "New password must contain a number." })
+    .regex(/[^A-Za-z0-9]/, { message: "New password must contain a special character." }),
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "Passwords don't match",
@@ -27,7 +31,8 @@ const schema = z.object({
 
 export default function ForcePasswordChangePage() {
   const { user } = useAuth();
-  const { auth, firestore } = useFirebase();
+  const { refreshUser } = useAuth();
+  const { auth } = useFirebase();
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -50,17 +55,31 @@ export default function ForcePasswordChangePage() {
   }
 
   const onSubmit = async (values: z.infer<typeof schema>) => {
-    if (!auth || !firestore || !user) return;
+    if (!auth || !user) return;
     setIsLoading(true);
 
     try {
       const credential = EmailAuthProvider.credential(user.email, values.currentPassword);
       await reauthenticateWithCredential(auth.currentUser!, credential);
-      await updatePassword(auth.currentUser!, values.newPassword);
-      await updateDoc(doc(firestore, 'users', user.id), { mustChangePassword: false });
+      const freshToken = await auth.currentUser!.getIdToken(true);
+
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${freshToken}`,
+        },
+        body: JSON.stringify({ newPassword: values.newPassword }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to change password.');
+      }
 
       toast({ title: "Password changed", description: "Your password has been updated successfully." });
 
+      await refreshUser();
       const dashboardMap: Record<string, string> = {
         executive: '/executive/analytics',
         commander: '/commander/dashboard',
@@ -71,10 +90,10 @@ export default function ForcePasswordChangePage() {
       const msg = error instanceof Error ? error.message : 'Failed to change password.';
       if (msg.includes('wrong-password') || msg.includes('invalid-credential')) {
         toast({ variant: "destructive", title: "Incorrect Password", description: "Current password is incorrect." });
-      } else if (msg.includes('weak-password')) {
-        toast({ variant: "destructive", title: "Weak Password", description: "New password must be at least 6 characters." });
+      } else if (msg.includes('session') || msg.includes('re-auth')) {
+        toast({ variant: "destructive", title: "Session Expired", description: msg });
       } else {
-        toast({ variant: "destructive", title: "Error", description: msg });
+        toast({ variant: "destructive", title: "Weak Password", description: msg });
       }
     } finally {
       setIsLoading(false);

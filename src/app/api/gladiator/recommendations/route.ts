@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getQuizRecommendations } from '@/ai/engines/prediction-engine';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -10,6 +11,8 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const rateLimitResponse = enforceRateLimit(`ai:${auth.uid}`, Limits.AI_API_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
 
     const recommendations = await getQuizRecommendations(auth.uid);
 

@@ -4,6 +4,7 @@ import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { rateLimiter, getClientIp, buildRateLimitHeaders, Limits } from '@/lib/rate-limiter';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
+import { validatePasswordStrength } from '@/lib/password-policy';
 
 export const runtime = 'nodejs';
 
@@ -38,8 +39,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid email format. Use a valid email address or a username (will be converted to email format).' }, { status: 400 });
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+    const passwordCheck = validatePasswordStrength(password);
+    if (!passwordCheck.valid) {
+      return NextResponse.json({ error: passwordCheck.errors.join(' ') }, { status: 400 });
     }
 
     const userRecord = await getAdminAuth().createUser({
@@ -281,8 +283,16 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (resetPassword) {
-      if (password && password.length >= 6) {
+      if (password) {
+        const passwordCheck = validatePasswordStrength(password);
+        if (!passwordCheck.valid) {
+          return NextResponse.json({ error: passwordCheck.errors.join(' ') }, { status: 400 });
+        }
         await getAdminAuth().updateUser(uid, { password });
+        await getAdminDb().collection('users').doc(uid).set(
+          { mustChangePassword: true },
+          { merge: true }
+        );
         await auditService.record({
           timestamp: Date.now(),
           actor: auth.uid,
@@ -301,7 +311,7 @@ export async function PATCH(req: NextRequest) {
         });
         return NextResponse.json({ success: true, uid, passwordReset: true });
       }
-      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+      return NextResponse.json({ error: 'Password is required' }, { status: 400 });
     }
 
     if (displayName && typeof displayName === 'string') {

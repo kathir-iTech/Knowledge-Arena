@@ -1,4 +1,3 @@
-import { Timestamp } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/constants';
 
@@ -132,20 +131,8 @@ export async function fetchSetDocs(setId: string): Promise<QuizSetDoc[]> {
     return snap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
   }
 
-  const parts = key.slice(2).split('|');
-  if (parts.length !== 4) return [];
-  const [createdAtMs, createdBy, source, category] = parts;
-  const ts = Number(createdAtMs);
-  if (!Number.isFinite(ts)) return [];
-
-  const snap = await ref
-    .where('createdAt', '==', Timestamp.fromMillis(ts))
-    .where('createdBy', '==', createdBy)
-    .where('source', '==', source)
-    .where('category', '==', category)
-    .limit(1000)
-    .get();
-  return snap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
+  const docs = await scanAllQuestionDocs();
+  return docs.filter(d => docGroupKey(d.data) === key);
 }
 
 export async function fetchSetSummaries(): Promise<{ sets: QuizSetSummary[]; sources: string[] }> {

@@ -3,6 +3,7 @@ import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
+import { validatePasswordStrength } from '@/lib/password-policy';
 
 export const runtime = 'nodejs';
 
@@ -81,8 +82,12 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (body.password !== undefined) {
-      if (typeof body.password !== 'string' || body.password.length < 6) {
-        return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+      if (typeof body.password !== 'string') {
+        return NextResponse.json({ error: 'Invalid password' }, { status: 400 });
+      }
+      const passwordCheck = validatePasswordStrength(body.password);
+      if (!passwordCheck.valid) {
+        return NextResponse.json({ error: passwordCheck.errors.join(' ') }, { status: 400 });
       }
       await getAdminAuth().updateUser(auth.uid, { password: body.password });
     }
