@@ -514,7 +514,7 @@ tr{page-break-inside:avoid}
 .card .label{font-size:12px;color:#666;margin-top:4px}
 @media print{body{padding:20px}th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
-<h1>Knowledge Arena — Analytics Report</h1>
+<h1>Quorena — Analytics Report</h1>
 <p>Generated: ${escHtml(new Date(data.fetchedAt).toLocaleString())}</p>
 <h2>Overview</h2>
 <div class="overview">

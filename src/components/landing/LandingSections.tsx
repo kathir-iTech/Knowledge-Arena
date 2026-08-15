@@ -163,12 +163,12 @@ export function LandingFooter() {
             <BrainCircuit className="h-4 w-4 text-primary-foreground" />
           </div>
           <div>
-            <p className="font-headline text-sm font-bold">Knowledge Arena</p>
+            <p className="font-headline text-sm font-bold">Quorena</p>
             <p className="text-[11px] text-muted-foreground">Learn. Battle. Own the leaderboard.</p>
           </div>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          © 2026 Knowledge Arena · Built for HackVerse
+          © 2026 Quorena · Built for HackVerse
         </p>
       </div>
     </footer>

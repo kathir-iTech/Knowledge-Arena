@@ -1,0 +1,18 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B1E2A"/>
+      <stop offset="100%" stop-color="#4A0E14"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F5D061"/>
+      <stop offset="100%" stop-color="#D9A833"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- Q lettermark: ring + tail styled as a small blade -->
+  <circle cx="256" cy="240" r="118" fill="none" stroke="url(#gold)" stroke-width="46"/>
+  <path d="M 300 300 L 380 400 L 340 410 L 320 380 L 290 330 Z" fill="url(#gold)"/>
+</svg>

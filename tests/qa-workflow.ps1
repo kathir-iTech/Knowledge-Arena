@@ -104,7 +104,7 @@ Test-Workflow "Rate-limit GET returns 405" {
 Test-Workflow "Login page HTML contains app shell" {
   $html = Get-Json "$BASE/"
   if (-not $html.Contains("Authenticating")) { throw "Missing loading screen" }
-  if (-not $html.Contains("Knowledge Arena")) { throw "Missing app title" }
+  if (-not $html.Contains("Quorena")) { throw "Missing app title" }
 }
 
 Test-Workflow "Login page loads auth providers" {

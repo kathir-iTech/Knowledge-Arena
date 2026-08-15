@@ -11,7 +11,7 @@ export function LoadingScreen({ message = 'Initializing...' }: LoadingScreenProp
     <div className="flex items-center justify-center min-h-screen bg-background">
       <div className="flex flex-col items-center gap-5">
         <BrainCircuit className="w-16 h-16 text-primary" />
-        <h1 className="text-2xl font-headline tracking-tight text-primary">Knowledge Arena</h1>
+        <h1 className="text-2xl font-headline tracking-tight text-primary">Quorena</h1>
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
           <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '200ms' }} />

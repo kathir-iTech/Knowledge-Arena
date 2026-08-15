@@ -92,7 +92,7 @@ export function LandingShowcases() {
               One arena. Three battle stations.
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Knowledge Arena unifies the classroom experience across dedicated portals —
+              Quorena unifies the classroom experience across dedicated portals —
               each tuned to its role, all sharing one real-time arena.
             </p>
           </Reveal>

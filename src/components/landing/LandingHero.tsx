@@ -28,7 +28,7 @@ export function LandingHero() {
             <span className="gradient-text">Own the leaderboard.</span>
           </h1>
           <p className="mt-5 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Knowledge Arena turns classrooms into live quiz arenas — with AI-generated
+            Quorena turns classrooms into live quiz arenas — with AI-generated
             questions, real-time battles, anti-cheat presence tracking, and executive-grade
             analytics. Built for Gladiators, Commanders, and Executives.
           </p>

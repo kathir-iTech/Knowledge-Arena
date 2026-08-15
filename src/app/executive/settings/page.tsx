@@ -68,7 +68,7 @@ const defaultSettings: PlatformSettings = {
   institutionName: '',
   institutionLogo: '',
   theme: 'system',
-  workspaceName: 'Knowledge Arena',
+  workspaceName: 'Quorena',
   auth: {
     allowCommanderSelfRegistration: false,
     allowGladiatorRegistration: true,
@@ -221,7 +221,7 @@ export default function ExecutiveSettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="workspaceName">Workspace Name</Label>
-                <Input id="workspaceName" value={settings.workspaceName} onChange={e => setSettings({ ...settings, workspaceName: e.target.value })} placeholder="Knowledge Arena" />
+                <Input id="workspaceName" value={settings.workspaceName} onChange={e => setSettings({ ...settings, workspaceName: e.target.value })} placeholder="Quorena" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="institutionName">Institution Name</Label>

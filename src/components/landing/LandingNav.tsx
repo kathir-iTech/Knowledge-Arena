@@ -16,11 +16,11 @@ export function LandingNav() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
       <div className="page-container flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="Knowledge Arena home">
+        <Link href="/" className="flex items-center gap-2.5" aria-label="Quorena home">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-elevation-medium">
             <BrainCircuit className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-headline text-lg font-bold tracking-tight">Knowledge Arena</span>
+          <span className="font-headline text-lg font-bold tracking-tight">Quorena</span>
         </Link>
 
         <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary">

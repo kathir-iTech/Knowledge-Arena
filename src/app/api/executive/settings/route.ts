@@ -14,7 +14,7 @@ const defaultSettings = {
   institutionName: '',
   institutionLogo: '',
   theme: 'system',
-  workspaceName: 'Knowledge Arena',
+  workspaceName: 'Quorena',
   auth: {
     allowCommanderSelfRegistration: false,
     allowGladiatorRegistration: true,
