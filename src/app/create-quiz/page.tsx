@@ -21,6 +21,7 @@ import { useFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
 
 export default function CreateQuizPage() {
   const router = useRouter();
@@ -155,7 +156,6 @@ export default function CreateQuizPage() {
     try {
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!idToken) throw new Error('UNAUTHORIZED');
-      const { generateQuizFromPDF } = await import('@/ai/flows/generate-quiz-pdf-flow');
       const result = await Promise.race([
         generateQuizFromPDF({
           pdfDataUri: forgeParams.current.pdfDataUri,

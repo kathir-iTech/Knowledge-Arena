@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
 
 const PDFQuizGenerator = dynamic(() => import('@/components/quiz/PDFQuizGenerator').then(m => m.PDFQuizGenerator), { ssr: false });
 const ExecutiveQuestionReviewPanel = dynamic(() => import('@/components/quiz/ExecutiveQuestionReviewPanel').then(m => m.ExecutiveQuestionReviewPanel), { ssr: false });
@@ -59,7 +60,6 @@ export default function QuestionBankPage() {
     try {
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!idToken) throw new Error('UNAUTHORIZED');
-      const { generateQuizFromPDF } = await import('@/ai/flows/generate-quiz-pdf-flow');
       const result = await Promise.race([
         generateQuizFromPDF({
           pdfDataUri: forgeParams.current.pdfDataUri,
