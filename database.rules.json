@@ -5,7 +5,7 @@
         ".read": "auth != null",
         "$uid": {
           ".write": "auth != null && $uid === auth.uid",
-          ".validate": "newData.isObject() && newData.hasChildren(['role', 'online']) && (newData.child('role').val() === 'commander' || newData.child('role').val() === 'gladiator') && newData.child('online').isBoolean()"
+          ".validate": "newData.hasChildren(['role', 'online']) && (newData.child('role').val() === 'commander' || newData.child('role').val() === 'gladiator') && newData.child('online').isBoolean()"
         }
       }
     }
