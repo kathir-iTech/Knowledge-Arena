@@ -3,6 +3,12 @@ import { z } from 'genkit';
 import { fetchDocsWithToken } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/constants';
 
+// PHASE 69: PARTIALLY SHELVED. getQuizRecommendations (and /api/gladiator/
+// recommendations) are LIVE — rendered on the gladiator dashboard. The Genkit
+// summary features below (getPredictionSummary, getRecommendationPrompt) are
+// shelved: their only route /api/predictions/summary now returns 410. These
+// two exports are kept for future wiring; do not treat them as active.
+
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -15,6 +21,8 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   throw new Error('Retry exhausted');
 }
 
+// SHELVED (see file header): prediction summary fed /api/predictions/summary,
+// which now returns 410. Kept for future wiring.
 export async function getPredictionSummary(uid: string) {
   const docs = await fetchDocsWithToken('quizzes', uid, {
     orderBy: 'created_at', direction: 'desc', limit: 5
@@ -178,6 +186,8 @@ export async function getQuizRecommendations(uid: string): Promise<QuizRecommend
   return recommendations.slice(0, 6);
 }
 
+// SHELVED (see file header): utility with no remaining callers (its only
+// consumer was the now-neutralized prediction summary flow). Kept for future wiring.
 export async function getRecommendationPrompt(uid: string): Promise<string> {
   const recs = await getQuizRecommendations(uid);
   if (!recs.length) return 'No recommendations available yet. Complete more quizzes to get personalized suggestions.';

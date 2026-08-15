@@ -2,6 +2,10 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
+// PHASE 69: SHELVED — wired only to the neutralized /api/decision-support/summary
+// route; no reachable UI flow calls it. Source kept for future wiring; do not
+// treat this module as part of the active build surface.
+
 /**
  * Decision Support Engine: Provides strategic guidance for Commanders.
  */

@@ -1,30 +1,24 @@
-
 import { NextResponse } from 'next/server';
-import { getDecisionSupportSummary } from '@/ai/engines/decision-support-engine';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
-import { rateLimiter, Limits, buildRateLimitHeaders } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
+// PHASE 69: SHELVED — this AI engine is not wired to any reachable UI flow.
+// The implementation lives on in src/ai/engines/decision-support-engine.ts
+// (source intentionally kept for future wiring). Endpoint intentionally
+// responds "not available" instead of running the Genkit engine.
+//
+// Auth is still enforced first so unauthenticated probing gets the same 401
+// as any other protected route; authenticated callers get an explicit
+// not-available signal instead of a silent success.
 export async function GET(req: Request) {
-  try {
-    const auth = await verifyFirebaseTokenWithRole(req, 'commander');
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const rl = rateLimiter.check(`ai:decision:${auth.uid}`, Limits.AI_API_PER_USER);
-    if (!rl.allowed) {
-      return NextResponse.json(
-        { error: Limits.AI_API_PER_USER.message, retryAfter: Math.ceil((rl.resetAt - Date.now()) / 1000) },
-        { status: 429, headers: buildRateLimitHeaders(rl) }
-      );
-    }
-
-    const data = await getDecisionSupportSummary();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('[DecisionSupport] Error:', (error as Error)?.name, (error as Error)?.message);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  const auth = await verifyFirebaseTokenWithRole(req, 'commander');
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  return NextResponse.json(
+    { error: 'Not available', message: 'The Decision Support engine is shelved and not available for use.' },
+    { status: 410 }
+  );
 }
