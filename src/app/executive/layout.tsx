@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import ExecutiveSidebar from '@/components/ExecutiveSidebar';
+import { MobileSidebarHeader } from '@/components/MobileSidebarHeader';
 
 export default function ExecutiveLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -25,7 +26,10 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
   return (
     <SidebarProvider>
       <ExecutiveSidebar />
-      <SidebarInset className="safe-top"><main id="main-content">{children}</main></SidebarInset>
+      <SidebarInset className="safe-top">
+        <MobileSidebarHeader />
+        <main id="main-content">{children}</main>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

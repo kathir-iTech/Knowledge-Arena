@@ -114,6 +114,8 @@ export default function BattleRoomLoader() {
   const [retryCount, setRetryCount] = useState(0);
   const [participantsReady, setParticipantsReady] = useState(false);
   const [replaced, setReplaced] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [isRetryingJoin, setIsRetryingJoin] = useState(false);
   const initialJoinDoneRef = useRef(false);
   const firstPartSnapRef = useRef(false);
   const reconnectLoggedRef = useRef(false);
@@ -125,6 +127,19 @@ export default function BattleRoomLoader() {
   const handleRetry = useCallback(() => {
     setRetryCount(c => c + 1);
   }, []);
+
+  const handleRetryJoin = useCallback(async () => {
+    if (!user || isRetryingJoin) return;
+    setIsRetryingJoin(true);
+    setJoinError(null);
+    try {
+      await participantService.joinQuiz(quizId, user.id, user.name, sessionToken);
+    } catch (e) {
+      setJoinError(e instanceof Error ? e.message : 'Failed to join the arena. Please try again.');
+    } finally {
+      setIsRetryingJoin(false);
+    }
+  }, [quizId, user, sessionToken, isRetryingJoin]);
 
   useEffect(() => {
     if (!quizId) return;
@@ -140,6 +155,7 @@ export default function BattleRoomLoader() {
     setParticipant(null);
     setAllParticipants([]);
     setReplaced(false);
+    setJoinError(null);
     firstPartSnapRef.current = false;
     reconnectLoggedRef.current = false;
 
@@ -159,7 +175,11 @@ export default function BattleRoomLoader() {
       quizRef.current = q;
       if (!initialJoinDoneRef.current && (q.status === QUIZ_WAITING || q.status === QUIZ_READY) && user.id !== q.created_by) {
         initialJoinDoneRef.current = true;
-        participantService.joinQuiz(quizId, user.id, user.name, sessionToken).catch(() => {});
+        participantService.joinQuiz(quizId, user.id, user.name, sessionToken).catch((e) => {
+          if (mounted) {
+            setJoinError(e instanceof Error ? e.message : 'Failed to join the arena. Please try again.');
+          }
+        });
       }
       if (mounted) setIsLoading(false);
     }, () => {
@@ -260,6 +280,9 @@ export default function BattleRoomLoader() {
         <WaitingRoom
           quiz={quiz}
           isTeacher={(user?.role === 'commander' || user?.role === 'executive') && quiz.created_by === user.id}
+          joinError={joinError}
+          onRetryJoin={handleRetryJoin}
+          isRetryingJoin={isRetryingJoin}
         />
         <NetworkStatusIndicator status={connectionStatus} />
       </>
