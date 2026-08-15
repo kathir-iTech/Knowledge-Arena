@@ -1,8 +1,13 @@
 import { initializeApp, getApps, getApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getDatabase, type Database } from 'firebase-admin/database';
 import { firebaseConfig } from '@/firebase/config';
 import { existsSync, readFileSync } from 'fs';
+
+function initDatabaseUrl(): string {
+  return process.env.FIREBASE_DATABASE_URL || firebaseConfig.databaseURL;
+}
 
 function loadServiceAccountKey(): string | null {
   const fromEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -53,14 +58,14 @@ function initAdmin() {
     (parsed as Record<string, string>).private_key = (parsed as Record<string, string>).private_key.replace(/\\n/g, '\n');
 
     try {
-      return initializeApp({ credential: cert(parsed as any) });
+      return initializeApp({ credential: cert(parsed as any), databaseURL: initDatabaseUrl() });
     } catch (e) {
       throw new Error(`Firebase Admin SDK: Initialization with service account failed. ${(e as Error).message}`);
     }
   }
 
   try {
-    return initializeApp({ credential: applicationDefault(), projectId: firebaseConfig.projectId });
+    return initializeApp({ credential: applicationDefault(), projectId: firebaseConfig.projectId, databaseURL: initDatabaseUrl() });
   } catch (e: any) {
     const msg = e?.message || '';
     if (msg.includes('Could not load the default credentials') || msg.includes('Application Default Credentials')) {
@@ -78,6 +83,7 @@ function initAdmin() {
 const globalForFirebase = globalThis as any;
 let _db = globalForFirebase.__firebaseDb as Firestore | undefined;
 let _auth = globalForFirebase.__firebaseAuth as ReturnType<typeof getAuth> | undefined;
+let _rtdb = globalForFirebase.__firebaseRtdb as Database | undefined;
 
 export function getAdminDb() {
   if (_db) return _db;
@@ -93,6 +99,14 @@ export function getAdminAuth() {
   _auth = getAuth();
   globalForFirebase.__firebaseAuth = _auth;
   return _auth;
+}
+
+export function getAdminRtdb() {
+  if (_rtdb) return _rtdb;
+  initAdmin();
+  _rtdb = getDatabase();
+  globalForFirebase.__firebaseRtdb = _rtdb;
+  return _rtdb;
 }
 
 export async function fetchDocsWithToken(

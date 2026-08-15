@@ -162,15 +162,6 @@ export const participantService = {
     await deleteDoc(doc(db, participantPath(quizId, userId)));
   },
 
-  async heartbeat(quizId: string, userId: string, sessionToken?: string): Promise<void> {
-    const db = getFirestore();
-    const update: Record<string, unknown> = {
-      lastSeen: serverTimestamp(),
-    };
-    if (sessionToken) update.session_token = sessionToken;
-    await updateDoc(doc(db, participantPath(quizId, userId)), update);
-  },
-
   subscribeToParticipants(
     quizId: string,
     callback: (participants: ValidatedParticipant[]) => void,

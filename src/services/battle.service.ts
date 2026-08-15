@@ -64,6 +64,9 @@ export const battleService = {
   evaluateSelf(quizId: string, questionId: string) {
     return post('/api/battle/evaluate', { quizId, questionId });
   },
+  autoAdvance(quizId: string) {
+    return post('/api/battle/auto-advance', { quizId });
+  },
   transferOwnership(quizId: string, newOwnerId: string) {
     return post('/api/battle/transfer-ownership', { quizId, newOwnerId });
   },

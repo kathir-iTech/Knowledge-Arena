@@ -9,6 +9,7 @@ import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { battleService, getSessionToken } from '@/services/battle.service';
+import { presenceService } from '@/services/presence.service';
 import { STARTING_TRANSITION_MS, QUIZ_WAITING, QUIZ_READY, QUIZ_STARTING, QUIZ_LIVE, QUIZ_PAUSED, QUIZ_FINISHED, QUIZ_ARCHIVED } from '@/lib/constants';
 import { isBattleActive } from '@/lib/battle-machine';
 import { ShieldX, RefreshCw, MonitorX } from 'lucide-react';
@@ -204,6 +205,15 @@ export default function BattleRoomLoader() {
       partSub();
     };
   }, [quizId, user, retryCount, connectionStatus, sessionToken, router]);
+
+  // Real-time presence: both Commanders and Gladiators register in RTDB while
+  // they are on the battle screen (waiting room and live battle). The node is
+  // removed automatically on disconnect and re-applied on reconnect.
+  useEffect(() => {
+    if (!user || !quizId) return;
+    const role = user.role === 'gladiator' ? 'gladiator' : 'commander';
+    return presenceService.setPresence(quizId, user.id, role);
+  }, [quizId, user?.id, user?.role]);
 
   useEffect(() => {
     if (participant?.status === 'blocked') {

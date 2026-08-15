@@ -165,6 +165,63 @@ export async function finishBattle(
   await writeBattleLog({ quizId, event: 'battle_finished', actor, actorRole, metadata });
 }
 
+export interface AdvanceOutcome {
+  nextIndex: number;
+  ended: boolean;
+}
+
+// Shared state-machine advance logic used by both the Commander's
+// "Evaluate & Next" button (/api/battle/advance) and the gladiator-triggered
+// Commander auto-advance (/api/battle/auto-advance). The status guard is kept
+// inside the transaction so concurrent advances are serialized by Firestore.
+export async function advanceQuestion(quizId: string): Promise<AdvanceOutcome> {
+  const db = getAdminDb();
+  let nextIndex = 0;
+  let ended = false;
+  await db.runTransaction(async (tx) => {
+    const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
+    const snap = await tx.get(quizRef);
+    if (!snap.exists) throw new Error('Arena not found');
+    const quiz = snap.data() as Record<string, any>;
+    if (quiz.status !== QUIZ_LIVE && quiz.status !== QUIZ_PAUSED) {
+      throw new Error(`Cannot advance a question in state: ${quiz.status}`);
+    }
+
+    const index = quiz.current_question_index ?? 0;
+    const questionCount = quiz.question_count ?? 0;
+    const now = Date.now();
+    nextIndex = index + 1;
+    ended = nextIndex >= questionCount;
+
+    const quizUpdate: Record<string, any> = {
+      current_question_index: nextIndex,
+      question_start_at: ended ? null : now,
+    };
+    if (ended) {
+      quizUpdate.status = QUIZ_FINISHED;
+      quizUpdate.ended_at = now;
+      quizUpdate.paused_at = null;
+    }
+    tx.update(quizRef, quizUpdate);
+
+    if (ended) {
+      const partsSnap = await db
+        .collection(COLLECTIONS.QUIZZES).doc(quizId)
+        .collection(COLLECTIONS.PARTICIPANTS)
+        .get();
+      for (const p of partsSnap.docs) {
+        const pSnap = await tx.get(p.ref);
+        if (!pSnap.exists || p.id === quiz.created_by || pSnap.data()?.status === PS_BLOCKED) continue;
+        tx.update(p.ref, {
+          status: PS_FINISHED,
+          finished_at: now,
+        });
+      }
+    }
+  });
+  return { nextIndex, ended };
+}
+
 async function loadQuestions(quizId: string) {
   const db = getAdminDb();
   const snap = await db
