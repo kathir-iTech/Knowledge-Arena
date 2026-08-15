@@ -20,7 +20,7 @@ function LoginPageContent() {
           <Link href="/" aria-label="Back to home" className="mx-auto flex w-16 h-16 rounded-[18px] bg-primary/10 items-center justify-center border border-primary/20">
             <BrainCircuit className="w-8 h-8 text-primary" />
           </Link>
-          <h1 className="text-3xl font-headline font-bold tracking-tight">Knowledge Arena</h1>
+          <h1 className="text-3xl font-headline font-bold tracking-tight">Quorena</h1>
           <p className="text-sm text-muted-foreground">Sign in to continue to the arena.</p>
         </div>
 

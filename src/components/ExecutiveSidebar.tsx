@@ -98,7 +98,7 @@ const ExecutiveSidebar = () => {
             <div className="flex items-center justify-center w-8 h-8 rounded-[10px] bg-primary/10 shrink-0">
               <BrainCircuit className="w-5 h-5 text-primary" aria-hidden="true" />
             </div>
-            <span className="text-sm font-headline font-semibold text-foreground whitespace-nowrap hidden group-data-[collapsed=false]:block tracking-tight">Knowledge Arena</span>
+            <span className="text-sm font-headline font-semibold text-foreground whitespace-nowrap hidden group-data-[collapsed=false]:block tracking-tight">Quorena</span>
           </div>
         </SidebarHeader>
         <SidebarContent className="gap-0.5">

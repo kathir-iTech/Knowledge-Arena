@@ -1,8 +1,8 @@
-# Knowledge Arena ⚔️
+# Quorena ⚔️
 
 > **The ultimate AI-powered quiz battleground. Create, compete, and conquer.**
 
-Knowledge Arena is a real-time multiplayer quiz platform where educators generate AI-powered quizzes from PDFs and students compete in live battles. Built with Next.js, Firebase, and Google Gemini AI.
+Quorena is a real-time multiplayer quiz platform where educators generate AI-powered quizzes from PDFs and students compete in live battles. Built with Next.js, Firebase, and Google Gemini AI.
 
 ---
 
@@ -52,7 +52,7 @@ Knowledge Arena is a real-time multiplayer quiz platform where educators generat
 
 ## Architecture Overview 🏗
 
-Knowledge Arena follows a **hybrid architecture** combining server-rendered pages, client-side Firebase SDK for real-time data, and server-side API routes for admin operations.
+Quorena follows a **hybrid architecture** combining server-rendered pages, client-side Firebase SDK for real-time data, and server-side API routes for admin operations.
 
 The Next.js 15 App Router serves as the backbone, with React Server Components for static content and Client Components for interactive real-time features. Authentication is handled client-side via Firebase Auth, with ID tokens verified server-side in API routes using the Firebase Admin SDK. Authorization is enforced at three layers: **client-side route guards** (redirects by role), **API route verification** (role-checked middleware), and **Firestore Security Rules**.
 

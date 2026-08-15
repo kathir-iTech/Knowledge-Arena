@@ -33,7 +33,7 @@ test.describe('Authentication Flow', () => {
     await waitForApp(page);
 
     // Heading
-    await expect(page.locator('h1')).toContainText('Knowledge Arena');
+    await expect(page.locator('h1')).toContainText('Quorena');
     // Subheading
     await expect(page.locator('p')).toContainText('The ultimate quiz battleground.');
     // Google Sign-In button
@@ -315,7 +315,7 @@ test.describe('Error Boundaries & 404', () => {
     // ClientLayout redirects to / for unauthenticated users
     // So we should be on the login page
     expect(page.url()).toBe(BASE_URL + '/');
-    await expect(page.locator('h1')).toContainText('Knowledge Arena');
+    await expect(page.locator('h1')).toContainText('Quorena');
   });
 
   test('Root-level non-existent route redirects to home via middleware', async ({ page }) => {

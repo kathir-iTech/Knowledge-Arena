@@ -17,7 +17,7 @@ test.describe('Live Battle Command Center', () => {
     await page.locator('button[type="submit"]').click();
 
     // Wait for the executive portal to load
-    await expect(page.locator('text=Knowledge Arena')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('text=Quorena')).toBeVisible({ timeout: 15000 });
     await page.waitForURL(/\/executive|login|$/, { timeout: 15000 });
     await page.waitForTimeout(2500);
 
