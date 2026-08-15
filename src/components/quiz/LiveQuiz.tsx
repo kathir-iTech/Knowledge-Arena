@@ -12,15 +12,16 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useFirebase } from '@/firebase';
-import { quizService } from '@/services/quiz.service';
 import { questionService, submissionService } from '@/services/game.service';
 import { participantService } from '@/services/participant.service';
-import { battleService, getSessionToken } from '@/services/battle.service';
+import { presenceService, type PresenceMap } from '@/services/presence.service';
+import { battleService } from '@/services/battle.service';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import { useToast } from '@/hooks/use-toast';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { applyOptionShuffle } from '@/lib/battle-machine';
+import { COMMANDER_PRESENCE_WINDOW_MS } from '@/lib/constants';
 
 interface LiveQuizQuestion {
   id: string;
@@ -30,32 +31,11 @@ interface LiveQuizQuestion {
   sort_index: number;
 }
 
-const COMMANDER_TIMEOUT_MS = 45000;
-const PARTICIPANT_TIMEOUT_MS = 30000;
-
-function isOnline(lastSeen: unknown, now: number, timeout: number): boolean {
-  if (!lastSeen) return true;
-  const ts = typeof lastSeen === 'number' ? lastSeen : (lastSeen as any).toMillis?.();
-  if (!ts) return true;
-  return now - ts < timeout;
-}
-
-function useCommanderPresence(quiz: ValidatedQuiz) {
-  const [commanderOnline, setCommanderOnline] = useState(true);
-  const [presenceNow, setPresenceNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const interval = setInterval(() => setPresenceNow(Date.now()), 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const lastSeen = (quiz as any).commanderLastSeen;
-    const online = isOnline(lastSeen, presenceNow, COMMANDER_TIMEOUT_MS);
-    setCommanderOnline(online);
-  }, [quiz, presenceNow]);
-
-  return commanderOnline;
+function useCommanderPresence(quiz: ValidatedQuiz, presence: PresenceMap | null): boolean {
+  // Until the first RTDB presence snapshot arrives, assume the Commander is
+  // online to avoid a false "connection interrupted" flash.
+  if (!presence) return true;
+  return !!(presence[quiz.created_by] && presence[quiz.created_by].online);
 }
 
 const CountdownTimer = React.memo(({ timeLeft, totalSec }: { timeLeft: number; totalSec: number }) => {
@@ -138,16 +118,10 @@ function AnimatedScore({ value, className }: { value: number; className?: string
   return <span className={cn("font-mono font-semibold tabular-nums", className)}>{display} PTS</span>;
 }
 
-const LiveLeaderboard = React.memo(({ participants, teacherId, currentUserId }: { participants: ValidatedParticipant[], teacherId: string, currentUserId: string }) => {
+const LiveLeaderboard = React.memo(({ participants, teacherId, currentUserId, presence }: { participants: ValidatedParticipant[], teacherId: string, currentUserId: string, presence: PresenceMap | null }) => {
     const sortedParticipants = useMemo(() => [...participants].sort((a,b) => b.score - a.score), [participants]);
-    const [presenceNow, setPresenceNow] = useState(() => Date.now());
     const [rankDeltas, setRankDeltas] = useState<Record<string, number>>({});
     const prevRanksRef = useRef<Record<string, number>>({});
-
-    useEffect(() => {
-      const interval = setInterval(() => setPresenceNow(Date.now()), 5000);
-      return () => clearInterval(interval);
-    }, []);
 
     useEffect(() => {
       const nextRanks: Record<string, number> = {};
@@ -163,7 +137,11 @@ const LiveLeaderboard = React.memo(({ participants, teacherId, currentUserId }: 
       prevRanksRef.current = nextRanks;
     }, [sortedParticipants]);
 
-    const onlineParticipants = useMemo(() => sortedParticipants.filter(p => p.user_id === teacherId || isOnline(p.lastSeen, presenceNow, PARTICIPANT_TIMEOUT_MS)), [sortedParticipants, teacherId, presenceNow]);
+    const onlineParticipants = useMemo(() => {
+      // Until the first RTDB presence snapshot arrives, don't filter anyone out.
+      if (presence == null) return sortedParticipants;
+      return sortedParticipants.filter(p => p.user_id === teacherId || presence[p.user_id] != null);
+    }, [sortedParticipants, teacherId, presence]);
     const students = onlineParticipants.filter(p => p.user_id !== teacherId);
     const total = students.length;
 
@@ -223,7 +201,7 @@ const LiveLeaderboard = React.memo(({ participants, teacherId, currentUserId }: 
     );
 });
 
-const ParticipantStats = ({ participants, teacherId, submittedCount, finishedCount, onUnblock, unblockingId, independent }: {
+const ParticipantStats = ({ participants, teacherId, submittedCount, finishedCount, onUnblock, unblockingId, independent, presence }: {
   participants: ValidatedParticipant[];
   teacherId: string;
   submittedCount: number;
@@ -231,12 +209,19 @@ const ParticipantStats = ({ participants, teacherId, submittedCount, finishedCou
   onUnblock: (userId: string) => void;
   unblockingId: string | null;
   independent: boolean;
+  presence: PresenceMap | null;
 }) => {
-  const students = participants.filter(p => p.user_id !== teacherId);
+  const allStudents = participants.filter(p => p.user_id !== teacherId);
+  // Roster stats reflect gladiators actually present via RTDB (ghost gladiators
+  // whose tab was closed drop out). Blocked status is management state, so
+  // blocked students stay visible for unblocking regardless of presence.
+  const students = presence == null
+    ? allStudents
+    : allStudents.filter(p => presence[p.user_id] != null);
   const playing = students.filter(p => p.status === 'playing').length;
-  const blocked = students.filter(p => p.status === 'blocked').length;
-  const finished = students.filter(p => p.status === 'finished').length;
-  const blockedStudents = students.filter(p => p.status === 'blocked');
+  const blocked = allStudents.filter(p => p.status === 'blocked').length;
+  const finished = allStudents.filter(p => p.status === 'finished').length;
+  const blockedStudents = allStudents.filter(p => p.status === 'blocked');
 
   return (
     <div className="flex flex-wrap gap-2 justify-center mb-4 md:mb-6">
@@ -299,12 +284,13 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const commanderOnline = useCommanderPresence(quiz);
+  const [presence, setPresence] = useState<PresenceMap | null>(null);
+  const commanderOnline = useCommanderPresence(quiz, presence);
   const independent = quiz.battle_mode === 'independent';
 
   const [questions, setQuestions] = useState<LiveQuizQuestion[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
-  const [participants, setParticipants] = useState<ValidatedParticipant[]>(allParticipants || []);
+  const participants = allParticipants;
 
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
@@ -325,58 +311,34 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const prevViolationsRef = useRef<Record<string, number>>({});
   const advancingRef = useRef(false);
   const confirmedQuestionIds = useRef(new Set<string>());
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const operationLock = useRef(false);
   const timeUpAttemptsRef = useRef<Record<string, number>>({});
   const autoEndedRef = useRef<string | null>(null);
+  const commanderAbsentSinceRef = useRef<number | null>(null);
+  const autoAdvanceAttemptedRef = useRef(new Set<string>());
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { firestore } = useFirebase();
 
+  // RTDB presence: single source of truth for who is actively connected to the
+  // arena (replaces the old Firestore lastSeen heartbeats entirely).
   useEffect(() => {
-    if (!isTeacher || !user) return;
-    const send = () => {
-      quizService.commanderHeartbeat(quiz.id).catch(() => {});
-    };
-    send();
-    heartbeatRef.current = setInterval(send, 15000);
+    let mounted = true;
+    const unsub = presenceService.subscribeToPresence(quiz.id, (p) => {
+      if (mounted) setPresence(p);
+    });
+    return () => { mounted = false; unsub(); };
+  }, [quiz.id]);
 
-    const handlePageShow = () => {
-      send();
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-      heartbeatRef.current = setInterval(send, 15000);
-    };
-
-    window.addEventListener('pageshow', handlePageShow);
-
-    return () => {
-      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
-      window.removeEventListener('pageshow', handlePageShow);
-    };
-  }, [quiz.id, user, isTeacher]);
-
+  // Tracks how long the Commander has been absent so gladiators can trigger the
+  // auto-advance once the grace window has fully elapsed.
   useEffect(() => {
-    if (!isTeacher && user) {
-      const send = () => {
-        participantService.heartbeat(quiz.id, user.id, getSessionToken(quiz.id)).catch(() => {});
-      };
-      send();
-      heartbeatRef.current = setInterval(send, 15000);
-
-      const handlePageShow = () => {
-        send();
-        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-        heartbeatRef.current = setInterval(send, 15000);
-      };
-
-      window.addEventListener('pageshow', handlePageShow);
-
-      return () => {
-        if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
-        window.removeEventListener('pageshow', handlePageShow);
-      };
+    if (commanderOnline) {
+      commanderAbsentSinceRef.current = null;
+    } else if (commanderAbsentSinceRef.current === null) {
+      commanderAbsentSinceRef.current = Date.now();
     }
-  }, [quiz.id, user, isTeacher]);
+  }, [commanderOnline]);
 
   useEffect(() => {
     if (!isTeacher && participant.status === 'blocked') {
@@ -411,37 +373,29 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     return () => { mounted = false; qSub(); };
   }, [quiz.id, toast]);
 
+  // Commander-facing violation alerts. Lives here instead of the participant
+  // onSnapshot (removed — participants now flow down via props) so teacher
+  // notifications still work without a duplicate Firestore listener.
   useEffect(() => {
-    let mounted = true;
-    const pSub = participantService.subscribeToParticipants(quiz.id, (parts) => {
-      if (!mounted) return;
-      setParticipants(parts);
-      if (isTeacher) {
-        parts.forEach(p => {
-          if (p.user_id === quiz.created_by) return;
-          const prev = prevViolationsRef.current[p.user_id];
-          const curr = p.violations_count ?? 0;
-          if (prev === undefined) {
-            prevViolationsRef.current[p.user_id] = curr;
-            return;
-          }
-          if (curr > prev) {
-            toast({
-              title: p.status === 'blocked' ? 'Gladiator Blocked' : 'Malpractice Warning',
-              description: `${p.name || p.user_id.slice(0, 8)} — Violation #${curr}`,
-              variant: p.status === 'blocked' ? 'destructive' : 'default',
-            });
-          }
-          prevViolationsRef.current[p.user_id] = curr;
+    if (!isTeacher) return;
+    allParticipants.forEach(p => {
+      if (p.user_id === quiz.created_by) return;
+      const prev = prevViolationsRef.current[p.user_id];
+      const curr = p.violations_count ?? 0;
+      if (prev === undefined) {
+        prevViolationsRef.current[p.user_id] = curr;
+        return;
+      }
+      if (curr > prev) {
+        toast({
+          title: p.status === 'blocked' ? 'Gladiator Blocked' : 'Malpractice Warning',
+          description: `${p.name || p.user_id.slice(0, 8)} — Violation #${curr}`,
+          variant: p.status === 'blocked' ? 'destructive' : 'default',
         });
       }
-    }, () => {
-      if (mounted && navigator.onLine) {
-        toast({ variant: 'destructive', title: 'Connection Issue', description: 'Participant sync interrupted. Reconnecting...' });
-      }
+      prevViolationsRef.current[p.user_id] = curr;
     });
-    return () => { mounted = false; pSub(); };
-  }, [quiz.id, isTeacher, quiz.created_by, toast]);
+  }, [allParticipants, isTeacher, quiz.created_by, toast]);
 
   const myQuestionOrder = independent ? (participant.question_order ?? null) : null;
   const myIndex = myQuestionOrder ? (participant.current_question_index ?? 0) : (quiz.current_question_index ?? -1);
@@ -456,6 +410,41 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     if ((quiz.current_question_index ?? -1) < 0) return null;
     return questions[quiz.current_question_index ?? 0] ?? null;
   }, [questions, myQuestionOrder, myIndex, quiz.current_question_index]);
+
+  // Gladiator-triggered Commander auto-advance: once the Commander has been
+  // absent for the grace window and the current question's timer has expired,
+  // the lowest-sorted online gladiator calls the server route once per question.
+  const tryAutoAdvance = useCallback(() => {
+    if (isTeacher || independent || !user) return;
+    if (quiz.status !== 'live') return;
+    if (commanderOnline) return;
+    const since = commanderAbsentSinceRef.current;
+    if (since == null || Date.now() - since < COMMANDER_PRESENCE_WINDOW_MS) return;
+    if (currentQuestion && timeLeft > 0) return;
+    const qid = currentQuestion?.id ?? '__idle__';
+    if (autoAdvanceAttemptedRef.current.has(qid)) return;
+    // Debounce: only the gladiator whose uid sorts first among the currently
+    // online gladiators triggers the auto-advance so 30 clients don't all fire.
+    const onlineGladiators = Object.keys(presence ?? {})
+      .filter(uid => presence?.[uid]?.role === 'gladiator')
+      .sort();
+    const triggerUid = onlineGladiators[0];
+    if (!triggerUid || triggerUid !== user.id) return;
+    autoAdvanceAttemptedRef.current.add(qid);
+    battleService.autoAdvance(quiz.id)
+      .then(() => {})
+      .catch(() => {
+        // Transient failure (or the Commander actually reconnected). Drop the
+        // lock so a later cycle can retry; rate limiting bounds the retries.
+        autoAdvanceAttemptedRef.current.delete(qid);
+      });
+  }, [isTeacher, independent, user, quiz.status, commanderOnline, currentQuestion, timeLeft, presence, quiz.id]);
+
+  useEffect(() => {
+    if (isTeacher || independent) return;
+    const interval = setInterval(tryAutoAdvance, 5000);
+    return () => clearInterval(interval);
+  }, [tryAutoAdvance, isTeacher, independent]);
 
   const displayedOptions = useMemo(() => {
     if (!currentQuestion) return [];
@@ -726,7 +715,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
   if (isLoadingQuestions) return <LoadingScreen message="Loading questions..." />;
 
-  const studentCount = participants.filter(p => p.user_id !== quiz.created_by).length;
+  const studentCount = participants.filter(p => p.user_id !== quiz.created_by && (presence == null || presence[p.user_id] != null)).length;
   const showCommanderOffline = !isTeacher && !commanderOnline && (quiz.status === 'live' || quiz.status === 'paused');
   const finishedCount = participants.filter(p => p.user_id !== quiz.created_by && p.status === 'finished').length;
   const isGladiatorFinished = !isTeacher && independent && participant.status === 'finished';
@@ -776,14 +765,14 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           <WifiOff className="w-4 h-4 text-warning shrink-0" />
           <div className="text-sm">
             <span className="font-medium text-warning">Commander connection interrupted</span>
-            <p className="text-xs text-muted-foreground">The battle is paused while we wait for the Commander to reconnect.</p>
+            <p className="text-xs text-muted-foreground">The battle won't stall — once the grace period ends, the next question will advance automatically.</p>
           </div>
         </div>
       )}
 
       {isTeacher && (
         <div className="flex items-center gap-2 mb-4 w-full max-w-4xl justify-between">
-          <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} finishedCount={finishedCount} onUnblock={handleUnblock} unblockingId={unblockingId} independent={independent} />
+          <ParticipantStats participants={participants} teacherId={quiz.created_by} submittedCount={submittedCount} finishedCount={finishedCount} onUnblock={handleUnblock} unblockingId={unblockingId} independent={independent} presence={presence} />
         </div>
       )}
 
@@ -988,7 +977,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         </div>
       )}
 
-      <LiveLeaderboard participants={participants} teacherId={quiz.created_by} currentUserId={user?.id || ''} />
+      <LiveLeaderboard participants={participants} teacherId={quiz.created_by} currentUserId={user?.id || ''} presence={presence} />
 
       <AlertDialog open={showEndConfirm} onOpenChange={(o) => { if (!o && !isEnding) setShowEndConfirm(false); }}>
         <AlertDialogContent>

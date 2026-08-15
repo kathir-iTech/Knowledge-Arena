@@ -3,6 +3,9 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "database": {
+    "rules": "database.rules.json"
+  },
   "hosting": {
     "public": ".next",
     "ignore": ["firebase.json", "**/node_modules/**"],
@@ -25,6 +28,9 @@
     ]
   },
   "emulators": {
+    "database": {
+      "port": 9000
+    },
     "firestore": {
       "port": 8080
     },

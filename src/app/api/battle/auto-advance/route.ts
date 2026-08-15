@@ -1,0 +1,116 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
+import { getAdminDb, getAdminRtdb } from '@/lib/firebase-admin';
+import {
+  COLLECTIONS,
+  QUIZ_LIVE,
+  PS_BLOCKED,
+  COMMANDER_PRESENCE_WINDOW_MS,
+} from '@/lib/constants';
+import {
+  evaluateQuestionForAll,
+  advanceQuestion,
+  writeBattleLog,
+  battleErrorResponse,
+  getMs,
+  loadQuizDoc,
+} from '@/lib/battle-server';
+
+export const runtime = 'nodejs';
+
+// Auto-advance triggered by gladiators when the Commander is genuinely absent
+// for the grace window. Reuses the exact evaluate+advance logic the Commander's
+// "Evaluate & Next" button runs; it only decides WHEN to run it.
+export async function POST(req: NextRequest) {
+  try {
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['gladiator']);
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const rateLimitResponse = enforceRateLimit(`battle:${auth.uid}`, Limits.BATTLE_ACTION_PER_USER);
+    if (rateLimitResponse) return rateLimitResponse;
+
+    const body = await req.json().catch(() => ({}));
+    const quizId = typeof body.quizId === 'string' ? body.quizId.trim() : '';
+    if (!quizId) return NextResponse.json({ error: 'Missing quizId' }, { status: 400 });
+
+    const db = getAdminDb();
+
+    // (a) The caller must be an authenticated gladiator who is a participant.
+    const partSnap = await db
+      .collection(COLLECTIONS.QUIZZES).doc(quizId)
+      .collection(COLLECTIONS.PARTICIPANTS).doc(auth.uid)
+      .get();
+    if (!partSnap.exists) {
+      return NextResponse.json({ error: 'You are not a member of this arena' }, { status: 403 });
+    }
+    if (partSnap.data()?.status === PS_BLOCKED) {
+      return NextResponse.json({ error: 'You are blocked from this arena' }, { status: 403 });
+    }
+
+    const { data: quiz } = await loadQuizDoc(quizId);
+    if (quiz.status !== QUIZ_LIVE) {
+      return NextResponse.json(
+        { error: `Auto-advance requires a live arena (state: ${quiz.status})` },
+        { status: 409 }
+      );
+    }
+
+    const commanderUid = quiz.created_by;
+    if (!commanderUid || commanderUid === auth.uid) {
+      return NextResponse.json({ error: 'No Commander to advance for this arena' }, { status: 409 });
+    }
+
+    // (b) Independently re-check RTDB presence: if the Commander's presence node
+    // still exists they are not actually absent — no-op.
+    const commanderPresence = await getAdminRtdb().ref(`presence/${quizId}/${commanderUid}`).get();
+    if (commanderPresence.exists()) {
+      return NextResponse.json({ error: 'Commander is present' }, { status: 409 });
+    }
+
+    // (c) The Commander must have been absent for the grace window. Presence is
+    // written/removed by the clients, so the server uses the fine-grained signal
+    // (missing node) plus an elapsed-time floor on the current question start.
+    const absentFor = Date.now() - getMs(quiz.question_start_at);
+    if (absentFor < COMMANDER_PRESENCE_WINDOW_MS) {
+      return NextResponse.json(
+        { error: `Commander disconnect grace period not yet elapsed (${absentFor}ms)` },
+        { status: 409 }
+      );
+    }
+
+    const index = quiz.current_question_index ?? 0;
+    const qSnap = await db
+      .collection(COLLECTIONS.QUIZZES).doc(quizId)
+      .collection(COLLECTIONS.QUESTIONS)
+      .orderBy('sort_index')
+      .get();
+    const currentQuestion = qSnap.docs[index];
+    if (!currentQuestion) {
+      return NextResponse.json({ error: 'No active question to advance' }, { status: 409 });
+    }
+
+    await evaluateQuestionForAll(quizId, currentQuestion.id, auth.uid, 'gladiator');
+    const outcome = await advanceQuestion(quizId);
+
+    await writeBattleLog({
+      quizId,
+      event: 'question_advanced',
+      actor: auth.uid,
+      actorRole: 'gladiator',
+      metadata: { auto: true, nextIndex: outcome.nextIndex },
+    });
+    if (outcome.ended) {
+      await writeBattleLog({
+        quizId,
+        event: 'battle_finished',
+        actor: auth.uid,
+        actorRole: 'gladiator',
+        metadata: { reason: 'commander_auto_advance_final' },
+      });
+    }
+
+    return NextResponse.json({ ok: true, ended: outcome.ended, nextIndex: outcome.nextIndex });
+  } catch (err: unknown) {
+    return battleErrorResponse(err);
+  }
+}

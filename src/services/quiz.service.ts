@@ -275,11 +275,6 @@ export const quizService = {
     await updateDoc(doc(db, COLLECTIONS.QUIZZES, id), updateData);
   },
 
-  async commanderHeartbeat(id: string): Promise<void> {
-    const db = getFirestore();
-    await updateDoc(doc(db, COLLECTIONS.QUIZZES, id), { commanderLastSeen: serverTimestamp() });
-  },
-
   async duplicateQuiz(id: string, creatorId: string): Promise<string> {
     const db = getFirestore();
 

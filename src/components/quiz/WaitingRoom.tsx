@@ -13,8 +13,9 @@ import { Skeleton } from '../ui/skeleton';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { battleService, getSessionToken } from '@/services/battle.service';
+import { battleService } from '@/services/battle.service';
 import { battleLogService } from '@/services/battle-log.service';
+import { presenceService, type PresenceMap } from '@/services/presence.service';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -34,7 +35,7 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [presenceNow, setPresenceNow] = useState(() => Date.now());
+  const [presence, setPresence] = useState<PresenceMap | null>(null);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [selfReady, setSelfReady] = useState(false);
@@ -52,31 +53,19 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
   }, [quiz.id]);
 
   useEffect(() => {
-    const interval = setInterval(() => setPresenceNow(Date.now()), 5000);
-    return () => clearInterval(interval);
-  }, []);
+    let mounted = true;
+    const unsub = presenceService.subscribeToPresence(quiz.id, (p) => {
+      if (mounted) setPresence(p);
+    });
+    return () => { mounted = false; unsub(); };
+  }, [quiz.id]);
 
   const unsubRef = useRef<(() => void) | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
-
-    if (isTeacher && user) {
-      const send = () => {
-        quizService.commanderHeartbeat(quiz.id).catch(() => {});
-      };
-      send();
-      heartbeatRef.current = setInterval(send, 15000);
-    } else if (!isTeacher && user) {
-      const send = () => {
-        participantService.heartbeat(quiz.id, user.id, getSessionToken(quiz.id)).catch(() => {});
-      };
-      send();
-      heartbeatRef.current = setInterval(send, 15000);
-    }
 
     const subscribe = () => {
       if (unsubRef.current) unsubRef.current();
@@ -126,20 +115,8 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
 
     const handlePageShow = () => {
       if (!mountedRef.current) return;
-      if (isTeacher && user) {
-        quizService.commanderHeartbeat(quiz.id).catch(() => {});
-      } else if (!isTeacher && user) {
-        participantService.heartbeat(quiz.id, user.id, getSessionToken(quiz.id)).catch(() => {});
-      }
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-      const hbUserId = user?.id;
-      if (hbUserId) {
-        const send = isTeacher
-          ? () => quizService.commanderHeartbeat(quiz.id).catch(() => {})
-          : () => participantService.heartbeat(quiz.id, hbUserId, getSessionToken(quiz.id)).catch(() => {});
-        send();
-        heartbeatRef.current = setInterval(send, 15000);
-      }
+      // RTDB presence is re-applied automatically by the `.info/connected`
+      // watcher in presenceService; only the Firestore roster needs to re-sync.
       subscribe();
     };
 
@@ -156,7 +133,6 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
       mountedRef.current = false;
       if (unsubRef.current) { unsubRef.current(); unsubRef.current = null; }
       if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
-      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('pageshow', handlePageShow);
@@ -168,22 +144,18 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
     return participants.filter(p => {
       if (p.user_id === quiz.created_by) return false;
       if (p.status === 'blocked') return false;
-      const lastSeen = p.lastSeen;
-      if (!lastSeen) return true;
-      const ts = typeof lastSeen === 'number' ? lastSeen : (lastSeen as any).toMillis?.();
-      if (!ts) return true;
-      return presenceNow - ts < 30000;
+      // RTDB presence: only gladiators actively connected count as in the room.
+      if (presence == null) return true;
+      return presence[p.user_id] != null;
     });
-  }, [participants, presenceNow, quiz.created_by]);
+  }, [participants, presence, quiz.created_by]);
 
   const teacherOnline = useMemo(() => {
-    const teacher = participants.find(p => p.user_id === quiz.created_by);
-    if (!teacher) return false;
-    if (!teacher.lastSeen) return true;
-    const ts = typeof teacher.lastSeen === 'number' ? teacher.lastSeen : (teacher.lastSeen as any).toMillis?.();
-    if (!ts) return true;
-    return presenceNow - ts < 30000;
-  }, [participants, presenceNow, quiz.created_by]);
+    // The Commander's own RTDB presence node is the same signal used by the
+    // live battle banner, so waiting-room and live room agree.
+    if (presence == null) return true;
+    return presence[quiz.created_by] != null;
+  }, [presence, quiz.created_by]);
 
   const blockedParticipants = useMemo(() => {
     return participants.filter(p => p.user_id !== quiz.created_by && p.status === 'blocked');

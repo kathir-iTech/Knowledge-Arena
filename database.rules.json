@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "presence": {
+      "$battleId": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && $uid === auth.uid",
+          ".validate": "newData.isObject() && newData.hasChildren(['role', 'online']) && newData.child('role').val() in ['commander', 'gladiator'] && newData.child('online').isBoolean()"
+        }
+      }
+    }
+  }
+}

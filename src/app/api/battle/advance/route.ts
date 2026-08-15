@@ -1,15 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
-import { getAdminDb } from '@/lib/firebase-admin';
-import {
-  COLLECTIONS,
-  QUIZ_LIVE,
-  QUIZ_PAUSED,
-  QUIZ_FINISHED,
-  PS_BLOCKED,
-} from '@/lib/constants';
-import { writeBattleLog, isCreator, battleErrorResponse } from '@/lib/battle-server';
+import { writeBattleLog, isCreator, battleErrorResponse, advanceQuestion, loadQuizDoc } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -24,54 +16,12 @@ export async function POST(req: NextRequest) {
     const quizId = typeof body.quizId === 'string' ? body.quizId.trim() : '';
     if (!quizId) return NextResponse.json({ error: 'Missing quizId' }, { status: 400 });
 
-    const db = getAdminDb();
-    let nextIndex = 0;
-    let ended = false;
+    const { data: quiz } = await loadQuizDoc(quizId);
+    if (!isCreator(quiz, auth.uid)) {
+      throw new Error('Only the Commander can advance the question');
+    }
 
-    await db.runTransaction(async (tx) => {
-      const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
-      const snap = await tx.get(quizRef);
-      if (!snap.exists) throw new Error('Arena not found');
-      const quiz = snap.data() as Record<string, any>;
-      if (!isCreator(quiz, auth.uid)) {
-        throw new Error('Only the Commander can advance the question');
-      }
-      if (quiz.status !== QUIZ_LIVE && quiz.status !== QUIZ_PAUSED) {
-        throw new Error(`Cannot advance a question in state: ${quiz.status}`);
-      }
-
-      const index = quiz.current_question_index ?? 0;
-      const questionCount = quiz.question_count ?? 0;
-      const now = Date.now();
-      nextIndex = index + 1;
-      ended = nextIndex >= questionCount;
-
-      const quizUpdate: Record<string, any> = {
-        current_question_index: nextIndex,
-        question_start_at: ended ? null : now,
-      };
-      if (ended) {
-        quizUpdate.status = QUIZ_FINISHED;
-        quizUpdate.ended_at = now;
-        quizUpdate.paused_at = null;
-      }
-      tx.update(quizRef, quizUpdate);
-
-      if (ended) {
-        const partsSnap = await getAdminDb()
-          .collection(COLLECTIONS.QUIZZES).doc(quizId)
-          .collection(COLLECTIONS.PARTICIPANTS)
-          .get();
-        for (const p of partsSnap.docs) {
-          const pSnap = await tx.get(p.ref);
-          if (!pSnap.exists || p.id === quiz.created_by || pSnap.data()?.status === PS_BLOCKED) continue;
-          tx.update(p.ref, {
-            status: 'finished',
-            finished_at: now,
-          });
-        }
-      }
-    });
+    const { nextIndex, ended } = await advanceQuestion(quizId);
 
     await writeBattleLog({
       quizId,
