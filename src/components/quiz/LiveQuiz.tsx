@@ -689,6 +689,11 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     setIsSkipping(true);
     setShowSkipConfirm(false);
     try {
+      // Reconcile first: score any submissions that landed before the skip so
+      // they aren't orphaned — only genuine non-submitters take the penalty.
+      if (currentQuestion) {
+        await battleService.evaluateQuestion(quiz.id, currentQuestion.id);
+      }
       const res = await battleService.skipQuestion(quiz.id);
       toast({ title: 'Question Skipped', description: res?.ended ? 'That was the final question. Battle complete.' : 'Everyone moved safely to the next question.' });
     } catch (e) {

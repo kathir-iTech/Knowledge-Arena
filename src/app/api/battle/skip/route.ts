@@ -10,7 +10,7 @@ import {
   QUIZ_FINISHED,
   PS_BLOCKED,
 } from '@/lib/constants';
-import { writeBattleLog, isCreator, normalizeSkipConfig, battleErrorResponse } from '@/lib/battle-server';
+import { writeBattleLog, isCreator, normalizeSkipConfig, evaluateQuestionForAll, battleErrorResponse } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -28,6 +28,27 @@ export async function POST(req: NextRequest) {
     const db = getAdminDb();
     let skippedQuestionId = '';
     let ended = false;
+
+    // Resolve the question being skipped and run the same evaluate step used by
+    // "Evaluate & Next" BEFORE the skip transaction commits. Any submission that
+    // landed before the skip gets scored first; the penalty loop below then only
+    // hits genuine non-submitters. evaluateQuestionForAll is idempotent (scored
+    // flag re-checked inside its own transaction), so a concurrent advance /
+    // auto-advance that already evaluated this question is a harmless no-op.
+    const preQuizSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
+    if (preQuizSnap.exists) {
+      const preQuiz = preQuizSnap.data() as Record<string, any>;
+      const preIndex = preQuiz.current_question_index ?? 0;
+      const preQuestionsSnap = await db
+        .collection(COLLECTIONS.QUIZZES).doc(quizId)
+        .collection(COLLECTIONS.QUESTIONS)
+        .orderBy('sort_index')
+        .get();
+      const preQuestion = preQuestionsSnap.docs[preIndex];
+      if (preQuestion) {
+        await evaluateQuestionForAll(quizId, preQuestion.id, auth.uid, 'commander');
+      }
+    }
 
     await db.runTransaction(async (tx) => {
       const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
