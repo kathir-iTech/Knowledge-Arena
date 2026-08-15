@@ -4,6 +4,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 import { auditService } from '@/services/audit.service';
 import { COLLECTIONS } from '@/lib/constants';
+import { buildSearchTokens } from '@/lib/quiz-sets';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
@@ -73,15 +74,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const now = Date.now();
+    const stored = snap.data()!;
+    const newCategory = (category && category.trim()) || 'General';
+    const newTags = tags || '';
     await ref.update({
       text: text.trim(),
       options: options.map((o: string) => o.trim()),
       correctAnswerIndex,
       explanation: explanation?.trim() || '',
-      category: (category && category.trim()) || 'General',
+      category: newCategory,
       difficulty: difficulty || 'medium',
-      tags: tags || '',
+      tags: newTags,
       updatedAt: Timestamp.fromMillis(now),
+      searchTokens: buildSearchTokens(stored.title, newCategory, newTags),
     });
 
     await auditService.record({

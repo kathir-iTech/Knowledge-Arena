@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
 
     const cutoff = dateCutoff(date);
-    const { sets, sources } = await fetchSetSummaries();
+    const { sets, sources } = await fetchSetSummaries({ searchTerm: q || undefined });
 
     const filtered = sets.filter(s => {
       if (q && !s.title.toLowerCase().includes(q) && !s.category.toLowerCase().includes(q)) return false;

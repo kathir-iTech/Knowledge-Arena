@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
+    "rules:generate": "node scripts/generate-firestore-rules.js",
     "test": "playwright test",
     "demo:seed": "cross-env FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 tsx scripts/seed-demo.ts",
     "demo": "npm run demo:seed && cross-env NEXT_PUBLIC_FIREBASE_EMULATOR=true FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run dev"

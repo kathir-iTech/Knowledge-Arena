@@ -5,7 +5,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { auditService } from '@/services/audit.service';
 import { COLLECTIONS } from '@/lib/constants';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
-import { decodeSetId, fetchSetDocs, summarizeSet } from '@/lib/quiz-sets';
+import { decodeSetId, fetchSetDocs, summarizeSet, buildSearchTokens } from '@/lib/quiz-sets';
 
 export const runtime = 'nodejs';
 
@@ -100,7 +100,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ se
     const db = getAdminDb();
     const batch = db.batch();
     for (const doc of docs) {
-      batch.update(db.collection(COLLECTIONS.QUESTION_BANK).doc(doc.id), { ...updates, updatedAt: Timestamp.fromMillis(now) });
+      const next: Record<string, unknown> = { ...updates, updatedAt: Timestamp.fromMillis(now) };
+      if (title !== undefined) {
+        next.searchTokens = buildSearchTokens(title, doc.data.category || 'General', typeof doc.data.tags === 'string' ? doc.data.tags : '');
+      }
+      batch.update(db.collection(COLLECTIONS.QUESTION_BANK).doc(doc.id), next);
     }
     await batch.commit();
 

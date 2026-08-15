@@ -33,6 +33,22 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Gladiator sign-up email-domain lock (Phase 68). Configured via
+// NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN (public twin of the server-side
+// ALLOWED_GLADIATOR_EMAIL_DOMAIN used by scripts/generate-firestore-rules.js).
+// Empty means unrestricted. Database-rules enforcement is the source of truth;
+// this only wires the Google `hd` hint and a clear error + sign-out UX.
+const ALLOWED_GLADIATOR_DOMAIN = (process.env.NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN || '').trim().toLowerCase();
+const IS_EMULATOR = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true';
+
+function isAllowedGladiatorEmail(email: string | null | undefined): boolean {
+  if (!ALLOWED_GLADIATOR_DOMAIN) return true;
+  if (!email) return false;
+  const lower = email.toLowerCase();
+  if (IS_EMULATOR && lower === getDemoAccount('gladiator')?.email) return true;
+  return lower.endsWith(`@${ALLOWED_GLADIATOR_DOMAIN}`);
+}
+
 const EMOJIS = [
   '🤖', '👾', '🔮', '🧠', '👻', '🧑‍🚀', '🧛', '🧟', '🧞', '🦹', '🦸',
   '🧙', '🧚', '🧑‍💻', '👨‍🎤', '🕵️', '💂', '👨‍🎨', '👨‍🔬', '👨‍🔧', '👨‍⚖️', '👨‍🚀', '👨‍🚒'
@@ -168,6 +184,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       sessionStorage.removeItem('oa_pending');
+      // Google self-sign-up is the gladiator flow. When a domain lock is
+      // configured, reject sign-ups from accounts outside it before a profile
+      // is created (the Firestore rules enforce the same boundary). Already
+      // provisioned profiles — including staff provisioned by an executive —
+      // keep working regardless of the sign-up domain.
+      if (ALLOWED_GLADIATOR_DOMAIN && !isAllowedGladiatorEmail(firebaseUser.email)) {
+        if (!firestore) {
+          fetchUserDocument(firebaseUser.uid);
+          return;
+        }
+        getDoc(doc(firestore, 'users', firebaseUser.uid))
+          .then((docSnap) => {
+            if (docSnap.exists()) {
+              fetchUserDocument(firebaseUser.uid);
+              return;
+            }
+            if (auth) { void signOut(auth); }
+            setUser(null);
+            fetchInProgress.current = false;
+            fetchInProgressUid.current = null;
+            setIsLoading(false);
+            toast({
+              variant: 'destructive',
+              title: 'Access Denied',
+              description: `Gladiator sign-ups are restricted to "${ALLOWED_GLADIATOR_DOMAIN}" accounts. Please sign in with an institutional Google account.`,
+            });
+          })
+          .catch(() => fetchUserDocument(firebaseUser.uid));
+        return;
+      }
       fetchUserDocument(firebaseUser.uid);
     } else {
       setUser(null);
@@ -310,7 +356,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     sessionStorage.setItem('oa_pending', Date.now().toString());
     const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
+    provider.setCustomParameters({
+      prompt: 'select_account',
+      ...(ALLOWED_GLADIATOR_DOMAIN ? { hd: ALLOWED_GLADIATOR_DOMAIN } : {}),
+    });
     try {
       await signInWithRedirect(auth, provider);
     } catch (error: unknown) {

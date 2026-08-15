@@ -127,6 +127,73 @@ function submissionRef(quizId: string, questionId: string, userId: string) {
     .collection(COLLECTIONS.SUBMISSIONS).doc(userId);
 }
 
+// Write-time denormalized per-question analytics (Phase 68). The analytics
+// dashboard previously re-scanned every question's submissions subcollection
+// client-side for every finished quiz; instead, the server collapses each
+// question's submissions into an aggregated `questionStats` field on the
+// question doc at evaluation/finish time. The dashboard now reads a single
+// field per question instead of one document per submission.
+//
+// Privacy note: aggregated counts live on the question doc (rules forbid adding
+// a dedicated subcollection outside scope), so arena participants can read the
+// aggregate of a question they have already answered. Scores and correctness of
+// individual participants are never included.
+export async function writeQuestionStats(quizId: string, questionId: string): Promise<void> {
+  const db = getAdminDb();
+  try {
+    const akSnap = await db
+      .collection(COLLECTIONS.QUIZZES).doc(quizId)
+      .collection(COLLECTIONS.ANSWER_KEYS).doc(questionId)
+      .get();
+    const correctIndex = typeof akSnap.data()?.correct_option_index === 'number'
+      ? akSnap.data()!.correct_option_index
+      : null;
+
+    const subsSnap = await db
+      .collection(COLLECTIONS.QUIZZES).doc(quizId)
+      .collection(COLLECTIONS.QUESTIONS).doc(questionId)
+      .collection(COLLECTIONS.SUBMISSIONS)
+      .get();
+
+    const optionCounts: number[] = [];
+    let submittedCount = 0;
+    let correctCount = 0;
+    const timestamps: number[] = [];
+    const userTimes: Record<string, number> = {};
+    for (const d of subsSnap.docs) {
+      const data = d.data();
+      if (typeof data.selected_option !== 'number' || data.selected_option < 0) continue;
+      submittedCount++;
+      const idx = data.selected_option;
+      while (optionCounts.length <= idx) optionCounts.push(0);
+      optionCounts[idx]++;
+      if (correctIndex !== null && idx === correctIndex) correctCount++;
+      const ts = getMs(data.submittedAt);
+      timestamps.push(ts);
+      userTimes[d.id] = typeof data.clientTime === 'number' ? data.clientTime : ts;
+    }
+
+    await db
+      .collection(COLLECTIONS.QUIZZES).doc(quizId)
+      .collection(COLLECTIONS.QUESTIONS).doc(questionId)
+      .set(
+        {
+          questionStats: {
+            submittedCount,
+            optionCounts,
+            correctCount,
+            correctOptionIndex: correctIndex,
+            timestamps: timestamps.slice(0, 500),
+            userTimes,
+          },
+        },
+        { merge: true }
+      );
+  } catch (err) {
+    console.error('[battle-server] writeQuestionStats failed:', err);
+  }
+}
+
 export async function finishBattle(
   quizId: string,
   actor: string,
@@ -163,6 +230,18 @@ export async function finishBattle(
     }
   });
   await writeBattleLog({ quizId, event: 'battle_finished', actor, actorRole, metadata });
+
+  // Denormalize analytics for every question now that the battle is final —
+  // the analytics dashboard relies on these write-time aggregates.
+  try {
+    const qSnap = await getAdminDb()
+      .collection(COLLECTIONS.QUIZZES).doc(quizId)
+      .collection(COLLECTIONS.QUESTIONS)
+      .get();
+    await Promise.all(qSnap.docs.map(d => writeQuestionStats(quizId, d.id)));
+  } catch (err) {
+    console.error('[finishBattle] question stats collection failed:', err);
+  }
 }
 
 export interface AdvanceOutcome {
@@ -230,6 +309,21 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
       }
     }
   });
+
+  if (ended) {
+    // The last question may end the battle without a final evaluateQuestion
+    // pass; denormalize analytics now so finished battles always have stats.
+    try {
+      const qSnap = await getAdminDb()
+        .collection(COLLECTIONS.QUIZZES).doc(quizId)
+        .collection(COLLECTIONS.QUESTIONS)
+        .get();
+      await Promise.all(qSnap.docs.map(d => writeQuestionStats(quizId, d.id)));
+    } catch (err) {
+      console.error('[advanceQuestion] question stats collection failed:', err);
+    }
+  }
+
   return { nextIndex, ended, alreadyAdvanced };
 }
 
@@ -389,6 +483,8 @@ export async function evaluateQuestionForUser(
     tx.update(partRef, update);
   });
 
+  await writeQuestionStats(quizId, questionId);
+
   if (quizMode === BATTLE_MODE_INDEPENDENT) {
     const [quizSnap2, partsSnap] = await Promise.all([
       getAdminDb().collection(COLLECTIONS.QUIZZES).doc(quizId).get(),
@@ -505,6 +601,7 @@ export async function evaluateQuestionForAll(
     tx.update(questionRef, { scored: true });
   });
 
+  await writeQuestionStats(quizId, questionId);
   await writeBattleLog({ quizId, event: 'question_advanced', actor, actorRole, metadata: { questionId } });
 }
 

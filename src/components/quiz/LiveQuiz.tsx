@@ -22,6 +22,7 @@ import { LoadingScreen } from '@/components/LoadingScreen';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { applyOptionShuffle } from '@/lib/battle-machine';
 import { COMMANDER_PRESENCE_WINDOW_MS } from '@/lib/constants';
+import { getServerOffset } from '@/lib/client-clock';
 
 interface LiveQuizQuestion {
   id: string;
@@ -316,9 +317,24 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const autoEndedRef = useRef<string | null>(null);
   const commanderAbsentSinceRef = useRef<number | null>(null);
   const autoAdvanceAttemptedRef = useRef(new Set<string>());
+  const offsetRef = useRef(0);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const { firestore } = useFirebase();
+
+  // Clock-skew correction: battle timers compare this browser's clock against
+  // server-written question_start_at timestamps. Sample the offset at mount
+  // and refresh it periodically so skewed clients stop locking out of the
+  // submit path prematurely (server still enforces its own tolerance).
+  useEffect(() => {
+    let mounted = true;
+    const sample = () => {
+      getServerOffset().then(o => { if (mounted) offsetRef.current = o; });
+    };
+    sample();
+    const interval = setInterval(sample, 60 * 1000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, []);
 
   // RTDB presence: single source of truth for who is actively connected to the
   // arena (replaces the old Firestore lastSeen heartbeats entirely).
@@ -471,7 +487,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     const deadline = answerStartAt + durationMs;
 
     const interval = setInterval(() => {
-      const now = Date.now();
+      // deadline is on the server's clock (question_start_at is server-written);
+      // correct this browser's now with the sampled offset first.
+      const now = Date.now() + offsetRef.current;
       const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
       const clamped = Math.min(remaining, totalSec);
       setTimeLeft(clamped);

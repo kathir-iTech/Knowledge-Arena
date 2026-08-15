@@ -32,6 +32,20 @@ export function docGroupKey(data: Record<string, any>): string | null {
   return `g:${createdAtMs}|${data.createdBy || ''}|${data.source || ''}|${data.category || 'General'}`;
 }
 
+// Lowercased full-word tokens used for server-side search. Derives from the
+// set's title/category/tags so every member question of a set carries the same
+// tokens, letting a single `array-contains` query match whole sets.
+export function buildSearchTokens(...inputs: Array<string | null | undefined>): string[] {
+  const tokens = new Set<string>();
+  for (const input of inputs) {
+    const words = String(input || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+    for (const w of words) {
+      if (w.length >= 2) tokens.add(w);
+    }
+  }
+  return Array.from(tokens);
+}
+
 export function encodeSetId(key: string): string {
   return Buffer.from(key, 'utf8').toString('base64url');
 }
@@ -135,9 +149,7 @@ export async function fetchSetDocs(setId: string): Promise<QuizSetDoc[]> {
   return docs.filter(d => docGroupKey(d.data) === key);
 }
 
-export async function fetchSetSummaries(): Promise<{ sets: QuizSetSummary[]; sources: string[] }> {
-  const docs = await scanAllQuestionDocs();
-
+function summarizeGroups(docs: QuizSetDoc[]): { sets: QuizSetSummary[]; sources: string[] } {
   const groups = new Map<string, QuizSetDoc[]>();
   const sources = new Set<string>();
   for (const doc of docs) {
@@ -157,4 +169,28 @@ export async function fetchSetSummaries(): Promise<{ sets: QuizSetSummary[]; sou
 
   sets.sort((a, b) => b.createdAt - a.createdAt);
   return { sets, sources: Array.from(sources).sort() };
+}
+
+export async function fetchSetSummaries(options?: { searchTerm?: string }): Promise<{ sets: QuizSetSummary[]; sources: string[] }> {
+  const term = options?.searchTerm?.trim().toLowerCase();
+  if (term && term.split(/\s+/)[0]) {
+    // Server-side search: narrow candidate question docs at the database layer
+    // via the lowercased searchTokens array written at save/update time. Every
+    // question in a set shares the set's title tokens, so a single
+    // `array-contains` first-term match retrieves whole matching sets. Residual
+    // filtering of additional terms still happens on the built summaries in
+    // the route. Docs saved before searchTokens existed have no tokens and are
+    // only reachable through the other (category/difficulty/source/…) filters.
+    const firstTerm = term.split(/\s+/)[0];
+    const snap = await getAdminDb()
+      .collection(COLLECTIONS.QUESTION_BANK)
+      .where('searchTokens', 'array-contains', firstTerm)
+      .limit(SET_SCAN_LIMIT)
+      .get();
+    const docs: QuizSetDoc[] = snap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
+    return summarizeGroups(docs);
+  }
+
+  const docs = await scanAllQuestionDocs();
+  return summarizeGroups(docs);
 }
