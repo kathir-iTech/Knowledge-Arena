@@ -20,13 +20,17 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface WaitingRoomProps {
   quiz: ValidatedQuiz;
   isTeacher: boolean;
+  joinError?: string | null;
+  onRetryJoin?: () => void;
+  isRetryingJoin?: boolean;
 }
 
-export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
+export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, isRetryingJoin }: WaitingRoomProps) {
   const { user } = useAuth();
   const router = useRouter();
   const [shareableLink, setShareableLink] = useState('');
@@ -323,6 +327,26 @@ export default function WaitingRoom({ quiz, isTeacher }: WaitingRoomProps) {
           <h1 className="text-display font-headline text-foreground tracking-tight">{quiz.title}</h1>
           <p className="text-base text-muted-foreground">{isTeacher ? 'Share the room code below to invite gladiators.' : 'Awaiting the Commander to start the battle.'}</p>
         </header>
+
+        {joinError && !isTeacher && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-destructive/10 border border-destructive/25 px-4 py-3 rounded-[12px] text-sm" role="alert" aria-live="assertive">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" aria-hidden="true" />
+              <span className="text-destructive font-medium">Could not join the arena: {joinError}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 touch-target"
+              onClick={onRetryJoin}
+              disabled={isRetryingJoin}
+              aria-label="Retry joining the arena"
+            >
+              {isRetryingJoin ? <Loader2 className="animate-spin mr-1.5 h-3.5 w-3.5" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+              {isRetryingJoin ? 'Retrying...' : 'Retry Join'}
+            </Button>
+          </div>
+        )}
 
         {isReconnecting && (
           <div className="flex items-center justify-center gap-2 bg-warning/5 border border-warning/10 px-4 py-2.5 rounded-[12px] text-sm" role="alert" aria-live="assertive">
