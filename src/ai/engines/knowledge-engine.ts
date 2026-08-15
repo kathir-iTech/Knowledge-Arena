@@ -2,6 +2,10 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { fetchDocsWithToken } from '@/lib/firebase-admin';
 
+// PHASE 69: SHELVED — wired only to the neutralized /api/knowledge/summary
+// route; no reachable UI flow calls it. Source kept for future wiring; do not
+// treat this module as part of the active build surface.
+
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
