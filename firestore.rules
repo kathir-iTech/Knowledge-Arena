@@ -45,6 +45,27 @@ service cloud.firestore {
       return !exists(partPath) || get(partPath).data.status != 'blocked';
     }
 
+    // Pre-submission guard: a submission is only accepted for the arena's
+    // CURRENT question for this participant. Question doc ids are UUIDs (not
+    // indices), so the binding resolves through the per-participant shuffled
+    // order when present (independent mode) and otherwise through the question's
+    // sort_index vs the quiz's current_question_index (synchronized mode). This
+    // stops pre-writing answers for questions that have not started yet.
+    function isCurrentQuestion(quizId, userId, questionId) {
+      let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
+      let questionPath = /databases/$(database)/documents/quizzes/$(quizId)/questions/$(questionId);
+      let partPath = /databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId);
+      // Member access on a missing map key raises an evaluation error in rules,
+      // and `??` is not supported, so field presence is probed via keys().hasAll.
+      let part = exists(partPath) ? get(partPath).data : null;
+      let hasOrder = part != null && part.keys().hasAll(['question_order']);
+      return hasOrder ? (
+        part.question_order[(part.keys().hasAll(['current_question_index']) ? part.current_question_index : 0)] == questionId
+      ) : (
+        exists(questionPath) && get(questionPath).data.sort_index == get(quizPath).data.current_question_index
+      );
+    }
+
     function isQuizParticipant(quizId, userId) {
       let partPath = /databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId);
       return isSignedIn() && exists(partPath);
@@ -104,8 +125,11 @@ service cloud.firestore {
     // --- Rules ---
 
     match /users/{userId} {
-      // Profiles may only be read by the owner, commanders (roster) and executives (admin).
-      allow read: if isOwner(userId) || isCommander() || isExecutive();
+      // Profiles may only be read by the owner and executives (admin). Roster
+      // identity travels in participant docs and all cross-user reads (messaging,
+      // executive workspace/search/analytics) go through the Admin SDK, so
+      // commanders have no client-side read need — preventing roster enumeration.
+      allow read: if isOwner(userId) || isExecutive();
       // Self-signup: only gladiator role allowed (no privilege escalation),
       // and only the profile fields a gladiator may set for themselves.
       allow create: if isOwner(userId)
@@ -134,9 +158,14 @@ service cloud.firestore {
         match /submissions/{userId} {
           allow read: if isExecutive() || isQuizCreator(quizId) || isOwner(userId);
           // Submissions are only accepted while the battle is live (canSubmitAnswer
-          // semantics enforced server-side as well) and only by the owner.
+          // semantics enforced server-side as well), only by the owner, and only
+          // for the arena's current question (pre-submission / question-id-forging
+          // guard). The question_id field must also match the doc path it is written to.
           allow create: if isOwner(userId) && isNotBlocked(quizId, userId)
+            && isQuizParticipant(quizId, userId)
             && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live'
+            && isCurrentQuestion(quizId, userId, questionId)
+            && request.resource.data.question_id == questionId
             && request.resource.data.selected_option >= 0
             && request.resource.data.selected_option <= 3
             && request.resource.data.keys().hasOnly(['question_id', 'selected_option', 'submittedAt', 'clientTime'])
