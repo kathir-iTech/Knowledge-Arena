@@ -21,7 +21,14 @@ export async function POST(req: NextRequest) {
       throw new Error('Only the Commander can advance the question');
     }
 
-    const { nextIndex, ended } = await advanceQuestion(quizId);
+    const expectedFromIndex = quiz.current_question_index ?? 0;
+    const { nextIndex, ended, alreadyAdvanced } = await advanceQuestion(quizId, expectedFromIndex);
+    if (alreadyAdvanced) {
+      // Another advance already moved past the index the caller saw (e.g. a
+      // racing auto-advance). The quiz/participant listeners will reflect the
+      // real index shortly; no error and no duplicate battle-log entries.
+      return NextResponse.json({ ok: true, ended: false, nextIndex, alreadyAdvanced: true });
+    }
 
     await writeBattleLog({
       quizId,

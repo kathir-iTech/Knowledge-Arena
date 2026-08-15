@@ -90,7 +90,13 @@ export async function POST(req: NextRequest) {
     }
 
     await evaluateQuestionForAll(quizId, currentQuestion.id, auth.uid, 'gladiator');
-    const outcome = await advanceQuestion(quizId);
+    const outcome = await advanceQuestion(quizId, index);
+    if (outcome.alreadyAdvanced) {
+      // The Commander (or another gladiator's auto-advance) already moved past
+      // the index observed here — no-op, never surface an error. Clients will
+      // pick up the real index via the quiz/participant listeners.
+      return NextResponse.json({ ok: true, ended: false, nextIndex: outcome.nextIndex, alreadyAdvanced: true });
+    }
 
     await writeBattleLog({
       quizId,

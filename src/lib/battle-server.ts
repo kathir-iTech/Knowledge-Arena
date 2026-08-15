@@ -168,16 +168,21 @@ export async function finishBattle(
 export interface AdvanceOutcome {
   nextIndex: number;
   ended: boolean;
+  alreadyAdvanced: boolean;
 }
 
 // Shared state-machine advance logic used by both the Commander's
 // "Evaluate & Next" button (/api/battle/advance) and the gladiator-triggered
-// Commander auto-advance (/api/battle/auto-advance). The status guard is kept
-// inside the transaction so concurrent advances are serialized by Firestore.
-export async function advanceQuestion(quizId: string): Promise<AdvanceOutcome> {
+// Commander auto-advance (/api/battle/auto-advance). The status guard and the
+// index-precondition guard are kept inside the transaction so concurrent
+// advances are serialized by Firestore: if the quiz's current_question_index no
+// longer matches what the caller observed (someone else already advanced past it),
+// the call no-ops with alreadyAdvanced=true instead of silently advancing again.
+export async function advanceQuestion(quizId: string, expectedFromIndex: number): Promise<AdvanceOutcome> {
   const db = getAdminDb();
   let nextIndex = 0;
   let ended = false;
+  let alreadyAdvanced = false;
   await db.runTransaction(async (tx) => {
     const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
     const snap = await tx.get(quizRef);
@@ -188,6 +193,12 @@ export async function advanceQuestion(quizId: string): Promise<AdvanceOutcome> {
     }
 
     const index = quiz.current_question_index ?? 0;
+    if (index !== expectedFromIndex) {
+      alreadyAdvanced = true;
+      nextIndex = index;
+      ended = false;
+      return;
+    }
     const questionCount = quiz.question_count ?? 0;
     const now = Date.now();
     nextIndex = index + 1;
@@ -219,7 +230,7 @@ export async function advanceQuestion(quizId: string): Promise<AdvanceOutcome> {
       }
     }
   });
-  return { nextIndex, ended };
+  return { nextIndex, ended, alreadyAdvanced };
 }
 
 async function loadQuestions(quizId: string) {
