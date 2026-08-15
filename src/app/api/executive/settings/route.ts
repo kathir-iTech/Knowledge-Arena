@@ -24,7 +24,6 @@ const defaultSettings = {
     maxQuestions: 50,
     defaultDifficulty: 'medium',
     autoEndBattle: false,
-    leaderboardVisibility: 'public',
   },
   ai: {
     enabled: true,

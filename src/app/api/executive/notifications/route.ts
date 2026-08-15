@@ -14,9 +14,15 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
-    const notifications = await notificationService.getAll({ limit: 100, unreadOnly, userId: auth.uid });
+    const cursorId = searchParams.get('cursor');
+    const cursorCreatedAt = searchParams.get('cursorCreatedAt');
+    const cursor =
+      cursorId && cursorCreatedAt && Number.isFinite(Number(cursorCreatedAt))
+        ? { id: cursorId, createdAt: Number(cursorCreatedAt) }
+        : null;
+    const { notifications, nextCursor } = await notificationService.getAll({ limit: 100, unreadOnly, userId: auth.uid, cursor });
     const unreadCount = await notificationService.getUnreadCount(auth.uid);
-    return NextResponse.json({ notifications, unreadCount });
+    return NextResponse.json({ notifications, unreadCount, nextCursor });
   } catch (err: any) {
     console.error('[Notifications GET] Error:', err?.name, err?.message);
     return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });

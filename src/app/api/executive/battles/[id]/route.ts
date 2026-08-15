@@ -89,35 +89,42 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       };
     });
 
-    // Participants + submissions. Submissions are read per participant in
-    // parallel (one failed sub-read cannot fail the whole request).
+    // Participants + submissions. Questions are already fetched once above
+    // (questionsDocs). Submissions are batch-read per question — one getDocs
+    // per question yields every participant's submission for it — instead of a
+    // per-participant loop that re-fetched the whole questions collection and
+    // did a point read per (participant × question). Results are indexed by
+    // userId so the participant mapping below is O(1) lookups.
     const participantDocs = await safeQuery('participants', async () => (await quizRef.collection('participants').get()).docs, [] as FirebaseFirestore.QueryDocumentSnapshot[]);
+
+    const submissionsByUserId = new Map<string, Array<{ questionId: string | null; selectedOption: number | null; submittedAt: number | null }>>();
+    const qIds = questionsDocs.map(d => d.id);
+    try {
+      const subSnapshots = await Promise.all(
+        qIds.map(qid => quizRef.collection('questions').doc(qid).collection('submissions').get())
+      );
+      subSnapshots.forEach((snap, i) => {
+        const qid = qIds[i];
+        for (const subDoc of snap.docs) {
+          const sData = subDoc.data();
+          if (!sData) continue;
+          const list = submissionsByUserId.get(subDoc.id) ?? [];
+          list.push({
+            questionId: qid,
+            selectedOption: sData.selected_option ?? null,
+            submittedAt: sData.submittedAt?.toMillis?.() ?? sData.submittedAt ?? null,
+          });
+          submissionsByUserId.set(subDoc.id, list);
+        }
+      });
+    } catch (err: any) {
+      console.error('[BattleDetail GET] submissions failed, degrading gracefully:', err?.name, err?.message, '\n', err?.stack);
+    }
+
     const participantPromises = participantDocs.map(async p => {
       const data = p.data();
       const userId = data.user_id || p.id;
-      const submissions: Array<{ questionId: string | null; selectedOption: number | null; submittedAt: number | null }> = [];
-      const subSnap = await quizRef.collection('questions').get().then(async qSnap => {
-        const results: Array<typeof submissions[0]> = [];
-        const qIds = qSnap.docs.map(d => d.id);
-        const subResults = await Promise.allSettled(
-          qIds.map(qid =>
-            quizRef.collection('questions').doc(qid).collection('submissions').doc(userId).get()
-          )
-        );
-        subResults.forEach((r, i) => {
-          if (r.status === 'fulfilled' && r.value.exists) {
-            const sData = r.value.data();
-            if (!sData) return;
-            results.push({
-              questionId: qIds[i],
-              selectedOption: sData.selected_option ?? null,
-              submittedAt: sData.submittedAt?.toMillis?.() ?? sData.submittedAt ?? null,
-            });
-          }
-        });
-        return results;
-      });
-      submissions.push(...subSnap);
+      const submissions = submissionsByUserId.get(userId) ?? [];
 
       // Correct count
       let correctCount = 0;

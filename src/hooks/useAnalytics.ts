@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFirebase } from '@/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
-import { computeAnalytics, type AnalyticsData, type AnswerKeyDoc, type SubmissionDoc } from '@/services/analytics.service';
+import { computeAnalytics, type AnalyticsData, type AnswerKeyDoc, type QuestionStatsDoc } from '@/services/analytics.service';
 import type { QuestionDoc } from '@/lib/schemas';
 
 const CACHE_TTL = 5 * 60 * 1000;
@@ -67,36 +67,28 @@ function useAnalytics(teacherId: string | undefined, role?: string) {
       const participantsMap: Record<string, ValidatedParticipant[]> = {};
       const questionsMap: Record<string, QuestionDoc[]> = {};
       const answerKeysMap: Record<string, AnswerKeyDoc[]> = {};
-      const submissionsMap: Record<string, SubmissionDoc[]> = {};
+      const statsMap: Record<string, Record<string, QuestionStatsDoc>> = {};
 
-      const subFetchPromises = quizIds.map(async (qid, i) => {
+      // Per-question aggregates are denormalized at evaluation/finish time
+      // (writeQuestionStats in battle-server.ts), so no submissions-scan is
+      // needed here — the previous per-question getDocs(submissions) read one
+      // document per submission for every finished quiz.
+      for (let i = 0; i < quizIds.length; i++) {
+        const qid = quizIds[i];
         participantsMap[qid] = participantsSnaps[i].docs.map(d => ({ user_id: d.id, ...d.data() } as ValidatedParticipant));
         questionsMap[qid] = questionsSnaps[i].docs.map(d => ({ id: d.id, ...d.data() } as QuestionDoc));
         answerKeysMap[qid] = answerKeysSnaps[i].docs.map(d => ({ id: d.id, ...d.data() } as AnswerKeyDoc));
-
-        const questionDocs = questionsSnaps[i].docs;
-        const subSnaps = await Promise.all(
-          questionDocs.map(qDoc =>
-            getDocs(collection(firestore, 'quizzes', qid, 'questions', qDoc.id, 'submissions'))
-          )
-        );
-        const quizSubmissions: SubmissionDoc[] = [];
-        for (let qi = 0; qi < questionDocs.length; qi++) {
-          for (const subDoc of subSnaps[qi].docs) {
-            quizSubmissions.push({
-              id: subDoc.id,
-              ...subDoc.data(),
-              question_id: questionDocs[qi].id,
-            } as SubmissionDoc);
-          }
+        const perQuestion: Record<string, QuestionStatsDoc> = {};
+        for (const qDoc of questionsSnaps[i].docs) {
+          const stats = qDoc.data()?.questionStats as QuestionStatsDoc | undefined;
+          if (stats) perQuestion[qDoc.id] = stats;
         }
-        submissionsMap[qid] = quizSubmissions;
-      });
-      await Promise.all(subFetchPromises);
+        statsMap[qid] = perQuestion;
+      }
 
       if (abortRef.current) return;
 
-      const result = computeAnalytics(allQuizzes, participantsMap, questionsMap, answerKeysMap, submissionsMap);
+      const result = computeAnalytics(allQuizzes, participantsMap, questionsMap, answerKeysMap, statsMap);
       setData(result);
       cache.set(cacheKey, { data: result, expiresAt: Date.now() + CACHE_TTL });
     } catch (err: unknown) {

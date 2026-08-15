@@ -5,6 +5,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
 import { auditService } from '@/services/audit.service';
 import { COLLECTIONS } from '@/lib/constants';
+import { buildSearchTokens } from '@/lib/quiz-sets';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
@@ -119,6 +120,7 @@ export async function POST(req: NextRequest) {
         createdBy: auth.uid,
         createdAt: Timestamp.fromMillis(now),
         updatedAt: Timestamp.fromMillis(now),
+        searchTokens: buildSearchTokens(title, category || 'General', tags),
       });
       savedIds.push(docRef.id);
     }

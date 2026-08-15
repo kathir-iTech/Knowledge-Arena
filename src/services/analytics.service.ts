@@ -12,6 +12,19 @@ export interface SubmissionDoc {
   question_id?: string;
 }
 
+// Write-time denormalized per-question aggregate written by the battle server
+// (writeQuestionStats) at evaluation/finish time. `userTimes` tracks each
+// participant's submit time so per-student answer speeds can still be derived
+// without re-reading the submissions subcollection.
+export interface QuestionStatsDoc {
+  submittedCount: number;
+  optionCounts: number[];
+  correctCount: number;
+  correctOptionIndex: number | null;
+  timestamps: number[];
+  userTimes: Record<string, number>;
+}
+
 export interface QuizAnalytics {
   quizId: string;
   title: string;
@@ -143,7 +156,7 @@ export function computeAnalytics(
   participantsMap: Record<string, ValidatedParticipant[]>,
   questionsMap: Record<string, QuestionDoc[]>,
   answerKeysMap: Record<string, AnswerKeyDoc[]>,
-  submissionsMap: Record<string, SubmissionDoc[]>,
+  statsMap: Record<string, Record<string, QuestionStatsDoc>>,
 ): AnalyticsData {
   const finishedQuizzes = quizzes.filter(q => q.status === 'finished');
   const now = Date.now();
@@ -182,33 +195,27 @@ export function computeAnalytics(
     const violations = students.reduce((s, p) => s + (p.violations_count || 0), 0);
     const avgScore = safeDiv(scores.reduce((a, b) => a + b, 0), scores.length || 1);
 
-    const subs = submissionsMap[q.id] || [];
+    const qStats = statsMap[q.id] || {};
     // Per-question response times using earliest submission as proxy for question start
-    const subsByQ = new Map<string, SubmissionDoc[]>();
-    for (const s of subs) {
-      const qid = s.question_id || '';
-      if (!qid) continue;
-      const arr = subsByQ.get(qid) || [];
-      arr.push(s);
-      subsByQ.set(qid, arr);
-    }
     const responseTimes: number[] = [];
-    for (const [, qSubs] of subsByQ) {
-      if (qSubs.length < 2) continue;
-      const sorted = [...qSubs].sort((a, b) => a.submittedAt - b.submittedAt);
-      const estStart = sorted[0].submittedAt;
+    const allTimestamps: number[] = [];
+    for (const [, stats] of Object.entries(qStats)) {
+      const times = Array.isArray(stats.timestamps) ? stats.timestamps.filter(t => t > 0) : [];
+      allTimestamps.push(...times);
+      if (times.length < 2) continue;
+      const sorted = [...times].sort((a, b) => a - b);
+      const estStart = sorted[0];
       for (let si = 1; si < sorted.length; si++) {
-        const rt = sorted[si].submittedAt - estStart;
+        const rt = sorted[si] - estStart;
         if (rt > 0 && rt < 3600000) responseTimes.push(rt);
       }
     }
     const avgAnswerTime = safeDiv(responseTimes.reduce((a, b) => a + b, 0), responseTimes.length || 1);
 
     // Quiz duration from earliest to latest submission timestamp across all questions
-    const allTimestamps = subs.map(s => s.submittedAt).filter(t => t > 0);
     const duration = allTimestamps.length > 1 ? Math.max(...allTimestamps) - Math.min(...allTimestamps) : 0;
 
-    const timeline = buildTimeline(subs);
+    const timeline = buildTimelineFromTimestamps(allTimestamps);
 
     quizAnalytics.push({
       quizId: q.id,
@@ -273,24 +280,23 @@ export function computeAnalytics(
     }
   }
 
-  // Submissions for answer times — per-question min submission time proxy
-  for (const [quizId, subs] of Object.entries(submissionsMap)) {
-    const subsByQ = new Map<string, SubmissionDoc[]>();
-    for (const s of subs) {
-      const qId = s.question_id || '';
-      if (!qId) continue;
-      const arr = subsByQ.get(qId) || [];
-      arr.push(s);
-      subsByQ.set(qId, arr);
-    }
-    for (const [, qSubs] of subsByQ) {
-      if (qSubs.length < 2) continue;
-      const sorted = [...qSubs].sort((a, b) => a.submittedAt - b.submittedAt);
-      const estStart = sorted[0].submittedAt;
+  // Per-question userTimes give each participant's submit time, so per-student
+  // answer speeds are derived from the aggregated stats (earliest = proxy for
+  // question start) without re-reading the submissions subcollection.
+  for (const [, qStats] of Object.entries(statsMap)) {
+    for (const [, stats] of Object.entries(qStats)) {
+      const entries = Object.entries(stats.userTimes || {});
+      if (entries.length < 2) continue;
+      const sorted = entries
+        .map(([uid, t]) => ({ uid, t }))
+        .filter(e => e.t > 0)
+        .sort((a, b) => a.t - b.t);
+      if (sorted.length < 2) continue;
+      const estStart = sorted[0].t;
       for (let si = 1; si < sorted.length; si++) {
-        const rt = sorted[si].submittedAt - estStart;
+        const rt = sorted[si].t - estStart;
         if (rt > 0 && rt < 3600000) {
-          const entry = studentMap.get(sorted[si].id);
+          const entry = studentMap.get(sorted[si].uid);
           if (entry) entry.responseTimes.push(rt);
         }
       }
@@ -344,39 +350,36 @@ export function computeAnalytics(
     const questions = questionsMap[q.id] || [];
     const aks = answerKeysMap[q.id] || [];
     const akMap = new Map(aks.map(ak => [ak.id, ak.correct_option_index]));
-    const subs = submissionsMap[q.id] || [];
-    const subsByQuestion = new Map<string, SubmissionDoc[]>();
-    for (const s of subs) {
-      const qId = s.question_id || '';
-      if (!qId) continue;
-      const arr = subsByQuestion.get(qId) || [];
-      arr.push(s);
-      subsByQuestion.set(qId, arr);
-    }
+    const qStats = statsMap[q.id] || {};
 
     const totalParts = (participantsMap[q.id] || []).filter(p => p.user_id !== (q as ValidatedQuiz).created_by).length;
 
     for (const question of questions) {
-      const correctIdx = akMap.get(question.id);
-      const questionSubs = subsByQuestion.get(question.id) || [];
-      const total = totalParts;
-      const submitted = questionSubs.length;
-      const correct = correctIdx !== undefined ? questionSubs.filter(s => s.selected_option === correctIdx).length : 0;
-      const wrong = submitted - correct;
-      const skipped = Math.max(0, total - submitted);
+      const stats = qStats[question.id];
+      const correctIdx = stats?.correctOptionIndex !== undefined && stats?.correctOptionIndex !== null
+        ? stats.correctOptionIndex
+        : (akMap.get(question.id) ?? null);
+      const optionCounts = Array.isArray(stats?.optionCounts) && (stats?.optionCounts as number[]).length === question.options.length
+        ? (stats?.optionCounts as number[])
+        : question.options.map(() => 0);
+      const submitted = stats?.submittedCount ?? 0;
+      const correct = stats?.correctCount ?? (correctIdx !== null ? (optionCounts[correctIdx] || 0) : 0);
+      const wrong = Math.max(0, submitted - correct);
+      const skipped = Math.max(0, totalParts - submitted);
 
-      const optionCounts = question.options.map((_, i) => questionSubs.filter(s => s.selected_option === i).length);
       // Per-question response time using earliest submission as proxy for question start
       let avgTime = 0;
-      if (questionSubs.length >= 2) {
-        const sorted = [...questionSubs].sort((a, b) => a.submittedAt - b.submittedAt);
-        const estStart = sorted[0].submittedAt;
-        const rts = sorted.slice(1).map(s => s.submittedAt - estStart).filter(t => t > 0 && t < 3600000);
+      const times = Array.isArray(stats?.timestamps)
+        ? (stats?.timestamps as number[]).filter(t => t > 0).sort((a, b) => a - b)
+        : [];
+      if (times.length >= 2) {
+        const estStart = times[0];
+        const rts = times.slice(1).map(t => t - estStart).filter(t => t > 0 && t < 3600000);
         avgTime = safeDiv(rts.reduce((a, b) => a + b, 0), rts.length || 1);
       }
 
       let commonWrong: { option: string; count: number } | null = null;
-      if (correctIdx !== undefined) {
+      if (correctIdx !== null) {
         let maxWrong = 0;
         let maxWrongIdx = -1;
         for (let i = 0; i < question.options.length; i++) {
@@ -397,7 +400,7 @@ export function computeAnalytics(
         quizTitle: q.title || 'Untitled',
         correctPercent: round2(safeDiv(correct, submitted || 1) * 100),
         wrongPercent: round2(safeDiv(wrong, submitted || 1) * 100),
-        skippedPercent: round2(safeDiv(skipped, total || 1) * 100),
+        skippedPercent: round2(safeDiv(skipped, totalParts || 1) * 100),
         averageResponseTime: Math.round(avgTime / 1000),
         optionDistribution: question.options.map((opt, i) => ({
           label: opt,
@@ -427,16 +430,15 @@ function computeEngagement(finished: number, total: number, violations: number, 
   return round2(Math.min(100, completionScore + (30 - dropoutScore) + violationScore));
 }
 
-function buildTimeline(submissions: SubmissionDoc[]): { time: number; count: number }[] {
-  const timestamps = submissions
-    .map(s => s.submittedAt)
+function buildTimelineFromTimestamps(timestamps: number[]): { time: number; count: number }[] {
+  const buckets = timestamps
     .filter(t => t > 0)
     .map(t => Math.floor(t / 30000) * 30000);
 
-  if (!timestamps.length) return [];
+  if (!buckets.length) return [];
 
   const counts = new Map<number, number>();
-  for (const t of timestamps) counts.set(t, (counts.get(t) || 0) + 1);
+  for (const t of buckets) counts.set(t, (counts.get(t) || 0) + 1);
 
   return Array.from(counts.entries())
     .sort(([a], [b]) => a - b)

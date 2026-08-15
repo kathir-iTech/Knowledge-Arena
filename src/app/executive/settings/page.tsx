@@ -47,7 +47,6 @@ interface PlatformSettings {
     maxQuestions: number;
     defaultDifficulty: string;
     autoEndBattle: boolean;
-    leaderboardVisibility: string;
   };
   ai: {
     enabled: boolean;
@@ -79,7 +78,6 @@ const defaultSettings: PlatformSettings = {
     maxQuestions: 50,
     defaultDifficulty: 'medium',
     autoEndBattle: false,
-    leaderboardVisibility: 'public',
   },
   ai: {
     enabled: true,
@@ -302,17 +300,6 @@ export default function ExecutiveSettingsPage() {
               <div className="flex items-center justify-between">
                 <div><Label>Auto-End Battle</Label><p className="text-xs text-muted-foreground">Automatically end battles when all participants finish.</p></div>
                 <Switch checked={settings.battle.autoEndBattle} onCheckedChange={c => setSettings({ ...settings, battle: { ...settings.battle, autoEndBattle: c } })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Leaderboard Visibility</Label>
-                <Select value={settings.battle.leaderboardVisibility} onValueChange={v => setSettings({ ...settings, battle: { ...settings.battle, leaderboardVisibility: v } })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="public">Public</SelectItem>
-                    <SelectItem value="commanders">Commanders Only</SelectItem>
-                    <SelectItem value="executives">Executives Only</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </CardContent>
           </Card>

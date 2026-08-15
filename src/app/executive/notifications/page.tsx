@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Bell, CheckCheck, Trash2, UserPlus, UserCheck, Swords, Zap,
   Megaphone, MessageSquare, AlertTriangle, AlertCircle, Clock,
-  Shield, BookOpen, Lock, RefreshCw,
+  Shield, BookOpen, Lock, RefreshCw, Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BulkSelection, BulkSelectionCheckbox } from '@/components/ui/bulk-selection';
@@ -63,43 +63,59 @@ export default function ExecutiveNotificationsPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [nextCursor, setNextCursor] = useState<{ id: string; createdAt: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (reset: boolean) => {
     try {
-      setError(null);
+      if (reset) setError(null);
       const token = await auth.currentUser?.getIdToken();
       if (!token) {
         setError('You are not signed in.');
         return;
       }
-      const res = await fetch('/api/executive/notifications', {
+      const params = new URLSearchParams();
+      if (!reset && nextCursor) {
+        params.set('cursor', nextCursor.id);
+        params.set('cursorCreatedAt', String(nextCursor.createdAt));
+      }
+      const qs = params.toString();
+      const res = await fetch(`/api/executive/notifications${qs ? `?${qs}` : ''}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.unreadCount || 0);
+        setNotifications(prev => reset ? (data.notifications || []) : [...prev, ...(data.notifications || [])]);
+        setNextCursor(data.nextCursor || null);
+        if (reset) setUnreadCount(data.unreadCount || 0);
       } else {
         const data = await res.json().catch(() => null);
         setError(data?.error || 'Failed to load notifications.');
-        setNotifications([]);
+        if (reset) setNotifications([]);
       }
     } catch {
       setError('Network error. Check your connection and try again.');
-      setNotifications([]);
+      if (reset) setNotifications([]);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [auth]);
+  }, [auth, nextCursor]);
 
   useEffect(() => {
     if (!user) return;
-    fetchNotifications();
-  }, [user, fetchNotifications]);
+    fetchNotifications(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const handleLoadMore = () => {
+    setLoadingMore(true);
+    fetchNotifications(false);
+  };
 
   const handleMarkAllRead = async () => {
     try {
@@ -200,7 +216,7 @@ export default function ExecutiveNotificationsPage() {
             <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-4" />
             <p className="text-base font-medium mb-1">Failed to load notifications</p>
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
-            <Button onClick={() => { setLoading(true); fetchNotifications(); }}>
+            <Button onClick={() => { setLoading(true); fetchNotifications(true); }}>
               <RefreshCw className="w-4 h-4 mr-2" />
               Retry
             </Button>
@@ -290,6 +306,14 @@ export default function ExecutiveNotificationsPage() {
               </Card>
             );
           })}
+        </div>
+      )}
+      {nextCursor && (
+        <div className="flex justify-center pt-2">
+          <Button variant="outline" onClick={handleLoadMore} disabled={loadingMore}>
+            {loadingMore ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Load More
+          </Button>
         </div>
       )}
     </div>

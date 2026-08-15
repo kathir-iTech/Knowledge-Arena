@@ -33,7 +33,7 @@ service cloud.firestore {
     // ALLOWED_GLADIATOR_EMAIL_DOMAIN environment variable. An empty value
     // disables the restriction. The value is regex-escaped by the generator.
     function allowedGladiatorEmailDomain() {
-      return '';
+      return '{{ALLOWED_GLADIATOR_EMAIL_DOMAIN}}';
     }
 
     function isAllowedGladiatorEmail(data) {
