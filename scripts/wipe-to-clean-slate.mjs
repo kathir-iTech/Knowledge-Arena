@@ -286,7 +286,7 @@ async function main() {
     try {
       const col = firestore.collection(collPath);
       const docs = await col.get();
-const deletePromises = docs.docs
+      const deletePromises = docs.docs
         .filter((d) => d.id !== PRESERVED_UID)
         .map((d) => firestore.recursiveDelete(d.ref));
       const results = await Promise.allSettled(deletePromises);
