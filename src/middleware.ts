@@ -22,7 +22,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith(BATTLE_ROUTE_PREFIX) ||
     pathname.startsWith(API_ROUTE_PREFIX) ||
     pathname.startsWith('/_next/') ||
-    pathname === '/favicon.ico'
+    pathname === '/favicon.ico' ||
+    pathname === '/manifest.webmanifest'
   ) {
     return NextResponse.next();
   }
