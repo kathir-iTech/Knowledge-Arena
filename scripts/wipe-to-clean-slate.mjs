@@ -37,17 +37,16 @@ let firestore, auth, database, storage, storageBucket;
 // the app's storageBucket option, then the env vars the app itself reads
 // (NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET is the canonical one, see
 // src/app/api/executive/workspace/route.ts), with FIREBASE_STORAGE_BUCKET as
-// an explicit override. Never guesses a bucket suffix: hardware failure in
-// confirm mode means Storage would be silently skipped.
+// an explicit override. Returns null when no bucket name can be resolved —
+// on Spark/free-tier projects Storage is simply not provisioned (a Blaze
+// upgrade prompt is all the console shows), so the wipe skips it gracefully
+// instead of aborting over something that genuinely does not exist.
 function resolveStorageBucket() {
   const app = getApp();
   if (app.options.storageBucket) return app.options.storageBucket;
   const fromEnv = process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   if (fromEnv) return fromEnv;
-  throw new Error(
-    'No storage bucket configured. Set FIREBASE_STORAGE_BUCKET or ' +
-    'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET to the project bucket name.'
-  );
+  return null;
 }
 
 function ensureAdminInitialized() {
@@ -221,16 +220,20 @@ async function main() {
   // ============================================================
   // 5. Count Storage files (list ALL files in buckets)
   // ============================================================
-  console.log('--- Step 5: Counting Storage files ---');
+console.log('--- Step 5: Counting Storage files ---');
   let storageFiles = 0;
 
-  try {
-    const bucket = storage.bucket(storageBucket);
-    const files = await listAllStorageFiles(bucket);
-    storageFiles = files.length;
-    console.log(`  Storage files: ${storageFiles}`);
-  } catch (e) {
-    console.log(`  Error counting storage files: ${e.message}`);
+  if (storageBucket) {
+    try {
+      const bucket = storage.bucket(storageBucket);
+      const files = await listAllStorageFiles(bucket);
+      storageFiles = files.length;
+      console.log(`  Storage files: ${storageFiles}`);
+    } catch (e) {
+      console.log(`  Error counting storage files: ${e.message}`);
+    }
+  } else {
+    console.log('  Storage: not provisioned for this project (Spark/free-tier, no bucket configured) — skipping.');
   }
   console.log('');
 
@@ -322,18 +325,22 @@ async function main() {
     console.log(`  ERROR wiping RTDB root: ${e.message}`);
   }
 
-  // D. Delete ALL Storage files (fully paginated, not just the first 1000)
+// D. Delete ALL Storage files (fully paginated, not just the first 1000)
   console.log('--- Deleting Storage files ---');
-  try {
-    const bucket = storage.bucket(storageBucket);
-    const files = await listAllStorageFiles(bucket);
-    const deletePromises = files.map((f) => f.delete());
-    const results = await Promise.allSettled(deletePromises);
-    const deletedCount = results.filter((r) => r.status === 'fulfilled').length;
-    const failedCount = results.filter((r) => r.status === 'rejected').length;
-    console.log(`  Deleted ${deletedCount} storage files, failed ${failedCount} (of ${files.length} scanned)`);
-  } catch (e) {
-    console.log(`  ERROR deleting storage files: ${e.message}`);
+  if (storageBucket) {
+    try {
+      const bucket = storage.bucket(storageBucket);
+      const files = await listAllStorageFiles(bucket);
+      const deletePromises = files.map((f) => f.delete());
+      const results = await Promise.allSettled(deletePromises);
+      const deletedCount = results.filter((r) => r.status === 'fulfilled').length;
+      const failedCount = results.filter((r) => r.status === 'rejected').length;
+      console.log(`  Deleted ${deletedCount} storage files, failed ${failedCount} (of ${files.length} scanned)`);
+    } catch (e) {
+      console.log(`  ERROR deleting storage files: ${e.message}`);
+    }
+  } else {
+    console.log('  Storage: not provisioned for this project (Spark/free-tier, no bucket configured) — skipping.');
   }
 
   console.log('');
