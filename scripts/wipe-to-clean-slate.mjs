@@ -220,7 +220,7 @@ async function main() {
   // ============================================================
   // 5. Count Storage files (list ALL files in buckets)
   // ============================================================
-console.log('--- Step 5: Counting Storage files ---');
+  console.log('--- Step 5: Counting Storage files ---');
   let storageFiles = 0;
 
   if (storageBucket) {
@@ -325,7 +325,7 @@ console.log('--- Step 5: Counting Storage files ---');
     console.log(`  ERROR wiping RTDB root: ${e.message}`);
   }
 
-// D. Delete ALL Storage files (fully paginated, not just the first 1000)
+  // D. Delete ALL Storage files (fully paginated, not just the first 1000)
   console.log('--- Deleting Storage files ---');
   if (storageBucket) {
     try {
