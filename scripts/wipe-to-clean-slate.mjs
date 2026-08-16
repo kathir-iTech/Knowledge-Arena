@@ -49,12 +49,30 @@ function resolveStorageBucket() {
   return null;
 }
 
+// Resolves the Realtime Database URL for this project. Source of truth is
+// FIREBASE_DATABASE_URL, then NEXT_PUBLIC_FIREBASE_DATABASE_URL (the same var
+// the app itself reads, e.g. set in Vercel). RTDB genuinely holds production
+// presence data this wipe must remove, so an unresolvable URL is a hard
+// abort — never guessed or defaulted.
+function resolveDatabaseUrl() {
+  const fromEnv = process.env.FIREBASE_DATABASE_URL || process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL;
+  if (fromEnv) return fromEnv;
+  console.error(
+    'ERROR: No Realtime Database URL configured. Set FIREBASE_DATABASE_URL or ' +
+    'NEXT_PUBLIC_FIREBASE_DATABASE_URL to your project RTDB URL (e.g. ' +
+    'https://<project>-default-rtdb.firebaseio.com) before running this script.'
+  );
+  process.exit(1);
+}
+
 function ensureAdminInitialized() {
   if (adminInitialized) return;
   try {
     // Firebase Admin SDK will use GOOGLE_APPLICATION_CREDENTIALS
-    // env var or compute engine ADC automatically
-    initializeApp();
+    // env var or compute engine ADC automatically. Only the database URL
+    // needs to be explicit — initializeApp() with no args cannot infer it.
+    const databaseUrl = resolveDatabaseUrl();
+    initializeApp({ databaseURL: databaseUrl });
     firestore = getFirestore();
     auth = getAuth();
     database = getDatabase();
