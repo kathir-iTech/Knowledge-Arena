@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Space_Grotesk } from 'next/font/google';
+import { Inter, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ClientLayout } from '@/components/ClientLayout';
@@ -37,9 +37,9 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
-const spaceGrotesk = Space_Grotesk({
+const playfairDisplay = Playfair_Display({
   subsets: ['latin'],
-  variable: '--font-space-grotesk',
+  variable: '--font-playfair-display',
 });
 
 
@@ -50,7 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={cn("font-body antialiased", inter.variable, spaceGrotesk.variable)}>
+      <body className={cn("font-body antialiased", inter.variable, playfairDisplay.variable)}>
         <FirebaseClientProvider>
           <AuthProvider>
             <ClientLayout>{children}</ClientLayout>

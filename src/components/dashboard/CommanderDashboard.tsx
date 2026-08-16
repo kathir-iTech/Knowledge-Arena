@@ -202,14 +202,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                       <span className="text-xl md:text-2xl font-headline font-bold tracking-tight truncate group-hover/card:text-primary transition-colors">
                         {quiz.title}
                       </span>
-                      <Badge className={cn("shrink-0 h-6 px-2.5 text-[10px] font-semibold uppercase tracking-wider",
-                          quiz.archived ? "bg-muted/50 text-muted-foreground" :
-                          isStaleLive ? "bg-warning/10 text-warning border border-warning/20" :
-                          quiz.status === 'live' ? "bg-success/10 text-success border border-success/20" :
-                          quiz.status === 'finished' ? "bg-primary/10 text-primary border border-primary/20" :
-                          isStaleWaiting ? "bg-muted/50 text-muted-foreground" :
-                          "bg-warning/10 text-warning border border-warning/20"
-                      )}>
+                      <Badge variant={quiz.archived ? 'secondary' : isStaleLive ? 'warning' : quiz.status === 'live' ? 'success' : quiz.status === 'finished' ? 'default' : isStaleWaiting ? 'secondary' : 'warning'} className="shrink-0 h-6 px-2.5 text-[10px] font-semibold uppercase tracking-wider">
                           <Shield className="w-3 h-3 mr-1" />
                           {isStaleLive ? 'STALLED' : quiz.archived ? 'Archived' : quiz.status === 'live' ? 'LIVE' : quiz.status === 'finished' ? 'Completed' : isStaleWaiting ? 'Abandoned' : 'Waiting'}
                       </Badge>

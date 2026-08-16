@@ -59,11 +59,11 @@ function downloadFile(attachment: Attachment) {
   document.body.removeChild(link);
 }
 
-const statusColors: Record<string, string> = {
-  pending: 'bg-warning/10 text-warning border border-warning/20',
-  approved: 'bg-success/10 text-success border border-success/20',
-  rejected: 'bg-destructive/10 text-destructive border border-destructive/20',
-  completed: 'bg-primary/10 text-primary border border-primary/20',
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'success' | 'warning'> = {
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'destructive',
+  completed: 'default',
 };
 
 const typeLabels: Record<string, string> = {
@@ -265,7 +265,7 @@ export default function ExecutiveRequestsPage() {
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-xs text-muted-foreground hidden sm:block">{formatDate(r.createdAt)}</span>
-                  <Badge className={cn(statusColors[r.status] || '')}>
+                  <Badge variant={STATUS_VARIANT[r.status] || 'secondary'}>
                     {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                   </Badge>
                   {r.status !== 'pending' && (
@@ -293,7 +293,7 @@ export default function ExecutiveRequestsPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">{selectedRequest.title}</h3>
-                <Badge className={cn(statusColors[selectedRequest.status])}>
+                <Badge variant={STATUS_VARIANT[selectedRequest.status] || 'secondary'}>
                   {selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1)}
                 </Badge>
               </div>

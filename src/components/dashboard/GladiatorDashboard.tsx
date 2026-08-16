@@ -18,6 +18,12 @@ import { QuizRecommendations } from '@/components/dashboard/QuizRecommendations'
 import { Loader2, Swords, UserCircle, History, ExternalLink, Trophy, Star, TrendingUp, Zap, Bell, ChevronRight, Play, Sparkles, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'success' | 'warning'> = {
+  finished: 'default',
+  live: 'success',
+  waiting: 'warning',
+};
+
 function AnimatedValue({ value, suffix = '' }: { value: string | number; suffix?: string }) {
   const [display, setDisplay] = useState(0);
   const num = typeof value === 'string' ? parseFloat(value) || 0 : value;
@@ -269,11 +275,6 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
             {dashboardData?.recentBattles && dashboardData.recentBattles.length > 0 ? (
               <div className="space-y-1">
                 {dashboardData.recentBattles.slice(0, 8).map((h: any) => {
-                  const statusColors: Record<string, string> = {
-                    finished: 'bg-muted/50 text-muted-foreground border-border',
-                    live: 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 border-emerald-200 dark:border-emerald-800',
-                    waiting: 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 border-amber-200 dark:border-amber-800',
-                  };
                   return (
                     <Link key={h.quizId} href={`/battle/${h.quizId}`} className="group block">
                       <div className="flex items-center gap-3 p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-200 border border-transparent hover:border-border/50">
@@ -281,7 +282,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
                           <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{h.title}</p>
                           <p className="text-[11px] text-muted-foreground">{new Date(h.created_at).toLocaleDateString()}</p>
                         </div>
-                        <Badge variant="outline" className={cn("h-5 text-[10px] shrink-0 transition-colors", statusColors[h.status] || '')}>
+                        <Badge variant={STATUS_VARIANT[h.status] || 'secondary'} className="h-5 text-[10px] shrink-0 transition-colors">
                           {h.status === 'finished' ? 'DONE' : h.status === 'live' ? 'LIVE' : 'WAITING'}
                         </Badge>
                         <span className="text-sm font-bold font-mono text-primary tabular-nums shrink-0">{h.score}<span className="text-[10px] text-muted-foreground font-normal ml-0.5">pts</span></span>

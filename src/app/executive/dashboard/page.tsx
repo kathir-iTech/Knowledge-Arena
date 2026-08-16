@@ -1,20 +1,5 @@
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Skeleton } from '@/components/ui/skeleton';
+import { redirect } from 'next/navigation';
 
 export default function ExecutiveDashboardPage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.replace('/executive/workspace');
-  }, [router]);
-
-  return (
-    <div className="page-container animate-in space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+  redirect('/executive/workspace');
 }

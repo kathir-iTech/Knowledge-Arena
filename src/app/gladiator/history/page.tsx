@@ -13,6 +13,12 @@ import { Swords, ExternalLink, ArrowLeft, AlertTriangle, RefreshCw } from 'lucid
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'success' | 'warning'> = {
+  finished: 'default',
+  live: 'success',
+  waiting: 'warning',
+};
+
 export default function GladiatorHistoryPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -65,7 +71,7 @@ export default function GladiatorHistoryPage() {
       ) : history.length === 0 ? (
         <EmptyState icon={Swords} title="No Battles Fought Yet" description="Join a battle from your dashboard to start your journey." action={<Button asChild><Link href="/gladiator/dashboard">Join a Battle</Link></Button>} />
       ) : (
-        <div className="-mx-4 md:mx-0 overflow-x-auto rounded-none md:rounded-[14px] border-x-0 md:border border-border/50 mobile-hide-overflow">
+        <div className="-mx-4 md:mx-0 overflow-x-auto rounded-none md:rounded-[18px] border-x-0 md:border border-border/50 mobile-hide-overflow">
           <table className="w-full text-sm min-w-[360px] md:min-w-0">
             <thead className="sticky top-0 z-10">
               <tr className="bg-muted/30 border-b border-border/50">
@@ -85,7 +91,7 @@ export default function GladiatorHistoryPage() {
                   </td>
                   <td className="p-3 font-medium text-sm min-w-0 max-w-[120px] md:max-w-none truncate">{h.title}</td>
                   <td className="p-3 hidden sm:table-cell">
-                    <Badge variant={h.status === 'finished' ? 'outline' : h.status === 'live' ? 'default' : 'secondary'} className="h-6">
+                    <Badge variant={STATUS_VARIANT[h.status] || 'secondary'} className="h-6">
                       {h.status.toUpperCase()}
                     </Badge>
                   </td>
