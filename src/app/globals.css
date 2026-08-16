@@ -4,25 +4,27 @@
 
 @layer base {
   :root {
-    --background: 228 16% 97%;
-    --foreground: 220 40% 11%;
+    --background: 38 41% 95%;
+    --background-dark: 20 13% 9%;
+    --foreground: 60 2% 17%;
+    --foreground-dark: 37 31% 90%;
     --card: 0 0% 100%;
     --card-foreground: 220 40% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 220 40% 11%;
-    --primary: 243 75% 59%;
+    --primary: 15 68% 36%;
     --primary-foreground: 0 0% 100%;
     --secondary: 228 16% 96%;
     --secondary-foreground: 220 40% 11%;
     --muted: 228 16% 94%;
     --muted-foreground: 220 9% 46%;
-    --accent: 239 84% 66%;
+    --accent: 38 59% 45%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
+    --destructive: 15 60% 30%;
     --destructive-foreground: 0 0% 100%;
-    --success: 142 71% 45%;
+    --success: 106 23% 33%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
+    --warning: 38 59% 45%;
     --warning-foreground: 0 0% 100%;
     --border: 228 16% 90%;
     --input: 228 16% 90%;
@@ -235,5 +237,12 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: var(--background-dark);
+    --foreground: var(--foreground-dark);
   }
 }
