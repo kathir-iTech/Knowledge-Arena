@@ -9,7 +9,7 @@ import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import * as zlib from 'zlib';
 
-import { PdfReader } from 'pdfreader';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 import { COLLECTIONS } from '@/lib/constants';
@@ -66,16 +66,33 @@ const modelFallbackChain = async (): Promise<string[]> => {
   return [...DEFAULT_MODEL_CHAIN];
 };
 
+function errorToString(err: unknown): string {
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) {
+    const name = err.name && err.name !== 'Error' ? `${err.name}: ` : '';
+    const message = err.message?.trim() || '[no message]';
+    return `${name}${message}`;
+  }
+  try {
+    const serialized = JSON.stringify(err);
+    if (serialized && serialized !== '{}') return serialized;
+  } catch {
+    // JSON.stringify failed for a circular/obstructed object; fall back below.
+  }
+  return String(err);
+}
+
 function formatError(err: unknown): string {
-  if (!(err instanceof Error)) return String(err);
-  const parts = [`${err.name}: ${err.message}`];
+  const parts = [errorToString(err)];
   const status = (err as any).status;
   if (status) parts.unshift(`STATUS: ${status}`);
-  if (err.stack) parts.push(`STACK: ${err.stack}`);
+  const stack = (err as any).stack;
+  if (stack) parts.push(`STACK: ${stack}`);
   const cause = (err as any).cause;
   if (cause) {
-    parts.push(`CAUSE: ${cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause)}`);
-    if (cause instanceof Error && cause.stack) parts.push(`CAUSE_STACK: ${cause.stack}`);
+    parts.push(`CAUSE: ${errorToString(cause)}`);
+    const causeStack = (cause as any).stack;
+    if (causeStack) parts.push(`CAUSE_STACK: ${causeStack}`);
   }
   const raw = (err as any).rawResponse ?? (err as any).response ?? (err as any).details;
   if (raw) parts.push(`RAW_RESPONSE: ${typeof raw === 'string' ? raw.slice(0, 2000) : JSON.stringify(raw).slice(0, 2000)}`);
@@ -491,68 +508,53 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
   }
 
   return withTimeout<{ text: string; numpages: number; isImageOnly: boolean }>(
-    new Promise((resolve, reject) => {
-      const textsByPage: Map<number, string[]> = new Map();
-      let maxPage = 0;
-      let settled = false;
+    (async () => {
+      const loadingTask = getDocument({ data: new Uint8Array(buffer) });
+      const pdf = await loadingTask.promise;
 
-      const reader = new PdfReader();
-      reader.parseBuffer(buffer, (err: any, item?: any) => {
-        if (settled) return;
+      try {
+        const textsByPage: string[] = [];
+        let pagesWithText = 0;
 
-        if (err) {
-          settled = true;
-          const msg = String(err.message || err).toLowerCase();
-          if (msg.includes('encrypt') || msg.includes('password') || msg.includes('permission')) {
-            reject(new Error('PDF_ENCRYPTED'));
-          } else if (msg.includes('format') || msg.includes('invalid') || msg.includes('corrupt') || msg.includes('parse')) {
-            reject(new Error('PDF_CORRUPTED'));
-          } else {
-            reject(new Error(`PDF_EXTRACTION_FAILED: ${err.message || err}`));
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          try {
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+              .map((item) => ('str' in item ? item.str : ''))
+              .join(' ')
+              .trim();
+            textsByPage.push(pageText);
+            if (pageText.length > 0) pagesWithText++;
+          } finally {
+            page.cleanup();
           }
-          return;
         }
 
-        if (!item) {
-          settled = true;
-          const totalPages = Math.max(maxPage, 1);
+        const text = textsByPage.join('\n').trim();
+        const numpages = pdf.numPages;
+        const isImageOnly = numpages > 0 && pagesWithText === 0;
 
-          const pageTexts: string[] = [];
-          let pagesWithText = 0;
-          for (let i = 1; i <= totalPages; i++) {
-            const t = (textsByPage.get(i) || []).join(' ').trim();
-            pageTexts.push(t);
-            if (t.length > 0) pagesWithText++;
-          }
-
-          const text = pageTexts.join('\n').trim();
-          const isImageOnly = totalPages > 0 && pagesWithText === 0;
-
-          resolve({ text, numpages: totalPages, isImageOnly });
-          return;
-        }
-
-        if (item.page) {
-          if (item.page > maxPage) maxPage = item.page;
-          return;
-        }
-
-        if (item.text) {
-          const pageNum = maxPage || 1;
-          if (!textsByPage.has(pageNum)) {
-            textsByPage.set(pageNum, []);
-          }
-          textsByPage.get(pageNum)!.push(item.text);
-        }
-      });
-    }),
+        return { text, numpages, isImageOnly };
+      } finally {
+        await loadingTask.destroy();
+      }
+    })(),
     EXTRACTION_TIMEOUT_MS,
     'PDF extraction'
   ).catch((err) => {
     if (err instanceof Error && err.message.startsWith('TIMEOUT:')) {
       throw new Error('PDF_EXTRACTION_TIMEOUT');
     }
-    throw err;
+    const readable = errorToString(err);
+    const lower = readable.toLowerCase();
+    if (lower.includes('encrypt') || lower.includes('password') || lower.includes('permission')) {
+      throw new Error('PDF_ENCRYPTED');
+    }
+    if (lower.includes('format') || lower.includes('invalid') || lower.includes('corrupt') || lower.includes('parse')) {
+      throw new Error('PDF_CORRUPTED');
+    }
+    throw new Error(`PDF_EXTRACTION_FAILED: ${readable}`);
   });
 }
 
