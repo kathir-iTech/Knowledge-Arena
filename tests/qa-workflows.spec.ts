@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:3456';
+const BASE_URL = process.env.QA_BASE_URL || 'https://knowledge-arena.vercel.app';
 
 // ─── Utility ───────────────────────────────────────────────────────
 async function waitForApp(page: any) {
@@ -11,13 +11,12 @@ async function waitForApp(page: any) {
 }
 
 async function expectNoErrorToasts(page: any) {
-  const toasts = await page.locator('[data-radix-toast-title]').allTextContents();
+  const toasts = await page.locator('ol[aria-label="Notifications"] li').allTextContents();
   for (const t of toasts) {
     // Only error toasts matter — success toasts are fine
     if (t.includes('Error') || t.includes('Failed') || t.includes('Access Denied')) {
       // Check if this is a genuine auth error (expected) vs unexpected
-      const desc = await page.locator('[data-radix-toast-description]').textContent();
-      if (desc && desc.includes('Incorrect email or password')) {
+      if (t.includes('Incorrect email or password')) {
         // Expected, skip
         continue;
       }
@@ -29,13 +28,13 @@ async function expectNoErrorToasts(page: any) {
 test.describe('Authentication Flow', () => {
 
   test('Login page renders correctly with all elements', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     // Heading
     await expect(page.locator('h1')).toContainText('Quorena');
-    // Subheading
-    await expect(page.locator('p')).toContainText('The ultimate quiz battleground.');
+    // Subheading (matches live /login copy)
+    await expect(page.locator('p')).toContainText('Sign in to continue to the arena.');
     // Google Sign-In button
     await expect(page.locator('button:has-text("Continue with Google")')).toBeVisible();
     // Staff Login separator
@@ -49,7 +48,7 @@ test.describe('Authentication Flow', () => {
   });
 
   test('Login form validation — empty fields show errors', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     // Click Sign In without filling anything
@@ -62,7 +61,7 @@ test.describe('Authentication Flow', () => {
   });
 
   test('Login form validation — empty password shows error', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     // Fill email only
@@ -76,7 +75,7 @@ test.describe('Authentication Flow', () => {
   });
 
   test('Login with invalid credentials shows Firebase error toast', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     // Fill with invalid credentials
@@ -85,18 +84,20 @@ test.describe('Authentication Flow', () => {
     await page.locator('button[type="submit"]:has-text("Sign In")').click();
 
     // Wait for Firebase API call and error toast
-    await page.waitForTimeout(5000);
-    const toastViewport = page.locator('[data-radix-toast-viewport]');
-    
-    // Should show an error toast
-    const toastTitle = page.locator('[data-radix-toast-title]');
-    await expect(toastTitle).toBeVisible();
-    const titleText = await toastTitle.textContent();
-    expect(['Sign In Failed', 'Too Many Attempts', 'Access Denied']).toContain(titleText);
+    // Note: Radix Toast (v1.2.x) does not emit data-radix-toast-* attributes on
+    // the viewport or title; toasts render as <li> inside ol[aria-label="Notifications"].
+    const toastViewport = page.locator('ol[aria-label="Notifications"] li');
+
+    // Should show an error toast (AuthContext toasts the mapped error, then
+    // LoginForm overrides it with "Login Failed" — TOAST_LIMIT=1 keeps the latest)
+    await expect(toastViewport).toContainText(
+      /(Sign In Failed|Login Failed|Too Many Attempts|Access Denied)/,
+      { timeout: 10000 }
+    );
   });
 
   test('Login with invalid email format shows error toast', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     // Fill with obviously invalid email
@@ -105,13 +106,14 @@ test.describe('Authentication Flow', () => {
     await page.locator('button[type="submit"]:has-text("Sign In")').click();
 
     // Wait for Firebase response
-    await page.waitForTimeout(5000);
-    const toastTitle = page.locator('[data-radix-toast-title]');
-    await expect(toastTitle).toBeVisible();
+    await expect(page.locator('ol[aria-label="Notifications"] li')).toContainText(
+      /(Sign In Failed|Login Failed|Too Many Attempts|Access Denied)/,
+      { timeout: 10000 }
+    );
   });
 
   test('Google Sign-In button is clickable', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     const googleButton = page.locator('button:has-text("Continue with Google")');
@@ -133,7 +135,7 @@ test.describe('Special Pages', () => {
   });
 
   test('Kicked page reads sessionStorage', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await page.evaluate(() => {
       sessionStorage.setItem('blocked_at', Date.now().toString());
       sessionStorage.setItem('blocked_violations', '3');
@@ -148,7 +150,7 @@ test.describe('Special Pages', () => {
   });
 
   test('Kicked page — low violations shows generic reason', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await page.evaluate(() => {
       sessionStorage.setItem('blocked_at', Date.now().toString());
       sessionStorage.setItem('blocked_violations', '1');
@@ -339,29 +341,27 @@ test.describe('Error Boundaries & 404', () => {
 test.describe('Accessibility', () => {
 
   test('Skip to main content link exists on login page', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     await expect(page.locator('a:has-text("Skip to main content")')).toBeVisible();
   });
 
   test('Toast viewport has correct aria attributes', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
-    // Trigger a login error to create a toast
-    await page.locator('input[name="email"]').fill('admin_001_1');
-    await page.locator('input[type="password"]').fill('wrongpassword');
-    await page.locator('button[type="submit"]:has-text("Sign In")').click();
-    await page.waitForTimeout(5000);
-
-    const viewport = page.locator('[data-radix-toast-viewport]');
+    // Radix Toast renders the viewport statically — it is present before any toast
+    const viewport = page.locator('ol[aria-label="Notifications"]');
     await expect(viewport).toHaveAttribute('aria-label', 'Notifications');
     await expect(viewport).toHaveAttribute('aria-live', 'polite');
+    // Provider wrapper is the region Radix renders around the viewport
+    // (zero-size a11y wrapper — assert presence, not visibility)
+    await expect(page.locator('[role="region"][aria-label="Notifications (F8)"]')).toHaveCount(1);
   });
 
   test('Toast close button has aria-label', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     await page.locator('input[name="email"]').fill('admin_001_1');
@@ -381,7 +381,7 @@ test.describe('Accessibility', () => {
 test.describe('Full Auth Workflow', () => {
 
   test('Complete login attempt with error handling flow', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     // 1. Fill login form
@@ -391,29 +391,27 @@ test.describe('Full Auth Workflow', () => {
     // 2. Submit
     await page.locator('button[type="submit"]:has-text("Sign In")').click();
     
-    // 3. Wait for Firebase response
-    await page.waitForTimeout(7000);
-
-    // 4. Check toast appeared
-    const toastTitle = page.locator('[data-radix-toast-title]');
-    await expect(toastTitle).toBeVisible();
+    // 3. Check toast appeared (Radix renders toasts as <li> in the viewport;
+    // it auto-dismisses after ~5s, so poll across the appearance window)
+    const toast = page.locator('ol[aria-label="Notifications"] li');
+    await expect(toast).toContainText(/(Sign In Failed|Login Failed|Too Many Attempts|Access Denied)/, { timeout: 10000 });
     
-    // 5. Dismiss the toast
+    // 4. Dismiss the toast — if still visible
     const closeBtn = page.locator('button[aria-label="Dismiss notification"]');
     if (await closeBtn.isVisible()) {
       await closeBtn.click();
       await page.waitForTimeout(500);
-      await expect(toastTitle).not.toBeVisible();
+      await expect(toast).not.toBeVisible();
     }
 
-    // 6. Form should still be usable after error
+    // 5. Form should still be usable after error
     await expect(page.locator('input[name="email"]')).toHaveValue('admin_001_1');
     await page.locator('input[name="email"]').fill('another_admin');
     await expect(page.locator('input[name="email"]')).toHaveValue('another_admin');
   });
 
   test('Form reset after failed login', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     await page.locator('input[name="email"]').fill('admin_001_1');
@@ -436,7 +434,7 @@ test.describe('Responsive Design', () => {
 
   test('Login page is usable on mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 }); // iPhone SE
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     // All elements should be visible without horizontal scroll
@@ -448,7 +446,7 @@ test.describe('Responsive Design', () => {
 
   test('Login page is usable on tablet viewport', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 }); // iPad
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     await expect(page.locator('input[name="email"]')).toBeVisible();
@@ -496,7 +494,7 @@ test.describe('Loading States', () => {
 test.describe('Form Interactions', () => {
 
   test('Password field is masked', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     const pwInput = page.locator('input[type="password"]');
@@ -504,7 +502,7 @@ test.describe('Form Interactions', () => {
   });
 
   test('Email field accepts staff ID format', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     const emailInput = page.locator('input[name="email"]');
@@ -513,7 +511,7 @@ test.describe('Form Interactions', () => {
   });
 
   test('Email field accepts full email format', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     const emailInput = page.locator('input[name="email"]');
@@ -522,7 +520,7 @@ test.describe('Form Interactions', () => {
   });
 
   test('Sign In button shows loading state on submit', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto(BASE_URL + '/login');
     await waitForApp(page);
 
     await page.locator('input[name="email"]').fill('admin_001_1');
@@ -542,7 +540,7 @@ test.describe('Form Interactions', () => {
 test.describe('Security Headers', () => {
 
   test('Response includes security headers', async ({ page }) => {
-    const response = await page.goto(BASE_URL);
+    const response = await page.goto(BASE_URL + '/login');
     const headers = response!.headers();
 
     // Verify security headers
