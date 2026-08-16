@@ -334,6 +334,7 @@ export default function CommanderDashboard() {
   const [quizzes, setQuizzes] = useState<ValidatedQuiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
@@ -357,16 +358,36 @@ export default function CommanderDashboard() {
   const fetchDashboardData = useCallback(async () => {
     try {
       const token = await auth.currentUser?.getIdToken();
-      if (!token) return;
+      if (!token) {
+        if (auth.currentUser) {
+          setDashboardError('Session expired. Please reload the page.');
+        }
+        return;
+      }
       const res = await fetch('/api/commander/dashboard', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
         setDashboardData(data);
+        setDashboardError(null);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          setDashboardError('You are not authorized to view the commander dashboard. Please ensure you are signed in as a Commander.');
+        } else {
+          setDashboardError(errorData.error || `Failed to load dashboard stats (${res.status}).`);
+        }
       }
-    } catch {}
+    } catch (e) {
+      setDashboardError('Network error while loading dashboard. Please check your connection and retry.');
+    }
   }, [auth]);
+
+  const retryDashboardData = useCallback(() => {
+    setDashboardError(null);
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   useEffect(() => { fetchQuizzes(); fetchDashboardData(); }, [fetchQuizzes, fetchDashboardData]);
 
@@ -387,6 +408,19 @@ export default function CommanderDashboard() {
     else if (sortKey === 'status') result.sort((a, b) => a.status.localeCompare(b.status));
     return result;
   }, [quizzes, debouncedQuery, sortKey, filterKey]);
+
+  const quickActions = useMemo(() => [
+    { label: 'Create Arena', icon: PlusCircle, href: '/create-quiz', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
+    { label: 'Question Bank', icon: BookOpen, href: '/create-quiz?tab=bank', color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
+    { label: 'AI Import', icon: Zap, href: '/create-quiz?tab=forge', color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20' },
+    { label: 'My Requests', icon: Inbox, href: '/commander/requests', color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20' },
+    { label: 'Messages', icon: MessageSquare, href: '/commander/messages', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20' },
+    { label: 'Battle History', icon: Clock, href: '/commander/history', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },
+  ], []);
+
+  const liveBattles = useMemo(() => quizzes.filter(q => q.status === 'live' && !q.archived), [quizzes]);
+  const waitingBattles = useMemo(() => quizzes.filter(q => q.status === 'waiting' && !q.archived), [quizzes]);
+  const finishedBattles = useMemo(() => quizzes.filter(q => q.status === 'finished' && !q.archived), [quizzes]);
 
   if (loading) {
     return (
@@ -417,19 +451,6 @@ export default function CommanderDashboard() {
     );
   }
 
-  const quickActions = useMemo(() => [
-    { label: 'Create Arena', icon: PlusCircle, href: '/create-quiz', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
-    { label: 'Question Bank', icon: BookOpen, href: '/create-quiz?tab=bank', color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-    { label: 'AI Import', icon: Zap, href: '/create-quiz?tab=forge', color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20' },
-    { label: 'My Requests', icon: Inbox, href: '/commander/requests', color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20' },
-    { label: 'Messages', icon: MessageSquare, href: '/commander/messages', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20' },
-    { label: 'Battle History', icon: Clock, href: '/commander/history', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },
-  ], []);
-
-  const liveBattles = useMemo(() => quizzes.filter(q => q.status === 'live' && !q.archived), [quizzes]);
-  const waitingBattles = useMemo(() => quizzes.filter(q => q.status === 'waiting' && !q.archived), [quizzes]);
-  const finishedBattles = useMemo(() => quizzes.filter(q => q.status === 'finished' && !q.archived), [quizzes]);
-
   return (
     <div className="page-container safe-bottom animate-in">
       {/* Header */}
@@ -452,6 +473,13 @@ export default function CommanderDashboard() {
       {error && (
         <section className="page-section">
           <PageError title={error} onRetry={() => { setError(null); fetchQuizzes(); }} />
+        </section>
+      )}
+
+      {/* Dashboard Data Error State */}
+      {dashboardError && !dashboardData && (
+        <section className="page-section">
+          <PageError title={dashboardError} onRetry={retryDashboardData} />
         </section>
       )}
 
