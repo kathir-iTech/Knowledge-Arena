@@ -12,7 +12,7 @@
 // (UID rk6j2oUmXefdxrQo0qLuCvVIo9C2, email admin_001_1@knowledge-arena.app)
 // cannot be verified as existing and role='executive' in Firestore.
 
-import { initializeApp } from 'firebase-admin/app';
+import { initializeApp, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
@@ -31,7 +31,24 @@ const PRESERVED_EMAIL = 'admin_001_1@knowledge-arena.app';
 // The script expects Firebase Admin credentials via ADC or env var.
 // Set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_SERVICE_ACCOUNT_KEY.
 let adminInitialized = false;
-let firestore, auth, database, storage;
+let firestore, auth, database, storage, storageBucket;
+
+// Resolves the Cloud Storage bucket name for this project. Source of truth is
+// the app's storageBucket option, then the env vars the app itself reads
+// (NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET is the canonical one, see
+// src/app/api/executive/workspace/route.ts), with FIREBASE_STORAGE_BUCKET as
+// an explicit override. Never guesses a bucket suffix: hardware failure in
+// confirm mode means Storage would be silently skipped.
+function resolveStorageBucket() {
+  const app = getApp();
+  if (app.options.storageBucket) return app.options.storageBucket;
+  const fromEnv = process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (fromEnv) return fromEnv;
+  throw new Error(
+    'No storage bucket configured. Set FIREBASE_STORAGE_BUCKET or ' +
+    'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET to the project bucket name.'
+  );
+}
 
 function ensureAdminInitialized() {
   if (adminInitialized) return;
@@ -43,6 +60,7 @@ function ensureAdminInitialized() {
     auth = getAuth();
     database = getDatabase();
     storage = getStorage();
+    storageBucket = resolveStorageBucket();
     adminInitialized = true;
     console.log('Firebase Admin SDK initialized.');
   } catch (e) {
@@ -167,8 +185,7 @@ async function main() {
   let totalAuthUsers = 0;
 
   try {
-    const listUsers = auth.listUsers.bind(auth);
-    const page = await listUsers({ maxResults: 1000 });
+    const page = await auth.listUsers(1000);
     authUsers = page.users;
     totalAuthUsers = authUsers.length;
   } catch (e) {
@@ -208,7 +225,7 @@ async function main() {
   let storageFiles = 0;
 
   try {
-    const bucket = storage.bucket();
+    const bucket = storage.bucket(storageBucket);
     const files = await listAllStorageFiles(bucket);
     storageFiles = files.length;
     console.log(`  Storage files: ${storageFiles}`);
@@ -308,7 +325,7 @@ async function main() {
   // D. Delete ALL Storage files (fully paginated, not just the first 1000)
   console.log('--- Deleting Storage files ---');
   try {
-    const bucket = storage.bucket();
+    const bucket = storage.bucket(storageBucket);
     const files = await listAllStorageFiles(bucket);
     const deletePromises = files.map((f) => f.delete());
     const results = await Promise.allSettled(deletePromises);
@@ -336,6 +353,7 @@ async function main() {
   }
 
   console.log('All done. Review the output above carefully.');
+  process.exit(0);
 }
 
 main().catch((err) => {
