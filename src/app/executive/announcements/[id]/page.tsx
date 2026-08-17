@@ -118,7 +118,7 @@ export default function ExecutiveAnnouncementDetailPage({ params }: { params: Pr
             <div className="flex items-center gap-3">
               <h1 className="text-page-title font-headline tracking-tight">Announcement</h1>
               <Badge variant="outline" className="text-[10px] h-5 shrink-0">
-                <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" />
+                <CheckCircle2 className="w-3 h-3 mr-1 text-success" />
                 {announcement.readCount ?? 0} read
               </Badge>
             </div>
@@ -142,8 +142,8 @@ export default function ExecutiveAnnouncementDetailPage({ params }: { params: Pr
         </CardHeader>
         <CardContent className="pt-4">
           <div className="flex items-start gap-3">
-            <div className="shrink-0 w-10 h-10 rounded-[12px] bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center">
-              <Megaphone className="w-5 h-5 text-orange-600" />
+            <div className="shrink-0 w-10 h-10 rounded-[12px] bg-primary/10 flex items-center justify-center">
+              <Megaphone className="w-5 h-5 text-primary" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-3">
@@ -180,8 +180,8 @@ export default function ExecutiveAnnouncementDetailPage({ params }: { params: Pr
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {announcement.readReceipts.map(r => (
                 <div key={r.uid} className="flex items-center gap-2.5 p-2.5 rounded-[10px] bg-muted/30">
-                  <div className="w-8 h-8 rounded-[8px] bg-emerald-50 dark:bg-emerald-950/20 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <div className="w-8 h-8 rounded-[8px] bg-success/10 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-4 h-4 text-success" />
                   </div>
                   <span className="text-sm font-medium truncate">{r.name}</span>
                 </div>

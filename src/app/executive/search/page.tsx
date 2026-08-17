@@ -40,18 +40,18 @@ const typeIcons: Record<string, React.ElementType> = {
 };
 
 const typeColors: Record<string, string> = {
-  Commander: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800',
-  Gladiator: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800',
-  Executive: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800',
-  Question: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
-  Battle: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800',
-  'Audit Log': 'text-slate-600 bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800',
-  'Security Log': 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
-  'AI Log': 'text-purple-600 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800',
-  Conversation: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800',
-  Announcement: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800',
-  Notification: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800',
-  Request: 'text-teal-600 bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800',
+  Commander: 'text-accent bg-accent/15 border-accent/30 dark:bg-accent/20',
+  Gladiator: 'text-success bg-success/10 border-success/25 dark:bg-success/20',
+  Executive: 'text-primary bg-primary/10 border-primary/25 dark:bg-primary/20',
+  Question: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
+  Battle: 'text-primary bg-primary/10 border-primary/25 dark:bg-primary/20',
+  'Audit Log': 'text-muted-foreground bg-muted/40 border-border/60',
+  'Security Log': 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
+  'AI Log': 'text-accent bg-accent/15 border-accent/30 dark:bg-accent/20',
+  Conversation: 'text-success bg-success/10 border-success/25 dark:bg-success/20',
+  Announcement: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
+  Notification: 'text-muted-foreground bg-muted/40 border-border/60',
+  Request: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
 };
 
 function HighlightedTitle({ title, highlight }: { title: string; highlight?: { start: number; end: number } | null }) {
@@ -170,7 +170,7 @@ export default function ExecutiveSearchPage() {
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
             <button
               onClick={() => doSearch(query)}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <RefreshCw className="w-4 h-4" />
               Retry
@@ -206,7 +206,7 @@ export default function ExecutiveSearchPage() {
                     const highlight = item.metadata?.highlight as { start: number; end: number } | null | undefined;
                     return (
                       <Link key={`${item.type}-${item.id}`} href={item.href}>
-                        <Card className="hover:bg-muted/30 transition-colors cursor-pointer">
+                        <Card className="hover:bg-muted/30 transition-all duration-300 ease-out cursor-pointer focus-visible:ring-2 focus-visible:ring-ring rounded-[18px]">
                           <CardContent className="p-4 flex items-center gap-3">
                             <div className="shrink-0 w-9 h-9 rounded-[8px] bg-muted flex items-center justify-center">
                               <Icon className="w-4 h-4 text-muted-foreground" />

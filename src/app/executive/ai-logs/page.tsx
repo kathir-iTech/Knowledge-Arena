@@ -227,7 +227,7 @@ export default function AiLogsPage() {
                 <CardContent className="p-0">
                   <button
                     onClick={() => toggleExpand(log.id)}
-                    className="w-full flex items-start gap-3 p-4 text-left"
+                    className="w-full flex items-start gap-3 p-4 text-left rounded-t-[16px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all duration-300 ease-out"
                   >
                     <div className={cn("shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5", log.success ? "bg-success/10" : "bg-destructive/10")}>
                       {log.success
@@ -237,8 +237,8 @@ export default function AiLogsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge className={cn("text-[10px] h-5 font-normal border", log.success
-                          ? "text-green-600 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
-                          : "text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800")}>
+                          ? "text-success bg-success/10 border-success/25 dark:bg-success/20"
+                          : "text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20")}>
                           {log.success ? 'SUCCESS' : 'FAILED'}
                         </Badge>
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground">{log.model || 'unknown model'}</span>

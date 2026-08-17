@@ -72,13 +72,13 @@ interface BattleData {
 }
 
 const statusBadge: Record<string, string> = {
-  live: 'border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20',
-  finished: 'border-slate-300 text-slate-600',
-  waiting: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20',
-  ready: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20',
-  starting: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20',
-  paused: 'border-slate-400 text-slate-600 bg-slate-50 dark:bg-slate-950/20',
-  cancelled: 'border-red-300 text-red-600 bg-red-50 dark:bg-red-950/20',
+  live: 'border-success/30 text-success bg-success/10 dark:bg-success/20',
+  finished: 'border-border/60 text-muted-foreground bg-muted/30',
+  waiting: 'border-warning/30 text-warning bg-warning/10 dark:bg-warning/20',
+  ready: 'border-warning/30 text-warning bg-warning/10 dark:bg-warning/20',
+  starting: 'border-warning/30 text-warning bg-warning/10 dark:bg-warning/20',
+  paused: 'border-border/60 text-muted-foreground bg-muted/40',
+  cancelled: 'border-destructive/30 text-destructive bg-destructive/10 dark:bg-destructive/20',
 };
 
 function formatDate(ts?: number | null): string {
@@ -131,8 +131,16 @@ export default function ExecutiveBattleDetailPage({ params }: { params: Promise<
 
   if (loading) {
     return (
-      <div className="page-container animate-in space-y-4">
-        <Skeleton className="h-10 w-80" />
+      <div className="page-container animate-in space-y-6">
+        <div className="space-y-1.5">
+          <Skeleton className="h-10 w-72 max-w-full" />
+          <Skeleton className="h-4 w-96 max-w-full" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full" />
+          ))}
+        </div>
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-72 w-full" />
       </div>
@@ -206,7 +214,7 @@ export default function ExecutiveBattleDetailPage({ params }: { params: Promise<
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatTile icon={Users} label="Participants" value={battle.stats?.participantCount ?? participants.length} />
         <StatTile icon={CheckCircle2} label="Finished" value={battle.stats?.finishedCount ?? 0} />
         <StatTile icon={Award} label="Avg Score" value={battle.stats?.averageScore ?? 0} />
@@ -262,20 +270,20 @@ export default function ExecutiveBattleDetailPage({ params }: { params: Promise<
             <div className="space-y-1">
               {leaderboard.slice(0, 50).map((p, idx) => (
                 <div key={p.userId} className={cn(
-                  'flex items-center gap-3 p-3 rounded-[12px] transition-colors',
-                  idx === 0 && p.score ? 'bg-amber-50/60 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-800/30' : 'bg-muted/30 hover:bg-muted/50'
+                  'flex items-center gap-3 p-3 rounded-[12px] transition-all duration-300 ease-out',
+                  idx === 0 && p.score ? 'bg-warning/10 border border-warning/25 dark:bg-warning/15' : 'bg-muted/30 hover:bg-muted/50'
                 )}>
                   <div className={cn(
                     'w-7 h-7 rounded-[8px] flex items-center justify-center text-xs font-bold shrink-0',
-                    idx === 0 ? 'bg-amber-400 text-white' : idx === 1 ? 'bg-slate-300 text-slate-700' : idx === 2 ? 'bg-orange-300 text-orange-900' : 'bg-background text-muted-foreground'
+                    idx === 0 ? 'bg-warning text-background' : idx === 1 ? 'bg-muted-foreground/30 text-background' : idx === 2 ? 'bg-accent/60 text-background' : 'bg-background text-muted-foreground'
                   )}>
                     {idx + 1}
                   </div>
                   <button
                     onClick={() => router.push(`/executive/${p.userId === battle.commanderId ? 'commanders' : 'students'}/${p.userId}`)}
-                    className="min-w-0 flex-1 text-left group"
+                    className="min-w-0 flex-1 text-left group rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
-                    <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+                    <p className="text-sm font-medium truncate group-hover:text-primary transition-colors duration-300">
                       {p.name || p.userId.slice(0, 12)}
                       {p.userId === battle.commanderId && <span className="ml-1.5 text-[10px] text-muted-foreground">(commander)</span>}
                     </p>
@@ -313,17 +321,17 @@ export default function ExecutiveBattleDetailPage({ params }: { params: Promise<
                     <button
                       onClick={() => setExpandedQuestion(expanded ? null : q.id)}
                       aria-expanded={expanded}
-                      className="w-full text-left p-3.5 hover:bg-muted/30 transition-colors flex items-start gap-3"
+                      className="w-full text-left p-3.5 hover:bg-muted/30 transition-all duration-300 ease-out flex items-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     >
                       <span className="text-xs font-bold text-muted-foreground shrink-0 mt-0.5">Q{qi + 1}</span>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium line-clamp-2">{q.text || 'Untitled question'}</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
                           {answered} answered · {correctCount} correct
-                          {q.correctAnswerIndex != null && <span className="ml-2 text-emerald-600">Key: option {q.correctAnswerIndex + 1}</span>}
+                          {q.correctAnswerIndex != null && <span className="ml-2 text-success">Key: option {q.correctAnswerIndex + 1}</span>}
                         </p>
                       </div>
-                      <ChevronRight className={cn('w-4 h-4 text-muted-foreground shrink-0 transition-transform', expanded && 'rotate-90')} />
+                      <ChevronRight className={cn('w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-300 ease-out', expanded && 'rotate-90')} />
                     </button>
                     {expanded && (
                       <div className="border-t border-border/40 p-3.5 bg-muted/20 space-y-3">
@@ -332,15 +340,15 @@ export default function ExecutiveBattleDetailPage({ params }: { params: Promise<
                             <div key={oi} className={cn(
                               'flex items-start gap-2 p-2 rounded-[8px] text-xs',
                               q.correctAnswerIndex === oi
-                                ? 'bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800'
+                                ? 'bg-success/10 border border-success/25 dark:bg-success/20'
                                 : 'bg-background border border-border/40'
                             )}>
                               <span className={cn(
                                 'shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold',
-                                q.correctAnswerIndex === oi ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'
+                                q.correctAnswerIndex === oi ? 'bg-success text-background' : 'bg-muted text-muted-foreground'
                               )}>{String.fromCharCode(65 + oi)}</span>
                               <span className="min-w-0 flex-1">{opt}</span>
-                              {q.correctAnswerIndex === oi && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                              {q.correctAnswerIndex === oi && <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" />}
                             </div>
                           ))}
                         </div>
@@ -348,12 +356,12 @@ export default function ExecutiveBattleDetailPage({ params }: { params: Promise<
                           {rows.map(r => (
                             <div key={r.participant.userId} className={cn(
                               'flex items-center gap-2 p-2 rounded-[8px] text-[10px] bg-background border',
-                              r.correct === true ? 'border-emerald-200 dark:border-emerald-800' : r.correct === false ? 'border-red-200 dark:border-red-800/40' : 'border-border/40'
+                              r.correct === true ? 'border-success/30 dark:border-success/40' : r.correct === false ? 'border-destructive/30 dark:border-destructive/40' : 'border-border/40'
                             )}>
                               {r.correct === true
-                                ? <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                ? <CheckCircle2 className="w-3 h-3 text-success shrink-0" />
                                 : r.correct === false
-                                  ? <XCircle className="w-3 h-3 text-red-500 shrink-0" />
+                                  ? <XCircle className="w-3 h-3 text-destructive shrink-0" />
                                   : <span className="w-3 h-3 shrink-0 rounded-full bg-muted" />}
                               <span className="truncate">{r.participant.name || r.participant.userId.slice(0, 8)}</span>
                               <span className="ml-auto font-mono text-muted-foreground shrink-0">
@@ -383,7 +391,7 @@ export default function ExecutiveBattleDetailPage({ params }: { params: Promise<
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
               {Object.entries(battle.config).map(([key, val]) => (
                 <div key={key} className="p-2.5 rounded-[10px] bg-muted/30">
                   <p className="text-[10px] text-muted-foreground capitalize">{key.replace(/([A-Z])/g, ' $1')}</p>

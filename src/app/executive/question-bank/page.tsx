@@ -106,8 +106,8 @@ export default function QuestionBankPage() {
         <div className="flex items-center justify-between mb-6 md:mb-8">
           <div className="space-y-1.5">
             <h1 className="text-page-title font-headline tracking-tight flex items-center gap-3">
-              <span className="bg-amber-500/10 p-2 rounded-lg inline-flex">
-                <Sparkles className="w-6 h-6 text-amber-500" />
+              <span className="bg-warning/10 p-2 rounded-lg inline-flex">
+                <Sparkles className="w-6 h-6 text-warning" />
               </span>
               AI PDF Forge
             </h1>

@@ -38,17 +38,17 @@ const eventLabels: Record<string, string> = {
 };
 
 const eventColors: Record<string, string> = {
-  login_success: 'text-green-600 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800',
+  login_success: 'text-success bg-success/10 border-success/25 dark:bg-success/20',
   logout: 'text-muted-foreground bg-muted/30 border-border/50',
-  login_failed: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
-  invalid_token: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800',
-  unauthorized_access: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800',
-  session_replaced: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800',
-  duplicate_session: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800',
-  suspicious_reconnect: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800',
-  battle_join_denied: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800',
-  rate_limited: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
-  security_violation: 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
+  login_failed: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
+  invalid_token: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
+  unauthorized_access: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
+  session_replaced: 'text-muted-foreground bg-muted/40 border-border/60',
+  duplicate_session: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
+  suspicious_reconnect: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
+  battle_join_denied: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
+  rate_limited: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
+  security_violation: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
 };
 
 function getEventColor(event: string): string {
@@ -60,9 +60,9 @@ function isBenign(event: string): boolean {
 }
 
 const actorRoleColors: Record<string, string> = {
-  executive: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  commander: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  gladiator: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  executive: 'bg-primary/10 text-primary border border-primary/25 dark:bg-primary/20',
+  commander: 'bg-accent/15 text-accent border border-accent/30 dark:bg-accent/20',
+  gladiator: 'bg-success/10 text-success border border-success/25 dark:bg-success/20',
 };
 
 function formatTimestamp(ts: number | null): string {
@@ -179,11 +179,15 @@ export default function SecurityLogsPage() {
 
   const riskyCount = logs.filter(l => !isBenign(l.event)).length;
 
-  if (loading) {
+if (loading) {
     return (
-      <div className="page-container animate-in space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-12 w-full" />
+      <div className="page-container animate-in space-y-6">
+        <div className="space-y-1.5">
+          <Skeleton className="h-10 w-44" />
+          <Skeleton className="h-4 w-72 max-w-full" />
+        </div>
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-20 w-full" />
@@ -246,7 +250,8 @@ export default function SecurityLogsPage() {
                 <CardContent className="p-0">
                   <button
                     onClick={() => toggleExpand(log.id)}
-                    className="w-full flex items-start gap-3 p-4 text-left"
+                    aria-expanded={isExpanded}
+                    className="w-full flex items-start gap-3 p-4 text-left transition-colors duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
                     <div className={cn("shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5", isBenign(log.event) ? "bg-muted" : "bg-destructive/10")}>
                       <ShieldAlert className={cn("w-3.5 h-3.5", isBenign(log.event) ? "text-muted-foreground" : "text-destructive")} />
