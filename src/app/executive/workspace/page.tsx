@@ -207,34 +207,34 @@ const systemLabels: Record<string, string> = {
 };
 
 const systemStatusConfig = {
-  healthy: { icon: CheckCircle2, className: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800', label: 'Healthy' },
-  warning: { icon: AlertTriangle, className: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800', label: 'Warning' },
-  offline: { icon: AlertCircle, className: 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800', label: 'Offline' },
+  healthy: { icon: CheckCircle2, className: 'text-success bg-success/10 border-success/25 dark:bg-success/15', label: 'Healthy' },
+  warning: { icon: AlertTriangle, className: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/15', label: 'Warning' },
+  offline: { icon: AlertCircle, className: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/15', label: 'Offline' },
 };
 
 const quickActions = [
-  { label: 'Question Bank', icon: BookOpen, href: '/executive/question-bank', color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-  { label: 'Battles', icon: Swords, href: '/executive/battles', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
-  { label: 'Requests', icon: Inbox, href: '/executive/requests', color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20' },
-  { label: 'Commanders', icon: Shield, href: '/executive/commanders', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20' },
-  { label: 'Settings', icon: Settings, href: '/executive/settings', color: 'text-slate-600 bg-slate-50 dark:bg-slate-950/20' },
+  { label: 'Question Bank', icon: BookOpen, href: '/executive/question-bank', color: 'text-accent bg-accent/10 group-hover:bg-accent/20' },
+  { label: 'Battles', icon: Swords, href: '/executive/battles', color: 'text-primary bg-primary/10 group-hover:bg-primary/20' },
+  { label: 'Requests', icon: Inbox, href: '/executive/requests', color: 'text-warning bg-warning/10 group-hover:bg-warning/20' },
+  { label: 'Commanders', icon: Shield, href: '/executive/commanders', color: 'text-success bg-success/10 group-hover:bg-success/20' },
+  { label: 'Settings', icon: Settings, href: '/executive/settings', color: 'text-muted-foreground bg-muted/60 group-hover:bg-muted' },
 ];
 
 const battleStatusConfig: Record<string, { className: string }> = {
-  live: { className: 'border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },
-  finished: { className: 'border-slate-300 text-slate-600' },
-  waiting: { className: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-  ready: { className: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-  starting: { className: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-  paused: { className: 'border-slate-400 text-slate-600 bg-slate-50 dark:bg-slate-950/20' },
-  cancelled: { className: 'border-red-300 text-red-600 bg-red-50 dark:bg-red-950/20' },
+  live: { className: 'text-success bg-success/10 border-success/25 dark:bg-success/15' },
+  finished: { className: 'text-muted-foreground border-border' },
+  waiting: { className: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/15' },
+  ready: { className: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/15' },
+  starting: { className: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/15' },
+  paused: { className: 'text-muted-foreground bg-muted/50 border-border' },
+  cancelled: { className: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/15' },
 };
 
 const requestStatusColor: Record<string, string> = {
-  pending: 'bg-amber-500',
-  approved: 'bg-emerald-500',
-  completed: 'bg-slate-400',
-  rejected: 'bg-red-500',
+  pending: 'bg-warning',
+  approved: 'bg-success',
+  completed: 'bg-muted-foreground/50',
+  rejected: 'bg-destructive',
 };
 
 export default function ExecutiveWorkspacePage() {
@@ -304,17 +304,27 @@ export default function ExecutiveWorkspacePage() {
     return (
       <div className="page-container animate-in space-y-6">
         <div className="space-y-1.5">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-72" />
+          <Skeleton className="h-10 w-56" />
+          <Skeleton className="h-4 w-80 max-w-full" />
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-32" />
+            <Skeleton key={i} className="h-12 w-32 rounded-[12px]" />
           ))}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full" />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 w-full" />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-72 w-full" />
           ))}
         </div>
       </div>
@@ -333,7 +343,7 @@ export default function ExecutiveWorkspacePage() {
           <div className="flex items-center gap-3">
             <h1 className="text-page-title font-headline tracking-tight">Mission Control</h1>
             {totalWarnings > 0 && (
-              <Badge variant="outline" className="gap-1 border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20">
+              <Badge variant="outline" className="gap-1 border-warning/30 text-warning bg-warning/10 dark:bg-warning/15">
                 <AlertTriangle className="w-3 h-3" />
                 {totalWarnings} issue{totalWarnings > 1 ? 's' : ''}
               </Badge>
@@ -358,27 +368,27 @@ export default function ExecutiveWorkspacePage() {
           <button
             key={action.label}
             onClick={() => router.push(action.href)}
-            className="group flex items-center gap-2 px-4 py-3 rounded-[12px] border border-border/60 hover:border-primary/30 hover:bg-accent/30 hover:shadow-elevation-hover transition-all duration-200 text-sm font-medium"
+            className="group flex items-center gap-2 px-4 py-3 rounded-[12px] border border-border/60 hover:border-primary/30 hover:bg-accent/30 hover:shadow-elevation-hover transition-all duration-300 ease-out text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <div className={cn('w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110', action.color)}>
+            <div className={cn('w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 transition-transform duration-300 ease-out group-hover:scale-110', action.color)}>
               <action.icon className="w-4 h-4" />
             </div>
             {action.label}
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground transition-transform duration-300 ease-out group-hover:translate-x-0.5" />
           </button>
         ))}
       </div>
 
       {/* Primary Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" aria-live="polite" aria-label="Platform statistics">
-        <StatCard icon={Users} label="Total Users" value={stats?.totalUsers ?? 0} sub={`${stats?.executives ?? 0} exec, ${stats?.commanders ?? 0} cmd, ${stats?.gladiators ?? 0} glad`} color="text-blue-600" />
-        <StatCard icon={BookOpen} label="Question Bank" value={stats?.questionBank ?? 0} sub={`${stats?.questionsImported ?? 0} AI-imported · ${stats?.questionsAddedThisWeek ?? 0} this week`} color="text-amber-600" />
-        <StatCard icon={Swords} label="Total Battles" value={stats?.battles ?? 0} sub={`${stats?.completedBattles ?? 0} completed, ${stats?.activeBattles ?? 0} active`} color="text-rose-600" />
-        <StatCard icon={Inbox} label="Pending Requests" value={stats?.unreadRequests ?? 0} sub="awaiting executive review" color="text-orange-600" />
+        <StatCard icon={Users} label="Total Users" value={stats?.totalUsers ?? 0} sub={`${stats?.executives ?? 0} exec, ${stats?.commanders ?? 0} cmd, ${stats?.gladiators ?? 0} glad`} color="text-primary" tileClass="bg-primary/10 group-hover/card:bg-primary/15" />
+        <StatCard icon={BookOpen} label="Question Bank" value={stats?.questionBank ?? 0} sub={`${stats?.questionsImported ?? 0} AI-imported · ${stats?.questionsAddedThisWeek ?? 0} this week`} color="text-accent" tileClass="bg-accent/15 group-hover/card:bg-accent/25" />
+        <StatCard icon={Swords} label="Total Battles" value={stats?.battles ?? 0} sub={`${stats?.completedBattles ?? 0} completed, ${stats?.activeBattles ?? 0} active`} color="text-success" tileClass="bg-success/10 group-hover/card:bg-success/15" />
+        <StatCard icon={Inbox} label="Pending Requests" value={stats?.unreadRequests ?? 0} sub="awaiting executive review" color="text-warning" tileClass="bg-warning/15 group-hover/card:bg-warning/25" />
       </div>
 
       {/* Realtime strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MiniStat icon={Activity} label="Live Battles" value={stats?.realtime?.liveBattles ?? 0} />
         <MiniStat icon={Wifi} label="Live Connections" value={stats?.realtime?.connections ?? 0} />
         <MiniStat icon={Award} label="Avg Score" value={stats?.averageBattleScore ?? 0} />
@@ -386,7 +396,7 @@ export default function ExecutiveWorkspacePage() {
       </div>
 
       {/* Analytics Mini Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
         <MiniStat icon={Calendar} label="Battles Today" value={stats?.battlesToday ?? 0} />
         <MiniStat icon={TrendingUp} label="This Week" value={stats?.battlesThisWeek ?? 0} />
         <MiniStat icon={User} label="New Today" value={stats?.newUsersToday ?? 0} />
@@ -414,15 +424,20 @@ export default function ExecutiveWorkspacePage() {
             {stats?.recentBattles && stats.recentBattles.length > 0 ? (
               <div className="space-y-1">
                 {stats.recentBattles.map(battle => (
-                  <div key={battle.id} onClick={() => router.push(`/executive/battles/${battle.id}`)} className="group flex items-center justify-between p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-200 cursor-pointer border border-transparent hover:border-border/50">
+                  <button
+                    key={battle.id}
+                    type="button"
+                    onClick={() => router.push(`/executive/battles/${battle.id}`)}
+                    className="group flex items-center justify-between w-full text-left p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-300 ease-out cursor-pointer border border-transparent hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{battle.title}</p>
+                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors duration-300">{battle.title}</p>
                       <p className="text-xs text-muted-foreground">{battle.commanderName} · {battle.participantCount} participants</p>
                     </div>
                     <Badge variant="outline" className={cn('text-[10px] ml-2', battleStatusConfig[battle.status]?.className)}>
                       {battle.status}
                     </Badge>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -446,16 +461,21 @@ export default function ExecutiveWorkspacePage() {
             {stats?.recentRequests && stats.recentRequests.length > 0 ? (
               <div className="space-y-1">
                 {stats.recentRequests.map(req => (
-                  <div key={req.id} onClick={() => router.push('/executive/requests')} className="group flex items-center justify-between p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-200 cursor-pointer border border-transparent hover:border-border/50">
+                  <button
+                    key={req.id}
+                    type="button"
+                    onClick={() => router.push('/executive/requests')}
+                    className="group flex items-center justify-between w-full text-left p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-300 ease-out cursor-pointer border border-transparent hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{req.title}</p>
+                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors duration-300">{req.title}</p>
                       <p className="text-xs text-muted-foreground">{req.commanderName} · {formatDate(req.createdAt)}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <div className={cn('w-1.5 h-1.5 rounded-full', requestStatusColor[req.status] || 'bg-slate-400')} />
+                      <div className={cn('w-1.5 h-1.5 rounded-full', requestStatusColor[req.status] || 'bg-muted-foreground/50')} />
                       <span className="text-[10px] font-medium capitalize text-muted-foreground">{req.status}</span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -479,15 +499,20 @@ export default function ExecutiveWorkspacePage() {
             {recentNotifications.length > 0 ? (
               <div className="space-y-1">
                 {recentNotifications.map(n => (
-                  <div key={n.id} onClick={() => router.push('/executive/notifications')} className="group flex items-start gap-3 p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-200 cursor-pointer border border-transparent hover:border-border/50">
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => router.push('/executive/notifications')}
+                    className="group flex items-start gap-3 w-full text-left p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-300 ease-out cursor-pointer border border-transparent hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
                     <div className="shrink-0 w-8 h-8 rounded-[10px] bg-primary/10 flex items-center justify-center">
                       <Bell className="w-4 h-4 text-primary" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm truncate group-hover:text-primary transition-colors">{n.title}</p>
+                      <p className="text-sm truncate group-hover:text-primary transition-colors duration-300">{n.title}</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(n.createdAt)}</p>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -515,18 +540,23 @@ export default function ExecutiveWorkspacePage() {
               {stats?.activeCommandersList && stats.activeCommandersList.length > 0 ? (
                 <div className="space-y-1">
                   {stats.activeCommandersList.slice(0, 5).map(cmd => (
-                    <div key={cmd.uid} onClick={() => router.push(`/executive/commanders/${cmd.uid}`)} className="group flex items-center justify-between p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-200 cursor-pointer border border-transparent hover:border-border/50">
+                    <button
+                      key={cmd.uid}
+                      type="button"
+                      onClick={() => router.push(`/executive/commanders/${cmd.uid}`)}
+                      className="group flex items-center justify-between w-full text-left p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-300 ease-out cursor-pointer border border-transparent hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    >
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                        <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-300 ease-out">
                           <Shield className="w-4 h-4 text-primary" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium group-hover:text-primary transition-colors">{cmd.name}</p>
+                          <p className="text-sm font-medium group-hover:text-primary transition-colors duration-300">{cmd.name}</p>
                           <p className="text-xs text-muted-foreground">{cmd.arenaCount} arenas created</p>
                         </div>
                       </div>
                       {cmd.disabled && <Badge variant="outline" className="text-[10px] border-destructive/30 text-destructive bg-destructive/5">Disabled</Badge>}
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -587,12 +617,12 @@ export default function ExecutiveWorkspacePage() {
                 <div className="space-y-0 max-h-[360px] overflow-y-auto custom-scrollbar -mx-1 px-1">
                   {stats.recentActivity.slice(0, 15).map(activity => {
                     const roleColors: Record<string, string> = {
-                      executive: 'bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-300 border-purple-200 dark:border-purple-800',
-                      commander: 'bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-                      gladiator: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+                      executive: 'bg-primary/10 text-primary border-primary/25 dark:bg-primary/20',
+                      commander: 'bg-accent/15 text-accent border-accent/30 dark:bg-accent/20',
+                      gladiator: 'bg-success/10 text-success border-success/25 dark:bg-success/20',
                     };
                     return (
-                      <div key={activity.id} className="group flex items-start gap-3 py-2.5 border-b border-border/20 last:border-0 hover:bg-muted/20 -mx-1 px-1 rounded-[8px] transition-colors duration-150">
+                      <div key={activity.id} className="group flex items-start gap-3 py-2.5 border-b border-border/20 last:border-0 hover:bg-muted/20 -mx-1 px-1 rounded-[8px] transition-colors duration-300 ease-out">
                         <div className="shrink-0 w-8 h-8 rounded-[10px] bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
                           <Activity className="w-3.5 h-3.5 text-primary" />
                         </div>
@@ -603,12 +633,12 @@ export default function ExecutiveWorkspacePage() {
                             </span>
                             <span className={cn(
                               'inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider',
-                              roleColors[activity.actorRole] || 'bg-muted text-muted-foreground border-border'
+                              roleColors[activity.actorRole] || 'bg-muted/60 text-muted-foreground border-border'
                             )}>
                               {activity.actorRole}
                             </span>
                           </div>
-                          <p className="text-sm mt-0.5 group-hover:text-foreground transition-colors">
+                          <p className="text-sm mt-0.5 group-hover:text-foreground transition-colors duration-300">
                             <span className="font-medium capitalize">{activity.actorRole || 'User'}</span>
                             {' '}{actionLabels[activity.action] || activity.action.replace(/_/g, ' ')}
                           </p>
@@ -634,7 +664,7 @@ export default function ExecutiveWorkspacePage() {
             <CardContent className="pt-4 space-y-3">
               <div className="flex items-center justify-between p-3 rounded-[12px] bg-muted/30">
                 <span className="text-sm font-medium">Failed logins (24h)</span>
-                <span className={cn('text-lg font-bold tabular-nums', (stats?.failedLogins24h ?? 0) > 10 ? 'text-destructive' : 'text-emerald-600')}>
+                <span className={cn('text-lg font-bold tabular-nums', (stats?.failedLogins24h ?? 0) > 10 ? 'text-destructive' : 'text-success')}>
                   <AnimatedValue value={stats?.failedLogins24h ?? 0} />
                 </span>
               </div>
@@ -642,10 +672,10 @@ export default function ExecutiveWorkspacePage() {
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-muted-foreground">Recent events</p>
                   {stats.recentSecurityEvents.slice(0, 4).map(evt => (
-                    <div key={evt.id} className="flex items-start gap-2 p-2.5 rounded-[10px] bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <div key={evt.id} className="flex items-start gap-2 p-2.5 rounded-[10px] bg-muted/30 hover:bg-muted/50 transition-colors duration-300 ease-out">
                       {evt.event === 'login_failed'
-                        ? <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                        : <ShieldAlert className="w-3.5 h-3.5 text-red-600 shrink-0 mt-0.5" />}
+                        ? <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
+                        : <ShieldAlert className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />}
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium">{evt.event?.replace(/_/g, ' ') || 'Security event'}</p>
                         <p className="text-[10px] text-muted-foreground truncate mt-0.5">
@@ -685,11 +715,11 @@ export default function ExecutiveWorkspacePage() {
                       <button
                         onClick={() => setExpandedService(expanded ? null : key)}
                         aria-expanded={expanded}
-                        className="group flex items-center justify-between w-full p-3 hover:bg-muted/30 transition-all duration-200 text-left"
+                        className="group flex items-center justify-between w-full p-3 hover:bg-muted/30 transition-all duration-300 ease-out text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       >
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-[8px] bg-background flex items-center justify-center">
-                            <Icon className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                            <Icon className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors duration-300" />
                           </div>
                           <span className="text-sm font-medium">{systemLabels[key] || key}</span>
                         </div>
@@ -701,7 +731,7 @@ export default function ExecutiveWorkspacePage() {
                             <StatusIcon className="w-3 h-3" />
                             {cfg.label}
                           </Badge>
-                          <ChevronRight className={cn('w-3.5 h-3.5 text-muted-foreground transition-transform duration-200', expanded && 'rotate-90')} />
+                          <ChevronRight className={cn('w-3.5 h-3.5 text-muted-foreground transition-transform duration-300 ease-out', expanded && 'rotate-90')} />
                         </div>
                       </button>
                       {expanded && (
@@ -761,11 +791,11 @@ export default function ExecutiveWorkspacePage() {
                 <div className="text-right">
                   {stats?.storage?.configured ? (
                     <>
-                      <p className="text-xs font-medium text-emerald-600">Configured</p>
+                      <p className="text-xs font-medium text-success">Configured</p>
                       <p className="text-[10px] font-mono text-muted-foreground max-w-[180px] truncate">{stats.storage.bucket}</p>
                     </>
                   ) : (
-                    <p className="text-xs font-medium text-amber-600">Not configured</p>
+                    <p className="text-xs font-medium text-warning">Not configured</p>
                   )}
                 </div>
               </div>
@@ -777,14 +807,14 @@ export default function ExecutiveWorkspacePage() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, sub, color }: {
+function StatCard({ icon: Icon, label, value, sub, color, tileClass }: {
   icon: React.ElementType;
   label: string;
   value: string | number;
   sub?: string;
   color?: string;
+  tileClass?: string;
 }) {
-  const bgClass = color ? `${color.replace('text-', 'bg-').replace('600', '100')} dark:${color.replace('text-', 'bg-').replace('600', '950/20')} group-hover:${color.replace('text-', 'bg-').replace('600', '200')} dark:group-hover:${color.replace('text-', 'bg-').replace('600', '950/30')}` : 'bg-muted';
   return (
     <Card className="group/card card-hover shadow-elevation-small hover:shadow-elevation-medium">
       <CardContent className="p-5">
@@ -794,7 +824,7 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
             <p className="text-sm text-muted-foreground">{label}</p>
             {sub && <p className="text-xs text-muted-foreground/70">{sub}</p>}
           </div>
-          <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-200 group-hover/card:scale-110 group-hover/card:shadow-sm", bgClass)}>
+          <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-300 ease-out group-hover/card:scale-110 group-hover/card:shadow-sm", tileClass || 'bg-muted/60')}>
             <Icon className={cn("w-5 h-5", color || 'text-muted-foreground')} />
           </div>
         </div>
@@ -811,7 +841,7 @@ function MiniStat({ icon: Icon, label, value }: {
   return (
     <Card className="card-hover shadow-elevation-small hover:shadow-elevation-medium">
       <CardContent className="p-3 flex items-center gap-2">
-        <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-200">
+        <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300 ease-out">
           <Icon className="w-3.5 h-3.5 text-primary" />
         </div>
         <div>
@@ -825,8 +855,8 @@ function MiniStat({ icon: Icon, label, value }: {
 
 function DbStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="group flex items-center justify-between p-2.5 rounded-[10px] bg-muted/30 hover:bg-muted/50 border border-transparent hover:border-border/50 transition-all duration-200">
-      <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">{label}</span>
+    <div className="group flex items-center justify-between p-2.5 rounded-[10px] bg-muted/30 hover:bg-muted/50 border border-transparent hover:border-border/50 transition-all duration-300 ease-out">
+      <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors duration-300">{label}</span>
       <span className="text-sm font-semibold tabular-nums"><AnimatedValue value={value} /></span>
     </div>
   );

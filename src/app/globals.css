@@ -28,16 +28,16 @@
     --warning-foreground: 0 0% 100%;
     --border: 228 16% 90%;
     --input: 228 16% 90%;
-    --ring: 243 75% 59%;
+    --ring: 15 68% 36%;
     --radius: 0.75rem;
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 220 9% 46%;
-    --sidebar-primary: 243 75% 59%;
+    --sidebar-primary: 15 68% 36%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 228 16% 96%;
     --sidebar-accent-foreground: 220 40% 11%;
     --sidebar-border: 228 16% 92%;
-    --sidebar-ring: 243 75% 59%;
+    --sidebar-ring: 15 68% 36%;
   }
 }
 
@@ -79,10 +79,10 @@
     @apply mb-10;
   }
   .animate-in {
-    animation: fade-in 150ms ease-out, slide-up 150ms ease-out;
+    animation: fade-in 300ms ease-out, slide-up 300ms ease-out;
   }
   .animate-in-fast {
-    animation: fade-in 100ms ease-out;
+    animation: fade-in 200ms ease-out;
   }
 }
 

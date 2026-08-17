@@ -180,9 +180,15 @@ export default function ExecutiveSettingsPage() {
 
   if (loading) {
     return (
-      <div className="page-container animate-in space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
+      <div className="page-container animate-in space-y-6">
+        <div className="space-y-1.5">
+          <Skeleton className="h-10 w-44" />
+          <Skeleton className="h-4 w-72 max-w-full" />
+        </div>
+        <Skeleton className="h-11 w-full sm:w-40 rounded-[12px]" />
+        <Skeleton className="h-10 w-full sm:w-auto rounded-[10px]" />
+        <Skeleton className="h-80 w-full" />
+        <Skeleton className="h-36 w-full" />
       </div>
     );
   }
@@ -201,13 +207,13 @@ export default function ExecutiveSettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:flex gap-0">
-          <TabsTrigger value="general" className="gap-1.5"><Palette className="w-4 h-4" /> General</TabsTrigger>
-          <TabsTrigger value="auth" className="gap-1.5"><Shield className="w-4 h-4" /> Authentication</TabsTrigger>
-          <TabsTrigger value="battle" className="gap-1.5"><Clock className="w-4 h-4" /> Battle</TabsTrigger>
-          <TabsTrigger value="ai" className="gap-1.5"><BrainCircuit className="w-4 h-4" /> AI</TabsTrigger>
-          <TabsTrigger value="messaging" className="gap-1.5"><MessageSquare className="w-4 h-4" /> Messaging</TabsTrigger>
-          <TabsTrigger value="export" className="gap-1.5"><DownloadCloud className="w-4 h-4" /> Export</TabsTrigger>
+        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-3 lg:flex gap-0">
+          <TabsTrigger value="general" className="gap-1.5 justify-center"><Palette className="w-4 h-4" /> General</TabsTrigger>
+          <TabsTrigger value="auth" className="gap-1.5 justify-center"><Shield className="w-4 h-4" /> Authentication</TabsTrigger>
+          <TabsTrigger value="battle" className="gap-1.5 justify-center"><Clock className="w-4 h-4" /> Battle</TabsTrigger>
+          <TabsTrigger value="ai" className="gap-1.5 justify-center"><BrainCircuit className="w-4 h-4" /> AI</TabsTrigger>
+          <TabsTrigger value="messaging" className="gap-1.5 justify-center"><MessageSquare className="w-4 h-4" /> Messaging</TabsTrigger>
+          <TabsTrigger value="export" className="gap-1.5 justify-center"><DownloadCloud className="w-4 h-4" /> Export</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6 mt-6">
@@ -254,12 +260,12 @@ export default function ExecutiveSettingsPage() {
                 Authentication
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between p-2.5 -mx-2.5 rounded-[10px] hover:bg-muted/30 transition-colors duration-300 ease-out">
                 <div><Label>Allow Commander Self-Registration</Label><p className="text-xs text-muted-foreground">Commanders can create their own accounts.</p></div>
                 <Switch checked={settings.auth.allowCommanderSelfRegistration} onCheckedChange={c => setSettings({ ...settings, auth: { ...settings.auth, allowCommanderSelfRegistration: c } })} />
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2.5 -mx-2.5 rounded-[10px] hover:bg-muted/30 transition-colors duration-300 ease-out">
                 <div><Label>Allow Gladiator Registration</Label><p className="text-xs text-muted-foreground">Students can sign up with Google.</p></div>
                 <Switch checked={settings.auth.allowGladiatorRegistration} onCheckedChange={c => setSettings({ ...settings, auth: { ...settings.auth, allowGladiatorRegistration: c } })} />
               </div>
@@ -297,7 +303,7 @@ export default function ExecutiveSettingsPage() {
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2.5 -mx-2.5 rounded-[10px] hover:bg-muted/30 transition-colors duration-300 ease-out">
                 <div><Label>Auto-End Battle</Label><p className="text-xs text-muted-foreground">Automatically end battles when all participants finish.</p></div>
                 <Switch checked={settings.battle.autoEndBattle} onCheckedChange={c => setSettings({ ...settings, battle: { ...settings.battle, autoEndBattle: c } })} />
               </div>
@@ -314,7 +320,7 @@ export default function ExecutiveSettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2.5 -mx-2.5 rounded-[10px] hover:bg-muted/30 transition-colors duration-300 ease-out">
                 <div><Label>Enable AI</Label><p className="text-xs text-muted-foreground">Allow AI-powered question generation and analysis.</p></div>
                 <Switch checked={settings.ai.enabled} onCheckedChange={c => setSettings({ ...settings, ai: { ...settings.ai, enabled: c } })} />
               </div>
@@ -371,11 +377,11 @@ export default function ExecutiveSettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2.5 -mx-2.5 rounded-[10px] hover:bg-muted/30 transition-colors duration-300 ease-out">
                 <div><Label>Enable Announcements</Label><p className="text-xs text-muted-foreground">Allow sending broadcast announcements.</p></div>
                 <Switch checked={settings.messaging.enableAnnouncements} onCheckedChange={c => setSettings({ ...settings, messaging: { ...settings.messaging, enableAnnouncements: c } })} />
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2.5 -mx-2.5 rounded-[10px] hover:bg-muted/30 transition-colors duration-300 ease-out">
                 <div><Label>Enable Chat</Label><p className="text-xs text-muted-foreground">Allow commanders and gladiators to send messages.</p></div>
                 <Switch checked={settings.messaging.enableChat} onCheckedChange={c => setSettings({ ...settings, messaging: { ...settings.messaging, enableChat: c } })} />
               </div>
@@ -392,16 +398,16 @@ export default function ExecutiveSettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2.5 -mx-2.5 rounded-[10px] hover:bg-muted/30 transition-colors duration-300 ease-out">
                 <div><Label>Include Student Names</Label><p className="text-xs text-muted-foreground">Include student names in exported reports.</p></div>
                 <Switch checked={settings.exportPreferences.includeStudentNames} onCheckedChange={c => setSettings({ ...settings, exportPreferences: { ...settings.exportPreferences, includeStudentNames: c } })} />
               </div>
-              <div className="flex items-center justify-between">
-                <div><Label>Include Scores</Label></div>
+              <div className="flex items-center justify-between p-2.5 -mx-2.5 rounded-[10px] hover:bg-muted/30 transition-colors duration-300 ease-out">
+                <div><Label>Include Scores</Label><p className="text-xs text-muted-foreground">Include scores in exported reports.</p></div>
                 <Switch checked={settings.exportPreferences.includeScores} onCheckedChange={c => setSettings({ ...settings, exportPreferences: { ...settings.exportPreferences, includeScores: c } })} />
               </div>
-              <div className="flex items-center justify-between">
-                <div><Label>Include Timestamps</Label></div>
+              <div className="flex items-center justify-between p-2.5 -mx-2.5 rounded-[10px] hover:bg-muted/30 transition-colors duration-300 ease-out">
+                <div><Label>Include Timestamps</Label><p className="text-xs text-muted-foreground">Include timestamps in exported reports.</p></div>
                 <Switch checked={settings.exportPreferences.includeTimestamps} onCheckedChange={c => setSettings({ ...settings, exportPreferences: { ...settings.exportPreferences, includeTimestamps: c } })} />
               </div>
             </CardContent>

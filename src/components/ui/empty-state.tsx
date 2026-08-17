@@ -15,7 +15,7 @@ export function EmptyState({ icon: Icon, title, description, action, className }
     <div className={cn('flex flex-col items-center justify-center py-14 px-4', className)}>
       <div className="relative mb-5">
         <div className="absolute -inset-3 rounded-[24px] bg-gradient-to-br from-primary/15 via-transparent to-accent/15 blur-xl animate-glow-pulse" aria-hidden="true" />
-        <div className="relative w-16 h-16 rounded-[16px] bg-muted flex items-center justify-center ring-1 ring-border/30 overflow-hidden">
+        <div className="relative w-16 h-16 rounded-[16px] bg-primary/8 ring-1 ring-accent/20 flex items-center justify-center overflow-hidden">
           <div className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-primary/15 animate-float" aria-hidden="true" />
           <div className="absolute -bottom-4 -left-4 w-9 h-9 rounded-full bg-accent/15 animate-float" style={{ animationDelay: '-3s' }} aria-hidden="true" />
           <Icon className="w-7 h-7 text-muted-foreground relative" />
