@@ -127,6 +127,8 @@ export default function ExecutiveBattlesPage() {
 
       {loading ? (
         <div className="space-y-3">
+          <Skeleton className="h-10 w-44" />
+          <Skeleton className="h-10 max-w-md" />
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-24 w-full" />
           ))}
@@ -175,7 +177,7 @@ export default function ExecutiveBattlesPage() {
                       </span>
                       {b.winner && (
                         <span className="flex items-center gap-1">
-                          <Trophy className="w-3 h-3 text-amber-500" />
+                          <Trophy className="w-3 h-3 text-warning" />
                           {b.winner.name} ({b.winner.score} pts)
                         </span>
                       )}

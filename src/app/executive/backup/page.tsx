@@ -130,7 +130,7 @@ export default function ExecutiveBackupPage() {
             {lastBackup && (
               <div className="p-3 rounded-[10px] bg-muted/30 space-y-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-success" />
                   <span>Last backup: {new Date(lastBackup.exportedAt).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -153,7 +153,7 @@ export default function ExecutiveBackupPage() {
             <p className="text-sm text-muted-foreground">
               Restore workspace data from a previously exported backup file. Existing documents will be merged.
             </p>
-            <div className="flex items-center gap-2 text-xs text-amber-600">
+            <div className="flex items-center gap-2 text-xs text-warning">
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>This will merge data into existing collections. Review backup file before importing.</span>
             </div>

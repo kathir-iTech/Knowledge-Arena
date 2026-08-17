@@ -190,9 +190,22 @@ export default function StudentManagementPage() {
 
   if (loading) {
     return (
-      <div className="page-container animate-in space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
+      <div className="page-container animate-in space-y-6">
+        <div className="space-y-1.5">
+          <Skeleton className="h-10 w-44" />
+          <Skeleton className="h-4 w-72 max-w-full" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+        <Skeleton className="h-10 w-full" />
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -213,7 +226,7 @@ export default function StudentManagementPage() {
         </Card>
         <Card>
           <CardContent className="py-4 text-center">
-            <p className="text-2xl font-bold text-green-600">{summary.active}</p>
+            <p className="text-2xl font-bold text-success">{summary.active}</p>
             <p className="text-sm text-muted-foreground">Active</p>
           </CardContent>
         </Card>
@@ -241,7 +254,7 @@ export default function StudentManagementPage() {
               key={status}
               onClick={() => setStatusFilter(status)}
               className={cn(
-                'px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-150',
+                'px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                 statusFilter === status
                   ? 'bg-primary text-primary-foreground shadow-elevation-small'
                   : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
@@ -292,7 +305,7 @@ export default function StudentManagementPage() {
                   <div className="min-w-0">
                     <button
                       onClick={() => router.push(`/executive/students/${g.uid}`)}
-                      className="font-medium truncate group-hover:text-primary transition-colors hover:text-primary hover:underline underline-offset-2 text-left"
+                      className="font-medium truncate group-hover:text-primary transition-colors duration-300 hover:text-primary hover:underline underline-offset-2 text-left rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       title="View full profile"
                     >
                       {g.displayName}
@@ -341,7 +354,7 @@ export default function StudentManagementPage() {
                     title={g.disabled ? 'Re-enable' : 'Disable'}
                     disabled={processingToggle}
                   >
-                    {g.disabled ? <Check className="w-4 h-4 text-green-600" /> : <Ban className="w-4 h-4 text-amber-600" />}
+                    {g.disabled ? <Check className="w-4 h-4 text-success" /> : <Ban className="w-4 h-4 text-warning" />}
                   </Button>
                   <Button
                     variant="ghost"

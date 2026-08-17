@@ -84,18 +84,18 @@ function formatDate(ts?: number | null): string {
 }
 
 const roleColors: Record<string, string> = {
-  executive: 'bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-300 border-purple-200 dark:border-purple-800',
-  commander: 'bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-  gladiator: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  executive: 'bg-primary/10 text-primary border-primary/25 dark:bg-primary/20',
+  commander: 'bg-accent/15 text-accent border-accent/30 dark:bg-accent/20',
+  gladiator: 'bg-success/10 text-success border-success/25 dark:bg-success/20',
 };
 
 const arenaStatusBadge: Record<string, string> = {
-  live: 'border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20',
-  finished: 'border-slate-300 text-slate-600',
-  waiting: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20',
-  ready: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20',
-  starting: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20',
-  paused: 'border-slate-400 text-slate-600 bg-slate-50 dark:bg-slate-950/20',
+  live: 'border-success/30 text-success bg-success/10 dark:bg-success/20',
+  finished: 'border-border/60 text-muted-foreground bg-muted/30',
+  waiting: 'border-warning/30 text-warning bg-warning/10 dark:bg-warning/20',
+  ready: 'border-warning/30 text-warning bg-warning/10 dark:bg-warning/20',
+  starting: 'border-warning/30 text-warning bg-warning/10 dark:bg-warning/20',
+  paused: 'border-border/60 text-muted-foreground bg-muted/40',
 };
 
 export default function UserDetail({ uid, expectedRole }: { uid: string; expectedRole?: string }) {
@@ -136,8 +136,16 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
 
   if (loading) {
     return (
-      <div className="page-container animate-in space-y-4">
-        <Skeleton className="h-10 w-64" />
+      <div className="page-container animate-in space-y-6">
+        <div className="space-y-1.5">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-4 w-80 max-w-full" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full" />
+          ))}
+        </div>
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -188,7 +196,7 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
             <p className="text-sm text-muted-foreground flex items-center gap-1.5">
               {profile.email && <><Mail className="w-3.5 h-3.5" />{profile.email}</>}
               {!profile.authExists && profile.authExists !== undefined && (
-                <span className="text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> no auth record</span>
+                <span className="text-warning flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> no auth record</span>
               )}
             </p>
           </div>
@@ -199,7 +207,7 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
       </div>
 
       {/* Meta strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetaTile icon={Calendar} label="Joined" value={formatDate(typeof profile.createdAt === 'number' ? profile.createdAt : profile.createdAt as unknown as number)} />
         <MetaTile icon={Activity} label="Last Active" value={formatDate(typeof profile.lastActive === 'number' ? profile.lastActive : profile.lastActive as unknown as number)} />
         <MetaTile icon={Shield} label="Last Login" value={profile.lastLoginAt ? new Date(profile.lastLoginAt).toLocaleString() : '—'} />
@@ -209,7 +217,7 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
       {isCommander && (
         <>
           {/* Commander stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <StatTile label="Arenas" value={profile.arenaStats?.total ?? 0} />
             <StatTile label="Active" value={profile.arenaStats?.active ?? 0} />
             <StatTile label="Waiting" value={profile.arenaStats?.waiting ?? 0} />
@@ -229,9 +237,9 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
               {profile.arenas && profile.arenas.length > 0 ? (
                 <div className="space-y-1">
                   {profile.arenas.slice(0, 30).map(arena => (
-                    <div key={arena.id} onClick={() => router.push(`/executive/battles/${arena.id}`)} className="group flex items-center justify-between p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-200 cursor-pointer border border-transparent hover:border-border/50">
+                    <button key={arena.id} type="button" onClick={() => router.push(`/executive/battles/${arena.id}`)} className="group w-full flex items-center justify-between p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-300 ease-out cursor-pointer border border-transparent hover:border-border/50 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{arena.title || 'Untitled Battle'}</p>
+                        <p className="text-sm font-medium truncate group-hover:text-primary transition-colors duration-300">{arena.title || 'Untitled Battle'}</p>
                         <p className="text-xs text-muted-foreground">
                           {arena.participantCount ?? 0} participants · {arena.questionCount ?? 0} questions · {arena.difficulty || 'medium'} · created {formatDate(arena.createdAt)}
                         </p>
@@ -240,7 +248,7 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
                         <Badge variant="outline" className={cn('text-[10px]', arenaStatusBadge[arena.status || ''])}>{arena.status || 'unknown'}</Badge>
                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -260,13 +268,13 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
               {profile.requests && profile.requests.length > 0 ? (
                 <div className="space-y-1">
                   {profile.requests.slice(0, 20).map(req => (
-                    <div key={req.id} onClick={() => router.push('/executive/requests')} className="group flex items-center justify-between p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 transition-all duration-200 cursor-pointer">
+                    <button key={req.id} type="button" onClick={() => router.push('/executive/requests')} className="group w-full flex items-center justify-between p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 transition-all duration-300 ease-out cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate">{req.title || 'Untitled Request'}</p>
                         <p className="text-xs text-muted-foreground">{req.type?.replace(/_/g, ' ')} · {formatDate(req.createdAt)}</p>
                       </div>
                       <span className="text-[10px] font-medium capitalize text-muted-foreground ml-2">{req.status || 'pending'}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -280,7 +288,7 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
       {isGladiator && (
         <>
           {/* Gladiator stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             <StatTile label="Battles Played" value={profile.battleStats?.battlesPlayed ?? 0} />
             <StatTile label="Best Score" value={profile.battleStats?.bestScore ?? 0} />
             <StatTile label="Average Score" value={profile.battleStats?.averageScore ?? 0} />
@@ -299,9 +307,9 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
               {profile.battles && profile.battles.length > 0 ? (
                 <div className="space-y-1">
                   {profile.battles.slice(0, 30).map(battle => (
-                    <div key={battle.id} onClick={() => router.push(`/executive/battles/${battle.id}`)} className="group flex items-center justify-between p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-200 cursor-pointer border border-transparent hover:border-border/50">
+                    <button key={battle.id} type="button" onClick={() => router.push(`/executive/battles/${battle.id}`)} className="group w-full flex items-center justify-between p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-300 ease-out cursor-pointer border border-transparent hover:border-border/50 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{battle.title || 'Untitled Battle'}</p>
+                        <p className="text-sm font-medium truncate group-hover:text-primary transition-colors duration-300">{battle.title || 'Untitled Battle'}</p>
                         <p className="text-xs text-muted-foreground">
                           {battle.difficulty || 'medium'} · {formatDate(battle.createdAt)}
                         </p>
@@ -310,7 +318,7 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
                         <span className="text-sm font-bold tabular-nums">{battle.score ?? 0}</span>
                         <Badge variant="outline" className={cn('text-[10px]', arenaStatusBadge[battle.status || ''])}>{battle.status || 'unknown'}</Badge>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -368,7 +376,7 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
                 <div className="space-y-1">
                   {profile.securityEvents.slice(0, 10).map(evt => (
                     <div key={evt.id} className="flex items-start gap-2 p-2.5 rounded-[10px] bg-muted/30">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium">{evt.event?.replace(/_/g, ' ') || 'Event'}</p>
                         <p className="text-[10px] text-muted-foreground truncate">
@@ -395,9 +403,9 @@ export default function UserDetail({ uid, expectedRole }: { uid: string; expecte
                 <div className="space-y-1">
                   {profile.aiLogs.slice(0, 10).map(log => (
                     <div key={log.id} className="flex items-start gap-2 p-2.5 rounded-[10px] bg-muted/30">
-                      <BrainCircuit className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                      <BrainCircuit className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium">{log.model || 'AI'} · <span className={log.success ? 'text-emerald-600' : 'text-destructive'}>{log.success ? 'success' : 'failed'}</span></p>
+                        <p className="text-xs font-medium">{log.model || 'AI'} · <span className={log.success ? 'text-success' : 'text-destructive'}>{log.success ? 'success' : 'failed'}</span></p>
                         <p className="text-[10px] text-muted-foreground truncate">
                           {log.questionCount ? `${log.questionCount} questions · ` : ''}{formatDate(log.createdAt)}
                         </p>

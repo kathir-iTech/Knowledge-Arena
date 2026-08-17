@@ -27,27 +27,27 @@ interface NotificationDetail {
 }
 
 const typeConfig: Record<string, { icon: React.ElementType; color: string }> = {
-  commander_request: { icon: UserPlus, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20' },
-  gladiator_registration: { icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },
-  battle_completed: { icon: Swords, color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
-  ai_import_completed: { icon: Zap, color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20' },
-  new_announcement: { icon: Megaphone, color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20' },
-  new_message: { icon: MessageSquare, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20' },
-  operation_failed: { icon: AlertTriangle, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-  system_warning: { icon: AlertCircle, color: 'text-red-600 bg-red-50 dark:bg-red-950/20' },
-  commander_created: { icon: Shield, color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20' },
-  commander_disabled: { icon: AlertTriangle, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-  commander_enabled: { icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },
-  password_reset: { icon: Lock, color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20' },
-  question_added: { icon: BookOpen, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-  question_deleted: { icon: AlertTriangle, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-  arena_created: { icon: Swords, color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
-  arena_started: { icon: Zap, color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
-  arena_completed: { icon: Swords, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },
-  student_joined: { icon: UserPlus, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20' },
-  student_kicked: { icon: AlertCircle, color: 'text-red-600 bg-red-50 dark:bg-red-950/20' },
-  student_unblocked: { icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },
-  settings_updated: { icon: Bell, color: 'text-slate-600 bg-slate-50 dark:bg-slate-950/20' },
+  commander_request: { icon: UserPlus, color: 'text-warning bg-warning/10 dark:bg-warning/20' },
+  gladiator_registration: { icon: UserCheck, color: 'text-success bg-success/10 dark:bg-success/20' },
+  battle_completed: { icon: Swords, color: 'text-success bg-success/10 dark:bg-success/20' },
+  ai_import_completed: { icon: Zap, color: 'text-accent bg-accent/15 dark:bg-accent/20' },
+  new_announcement: { icon: Megaphone, color: 'text-warning bg-warning/10 dark:bg-warning/20' },
+  new_message: { icon: MessageSquare, color: 'text-muted-foreground bg-muted/40' },
+  operation_failed: { icon: AlertTriangle, color: 'text-destructive bg-destructive/10 dark:bg-destructive/20' },
+  system_warning: { icon: AlertCircle, color: 'text-destructive bg-destructive/10 dark:bg-destructive/20' },
+  commander_created: { icon: Shield, color: 'text-primary bg-primary/10 dark:bg-primary/20' },
+  commander_disabled: { icon: AlertTriangle, color: 'text-warning bg-warning/10 dark:bg-warning/20' },
+  commander_enabled: { icon: UserCheck, color: 'text-success bg-success/10 dark:bg-success/20' },
+  password_reset: { icon: Lock, color: 'text-warning bg-warning/10 dark:bg-warning/20' },
+  question_added: { icon: BookOpen, color: 'text-warning bg-warning/10 dark:bg-warning/20' },
+  question_deleted: { icon: AlertTriangle, color: 'text-destructive bg-destructive/10 dark:bg-destructive/20' },
+  arena_created: { icon: Swords, color: 'text-primary bg-primary/10 dark:bg-primary/20' },
+  arena_started: { icon: Zap, color: 'text-primary bg-primary/10 dark:bg-primary/20' },
+  arena_completed: { icon: Swords, color: 'text-success bg-success/10 dark:bg-success/20' },
+  student_joined: { icon: UserPlus, color: 'text-accent bg-accent/15 dark:bg-accent/20' },
+  student_kicked: { icon: AlertCircle, color: 'text-destructive bg-destructive/10 dark:bg-destructive/20' },
+  student_unblocked: { icon: UserCheck, color: 'text-success bg-success/10 dark:bg-success/20' },
+  settings_updated: { icon: Bell, color: 'text-muted-foreground bg-muted/40' },
 };
 
 function formatDate(ts?: number | null): string {
@@ -138,9 +138,12 @@ export default function ExecutiveNotificationDetailPage({ params }: { params: Pr
 
   if (loading) {
     return (
-      <div className="page-container animate-in space-y-4">
-        <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-40 w-full" />
+      <div className="page-container animate-in space-y-6">
+        <div className="space-y-1.5">
+          <Skeleton className="h-10 w-44" />
+          <Skeleton className="h-4 w-72 max-w-full" />
+        </div>
+        <Skeleton className="h-32 w-full" />
       </div>
     );
   }

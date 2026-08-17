@@ -47,14 +47,27 @@ const actionLabels: Record<string, string> = {
 };
 
 const actionColors: Record<string, string> = {
-  commander_created: 'text-green-600 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800',
-  commander_deleted: 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
-  commander_disabled: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
-  commander_enabled: 'text-green-600 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800',
-  password_reset: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800',
-  gladiator_deleted: 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
-  request_deleted: 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
-  request_handled: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800',
+  commander_created: 'text-success bg-success/10 border-success/25 dark:bg-success/20',
+  commander_deleted: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
+  commander_disabled: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
+  commander_enabled: 'text-success bg-success/10 border-success/25 dark:bg-success/20',
+  password_reset: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
+  gladiator_deleted: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
+  request_deleted: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
+  request_handled: 'text-accent bg-accent/15 border-accent/30 dark:bg-accent/20',
+  question_added: 'text-success bg-success/10 border-success/25 dark:bg-success/20',
+  question_edited: 'text-accent bg-accent/15 border-accent/30 dark:bg-accent/20',
+  question_deleted: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
+  question_imported: 'text-accent bg-accent/15 border-accent/30 dark:bg-accent/20',
+  arena_created: 'text-primary bg-primary/10 border-primary/25 dark:bg-primary/20',
+  arena_started: 'text-primary bg-primary/10 border-primary/25 dark:bg-primary/20',
+  arena_ended: 'text-success bg-success/10 border-success/25 dark:bg-success/20',
+  student_joined: 'text-accent bg-accent/15 border-accent/30 dark:bg-accent/20',
+  student_kicked: 'text-destructive bg-destructive/10 border-destructive/25 dark:bg-destructive/20',
+  student_unblocked: 'text-success bg-success/10 border-success/25 dark:bg-success/20',
+  message_sent: 'text-muted-foreground bg-muted/40 border-border/60',
+  announcement_sent: 'text-warning bg-warning/10 border-warning/25 dark:bg-warning/20',
+  settings_changed: 'text-muted-foreground bg-muted/40 border-border/60',
 };
 
 function getActionColor(action: string): string {
@@ -62,9 +75,9 @@ function getActionColor(action: string): string {
 }
 
 const actorRoleColors: Record<string, string> = {
-  executive: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  commander: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  gladiator: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  executive: 'bg-primary/10 text-primary border border-primary/25 dark:bg-primary/20',
+  commander: 'bg-accent/15 text-accent border border-accent/30 dark:bg-accent/20',
+  gladiator: 'bg-success/10 text-success border border-success/25 dark:bg-success/20',
 };
 
 function formatTimestamp(ts: number): string {
@@ -190,9 +203,17 @@ export default function AuditLogsPage() {
 
   if (loading) {
     return (
-      <div className="page-container animate-in space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-12 w-full" />
+      <div className="page-container animate-in space-y-6">
+        <div className="space-y-1.5">
+          <Skeleton className="h-10 w-44" />
+          <Skeleton className="h-4 w-72 max-w-full" />
+        </div>
+        <Skeleton className="h-10 w-full" />
+        <div className="flex gap-3">
+          <Skeleton className="h-10 flex-1" />
+          <Skeleton className="h-10 w-32" />
+          <Skeleton className="h-10 w-28" />
+        </div>
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-20 w-full" />
@@ -264,7 +285,8 @@ export default function AuditLogsPage() {
                 <CardContent className="p-0">
                   <button
                     onClick={() => toggleExpand(log.id)}
-                    className="w-full flex items-start gap-3 p-4 text-left"
+                    aria-expanded={isExpanded}
+                    className="w-full flex items-start gap-3 p-4 text-left transition-colors duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
                     <div className="shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center mt-0.5">
                       <Activity className="w-3.5 h-3.5 text-muted-foreground" />

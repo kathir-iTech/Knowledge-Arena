@@ -132,7 +132,7 @@ function BattleHistoryCard({ quiz }: { quiz: ValidatedQuiz }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-card-title font-headline tracking-tight truncate block">{quiz.title}</span>
-              <Badge variant="outline" className="text-[10px] shrink-0">COMPLETED</Badge>
+              <Badge variant="default" className="text-[10px] shrink-0">COMPLETED</Badge>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5 flex-wrap">
               <span className="font-mono text-[11px] bg-muted/50 px-2 py-0.5 rounded-[6px]">{quiz.id}</span>
