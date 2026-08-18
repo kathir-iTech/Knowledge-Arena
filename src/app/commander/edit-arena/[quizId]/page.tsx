@@ -7,8 +7,8 @@ import { questionService } from '@/services/game.service';
 import { useAuth } from '@/hooks/useAuth';
 import { QuizEditor } from '@/components/quiz/QuizEditor';
 import { ShieldX } from 'lucide-react';
-import { LoadingScreen } from '@/components/LoadingScreen';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { ValidatedQuiz } from '@/lib/schemas';
 import type { ExistingQuestion, ExistingAnswerKey } from '@/components/quiz/QuizEditor';
 import { useToast } from '@/hooks/use-toast';
@@ -55,7 +55,23 @@ export default function EditArenaPage() {
   }, [quizId, user, isAuthLoading, router]);
 
   if (isLoading || isAuthLoading) {
-    return <LoadingScreen message="Loading arena editor..." />;
+    return (
+      <div className="page-container space-y-6 animate-in safe-top safe-bottom">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-9 w-9 rounded-[10px]" />
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+        </div>
+        <Skeleton className="h-44 w-full rounded-[16px]" />
+        <Skeleton className="h-64 w-full rounded-[16px]" />
+        <div className="flex flex-col md:flex-row gap-4">
+          <Skeleton className="h-14 w-full md:w-52 rounded-[10px]" />
+          <Skeleton className="h-14 w-full md:flex-1 rounded-[10px]" />
+        </div>
+      </div>
+    );
   }
 
   if (error || !quiz) {

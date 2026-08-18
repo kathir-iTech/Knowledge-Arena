@@ -84,7 +84,7 @@ export default function CommanderProfilePage() {
                   key={emoji}
                   type="button"
                   onClick={() => setAvatar(emoji)}
-                  className={cn(`text-lg w-9 h-9 flex items-center justify-center rounded-[10px] border transition-all duration-150`,
+                  className={cn(`text-lg w-9 h-9 flex items-center justify-center rounded-[10px] border transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background`,
                     avatar === emoji ? 'border-primary bg-primary/10' : 'border-border/50 hover:border-primary/30 hover:bg-primary/5'
                   )}
                   aria-label={`Select avatar ${emoji}`}

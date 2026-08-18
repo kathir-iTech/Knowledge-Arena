@@ -451,7 +451,7 @@ export default function CommanderMessagesPage() {
           )}>
             <div className="flex-1 overflow-y-auto space-y-1">
               {loading ? (
-                [1,2].map(i => <Skeleton key={i} className="h-16 w-full" />)
+                [1,2,3].map(i => <Skeleton key={i} className="h-14 w-full" />)
               ) : convError ? (
                 <div className="flex flex-col items-center py-8 text-center">
                   <WifiOff className="w-8 h-8 text-destructive mb-2" />
@@ -476,7 +476,7 @@ export default function CommanderMessagesPage() {
                       key={conv.id}
                       onClick={() => selectConversation(conv.id)}
                       className={cn(
-                        "w-full text-left p-3 rounded-[10px] border transition-all duration-150",
+                        "w-full text-left p-3 rounded-[10px] border transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                         activeConvId === conv.id
                           ? "border-primary bg-primary/5 shadow-elevation-small"
                           : "border-border/40 hover:border-primary/30 hover:bg-muted/20 hover:shadow-elevation-small"
@@ -538,8 +538,10 @@ export default function CommanderMessagesPage() {
                 </div>
                 <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 relative">
                   {loadingMessages ? (
-                    <div className="flex items-center justify-center h-full">
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    <div className="space-y-3">
+                      <Skeleton className="h-12 w-2/3 ml-auto" />
+                      <Skeleton className="h-12 w-1/2" />
+                      <Skeleton className="h-14 w-2/3" />
                     </div>
                   ) : messages.length === 0 && !otherTyping ? (
                     <div className="flex items-center justify-center h-full text-center">
@@ -576,7 +578,7 @@ export default function CommanderMessagesPage() {
                                   const isImage = f.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(f.name);
                                   const isPdf = /\.pdf$/i.test(f.name);
                                   return isImage ? (
-                                    <button key={i} onClick={() => setPreviewImageUrl(f.data)} className="block max-w-[200px] rounded-lg overflow-hidden border border-border/30 hover:opacity-90 transition-opacity">
+                                    <button key={i} onClick={() => setPreviewImageUrl(f.data)} className="block max-w-[200px] rounded-lg overflow-hidden border border-border/30 hover:opacity-90 transition-opacity duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                                       <img src={f.data} alt={f.name} className="w-full h-auto object-cover max-h-[200px]" />
                                       <div className="flex items-center gap-1 px-2 py-1 text-[10px] text-muted-foreground bg-background/80">
                                         <Download className="w-3 h-3" />
@@ -598,7 +600,7 @@ export default function CommanderMessagesPage() {
                                         <span className="truncate">{f.name}</span>
                                         <span className="opacity-60 shrink-0">({formatFileSize(f.size)})</span>
                                       </div>
-                                      <button onClick={() => downloadFile(f)} className="opacity-70 hover:opacity-100 shrink-0">
+                                      <button onClick={() => downloadFile(f)} aria-label={`Download ${f.name}`} className="opacity-70 hover:opacity-100 shrink-0 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                                         <Download className="w-3 h-3" />
                                       </button>
                                     </div>
@@ -614,7 +616,7 @@ export default function CommanderMessagesPage() {
                               {isMine && <CheckCheck className="w-3 h-3 opacity-70" />}
                               {isOptimistic && <Loader2 className="w-3 h-3 animate-spin opacity-70" />}
                               {isMine && msg.id !== optimisticMsgRef.current && (
-                                <button onClick={() => deleteMessage(msg.id)} className="opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity ml-1" aria-label="Delete message">
+                                <button onClick={() => deleteMessage(msg.id)} className="opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity duration-300 ease-out ml-1 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:opacity-100" aria-label="Delete message">
                                   <Trash2 className="w-3 h-3" />
                                 </button>
                               )}
@@ -638,7 +640,7 @@ export default function CommanderMessagesPage() {
                   {showScrollButton && (
                     <button
                       onClick={scrollToBottom}
-                      className="sticky bottom-2 z-10 bg-primary text-primary-foreground rounded-full p-2 shadow-lg hover:bg-primary/90 transition-all mx-auto"
+                      className="sticky bottom-2 z-10 bg-primary text-primary-foreground rounded-full p-2 shadow-lg hover:bg-primary/90 transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background mx-auto"
                       aria-label="Scroll to bottom"
                     >
                       <ChevronDown className="w-4 h-4" />
@@ -653,7 +655,7 @@ export default function CommanderMessagesPage() {
                           <Paperclip className="w-3 h-3 shrink-0 text-muted-foreground" />
                           <span className="truncate max-w-[120px]">{f.name}</span>
                           <span className="text-muted-foreground">({formatFileSize(f.size)})</span>
-                          <button onClick={() => setFileAttachments(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive ml-0.5">
+                          <button onClick={() => setFileAttachments(prev => prev.filter((_, j) => j !== i))} aria-label={`Remove ${f.name}`} className="text-muted-foreground hover:text-destructive ml-0.5 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                             <X className="w-3 h-3" />
                           </button>
                         </div>
@@ -661,7 +663,7 @@ export default function CommanderMessagesPage() {
                     </div>
                   )}
                   <div className="flex gap-2 items-end">
-                    <label className="cursor-pointer text-muted-foreground hover:text-foreground mb-0.5 shrink-0">
+                    <label className="cursor-pointer text-muted-foreground hover:text-foreground mb-0.5 shrink-0 rounded-md p-0.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
                       <Paperclip className="w-5 h-5" />
                       <input type="file" multiple onChange={handleFileSelect} className="hidden" accept=".pdf,.csv,.json,.xlsx,.txt,.png,.jpg,.jpeg,.gif" />
                     </label>
@@ -708,7 +710,7 @@ export default function CommanderMessagesPage() {
         <TabsContent value="announcements" className="flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto space-y-3 h-full">
             {loadingAnnouncements ? (
-              [1,2].map(i => <Skeleton key={i} className="h-24 w-full" />)
+              [1,2,3].map(i => <Skeleton key={i} className="h-32 w-full" />)
             ) : announcementsError ? (
               <div className="flex flex-col items-center py-16 text-center">
                 <WifiOff className="w-10 h-10 text-destructive mx-auto mb-3" />
@@ -726,12 +728,17 @@ export default function CommanderMessagesPage() {
               announcements.map(a => {
                 const isUnread = !a.readBy?.includes(user?.id || '');
                 return (
-                  <Card
+                  <button
                     key={a.id}
-                    className={cn(isUnread && "border-primary/40 cursor-pointer", !isUnread && "cursor-default")}
+                    type="button"
                     onClick={() => markAnnouncementRead(a.id)}
+                    className={cn(
+                      "w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-[14px]",
+                      isUnread && "cursor-pointer", !isUnread && "cursor-default"
+                    )}
                   >
-                    <CardContent className="p-4">
+                    <Card className={cn(isUnread && "border-primary/40")}>
+                      <CardContent className="p-4">
                       <div className="flex items-start gap-3">
                         <Megaphone className={cn(
                           "w-5 h-5 shrink-0 mt-0.5",
@@ -752,6 +759,7 @@ export default function CommanderMessagesPage() {
                       </div>
                     </CardContent>
                   </Card>
+                  </button>
                 );
               })
             )}

@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageError } from '@/components/ui/page-error';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   PlusCircle, Swords, Search as SearchIcon, MoreHorizontal, Pencil, Copy,
   Trash2, Download, FileText, RefreshCw, Users, PlayCircle, Calendar,
@@ -188,7 +189,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
     const isStaleWaiting = quiz.status === 'waiting' && quiz.created_at && Date.now() - quiz.created_at > 7200000;
 
     return (
-        <Card className={cn("group/card card-hover transition-all duration-200 overflow-hidden hover:shadow-elevation-medium", quiz.archived && "opacity-50")}>
+        <Card className={cn("group/card card-hover transition-all duration-300 ease-out overflow-hidden hover:shadow-elevation-medium", quiz.archived && "opacity-50")}>
             <div className="relative">
               <div className={cn("absolute top-0 left-0 w-1.5 h-full rounded-r-sm",
                 quiz.status === 'live' ? (isStaleLive ? "bg-warning" : "bg-success") :
@@ -199,7 +200,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-xl md:text-2xl font-headline font-bold tracking-tight truncate group-hover/card:text-primary transition-colors">
+                      <span className="text-xl md:text-2xl font-headline font-bold tracking-tight truncate group-hover/card:text-primary transition-colors duration-300 ease-out">
                         {quiz.title}
                       </span>
                       <Badge variant={quiz.archived ? 'secondary' : isStaleLive ? 'warning' : quiz.status === 'live' ? 'success' : quiz.status === 'finished' ? 'default' : isStaleWaiting ? 'secondary' : 'warning'} className="shrink-0 h-6 px-2.5 text-[10px] font-semibold uppercase tracking-wider">
@@ -227,7 +228,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {!quiz.archived && (
-                      <Button asChild size="default" className="h-10 px-5 font-semibold shadow-elevation-small hover:shadow-elevation-hover transition-all duration-200">
+                      <Button asChild size="default" className="h-10 px-5 font-semibold shadow-elevation-small hover:shadow-elevation-hover transition-all duration-300 ease-out">
                           <Link href={`/battle/${quiz.id}`}>
                             {quiz.status === 'waiting' ? <><Swords className="mr-2 h-4 w-4" /> Start Battle</> : <><PlayCircle className="mr-2 h-4 w-4" /> Enter Arena</>}
                           </Link>
@@ -235,7 +236,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                     )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-muted/50 transition-colors" aria-label="More actions">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-muted/50 transition-colors duration-300 ease-out" aria-label="More actions">
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -403,12 +404,12 @@ export default function CommanderDashboard() {
   }, [quizzes, debouncedQuery, sortKey, filterKey]);
 
   const quickActions = useMemo(() => [
-    { label: 'Create Arena', icon: PlusCircle, href: '/create-quiz', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
-    { label: 'Question Bank', icon: BookOpen, href: '/create-quiz?tab=bank', color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
-    { label: 'AI Import', icon: Zap, href: '/create-quiz?tab=forge', color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20' },
-    { label: 'My Requests', icon: Inbox, href: '/commander/requests', color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/20' },
-    { label: 'Messages', icon: MessageSquare, href: '/commander/messages', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20' },
-    { label: 'Battle History', icon: Clock, href: '/commander/history', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' },
+    { label: 'Create Arena', icon: PlusCircle, href: '/create-quiz', color: 'text-primary bg-primary/10' },
+    { label: 'Question Bank', icon: BookOpen, href: '/create-quiz?tab=bank', color: 'text-warning bg-warning/10' },
+    { label: 'AI Import', icon: Zap, href: '/create-quiz?tab=forge', color: 'text-accent bg-accent/10' },
+    { label: 'My Requests', icon: Inbox, href: '/commander/requests', color: 'text-success bg-success/10' },
+    { label: 'Messages', icon: MessageSquare, href: '/commander/messages', color: 'text-muted-foreground bg-muted/30' },
+    { label: 'Battle History', icon: Clock, href: '/commander/history', color: 'text-primary bg-primary/10' },
   ], []);
 
   const liveBattles = useMemo(() => quizzes.filter(q => q.status === 'live' && !q.archived), [quizzes]);
@@ -421,22 +422,22 @@ export default function CommanderDashboard() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 safe-top" aria-hidden="true">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-[14px] bg-muted animate-pulse" />
-              <div className="h-8 w-48 bg-muted rounded-lg animate-pulse" />
+              <Skeleton className="w-10 h-10 rounded-[14px]" />
+              <Skeleton className="h-8 w-48 rounded-lg" />
             </div>
-            <div className="h-5 w-72 bg-muted rounded-lg animate-pulse ml-[3.25rem]" />
+            <Skeleton className="h-5 w-72 rounded-lg ml-[3.25rem]" />
           </div>
-          <div className="h-12 w-40 bg-muted rounded-xl animate-pulse" />
+          <Skeleton className="h-12 w-40 rounded-xl" />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10" aria-hidden="true">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />
+            <Skeleton key={i} className="h-24 rounded-xl" />
           ))}
         </div>
-        <div className="h-10 w-full max-w-md bg-muted rounded-lg animate-pulse mb-6" aria-hidden="true" />
+        <Skeleton className="h-10 w-full max-w-md rounded-lg mb-6" aria-hidden="true" />
         <div className="grid gap-4" aria-hidden="true">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-32 bg-muted rounded-xl animate-pulse" />
+            <Skeleton key={i} className="h-32 rounded-xl" />
           ))}
         </div>
         <span className="sr-only">Dashboard is loading...</span>
@@ -483,10 +484,10 @@ export default function CommanderDashboard() {
             <button
               key={action.label}
               onClick={() => router.push(action.href)}
-              className="group flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-border/60 hover:border-primary/30 hover:bg-accent/30 hover:shadow-elevation-hover transition-all duration-200 text-sm font-medium"
+              className="group flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-border/60 hover:border-primary/30 hover:bg-accent/30 hover:shadow-elevation-hover transition-all duration-300 ease-out text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               aria-label={action.label}
             >
-              <div className={cn('w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110', action.color)} aria-hidden="true">
+              <div className={cn('w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0 transition-transform duration-300 ease-out group-hover:scale-110', action.color)} aria-hidden="true">
                 <action.icon className="w-3.5 h-3.5" />
               </div>
               {action.label}
@@ -499,10 +500,10 @@ export default function CommanderDashboard() {
       {dashboardData && (
         <section className="page-section" aria-live="polite" aria-label="Platform statistics">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard icon={Swords} label="Total Battles" value={dashboardData.stats.totalBattles} color="text-blue-600" />
-            <StatCard icon={PlayCircle} label="Active" value={dashboardData.stats.activeCount} color="text-emerald-600" />
-            <StatCard icon={Users} label="Participants" value={dashboardData.stats.totalParticipants} color="text-amber-600" />
-            <StatCard icon={Star} label="Avg Score" value={dashboardData.stats.averageScore} color="text-purple-600" />
+            <StatCard icon={Swords} label="Total Battles" value={dashboardData.stats.totalBattles} color="text-primary" />
+            <StatCard icon={PlayCircle} label="Active" value={dashboardData.stats.activeCount} color="text-success" />
+            <StatCard icon={Users} label="Participants" value={dashboardData.stats.totalParticipants} color="text-warning" />
+            <StatCard icon={Star} label="Avg Score" value={dashboardData.stats.averageScore} color="text-accent" />
           </div>
         </section>
       )}
@@ -514,8 +515,8 @@ export default function CommanderDashboard() {
           <CardHeader className="flex flex-row items-center justify-between border-b border-border/30 pb-4">
             <CardTitle className="text-base flex items-center gap-2">
               <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-success" />
               </span>
               Active Battles
               {liveBattles.length > 0 && (
@@ -527,13 +528,13 @@ export default function CommanderDashboard() {
             {liveBattles.length > 0 ? (
               <div className="space-y-2">
                 {liveBattles.map(q => (
-                  <Link key={q.id} href={`/battle/${q.id}`} className="group block p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-200 border border-transparent hover:border-emerald-200/50">
+                  <Link key={q.id} href={`/battle/${q.id}`} className="group block p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-300 ease-out border border-transparent hover:border-success/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate group-hover:text-emerald-600 transition-colors">{q.title}</p>
+                        <p className="text-sm font-medium truncate group-hover:text-success transition-colors duration-300">{q.title}</p>
                         <p className="text-xs text-muted-foreground">{q.id}</p>
                       </div>
-                      <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20">LIVE</Badge>
+                      <Badge variant="outline" className="text-[10px] border-success/30 text-success bg-success/10 dark:bg-success/20">LIVE</Badge>
                     </div>
                   </Link>
                 ))}
@@ -559,13 +560,13 @@ export default function CommanderDashboard() {
             {waitingBattles.length > 0 ? (
               <div className="space-y-2">
                 {waitingBattles.slice(0, 5).map(q => (
-                  <Link key={q.id} href={`/battle/${q.id}`} className="group block p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-200 border border-transparent hover:border-amber-200/50">
+                  <Link key={q.id} href={`/battle/${q.id}`} className="group block p-3 rounded-[12px] bg-muted/30 hover:bg-muted/50 hover:shadow-elevation-small transition-all duration-300 ease-out border border-transparent hover:border-warning/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate group-hover:text-amber-600 transition-colors">{q.title}</p>
+                        <p className="text-sm font-medium truncate group-hover:text-warning transition-colors duration-300">{q.title}</p>
                         <p className="text-xs text-muted-foreground">{q.id}</p>
                       </div>
-                      <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20">WAITING</Badge>
+                      <Badge variant="outline" className="text-[10px] border-warning/30 text-warning bg-warning/10 dark:bg-warning/20">WAITING</Badge>
                     </div>
                   </Link>
                 ))}
@@ -594,9 +595,9 @@ export default function CommanderDashboard() {
             {finishedBattles.length > 0 ? (
               <div className="space-y-1">
                 {finishedBattles.slice(0, 5).map(q => (
-                  <Link key={q.id} href={`/battle/${q.id}`} className="group flex items-center justify-between p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-200 border border-transparent hover:border-border/50">
+                  <Link key={q.id} href={`/battle/${q.id}`} className="group flex items-center justify-between p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-300 ease-out border border-transparent hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{q.title}</p>
+                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors duration-300">{q.title}</p>
                       <p className="text-[11px] text-muted-foreground">{new Date(q.created_at || 0).toLocaleDateString()}</p>
                     </div>
                     <Badge variant="outline" className="text-[10px] shrink-0 ml-2 bg-muted/30">DONE</Badge>
@@ -616,7 +617,7 @@ export default function CommanderDashboard() {
               <Inbox className="w-4 h-4 text-primary" aria-hidden="true" />
               Pending Requests
               {dashboardData && dashboardData.pendingRequestsCount > 0 && (
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-[10px] font-bold text-white">{dashboardData.pendingRequestsCount}</span>
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-warning text-[10px] font-bold text-warning-foreground">{dashboardData.pendingRequestsCount}</span>
               )}
             </CardTitle>
             <Button variant="ghost" size="sm" onClick={() => router.push('/commander/requests')} aria-label="View all pending requests">
@@ -625,15 +626,15 @@ export default function CommanderDashboard() {
           </CardHeader>
           <CardContent className="pt-4">
             {dashboardData && dashboardData.pendingRequestsCount > 0 ? (
-              <div className="group p-4 rounded-[12px] bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/20 dark:to-amber-950/10 border border-amber-200 dark:border-amber-800 flex items-center gap-3 hover:shadow-elevation-small transition-all duration-200">
-                <div className="w-10 h-10 rounded-[10px] bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                  <Inbox className="w-5 h-5 text-amber-600" aria-hidden="true" />
+              <div className="group p-4 rounded-[12px] bg-gradient-to-br from-warning/10 to-warning/5 dark:from-warning/15 dark:to-warning/5 border border-warning/25 flex items-center gap-3 hover:shadow-elevation-small transition-all duration-300 ease-out">
+                <div className="w-10 h-10 rounded-[10px] bg-warning/10 flex items-center justify-center shrink-0">
+                  <Inbox className="w-5 h-5 text-warning" aria-hidden="true" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{dashboardData.pendingRequestsCount} pending request{dashboardData.pendingRequestsCount !== 1 ? 's' : ''}</p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400">Awaiting executive review</p>
+                  <p className="text-sm font-medium text-warning">{dashboardData.pendingRequestsCount} pending request{dashboardData.pendingRequestsCount !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-warning/80 dark:text-warning/70">Awaiting executive review</p>
                 </div>
-                <ChevronRight className="w-4 h-4 text-amber-400 ml-auto transition-transform duration-200 group-hover:translate-x-0.5" />
+                <ChevronRight className="w-4 h-4 text-warning ml-auto transition-transform duration-300 ease-out group-hover:translate-x-0.5" />
               </div>
             ) : (
               <EmptyState icon={Inbox} title="No Pending Requests" description="Requests you submit will appear here." />
@@ -671,7 +672,7 @@ export default function CommanderDashboard() {
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mb-6">
           <div className="relative flex-1 max-w-md">
             <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search arenas by name or room code..." className="pl-10 h-11 rounded-[12px] shadow-elevation-small focus-visible:ring-2 focus-visible:ring-primary/20" aria-label="Search arenas" />
+            <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search arenas by name or room code..." className="pl-10 h-11 rounded-[12px] shadow-elevation-small" aria-label="Search arenas" />
           </div>
           <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)} className="h-11 rounded-[12px] border border-input bg-background px-4 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 shadow-elevation-small" aria-label="Sort quizzes">
             <option value="newest">Newest First</option>
@@ -688,7 +689,7 @@ export default function CommanderDashboard() {
               { key: 'archived', label: 'Archived' },
             ].map(({ key, label }) => (
               <button key={key} onClick={() => setFilterKey(key as FilterKey)}
-                className={cn("px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-150",
+                className={cn("px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   filterKey === key ? "bg-primary text-primary-foreground shadow-elevation-small ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground hover:shadow-elevation-small"
                 )}
                 aria-pressed={filterKey === key}
@@ -744,12 +745,12 @@ class QuizCardErrorBoundary extends React.Component<{ children: React.ReactNode;
 function statBgClass(color: string | undefined): string {
   if (!color) return 'bg-muted';
   const mapping: Record<string, string> = {
-    'text-blue-600': 'bg-blue-100 dark:bg-blue-950/20',
-    'text-emerald-600': 'bg-emerald-100 dark:bg-emerald-950/20',
-    'text-amber-600': 'bg-amber-100 dark:bg-amber-950/20',
-    'text-purple-600': 'bg-purple-100 dark:bg-purple-950/20',
-    'text-rose-600': 'bg-rose-100 dark:bg-rose-950/20',
-    'text-orange-600': 'bg-orange-100 dark:bg-orange-950/20',
+    'text-primary': 'bg-primary/10',
+    'text-success': 'bg-success/10',
+    'text-warning': 'bg-warning/10',
+    'text-accent': 'bg-accent/10',
+    'text-destructive': 'bg-destructive/10',
+    'text-muted-foreground': 'bg-muted/30',
   };
   return mapping[color] || 'bg-muted';
 }
@@ -758,7 +759,7 @@ const StatCard = React.memo(function StatCard({ icon: Icon, label, value, color 
   return (
     <Card className="group/card card-hover shadow-elevation-small hover:shadow-elevation-medium">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-200 group-hover/card:scale-110 group-hover/card:shadow-sm", statBgClass(color))}>
+        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-300 ease-out group-hover/card:scale-110 group-hover/card:shadow-sm", statBgClass(color))}>
           <Icon className={cn("w-4 h-4", color || 'text-muted-foreground')} />
         </div>
         <div>

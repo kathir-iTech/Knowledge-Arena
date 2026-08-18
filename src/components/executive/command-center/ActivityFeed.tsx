@@ -27,9 +27,9 @@ export function ActivityFeed({ events }: Props) {
       {events.map(e => (
         <div key={e.id} className="flex items-start gap-2 py-1.5 border-b border-border/10 last:border-0">
           {e.type === 'joined' ? (
-            <UserPlus className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+            <UserPlus className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
           ) : (
-            <UserMinus className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+            <UserMinus className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
           )}
           <span className="text-xs min-w-0 flex-1">
             <span className="font-medium">{e.name || e.uid.slice(0, 8)}</span>{' '}
