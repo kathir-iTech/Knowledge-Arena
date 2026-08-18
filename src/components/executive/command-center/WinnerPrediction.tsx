@@ -27,7 +27,7 @@ export function WinnerPrediction({ battle }: Props) {
         <div key={row.uid} className="space-y-1">
           <div className="flex items-center justify-between gap-3 text-xs">
             <span className="flex items-center gap-1.5 min-w-0">
-              {row.lead && <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+              {row.lead && <Crown className="w-3.5 h-3.5 text-warning shrink-0" />}
               <span className="truncate font-medium">{row.name || row.uid.slice(0, 8)}</span>
               <span className="text-muted-foreground tabular-nums">({row.score})</span>
             </span>
@@ -37,7 +37,7 @@ export function WinnerPrediction({ battle }: Props) {
           </div>
           <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div
-              className={cn('h-full rounded-full transition-all duration-700 ease-out', row.lead ? 'bg-amber-400' : 'bg-primary/50')}
+              className={cn('h-full rounded-full transition-all duration-700 ease-out', row.lead ? 'bg-warning' : 'bg-primary/50')}
               style={{ width: `${row.probability}%` }}
             />
           </div>

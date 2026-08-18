@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Inbox, Plus, MessageSquare, Paperclip, X, Download } from 'lucide-react';
+import { Inbox, Plus, MessageSquare, Paperclip, X, Download, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -86,6 +86,7 @@ export default function CommanderRequestsPage() {
   const { toast } = useToast();
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<RequestItem | null>(null);
 
@@ -97,6 +98,7 @@ export default function CommanderRequestsPage() {
 
   const fetchRequests = useCallback(async () => {
     try {
+      setError(null);
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
       const res = await fetch('/api/commander/requests', {
@@ -106,11 +108,11 @@ export default function CommanderRequestsPage() {
       const data = await res.json();
       setRequests(data.requests || []);
     } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load requests.' });
+      setError('Failed to load requests.');
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user, auth]);
 
   useEffect(() => {
     if (user) fetchRequests();
@@ -172,9 +174,16 @@ export default function CommanderRequestsPage() {
 
   if (loading) {
     return (
-      <div className="page-container animate-in space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
+      <div className="page-container animate-in space-y-4 safe-bottom">
+        <div className="flex items-center justify-between gap-3">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-32 rounded-[10px]" />
+        </div>
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full rounded-[16px]" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -192,7 +201,18 @@ export default function CommanderRequestsPage() {
         </Button>
       </div>
 
-      {requests.length === 0 ? (
+      {error ? (
+        <Card className="border-destructive/40">
+          <CardContent className="py-14 text-center">
+            <Inbox className="w-10 h-10 text-destructive mx-auto mb-4" />
+            <p className="text-base font-medium mb-1">Failed to load requests</p>
+            <p className="text-sm text-muted-foreground mb-4">{error}</p>
+            <Button variant="outline" onClick={fetchRequests}>
+              <RefreshCw className="w-4 h-4 mr-2" /> Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : requests.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <Inbox className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
@@ -205,25 +225,27 @@ export default function CommanderRequestsPage() {
       ) : (
         <div className="space-y-2">
           {requests.map(r => (
-            <Card key={r.id} className="cursor-pointer hover:bg-accent/30 transition-colors" onClick={() => setSelectedRequest(r)}>
-              <CardContent className="flex items-center justify-between py-4">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 shrink-0">
-                    <MessageSquare className="w-5 h-5 text-primary" />
+            <button key={r.id} type="button" className="w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all duration-300 ease-out" onClick={() => setSelectedRequest(r)}>
+              <Card className="hover:bg-accent/30 transition-colors duration-300 ease-out">
+                <CardContent className="flex items-center justify-between py-4">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 shrink-0">
+                      <MessageSquare className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{r.title}</p>
+                      <p className="text-sm text-muted-foreground">{typeLabels[r.type] || r.type}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{r.title}</p>
-                    <p className="text-sm text-muted-foreground">{typeLabels[r.type] || r.type}</p>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-muted-foreground hidden sm:block">{formatDate(r.createdAt)}</span>
+                    <Badge variant={STATUS_VARIANT[r.status] || 'secondary'}>
+                      {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                    </Badge>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs text-muted-foreground hidden sm:block">{formatDate(r.createdAt)}</span>
-                  <Badge variant={STATUS_VARIANT[r.status] || 'secondary'}>
-                    {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </button>
           ))}
         </div>
       )}
@@ -273,7 +295,7 @@ export default function CommanderRequestsPage() {
             </div>
             <div className="space-y-2">
               <Label>Attachments</Label>
-              <label className="flex items-center gap-2 px-3 py-2 border border-dashed rounded-lg cursor-pointer hover:bg-accent/30 text-sm text-muted-foreground">
+              <label className="flex items-center gap-2 px-3 py-2 border border-dashed rounded-lg cursor-pointer hover:bg-accent/30 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
                 <Paperclip className="w-4 h-4" />
                 <span>Attach files (max 500KB each)</span>
                 <input type="file" multiple onChange={handleFileSelect} className="hidden" accept=".pdf,.csv,.json,.xlsx,.txt" />
@@ -287,7 +309,7 @@ export default function CommanderRequestsPage() {
                         <span className="truncate">{f.name}</span>
                         <span className="text-xs text-muted-foreground shrink-0">({formatFileSize(f.size)})</span>
                       </div>
-                      <button onClick={() => setFormAttachments(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
+                      <button onClick={() => setFormAttachments(prev => prev.filter((_, j) => j !== i))} aria-label={`Remove ${f.name}`} className="text-muted-foreground hover:text-destructive rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -361,7 +383,7 @@ export default function CommanderRequestsPage() {
                           <span className="truncate">{f.name}</span>
                           <span className="text-xs text-muted-foreground shrink-0">({formatFileSize(f.size)})</span>
                         </div>
-                        <button onClick={() => downloadFile(f)} className="text-muted-foreground hover:text-primary">
+                        <button onClick={() => downloadFile(f)} aria-label={`Download ${f.name}`} className="text-muted-foreground hover:text-primary rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                           <Download className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -380,7 +402,7 @@ export default function CommanderRequestsPage() {
                           <span className="truncate">{f.name}</span>
                           <span className="text-xs text-muted-foreground shrink-0">({formatFileSize(f.size)})</span>
                         </div>
-                        <button onClick={() => downloadFile(f)} className="text-muted-foreground hover:text-primary">
+                        <button onClick={() => downloadFile(f)} aria-label={`Download ${f.name}`} className="text-muted-foreground hover:text-primary rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                           <Download className="w-3.5 h-3.5" />
                         </button>
                       </div>

@@ -135,7 +135,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-headline text-primary">Edit Arena</h1>
+          <h1 className="text-page-title font-headline tracking-tight">Edit Arena</h1>
           <p className="text-sm text-muted-foreground">Room Code: <code className="font-mono bg-muted px-2 py-0.5 rounded">{quizId}</code></p>
         </div>
       </div>
@@ -168,8 +168,8 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
             </div>
 
             {fields.map((field, index) => (
-              <Card key={field.id} className="relative pt-12 overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-primary/15 group-hover:bg-primary/30 transition-colors" />
+              <Card key={field.id} className="group relative pt-12 overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-primary/15 group-hover:bg-primary/30 transition-colors duration-300 ease-out" />
                 <div className="absolute top-3 left-4 flex items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary px-3 py-1 rounded-full">QUESTION {index + 1}</span>
                 </div>
@@ -211,7 +211,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
                                   if (currentCorrect === optIdx) form.setValue(`questions.${index}.correctAnswerIndex`, -1);
                                   else if (currentCorrect > optIdx) form.setValue(`questions.${index}.correctAnswerIndex`, currentCorrect - 1);
                                 }
-                              }} className="absolute right-2 top-2 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                              }} aria-label={`Remove option ${String.fromCharCode(65 + optIdx)}`} className="absolute right-2 top-2 text-muted-foreground hover:text-destructive rounded-md p-0.5 transition-colors duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"><Trash2 className="h-3 w-3" /></button>
                             )}
                             <FormMessage />
                           </FormItem>

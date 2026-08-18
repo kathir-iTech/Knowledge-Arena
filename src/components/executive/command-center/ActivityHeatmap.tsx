@@ -6,9 +6,9 @@ import { buildHeatmap, type HeatCell } from '@/lib/command-center';
 import type { CommandBattle } from '@/lib/command-center';
 
 const CELL_STYLE: Record<HeatCell, string> = {
-  answered: 'bg-emerald-500',
-  timedout: 'bg-amber-400',
-  skipped: 'bg-slate-400',
+  answered: 'bg-success',
+  timedout: 'bg-warning',
+  skipped: 'bg-muted-foreground/60',
   none: 'bg-muted/40',
   current: 'bg-primary/70 animate-pulse',
 };

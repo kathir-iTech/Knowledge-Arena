@@ -23,11 +23,11 @@ interface Props {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  live: 'border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20',
-  waiting: 'border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20',
-  ready: 'border-blue-300 text-blue-600 bg-blue-50 dark:bg-blue-950/20',
-  starting: 'border-violet-300 text-violet-600 bg-violet-50 dark:bg-violet-950/20',
-  paused: 'border-slate-400 text-slate-600 bg-slate-50 dark:bg-slate-950/20',
+  live: 'border-success/30 text-success bg-success/10 dark:bg-success/20',
+  waiting: 'border-warning/30 text-warning bg-warning/10 dark:bg-warning/20',
+  ready: 'border-primary/30 text-primary bg-primary/10 dark:bg-primary/20',
+  starting: 'border-accent/30 text-accent bg-accent/10 dark:bg-accent/20',
+  paused: 'border-muted-foreground/30 text-muted-foreground bg-muted/40 dark:bg-muted/20',
 };
 
 export function BattleDetailPanel({ battle, now, events }: Props) {
@@ -55,7 +55,7 @@ export function BattleDetailPanel({ battle, now, events }: Props) {
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className={cn('text-xl font-bold font-mono tabular-nums leading-none', timer.seconds <= 5 ? 'text-red-600' : 'text-foreground')}>
+          <p className={cn('text-xl font-bold font-mono tabular-nums leading-none', timer.seconds <= 5 ? 'text-destructive' : 'text-foreground')}>
             {timer.state === 'running' ? timer.label : '—'}
           </p>
           <p className="text-[10px] text-muted-foreground mt-0.5">{timer.state === 'paused' ? 'paused' : timer.state === 'running' ? 'left on timer' : 'no active timer'}</p>
@@ -96,25 +96,25 @@ export function BattleDetailPanel({ battle, now, events }: Props) {
             <div className="space-y-1">
               {leaderboard.map((p, idx) => (
                 <div key={p.uid} className={cn(
-                  'flex items-center gap-2.5 p-2 rounded-[10px] transition-colors animate-in',
-                  idx === 0 && p.score > 0 ? 'bg-amber-50/60 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-800/30' : 'hover:bg-muted/30'
+                  'flex items-center gap-2.5 p-2 rounded-[10px] transition-colors duration-300 ease-out animate-in',
+                  idx === 0 && p.score > 0 ? 'bg-warning/10 border border-warning/25' : 'hover:bg-muted/30'
                 )} style={{ animationDelay: `${Math.min(idx, 10) * 50}ms` }}>
                   <div className={cn(
                     'w-6 h-6 rounded-[8px] flex items-center justify-center text-[10px] font-bold shrink-0',
-                    idx === 0 ? 'bg-amber-400 text-white' : idx === 1 ? 'bg-slate-300 text-slate-700' : 'bg-background text-muted-foreground border border-border/40'
+                    idx === 0 ? 'bg-warning text-background' : idx === 1 ? 'bg-muted-foreground/30 text-background' : 'bg-background text-muted-foreground border border-border/40'
                   )}>
                     {idx + 1}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate leading-tight">
                       {p.name || p.uid.slice(0, 8)}
-                      {p.status === 'finished' && <span className="ml-1.5 text-[10px] text-slate-400">done</span>}
+                      {p.status === 'finished' && <span className="ml-1.5 text-[10px] text-muted-foreground">done</span>}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       {p.answeredIds.length} answered · {p.violations || 0} violations
                     </p>
                   </div>
-                  <span className={cn('w-2 h-2 rounded-full shrink-0', isOnline(p.lastSeen, now) ? 'bg-emerald-500' : 'bg-muted-foreground/30')} title={isOnline(p.lastSeen, now) ? 'online' : 'offline'} />
+                  <span className={cn('w-2 h-2 rounded-full shrink-0', isOnline(p.lastSeen, now) ? 'bg-success' : 'bg-muted-foreground/30')} title={isOnline(p.lastSeen, now) ? 'online' : 'offline'} />
                   <span className="text-sm font-bold tabular-nums w-10 text-right shrink-0">{p.score}</span>
                 </div>
               ))}
@@ -129,7 +129,7 @@ export function BattleDetailPanel({ battle, now, events }: Props) {
       <Card className="card-hover">
         <CardHeader className="border-b border-border/30 pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Crown className="w-4 h-4 text-amber-500" /> Winner Prediction
+            <Crown className="w-4 h-4 text-warning" /> Winner Prediction
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-4">

@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
-import { LoadingScreen } from '@/components/LoadingScreen';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { Swords, Users, Calendar, ArrowLeft, Search, Download, Star, Trophy, AlertTriangle, RefreshCw } from 'lucide-react';
@@ -44,7 +44,22 @@ export default function CommanderHistoryPage() {
     return result.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
   }, [quizzes, search]);
 
-  if (loading) return <LoadingScreen message="Loading battle history..." />;
+  if (loading) {
+    return (
+      <div className="page-container animate-in space-y-4 safe-bottom">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-9 w-9 rounded-[10px]" />
+          <Skeleton className="h-8 w-56" />
+        </div>
+        <Skeleton className="h-10 w-full max-w-md" />
+        <div className="space-y-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-[16px]" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container safe-bottom animate-in">
@@ -150,7 +165,7 @@ function BattleHistoryCard({ quiz }: { quiz: ValidatedQuiz }) {
               </span>
               {winner && (
                 <span className="flex items-center gap-1">
-                  <Trophy className="w-3 h-3 text-amber-500" />
+                  <Trophy className="w-3 h-3 text-warning" />
                   {winner.name || winner.user_id.slice(0, 8)} ({winner.score} pts)
                 </span>
               )}
