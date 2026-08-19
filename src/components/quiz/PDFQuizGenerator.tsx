@@ -230,7 +230,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
           <Label className="text-lg font-medium">1. Source Material ({files.length > 0 ? `${files.length} file(s)` : ''})</Label>
           {files.length === 0 ? (
             <div className={cn(
-              "border-2 border-dashed border-border/30 rounded-lg p-12 transition-all hover:border-primary/30 cursor-pointer flex flex-col items-center justify-center gap-4 text-center relative",
+              "border-2 border-dashed border-border/30 rounded-lg p-12 transition-all hover:border-primary/30 cursor-pointer flex flex-col items-center justify-center gap-4 text-center relative focus-within:outline-none focus-within:ring-2 focus-within:ring-ring",
               error && !error.includes("API key") && "border-destructive/30 bg-destructive/5"
             )}>
               <input 
@@ -273,7 +273,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
                   </Button>
                 </div>
               ))}
-              <label className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-border/30 rounded-lg cursor-pointer hover:bg-accent/30 text-sm text-muted-foreground transition-colors">
+              <label className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-border/30 rounded-lg cursor-pointer hover:bg-accent/30 text-sm text-muted-foreground transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring">
                 <Upload className="w-4 h-4" />
                 <span>Add more files</span>
                 <input type="file" accept={ACCEPTED_TYPES} multiple onChange={handleFileChange} className="hidden" disabled={isGenerating} />
@@ -306,14 +306,15 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
                 key={d.id}
                 onClick={() => setDifficulty(d.id as 'easy' | 'moderate' | 'hard')}
                 disabled={isGenerating}
+                aria-pressed={difficulty === d.id}
                 className={cn(
-                  "flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all text-center",
+                  "flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all duration-300 ease-out text-center min-h-[7.5rem] touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                   difficulty === d.id 
                     ? "bg-primary/5 border-primary" 
                     : "bg-background/30 border-border/40 hover:border-primary/30 hover:bg-primary/5"
                 )}
               >
-                <span className="text-3xl mb-1 transition-transform duration-150">{d.emoji}</span>
+                <span className="text-3xl mb-1 transition-transform duration-300 group-hover:scale-110">{d.emoji}</span>
                 <span className="font-bold uppercase tracking-widest text-sm">{d.label}</span>
                 <span className="text-xs text-muted-foreground leading-tight">{d.desc}</span>
               </button>
@@ -363,14 +364,14 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
           {isGenerating && (
             <div className="mt-4 rounded-xl border bg-background/60 p-4 animate-in" role="status" aria-live="polite">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                <Sparkles className="w-4 h-4 text-warning animate-pulse" />
                 <p className="text-xs font-semibold text-foreground">{STAGE_LABELS[stage]}</p>
               </div>
               <div className="mt-3 space-y-2">
                 {[0, 1, 2].map(bar => (
                   <div key={bar} className="h-2 rounded-full bg-muted overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-amber-400/80 via-primary/70 to-accent/70 animate-pulse"
+                      className="h-full rounded-full bg-gradient-to-r from-warning/80 via-primary/70 to-accent/70 animate-pulse"
                       style={{ width: `${[70, 45, 85][bar]}%`, animationDelay: `${bar * 200}ms` }}
                     />
                   </div>

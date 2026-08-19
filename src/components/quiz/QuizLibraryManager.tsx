@@ -71,10 +71,10 @@ const DATE_RANGES = [
 ];
 
 const difficultyColor: Record<string, string> = {
-  easy: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800',
-  medium: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800',
-  moderate: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800',
-  hard: 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
+  easy: 'text-success bg-success/5 border-success/20',
+  medium: 'text-warning bg-warning/5 border-warning/20',
+  moderate: 'text-primary bg-primary/5 border-primary/20',
+  hard: 'text-destructive bg-destructive/5 border-destructive/20',
 };
 
 function formatDate(ts?: number | null): string {
@@ -83,8 +83,8 @@ function formatDate(ts?: number | null): string {
 }
 
 function SourceIcon({ source, className }: { source: string; className?: string }) {
-  if (source === 'ai_pdf_forge') return <Sparkles className={cn('w-3.5 h-3.5 text-amber-500', className)} />;
-  if (source === 'manual') return <FileText className={cn('w-3.5 h-3.5 text-blue-500', className)} />;
+  if (source === 'ai_pdf_forge') return <Sparkles className={cn('w-3.5 h-3.5 text-warning', className)} />;
+  if (source === 'manual') return <FileText className={cn('w-3.5 h-3.5 text-primary', className)} />;
   return <FileText className={cn('w-3.5 h-3.5 text-muted-foreground', className)} />;
 }
 
@@ -527,7 +527,7 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
                     <BulkSelectionCheckbox id={set.setId} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       {set.status === 'published' && (
-                        <Badge variant="outline" className="text-[10px] h-5 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+                        <Badge variant="outline" className="text-[10px] h-5 text-success bg-success/5 border-success/20">
                           <CheckCircle2 className="w-3 h-3 mr-1" /> Published
                         </Badge>
                       )}
@@ -571,7 +571,7 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
                     <button
                       type="button"
                       onClick={() => setPreviewOpenId(previewOpen ? null : set.setId)}
-                      className="w-full flex items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground py-1.5 border-t border-border/20 transition-colors"
+                      className="w-full flex items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground py-1.5 border-t border-border/20 transition-colors focus-visible:outline-none focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring rounded"
                     >
                       <span>Question preview</span>
                       <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', previewOpen && 'rotate-180')} />

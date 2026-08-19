@@ -341,11 +341,11 @@ export function ExecutiveQuestionReviewPanel({
         const globalIssues = validationIssues.filter(i => i.questionIndex === -1);
         if (!globalIssues.length) return null;
         return (
-          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-4 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+          <div className="bg-warning/5 border border-warning/20 rounded-lg p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
             <div className="space-y-1">
               {globalIssues.map((issue, ii) => (
-                <p key={ii} className="text-sm text-yellow-600">{issue.message}</p>
+                <p key={ii} className="text-sm text-warning">{issue.message}</p>
               ))}
             </div>
           </div>
@@ -586,7 +586,7 @@ export function ExecutiveQuestionReviewPanel({
                             key={ii}
                             className={cn(
                               "flex items-start gap-2 p-2 rounded text-xs",
-                              issue.severity === 'error' ? "bg-destructive/5 text-destructive" : "bg-yellow-500/5 text-yellow-600"
+                              issue.severity === 'error' ? "bg-destructive/5 text-destructive" : "bg-warning/5 text-warning"
                             )}
                           >
                             <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />

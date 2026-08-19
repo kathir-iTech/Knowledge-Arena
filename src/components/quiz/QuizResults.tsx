@@ -18,7 +18,7 @@ import { Celebration } from '@/components/Celebration';
 function getMedalIcon(rank: number) {
   if (rank === 1) return <Crown className="w-5 h-5 text-warning" />;
   if (rank === 2) return <Medal className="w-5 h-5 text-muted-foreground" />;
-  if (rank === 3) return <Medal className="w-5 h-5 text-amber-700" />;
+  if (rank === 3) return <Medal className="w-5 h-5 text-warning/70" />;
   return null;
 }
 
@@ -155,7 +155,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
                 <div className="flex items-center justify-center gap-4 md:gap-8 pb-6 mb-4 border-b border-border/30">
                   {ranked.length >= 2 && (
                     <div className="flex flex-col items-center gap-2 text-center group">
-                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-muted-foreground/30 ring-offset-2 ring-offset-card transition-all duration-200 group-hover:scale-105 group-hover:shadow-elevation-small">
+                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-muted-foreground/30 ring-offset-2 ring-offset-card transition-all duration-300 group-hover:scale-105 group-hover:shadow-elevation-small">
                         <AvatarFallback className="text-xl bg-secondary">{getParticipantAvatar(ranked[1])}</AvatarFallback>
                       </Avatar>
                       <Medal className="w-5 h-5 text-muted-foreground" />
@@ -165,7 +165,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
                   )}
                   {ranked.length >= 1 && (
                     <div className="flex flex-col items-center gap-2 text-center -mt-4 group">
-                      <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-2 ring-warning/40 ring-offset-2 ring-offset-card transition-all duration-200 group-hover:scale-105 group-hover:shadow-elevation-medium">
+                      <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-2 ring-warning/40 ring-offset-2 ring-offset-card transition-all duration-300 group-hover:scale-105 group-hover:shadow-elevation-medium">
                         <AvatarFallback className="text-2xl bg-secondary">{getParticipantAvatar(ranked[0])}</AvatarFallback>
                       </Avatar>
                       <Crown className="w-6 h-6 text-warning" />
@@ -175,10 +175,10 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
                   )}
                   {ranked.length >= 3 && (
                     <div className="flex flex-col items-center gap-2 text-center group">
-                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-amber-700/30 ring-offset-2 ring-offset-card transition-all duration-200 group-hover:scale-105 group-hover:shadow-elevation-small">
+                      <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-warning/30 ring-offset-2 ring-offset-card transition-all duration-300 group-hover:scale-105 group-hover:shadow-elevation-small">
                         <AvatarFallback className="text-xl bg-secondary">{getParticipantAvatar(ranked[2])}</AvatarFallback>
                       </Avatar>
-                      <Medal className="w-5 h-5 text-amber-700" />
+                      <Medal className="w-5 h-5 text-warning/70" />
                       <span className="text-xs font-medium max-w-16 truncate">{getParticipantLabel(ranked[2])}</span>
                       <span className="font-mono text-sm font-bold tabular-nums">{ranked[2].score}</span>
                     </div>
@@ -187,13 +187,13 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
               )}
               {ranked.map((p, idx) => (
                 <div key={p.user_id} className={cn(
-                  "flex justify-between items-center p-3 md:p-4 rounded-[12px] transition-all duration-150 border",
+                  "flex justify-between items-center p-3 md:p-4 rounded-[12px] transition-all duration-300 border",
                   p.user_id === uid ? "bg-primary/5 border-primary/10 shadow-elevation-small" : "border-transparent hover:bg-muted/30 hover:shadow-elevation-small"
                 )}>
                   <div className="flex items-center gap-3">
                     <span className={cn(
                       "font-mono text-sm w-6 text-center flex items-center justify-center",
-                      idx === 0 ? "text-warning font-bold" : idx === 1 ? "text-muted-foreground font-bold" : idx === 2 ? "text-amber-700 font-bold" : "text-muted-foreground"
+                      idx === 0 ? "text-warning font-bold" : idx === 1 ? "text-muted-foreground font-bold" : idx === 2 ? "text-warning/70 font-bold" : "text-muted-foreground"
                     )}>
                       {idx < 3 ? getMedalIcon(idx) : idx + 1}
                     </span>

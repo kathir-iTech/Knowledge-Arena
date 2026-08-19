@@ -441,7 +441,7 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
                         <Button
                           variant="destructive"
                           size="sm"
-                          className="h-7 px-2 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-7 px-2 text-[10px] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300"
                           onClick={() => setKickingId(p.user_id)}
                         >
                           Kick
@@ -449,7 +449,13 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
                       )}
                     </div>
                   )                  ) : (
-                    <p className="text-sm text-muted-foreground py-8">Waiting for participants to arrive...</p>
+                    <div className="flex flex-col items-center gap-2 py-8 text-center" role="status">
+                      <div className="w-12 h-12 rounded-[14px] bg-muted/40 flex items-center justify-center">
+                        <Users className="w-5 h-5 text-muted-foreground/60" aria-hidden="true" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">Waiting for participants to arrive...</p>
+                      <p className="text-xs text-muted-foreground/60">{isTeacher ? 'Share the room code above to invite gladiators.' : 'Once others join, they will appear here.'}</p>
+                    </div>
                   )}
                 </div>
           </CardContent>
@@ -502,12 +508,12 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
                   disabled={isUpdatingConfig}
                   onClick={() => handleRequireAllReadyChange(!requireAllReady)}
                   className={cn(
-                    "relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200 disabled:opacity-50",
+                    "relative shrink-0 w-11 h-6 rounded-full transition-colors duration-300 disabled:opacity-50 p-2.5 -m-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                     requireAllReady ? "bg-primary" : "bg-muted-foreground/30"
                   )}
                 >
                   <span className={cn(
-                    "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-background shadow-elevation-small transition-transform duration-200",
+                    "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-background shadow-elevation-small transition-transform duration-300 pointer-events-none",
                     requireAllReady && "translate-x-5"
                   )} />
                 </button>
@@ -524,12 +530,12 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
                   disabled={isUpdatingConfig}
                   onClick={() => handleModeChange(!independentMode)}
                   className={cn(
-                    "relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200 disabled:opacity-50",
+                    "relative shrink-0 w-11 h-6 rounded-full transition-colors duration-300 disabled:opacity-50 p-2.5 -m-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                     independentMode ? "bg-primary" : "bg-muted-foreground/30"
                   )}
                 >
                   <span className={cn(
-                    "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-background shadow-elevation-small transition-transform duration-200",
+                    "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-background shadow-elevation-small transition-transform duration-300 pointer-events-none",
                     independentMode && "translate-x-5"
                   )} />
                 </button>
