@@ -14,7 +14,6 @@ import { STARTING_TRANSITION_MS, QUIZ_WAITING, QUIZ_READY, QUIZ_STARTING, QUIZ_L
 import { isBattleActive } from '@/lib/battle-machine';
 import { ShieldX, RefreshCw, MonitorX } from 'lucide-react';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { NetworkStatusIndicator } from '@/components/NetworkStatusIndicator';
 import LiveQuiz from '@/components/quiz/LiveQuiz';
 import QuizResults from '@/components/quiz/QuizResults';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
@@ -261,7 +260,7 @@ export default function BattleRoomLoader() {
           </Button>
           <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
         </div>
-        <NetworkStatusIndicator status={connectionStatus} />
+
       </div>
     );
   }
@@ -284,7 +283,7 @@ export default function BattleRoomLoader() {
           onRetryJoin={handleRetryJoin}
           isRetryingJoin={isRetryingJoin}
         />
-        <NetworkStatusIndicator status={connectionStatus} />
+
       </>
     );
   }
@@ -315,7 +314,7 @@ export default function BattleRoomLoader() {
     return (
       <>
         <QuizResults quiz={quiz} currentUserId={user.id} />
-        <NetworkStatusIndicator status={connectionStatus} />
+
       </>
     );
   }
@@ -347,7 +346,7 @@ export default function BattleRoomLoader() {
         isTeacher={isTeacher}
             allParticipants={allParticipants}
         />
-        <NetworkStatusIndicator status={connectionStatus} />
+
       </>
     );
   }
