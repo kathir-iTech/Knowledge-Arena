@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, Flag, WifiOff, Pause, Play, SkipForward, Trophy } from 'lucide-react';
+import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, XCircle, Flag, WifiOff, Pause, Play, SkipForward, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -30,7 +30,10 @@ interface LiveQuizQuestion {
   options: string[];
   timer: number;
   sort_index: number;
+  questionStats?: { correctOptionIndex?: number | null };
 }
+
+const REVEAL_HOLD_MS = 1500;
 
 function useCommanderPresence(quiz: ValidatedQuiz, presence: PresenceMap | null): boolean {
   // Until the first RTDB presence snapshot arrives, assume the Commander is
@@ -39,10 +42,32 @@ function useCommanderPresence(quiz: ValidatedQuiz, presence: PresenceMap | null)
   return !!(presence[quiz.created_by] && presence[quiz.created_by].online);
 }
 
-const CountdownTimer = React.memo(({ timeLeft, totalSec }: { timeLeft: number; totalSec: number }) => {
+const CountdownTimer = React.memo(({ timeLeft, totalSec, idle }: { timeLeft: number; totalSec: number; idle?: boolean }) => {
   const progress = totalSec > 0 ? (timeLeft / totalSec) * 100 : 0;
   const isUrgent = timeLeft <= 5;
   const isCritical = timeLeft <= 3;
+
+  if (idle) {
+    return (
+      <div
+        className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-[12px] border border-border/50 bg-card"
+        role="timer"
+      >
+        <Clock className="w-4 h-4 text-muted-foreground" />
+        <span className="font-mono text-lg font-bold tabular-nums text-muted-foreground">--</span>
+        <span className="text-sm text-muted-foreground">preparing...</span>
+        <div className="flex gap-0.5 ml-auto" aria-hidden="true">
+          {[0, 1, 2, 3, 4].map((_, i) => (
+            <div
+              key={i}
+              className="w-1.5 h-4 rounded-full bg-muted animate-pulse"
+              style={{ animationDelay: `${i * 120}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -179,7 +204,7 @@ const LiveLeaderboard = React.memo(({ participants, teacherId, currentUserId, pr
                               </Avatar>
                               <span className={cn(
                                 "absolute -bottom-1 -right-1 text-[9px] font-bold bg-background border border-border rounded-full w-4 h-4 flex items-center justify-center transition-colors duration-300",
-                                rank === 1 ? "text-warning" : rank === 2 ? "text-muted-foreground" : rank === 3 ? "text-amber-700" : "text-muted-foreground",
+                                rank === 1 ? "text-warning" : rank === 2 ? "text-muted-foreground" : rank === 3 ? "text-warning/70" : "text-muted-foreground",
                                 delta === 1 && "bg-success/20 border-success/40 text-success",
                                 delta === -1 && "bg-destructive/20 border-destructive/40 text-destructive"
                               )} aria-label={`Rank ${rank}`}>
@@ -320,6 +345,17 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const offsetRef = useRef(0);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [hold, setHold] = useState<null | {
+    question: LiveQuizQuestion;
+    options: string[];
+    selected: number | null;
+    answered: boolean;
+    correctIndex: number;
+    userIndex: number;
+  }>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revealSnapshotRef = useRef<null | { qid: string; selected: number | null; answered: boolean; userIndex: number }>(null);
+  const prevQuestionIdRef = useRef<string | null>(null);
   const { firestore } = useFirebase();
 
   // Clock-skew correction: battle timers compare this browser's clock against
@@ -470,6 +506,60 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     return currentQuestion.options;
   }, [currentQuestion, independent, participant.option_shuffle]);
 
+  // Post-scoring reveal: once the server has evaluated the current question,
+  // `questionStats.correctOptionIndex` appears on the question doc. For a
+  // gladiator this unlocks the correct/incorrect flash — the emotional payoff
+  // of the battle. The question is sealed by then (timer expired or answered),
+  // so no answer can leak forward.
+  const displayQuestion = hold ? hold.question : currentQuestion;
+  const displayKey = displayQuestion?.id ?? null;
+  const shownUserIndex = hold ? hold.userIndex : myIndex;
+  const displayOptions = hold ? hold.options : displayedOptions;
+  const displaySelected = hold ? hold.selected : selectedAnswer;
+  const displayAnswered = hold ? hold.answered : hasAnswered;
+
+  const liveReveal = useMemo(() => {
+    if (isTeacher || hold || !currentQuestion) return null;
+    const ci = currentQuestion.questionStats?.correctOptionIndex;
+    if (typeof ci !== 'number') return null;
+    if (!hasAnswered && timeLeft > 0) return null;
+    return { correctIndex: ci, selected: selectedAnswer, answered: hasAnswered };
+  }, [isTeacher, hold, currentQuestion, hasAnswered, selectedAnswer, timeLeft]);
+
+  // Arm the reveal snapshot while the evaluated question is still on screen,
+  // so an incoming question switch can freeze it for a satisfying flash.
+  useEffect(() => {
+    if (isTeacher || hold || !currentQuestion) { revealSnapshotRef.current = null; return; }
+    const ci = currentQuestion.questionStats?.correctOptionIndex;
+    if (typeof ci !== 'number') return;
+    if (!hasAnswered && timeLeft > 0) return;
+    revealSnapshotRef.current = { qid: currentQuestion.id, selected: selectedAnswer, answered: hasAnswered, userIndex: myIndex };
+  }, [currentQuestion, hasAnswered, selectedAnswer, timeLeft, myIndex, isTeacher, hold]);
+
+  // When the question advances with a reveal armed, freeze the old question on
+  // screen (with options as the gladiator saw them) so the verdict lands.
+  useEffect(() => {
+    const nextId = currentQuestion?.id ?? null;
+    if (nextId === prevQuestionIdRef.current) return;
+    const prevId = prevQuestionIdRef.current;
+    prevQuestionIdRef.current = nextId;
+    if (isTeacher || hold) return;
+    const snap = revealSnapshotRef.current;
+    if (!snap || snap.qid !== prevId) return;
+    const oldQ = questions.find(q => q.id === snap.qid);
+    const ci = oldQ?.questionStats?.correctOptionIndex;
+    if (!oldQ || typeof ci !== 'number') return;
+    const opts = participant.option_shuffle?.[oldQ.id]
+      ? applyOptionShuffle(oldQ.options, participant.option_shuffle[oldQ.id])
+      : oldQ.options;
+    setHold({ question: oldQ, options: opts, selected: snap.selected, answered: snap.answered, correctIndex: ci, userIndex: snap.userIndex });
+    revealSnapshotRef.current = null;
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = setTimeout(() => {
+      setHold(null);
+    }, REVEAL_HOLD_MS);
+  }, [currentQuestion, questions, isTeacher, hold, participant.option_shuffle]);
+
   const answerStartAt = useMemo(() => {
     if (independent) {
       return typeof participant.question_start_at === 'number' ? participant.question_start_at : Date.now();
@@ -498,10 +588,8 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     return () => clearInterval(interval);
   }, [isQuestionTimerActive, currentQuestion?.id, currentQuestion?.timer, answerStartAt, isTeacher, independent, participant.status]);
 
-  const questionKey = currentQuestion?.id ?? null;
-
   useEffect(() => {
-    if (!questionKey) return;
+    if (!displayKey) return;
     setIsTransitioning(true);
     setSelectedAnswer(null);
     setHasAnswered(false);
@@ -510,7 +598,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     setAdvanceStage('idle');
     const timer = setTimeout(() => setIsTransitioning(false), 300);
     return () => clearTimeout(timer);
-  }, [questionKey]);
+  }, [displayKey]);
 
   useEffect(() => {
     if (isTeacher || !currentQuestion || !user || !firestore) return;
@@ -775,7 +863,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
             </div>
             <button
               onClick={() => setShowViolationWarning(false)}
-              className="w-full h-11 rounded-[12px] bg-destructive text-destructive-foreground font-medium text-sm hover:bg-destructive/90 transition-colors"
+              className="w-full h-11 rounded-[12px] bg-destructive text-destructive-foreground font-medium text-sm hover:bg-destructive/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
             >
               Continue Battle
             </button>
@@ -815,8 +903,8 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         </div>
       )}
 
-      {!isTeacher && !isGladiatorFinished && (
-        <CountdownTimer timeLeft={timeLeft} totalSec={currentQuestion?.timer ?? 0} />
+      {!isTeacher && !isGladiatorFinished && !hold && (
+        <CountdownTimer idle={!currentQuestion} timeLeft={timeLeft} totalSec={currentQuestion?.timer ?? 0} />
       )}
 
       {!isGladiatorFinished && (
@@ -840,11 +928,11 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                 Question order and options are shuffled per gladiator. Scores update in real time below.
               </p>
             </div>
-          ) : currentQuestion ? (
+          ) : displayQuestion ? (
             <>
               <div className="flex items-center justify-center gap-3 mb-3">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Question {myIndex + 1} / {quiz.question_count ?? 0}
+                  Question {shownUserIndex + 1} / {quiz.question_count ?? 0}
                 </span>
                 <div className="flex gap-1" aria-hidden="true">
                   {Array.from({ length: quiz.question_count ?? 0 }).map((_, i) => (
@@ -852,15 +940,15 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                       key={i}
                       className={cn(
                         "w-2 h-2 rounded-full transition-all duration-300",
-                        i < myIndex ? "bg-primary" :
-                        i === myIndex ? "bg-primary/60 scale-125" :
+                        i < shownUserIndex ? "bg-primary" :
+                        i === shownUserIndex ? "bg-primary/60 scale-125" :
                         "bg-muted-foreground/20"
                       )}
                     />
                   ))}
                 </div>
               </div>
-              <CardTitle className="text-xl sm:text-3xl md:text-4xl font-headline leading-snug md:leading-tight tracking-tight">{currentQuestion.text}</CardTitle>
+              <CardTitle className="text-xl sm:text-3xl md:text-4xl font-headline leading-snug md:leading-tight tracking-tight">{displayQuestion.text}</CardTitle>
               {isTeacher && !independent && (
                 <div className="flex items-center justify-center gap-2 mt-4">
                   <Clock className="w-4 h-4 text-muted-foreground" />
@@ -872,44 +960,107 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
             <CardTitle className="text-xl sm:text-2xl font-headline tracking-tight">Preparing question...</CardTitle>
           )}
         </CardHeader>
-        {currentQuestion && !isTeacher && (
+        {displayQuestion && !isTeacher && (
         <CardContent className="pb-10 md:pb-14 px-5 md:px-10">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-            {displayedOptions.map((opt: string, i: number) => (
+            {displayOptions.map((opt: string, i: number) => {
+              const isSelected = displaySelected === i;
+              const revealed = hold !== null || liveReveal !== null;
+              const correctIndex = hold ? hold.correctIndex : (liveReveal?.correctIndex ?? -1);
+              const isRevealedCorrect = revealed && i === correctIndex;
+              const isRevealedWrongPick = revealed && isSelected && i !== correctIndex;
+              return (
               <button
                 key={i}
                 onClick={() => handleAnswerSubmit(i)}
-                disabled={hasAnswered || isTeacher || timeLeft === 0 || quiz.status !== 'live' || participant.status === 'blocked'}
+                disabled={displayAnswered || isTeacher || timeLeft === 0 || quiz.status !== 'live' || participant.status === 'blocked'}
+                aria-pressed={isSelected}
                 className={cn(
-                  "group relative flex flex-col gap-2 p-3 md:p-5 rounded-[14px] border-2 text-left transition-all duration-150 min-h-[3.5rem] md:min-h-[5.5rem]",
-                  selectedAnswer === i
-                    ? "border-primary bg-primary/5 shadow-elevation-small ring-1 ring-primary/20"
-                    : hasAnswered
-                      ? "border-border/30 bg-muted/10 opacity-40"
-                      : "border-border/50 bg-card hover:border-primary/30 hover:bg-primary/[0.02] hover:shadow-elevation-small hover:-translate-y-0.5 cursor-pointer active:scale-[0.98]",
-                  (hasAnswered || isTeacher || timeLeft === 0 || quiz.status !== 'live') && "cursor-default"
+                  "group relative flex flex-col gap-2 p-3 md:p-5 rounded-[14px] border-2 text-left transition-all duration-300 ease-out min-h-14 md:min-h-[5.5rem] touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                  isRevealedCorrect
+                    ? "border-success bg-success/10 shadow-elevation-small animate-in"
+                    : isRevealedWrongPick
+                      ? "border-destructive bg-destructive/10 shadow-elevation-small animate-in"
+                      : revealed
+                        ? "border-border/30 bg-muted/10 opacity-40"
+                        : isSelected
+                          ? "border-primary bg-primary/5 shadow-elevation-small ring-1 ring-primary/20"
+                          : displayAnswered
+                            ? "border-border/30 bg-muted/10 opacity-40"
+                            : "border-border/50 bg-card hover:border-primary/30 hover:bg-primary/5 hover:shadow-elevation-small hover:-translate-y-0.5 cursor-pointer active:scale-[0.98]",
+                  (displayAnswered || isTeacher || timeLeft === 0 || quiz.status !== 'live') && "cursor-default"
                 )}
                 aria-label={`Option ${String.fromCharCode(65 + i)}: ${opt}`}
               >
                 <div className="flex items-center gap-3">
                   <span className={cn(
-                    "shrink-0 flex items-center justify-center w-8 h-8 rounded-[10px] text-sm font-bold font-mono transition-all duration-150",
-                    selectedAnswer === i
-                      ? "bg-primary text-primary-foreground shadow-elevation-small"
-                      : "bg-primary/10 text-primary group-hover:bg-primary/20 group-hover:scale-105"
+                    "shrink-0 flex items-center justify-center w-8 h-8 rounded-[10px] text-sm font-bold font-mono transition-all duration-300 ease-out",
+                    isRevealedCorrect
+                      ? "bg-success text-success-foreground shadow-elevation-small"
+                      : isRevealedWrongPick
+                        ? "bg-destructive text-destructive-foreground shadow-elevation-small"
+                        : isSelected
+                          ? "bg-primary text-primary-foreground shadow-elevation-small"
+                          : "bg-primary/10 text-primary group-hover:bg-primary/20 group-hover:scale-105"
                   )}>
                     {String.fromCharCode(65 + i)}
                   </span>
                   <span className="flex-1 text-sm md:text-base font-medium leading-snug">{opt}</span>
-                  {selectedAnswer === i && (
+                  {isRevealedCorrect && (
+                    <CheckCircle2 className="w-5 h-5 text-success shrink-0 animate-in" aria-label="Correct answer" />
+                  )}
+                  {isRevealedWrongPick && (
+                    <XCircle className="w-5 h-5 text-destructive shrink-0 animate-in" aria-label="Your answer was incorrect" />
+                  )}
+                  {!revealed && isSelected && (
                     <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
                   )}
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
 
-          {hasAnswered && !isTeacher && (
+          {(() => {
+            const revealInfo = hold ? { correctIndex: hold.correctIndex, answered: hold.answered, selected: hold.selected } : liveReveal;
+            if (!revealInfo) return null;
+            const verdict = revealInfo.answered && revealInfo.selected === revealInfo.correctIndex ? 'correct'
+              : revealInfo.answered ? 'incorrect' : 'timedout';
+            const letter = String.fromCharCode(65 + revealInfo.correctIndex);
+            return (
+              <div
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className={cn(
+                  "flex items-center justify-center gap-2.5 mt-5 px-4 py-3.5 rounded-[12px] border animate-in",
+                  verdict === 'correct' ? "bg-success/10 border-success/25" : verdict === 'incorrect' ? "bg-destructive/10 border-destructive/25" : "bg-warning/10 border-warning/25"
+                )}
+              >
+                {verdict === 'correct' ? (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 shrink-0 text-success" />
+                    <span className="font-semibold text-success">Correct!</span>
+                    <span className="text-sm text-muted-foreground">Well fought, gladiator.</span>
+                  </>
+                ) : verdict === 'incorrect' ? (
+                  <>
+                    <XCircle className="w-5 h-5 shrink-0 text-destructive" />
+                    <span className="font-semibold text-destructive">Incorrect</span>
+                    <span className="text-sm text-muted-foreground">The correct answer was {letter}.</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-5 h-5 shrink-0 text-warning" />
+                    <span className="font-semibold text-warning">Time&apos;s up</span>
+                    <span className="text-sm text-muted-foreground">The correct answer was {letter}.</span>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          {displayAnswered && !isTeacher && !(hold ? true : liveReveal !== null) && (
             <div className="flex items-center justify-center gap-2 mt-4 text-sm">
               <CheckCircle2 className="w-4 h-4 text-primary" />
               <span className="font-medium text-primary">Answer Locked</span>

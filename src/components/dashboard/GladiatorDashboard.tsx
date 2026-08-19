@@ -188,31 +188,56 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
       {stats && (
         <section className="page-section">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard icon={Swords} label="Battles" value={stats.totalBattles} color="text-blue-600" />
-            <StatCard icon={Trophy} label="Wins" value={stats.wins} color="text-amber-600" />
-            <StatCard icon={Star} label="Avg Score" value={stats.averageScore} color="text-purple-600" />
-            <StatCard icon={Zap} label="Accuracy" value={`${stats.accuracy}%`} color="text-emerald-600" />
+            <StatCard icon={Swords} label="Battles" value={stats.totalBattles} iconClass="text-primary" iconBgClass="bg-primary/10 group-hover/card:bg-primary/15" />
+            <StatCard icon={Trophy} label="Wins" value={stats.wins} iconClass="text-warning" iconBgClass="bg-warning/10 group-hover/card:bg-warning/15" />
+            <StatCard icon={Star} label="Avg Score" value={stats.averageScore} iconClass="text-accent" iconBgClass="bg-accent/10 group-hover/card:bg-accent/15" />
+            <StatCard icon={Zap} label="Accuracy" value={`${stats.accuracy}%`} iconClass="text-success" iconBgClass="bg-success/10 group-hover/card:bg-success/15" />
           </div>
+        </section>
+      )}
+
+      {/* No Battles Yet */}
+      {stats && stats.totalBattles === 0 && !dashboardData?.activeBattle && (
+        <section className="page-section">
+          <Card className="border-primary/10 overflow-hidden">
+            <CardContent className="p-6 md:p-8">
+              <div className="flex flex-col md:flex-row md:items-center gap-5">
+                <div className="relative shrink-0">
+                  <div className="absolute -inset-2 rounded-[20px] bg-gradient-to-br from-primary/15 via-transparent to-accent/15 blur-xl animate-glow-pulse" aria-hidden="true" />
+                  <div className="relative w-14 h-14 rounded-[16px] bg-primary/10 ring-1 ring-primary/20 flex items-center justify-center">
+                    <Swords className="w-6 h-6 text-primary" />
+                  </div>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <h2 className="text-card-title font-headline">No Battles Yet</h2>
+                  <p className="text-sm text-muted-foreground max-w-lg leading-relaxed">
+                    Your story starts when you join one. Enter the 6-digit room code your Commander shares below, or check back after the next arena opens.
+                  </p>
+                </div>
+                <Sparkles className="hidden md:block w-5 h-5 text-warning/50" aria-hidden="true" />
+              </div>
+            </CardContent>
+          </Card>
         </section>
       )}
 
       {/* Active Battle Alert */}
       {dashboardData?.activeBattle && (
         <section className="page-section">
-          <Link href={`/battle/${dashboardData.activeBattle.id}`} className="group block p-5 rounded-[14px] bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-950/20 dark:to-emerald-950/10 border border-emerald-200 dark:border-emerald-800 hover:shadow-elevation-medium transition-all duration-200">
+          <Link href={`/battle/${dashboardData.activeBattle.id}`} className="group block p-5 rounded-[14px] bg-gradient-to-r from-success/10 to-success/5 border border-success/25 hover:shadow-elevation-medium transition-all duration-300">
             <div className="flex items-center gap-4">
               <span className="relative flex h-4 w-4">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-60" />
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-success" />
               </span>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Active Battle</p>
-                <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">{dashboardData.activeBattle.title}</p>
-                <p className="text-xs text-emerald-500 dark:text-emerald-500 mt-0.5">Tap to rejoin</p>
+                <p className="text-sm font-semibold text-success">Active Battle</p>
+                <p className="text-sm text-success/80 font-medium">{dashboardData.activeBattle.title}</p>
+                <p className="text-xs text-success/60 mt-0.5">Tap to rejoin</p>
               </div>
-              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-sm font-medium group-hover:gap-3 transition-all">
+              <div className="flex items-center gap-2 text-success/80 text-sm font-medium group-hover:gap-3 transition-all duration-300">
                 <span className="hidden sm:inline">Rejoin</span>
-                <ChevronRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" />
+                <ChevronRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
               </div>
             </div>
           </Link>
@@ -246,7 +271,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-mono">{roomCode.length}/6</span>
                 )}
               </div>
-              <Button type="submit" size="lg" className="shrink-0 h-14 px-8 text-base font-semibold shadow-elevation-small hover:shadow-elevation-hover transition-all duration-200" disabled={isLoading || roomCode.length < 6}>
+              <Button type="submit" size="lg" className="shrink-0 h-14 px-8 text-base font-semibold shadow-elevation-small hover:shadow-elevation-hover transition-all duration-300" disabled={isLoading || roomCode.length < 6}>
                 {isLoading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <Swords className="mr-2 h-5 w-5" />}
                 {isLoading ? 'Joining...' : 'Join Battle'}
               </Button>
@@ -277,7 +302,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
                 {dashboardData.recentBattles.slice(0, 8).map((h: any) => {
                   return (
                     <Link key={h.quizId} href={`/battle/${h.quizId}`} className="group block">
-                      <div className="flex items-center gap-3 p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-200 border border-transparent hover:border-border/50">
+                      <div className="flex items-center gap-3 p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-300 border border-transparent hover:border-border/50">
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{h.title}</p>
                           <p className="text-[11px] text-muted-foreground">{new Date(h.created_at).toLocaleDateString()}</p>
@@ -323,7 +348,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
                     <p className="text-[10px] text-muted-foreground">Total Battles</p>
                   </div>
                   <div className="p-2.5 rounded-[10px] bg-muted/30 text-center">
-                    <p className="text-lg font-bold tabular-nums text-amber-600"><AnimatedValue value={stats.wins} /></p>
+                    <p className="text-lg font-bold tabular-nums text-warning"><AnimatedValue value={stats.wins} /></p>
                     <p className="text-[10px] text-muted-foreground">Wins</p>
                   </div>
                 </>
@@ -362,13 +387,12 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
   );
 }
 
-const StatCard = React.memo(function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color?: string }) {
-  const bgClass = color ? `${color.replace('text-', 'bg-').replace('600', '100')} dark:${color.replace('text-', 'bg-').replace('600', '950/20')}` : 'bg-muted';
+const StatCard = React.memo(function StatCard({ icon: Icon, label, value, iconClass, iconBgClass }: { icon: React.ElementType; label: string; value: string | number; iconClass?: string; iconBgClass?: string }) {
   return (
     <Card className="group/card card-hover shadow-elevation-small hover:shadow-elevation-medium">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-200 group-hover/card:scale-110 group-hover/card:shadow-sm", bgClass)}>
-          <Icon className={cn("w-4 h-4", color || 'text-muted-foreground')} />
+        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-300 group-hover/card:scale-110 group-hover/card:shadow-sm", iconBgClass || 'bg-muted')}>
+          <Icon className={cn("w-4 h-4", iconClass || 'text-muted-foreground')} />
         </div>
         <div>
           <p className="text-lg font-bold leading-tight tabular-nums"><AnimatedValue value={value} /></p>

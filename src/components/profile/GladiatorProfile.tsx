@@ -104,7 +104,7 @@ export default function GladiatorProfile() {
             <div className="flex flex-wrap gap-2">
               {EMOJIS.map(emoji => (
                 <button key={emoji} type="button" onClick={() => setAvatar(emoji)}
-                  className={cn('text-xl w-11 h-11 touch-target flex items-center justify-center rounded-[12px] border-2 transition-all duration-150',
+                  className={cn('text-xl w-11 h-11 touch-target flex items-center justify-center rounded-[12px] border-2 transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
                     avatar === emoji ? 'border-primary bg-primary/10 scale-110' : 'border-border/50 hover:border-primary/30 hover:bg-primary/5'
                   )}
                   aria-label={`Select avatar ${emoji}`}
