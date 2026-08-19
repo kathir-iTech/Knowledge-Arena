@@ -519,7 +519,7 @@ export default function CommanderMessagesPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="md:hidden h-8 w-8"
+                    className="md:hidden h-8 w-8 touch-target"
                     onClick={() => setShowingMobileList(true)}
                     aria-label="Back to conversations"
                   >
@@ -529,7 +529,7 @@ export default function CommanderMessagesPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    className="h-8 w-8 touch-target text-muted-foreground hover:text-destructive"
                     onClick={() => setLeaveDialogOpen(true)}
                     aria-label="Leave conversation"
                   >
@@ -616,7 +616,7 @@ export default function CommanderMessagesPage() {
                               {isMine && <CheckCheck className="w-3 h-3 opacity-70" />}
                               {isOptimistic && <Loader2 className="w-3 h-3 animate-spin opacity-70" />}
                               {isMine && msg.id !== optimisticMsgRef.current && (
-                                <button onClick={() => deleteMessage(msg.id)} className="opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity duration-300 ease-out ml-1 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:opacity-100" aria-label="Delete message">
+                                <button onClick={() => deleteMessage(msg.id)} className="touch-target md:opacity-0 md:group-hover:opacity-70 hover:opacity-100 transition-opacity duration-300 ease-out ml-1 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:opacity-100" aria-label="Delete message">
                                   <Trash2 className="w-3 h-3" />
                                 </button>
                               )}

@@ -17,6 +17,7 @@ import { participantService } from '@/services/participant.service';
 import { presenceService, type PresenceMap } from '@/services/presence.service';
 import { battleService } from '@/services/battle.service';
 import { usePageFocusChange } from '@/hooks/usePageFocusChange';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
@@ -703,7 +704,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       if (Date.now() - lastAttempt < 8000) return;
       timeUpAttemptsRef.current[qid] = Date.now();
       const t = setTimeout(() => {
-        battleService.evaluateSelf(quiz.id, qid).catch(() => {});
+        battleService.evaluateSelf(quiz.id, qid).catch(() => {
+          toast({ variant: 'destructive', title: 'Sync Issue', description: 'Failed to evaluate your answer. The arena will retry.' });
+        });
       }, 1200);
       return () => clearTimeout(t);
     }
@@ -717,7 +720,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       if (advancingRef.current || endingRef.current || autoEndedRef.current === currentQuestion.id) return;
       autoEndedRef.current = currentQuestion.id;
       const t = setTimeout(() => {
-        battleService.endBattle(quiz.id).catch(() => {});
+        battleService.endBattle(quiz.id).catch(() => {
+          toast({ variant: 'destructive', title: 'Sync Issue', description: 'Failed to finalize the battle automatically. Please ask the Commander to end it.' });
+        });
       }, 2000);
       return () => clearTimeout(t);
     }
@@ -833,42 +838,75 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-3 md:p-4 bg-background overflow-x-hidden animate-in safe-top safe-bottom">
-      {quiz.status === 'paused' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
-          <div className="relative bg-card border border-warning/20 rounded-[18px] shadow-elevation-medium p-6 max-w-sm w-full space-y-4 text-center animate-in">
-            <div className="flex items-center justify-center w-12 h-12 rounded-[14px] bg-warning/10 mx-auto">
-              <Pause className="w-6 h-6 text-warning" />
+      <DialogPrimitive.Root open={quiz.status === 'paused'}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm" />
+          <DialogPrimitive.Content aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 focus:outline-none">
+            <div className="bg-card border border-warning/20 rounded-[18px] shadow-elevation-medium p-6 max-w-sm w-full space-y-4 text-center animate-in">
+              <div className="flex items-center justify-center w-12 h-12 rounded-[14px] bg-warning/10 mx-auto">
+                <Pause className="w-6 h-6 text-warning" />
+              </div>
+              <DialogPrimitive.Title className="font-headline text-xl font-semibold">Battle Paused</DialogPrimitive.Title>
+              <DialogPrimitive.Description className="text-sm text-muted-foreground">
+                The Commander has paused the battle. Timers and answers are frozen and will resume exactly where they left off.
+              </DialogPrimitive.Description>
             </div>
-            <h2 className="font-headline text-xl font-semibold">Battle Paused</h2>
-            <p className="text-sm text-muted-foreground">
-              The Commander has paused the battle. Timers and answers are frozen and will resume exactly where they left off.
-            </p>
-          </div>
-        </div>
-      )}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
 
-      {showViolationWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setShowViolationWarning(false)} />
-          <div className="relative bg-card border border-destructive/20 rounded-[18px] shadow-elevation-medium p-6 max-w-sm w-full space-y-4 animate-in">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-destructive/10 shrink-0">
-                <ShieldAlert className="w-5 h-5 text-destructive" />
+      <DialogPrimitive.Root open={showViolationWarning}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm" />
+          <DialogPrimitive.Content aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 focus:outline-none">
+            <div className="bg-card border border-destructive/20 rounded-[18px] shadow-elevation-medium p-6 max-w-sm w-full space-y-4 animate-in">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-destructive/10 shrink-0">
+                  <ShieldAlert className="w-5 h-5 text-destructive" />
+                </div>
+                <div>
+                  <DialogPrimitive.Title className="font-semibold text-base">Focus Lost</DialogPrimitive.Title>
+                  <DialogPrimitive.Description className="text-sm text-muted-foreground">You looked away from the battle. One more violation will disqualify you.</DialogPrimitive.Description>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-base">Focus Lost</h3>
-                <p className="text-sm text-muted-foreground">You looked away from the battle. One more violation will disqualify you.</p>
-              </div>
+              <DialogPrimitive.Close asChild>
+                <button
+                  onClick={() => setShowViolationWarning(false)}
+                  className="w-full h-11 rounded-[12px] bg-destructive text-destructive-foreground font-medium text-sm hover:bg-destructive/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                >
+                  Continue Battle
+                </button>
+              </DialogPrimitive.Close>
             </div>
-            <button
-              onClick={() => setShowViolationWarning(false)}
-              className="w-full h-11 rounded-[12px] bg-destructive text-destructive-foreground font-medium text-sm hover:bg-destructive/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-            >
-              Continue Battle
-            </button>
-          </div>
-        </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+
+      {participant.status === 'blocked' && !isTeacher && (
+        <DialogPrimitive.Root open>
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm" />
+            <DialogPrimitive.Content aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4 focus:outline-none">
+              <div className="bg-card border border-destructive/20 rounded-[18px] shadow-elevation-medium p-6 max-w-sm w-full space-y-4 text-center animate-in">
+                <div className="flex items-center justify-center w-12 h-12 rounded-[14px] bg-destructive/10 mx-auto">
+                  <ShieldAlert className="w-6 h-6 text-destructive" />
+                </div>
+                <DialogPrimitive.Title className="font-headline text-xl font-semibold">Disqualified</DialogPrimitive.Title>
+                <DialogPrimitive.Description className="text-sm text-muted-foreground">
+                  Malpractice detected. Awaiting review.
+                </DialogPrimitive.Description>
+                <DialogPrimitive.Close asChild>
+                  <button
+                    onClick={() => router.push('/gladiator/dashboard')}
+                    className="w-full h-11 rounded-[12px] bg-destructive text-destructive-foreground font-medium text-sm hover:bg-destructive/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                  >
+                    Return to Dashboard
+                  </button>
+                </DialogPrimitive.Close>
+              </div>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
       )}
 
       {showCommanderOffline && (
@@ -903,16 +941,19 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         </div>
       )}
 
-      {!isTeacher && !isGladiatorFinished && !hold && (
+      {!isTeacher && !isGladiatorFinished && participant.status !== 'blocked' && !hold && (
         <CountdownTimer idle={!currentQuestion} timeLeft={timeLeft} totalSec={currentQuestion?.timer ?? 0} />
       )}
 
-      {!isGladiatorFinished && (
+      {!isGladiatorFinished && participant.status !== 'blocked' && (
       <Card className="w-full max-w-4xl card-hover shadow-elevation-small">
         <CardHeader className={cn(
           "text-center pt-10 pb-4 md:pb-6 px-5 md:px-10 transition-opacity duration-300",
           isTransitioning ? "opacity-50" : "opacity-100"
         )}>
+          <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {displayQuestion ? `Question ${shownUserIndex + 1} of ${quiz.question_count ?? 0}` : 'Preparing question'}
+          </span>
           {isTeacher && independent ? (
             <div className="space-y-3">
               <div className="flex items-center justify-center gap-3">
@@ -1078,14 +1119,6 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
                 </span>
               )}
             </div>
-          )}
-
-          {participant.status === 'blocked' && !isTeacher && (
-             <div className="bg-destructive/5 border border-destructive/10 p-8 rounded-[18px] text-center space-y-3 mt-6">
-                <ShieldAlert className="w-12 h-12 text-destructive mx-auto" />
-                <h3 className="text-xl font-bold text-destructive">Disqualified</h3>
-                <p className="text-sm text-muted-foreground">Malpractice detected. Awaiting review.</p>
-             </div>
           )}
         </CardContent>
         )}

@@ -248,7 +248,11 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
                             </Link>
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(quiz.id); toast({ title: 'Copied', description: `Room code ${quiz.id} copied.` }); }}>
+                        <DropdownMenuItem onClick={() => {
+                          navigator.clipboard.writeText(quiz.id)
+                            .then(() => toast({ title: 'Copied', description: `Room code ${quiz.id} copied.` }))
+                            .catch(() => toast({ variant: 'destructive', title: "Couldn't Copy", description: 'Copy failed — try copying the code manually.' }));
+                        }}>
                           <Copy className="w-4 h-4 mr-2" /> Copy Room Code
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={handleDuplicate} disabled={isProcessing}>

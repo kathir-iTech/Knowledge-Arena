@@ -297,9 +297,13 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      toast({ title: 'Copied!', description: `${text} copied to your clipboard.` });
-    });
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        toast({ title: 'Copied!', description: `${text} copied to your clipboard.` });
+      })
+      .catch(() => {
+        toast({ variant: 'destructive', title: "Couldn't Copy", description: 'Copy failed — try copying the code manually.' });
+      });
   };
 
   const handleStartQuiz = async () => {
@@ -441,7 +445,7 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
                         <Button
                           variant="destructive"
                           size="sm"
-                          className="h-7 px-2 text-[10px] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300"
+                          className="touch-target h-7 px-2 text-[10px] md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300"
                           onClick={() => setKickingId(p.user_id)}
                         >
                           Kick

@@ -675,7 +675,7 @@ export default function ExecutiveMessagesPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="md:hidden h-8 w-8"
+                    className="md:hidden h-8 w-8 touch-target"
                     onClick={() => setShowingMobileList(true)}
                     aria-label="Back to conversations"
                   >
@@ -687,7 +687,7 @@ export default function ExecutiveMessagesPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    className="h-8 w-8 touch-target text-muted-foreground hover:text-destructive"
                     onClick={() => setDeleteConvDialog(true)}
                     aria-label="Delete conversation"
                   >
@@ -729,17 +729,17 @@ export default function ExecutiveMessagesPage() {
                             isOptimistic && "opacity-70"
                           )}>
                             {isMine && msg.id !== optimisticMsgRef.current && !isEditing && (
-                              <div className="absolute -left-16 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity">
+                              <div className="absolute -left-16 top-1/2 -translate-y-1/2 flex gap-1 md:opacity-0 md:group-hover:opacity-70 hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => { setEditingMessageId(msg.id); setEditMessageText(msg.text); }}
-                                  className="hover:text-primary"
+                                  className="touch-target hover:text-primary rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   aria-label="Edit message"
                                 >
                                   <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                                 </button>
                                 <button
                                   onClick={() => deleteMessage(msg.id)}
-                                  className="hover:text-destructive"
+                                  className="touch-target hover:text-destructive rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   aria-label="Delete message"
                                 >
                                   {deletingMessageId === msg.id ? (

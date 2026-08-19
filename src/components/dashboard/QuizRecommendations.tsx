@@ -135,7 +135,7 @@ export function QuizRecommendations() {
                   <p className="text-[10px] text-muted-foreground">Confidence</p>
                   <p className="text-sm font-bold text-primary tabular-nums">{Math.round(rec.confidence * 100)}%</p>
                 </div>
-                <Button size="sm" variant="outline" asChild className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button size="sm" variant="outline" asChild className="md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <Link href={`/battle/${rec.quizId}`}>Join<ChevronRight className="w-3 h-3 ml-1" /></Link>
                 </Button>
               </div>
