@@ -18,21 +18,22 @@ import {
   Zap,
 } from 'lucide-react';
 
+// Product overview — arena / battle language throughout
 const OVERVIEW_PILLARS = [
   {
     icon: Swords,
-    title: 'For Gladiators',
-    text: 'Join live arenas with a room code, answer on a timer, and watch your rank move in real time.',
+    title: 'Gladiators — Battle & Learn',
+    text: 'Enter live arenas with a room code, answer on a timer, and watch your rank move in real time as you fight for the top.',
   },
   {
     icon: Flame,
-    title: 'For Commanders',
-    text: 'Forge AI-powered questions from PDFs, launch synchronized battles, and command the room.',
+    title: 'Commanders — Forge & Command',
+    text: 'Forge AI-powered questions from PDFs, launch synchronized battles, control the arena clock, and own the room.',
   },
   {
     icon: Radar,
-    title: 'For Executives',
-    text: 'Monitor every active arena from a live command center with predictions and heatmaps.',
+    title: 'Executives — Govern & Observe',
+    text: 'Monitor every active arena from a live command center with winner predictions, answer heatmaps, and activity streams.',
   },
 ];
 
@@ -87,12 +88,12 @@ export function LandingShowcases() {
       <section id="product" className="border-y bg-secondary/40">
         <div className="page-container py-16 md:py-20">
           <Reveal className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-bold uppercase tracking-widest text-primary">Product Overview</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary">The Arena</p>
             <h2 className="mt-2 font-headline text-3xl font-bold tracking-tight text-balance sm:text-4xl">
               One arena. Three battle stations.
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Quorena unifies the classroom experience across dedicated portals —
+              Quorena unifies the classroom experience across dedicated stations —
               each tuned to its role, all sharing one real-time arena.
             </p>
           </Reveal>
@@ -119,18 +120,19 @@ export function LandingShowcases() {
         text="Commanders drop in a syllabus, textbook chapter, or study guide — the AI Forge extracts questions, filters them in a review panel, and publishes an arena with a room code. Every question is human-verified before it ever reaches a Gladiator."
       >
         <div className="relative mx-auto w-full max-w-lg">
-          <div className="absolute -inset-4 rounded-[28px] bg-gradient-to-br from-amber-500/15 to-primary/10 blur-2xl animate-glow-pulse" aria-hidden="true" />
+          {/* Glow uses warning/primary tokens — no amber */}
+          <div className="absolute -inset-4 rounded-[28px] bg-gradient-to-br from-warning/15 to-primary/10 blur-2xl animate-glow-pulse" aria-hidden="true" />
           <div className="relative rounded-3xl border bg-card p-5 shadow-elevation-large">
             <div className="flex items-center gap-3 border-b pb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/10 text-warning">
                 <BrainCircuit className="h-5 w-5" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold">AI Quiz Generator</p>
+                <p className="text-sm font-semibold">AI Quiz Forge</p>
                 <p className="text-xs text-muted-foreground">genkit · gemini</p>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-600">
-                <Zap className="h-3 w-3" /> PROCESSING
+              <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
+                <Zap className="h-3 w-3" /> FORGING
               </span>
             </div>
             <div className="mt-4 space-y-3">
@@ -142,7 +144,7 @@ export function LandingShowcases() {
               <div className="space-y-2">
                 {AI_FORGE_QUESTIONS.map((q, i) => (
                   <div key={q.text} className="flex items-start gap-2 rounded-xl bg-muted/60 p-3 animate-in" style={{ animationDelay: `${i * 150}ms` }}>
-                    <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium text-foreground">{q.text}</p>
                       <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -161,7 +163,7 @@ export function LandingShowcases() {
         id="live-battle"
         eyebrow="Live Battle Command Center"
         title="Watch every arena breathe — live"
-        text="Executives see the entire arena in real time: who is online, the exact question being answered, remaining timers, a leaderboard that re-sorts live, probabilistic winner shortlists, and a per-question answer heatmap. Zero page refreshes."
+        text="Executives see the entire arena in real time: who is online, the exact question being answered, remaining timers, rankings that re-sort live, probabilistic winner shortlists, and a per-question answer heatmap. Zero page refreshes."
         reverse
       >
         <div className="relative mx-auto w-full max-w-lg">
@@ -178,32 +180,36 @@ export function LandingShowcases() {
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl border bg-background/60 p-3">
                 <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <MonitorPlay className="h-3 w-3" /> Live battles
+                  <MonitorPlay className="h-3 w-3" /> Live arenas
                 </p>
                 <p className="mt-1 font-headline text-2xl font-bold">12</p>
               </div>
               <div className="rounded-xl border bg-background/60 p-3">
                 <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <Users className="h-3 w-3" /> Online gladiators
+                  <Users className="h-3 w-3" /> Active gladiators
                 </p>
                 <p className="mt-1 font-headline text-2xl font-bold">84</p>
               </div>
             </div>
-            <div className="mt-3 space-y-2">
-              {LEADERBOARD_HINT.map((row, i) => (
-                <div key={row.name} className="flex items-center gap-2.5 rounded-xl border bg-background/60 p-2 animate-in" style={{ animationDelay: `${i * 120}ms` }}>
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-[10px] font-bold text-white">
-                    {row.initials}
-                  </span>
-                  <span className="flex-1 truncate text-xs font-medium">{row.name}</span>
-                  <span className="font-headline text-sm font-bold tabular-nums text-primary">{row.score}</span>
-                  {i === 0 && (
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-warning/15 text-warning">
-                      <Trophy className="h-3 w-3" />
+            {/* Arena rankings in the command center — same neo-roman style */}
+            <div className="mt-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Top Gladiators</p>
+              <div className="space-y-2">
+                {LEADERBOARD_HINT.map((row, i) => (
+                  <div key={row.name} className="flex items-center gap-2.5 rounded-xl border bg-background/60 p-2 animate-in" style={{ animationDelay: `${i * 120}ms` }}>
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-[10px] font-bold text-white">
+                      {row.initials}
                     </span>
-                  )}
-                </div>
-              ))}
+                    <span className="flex-1 truncate text-xs font-medium">{row.name}</span>
+                    <span className="font-headline text-sm font-bold tabular-nums text-primary">{row.score}</span>
+                    {i === 0 && (
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-warning/15 text-warning">
+                        <Trophy className="h-3 w-3" />
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -213,7 +219,7 @@ export function LandingShowcases() {
         id="analytics"
         eyebrow="Analytics"
         title="Executive intelligence, not just dashboards"
-        text="30-day engagement trends, category usage, AI adoption, messaging activity, and per-commander performance — computed on demand from the live arena data, no ETL pipeline required."
+        text="30-day engagement trends, arena usage, AI adoption, messaging activity, and per-Commander performance — computed on demand from live arena data, no ETL pipeline required."
       >
         <div className="relative mx-auto w-full max-w-lg">
           <div className="absolute -inset-4 rounded-[28px] bg-gradient-to-br from-accent/20 to-primary/10 blur-2xl animate-glow-pulse" aria-hidden="true" />
@@ -275,12 +281,12 @@ function Sparkles({ className }: { className?: string }) {
 
 export function LandingFeatures() {
   const features = [
-    { icon: Zap, title: 'Real-time battles', text: 'Firestore-synced arenas with presence tracking, live timers, and instant leaderboard movement.' },
+    { icon: Zap, title: 'Real-time arenas', text: 'Firestore-synced battles with presence tracking, live timers, and instant ranking movement.' },
     { icon: BrainCircuit, title: 'AI question forge', text: 'Generate reviewable questions from any document via Genkit and Gemini — with full audit trails.' },
-    { icon: ShieldAlert, title: 'Anti-cheat presence', text: 'Participant heartbeat tracking, skip/timeout detection, and reconnect suspicion flags.' },
-    { icon: Radar, title: 'Command center', text: 'Live battle telemetry for executives: predictions, answer heatmaps, and activity streams.' },
-    { icon: BarChart3, title: 'Deep analytics', text: '30-day engagement, category usage, AI adoption, and messaging activity in one view.' },
-    { icon: Layers, title: 'Role-first UX', text: 'Dedicated Gladiator, Commander, and Executive portals with tailored workflows.' },
+    { icon: ShieldAlert, title: 'Anti-cheat presence', text: 'Gladiator heartbeat tracking, skip/timeout detection, and reconnect suspicion flags.' },
+    { icon: Radar, title: 'Command center', text: 'Live arena telemetry for Executives: predictions, answer heatmaps, and activity streams.' },
+    { icon: BarChart3, title: 'Deep analytics', text: '30-day engagement, arena usage, AI adoption, and messaging activity in one command view.' },
+    { icon: Layers, title: 'Role-first UX', text: 'Dedicated Gladiator, Commander, and Executive stations with tailored battle workflows.' },
   ];
   return (
     <section id="features" className="border-y bg-secondary/40">
@@ -288,7 +294,7 @@ export function LandingFeatures() {
         <Reveal className="mx-auto max-w-2xl text-center">
           <p className="text-xs font-bold uppercase tracking-widest text-primary">Features</p>
           <h2 className="mt-2 font-headline text-3xl font-bold tracking-tight text-balance sm:text-4xl">
-            Everything a quiz platform should be
+            Everything a battle-ready arena needs
           </h2>
         </Reveal>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
