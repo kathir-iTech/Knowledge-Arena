@@ -44,7 +44,7 @@ export function BattleDetailPanel({ battle, now, events }: Props) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-bold tracking-tight truncate">{battle.title}</h2>
+            <h2 className="font-headline text-lg font-bold tracking-tight truncate">{battle.title}</h2>
             <Badge variant="outline" className={cn('text-[10px] h-5 capitalize', STATUS_STYLE[battle.status] || '')}>
               {battle.status}
             </Badge>

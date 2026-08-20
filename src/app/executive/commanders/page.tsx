@@ -314,7 +314,7 @@ export default function CommanderManagementPage() {
               key={status}
               onClick={() => setStatusFilter(status)}
               className={cn(
-                'px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-150',
+                'px-3.5 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-300 ease-out',
                 statusFilter === status
                   ? 'bg-primary text-primary-foreground shadow-elevation-small'
                   : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
@@ -484,9 +484,9 @@ export default function CommanderManagementPage() {
               </div>
             </div>
             {generatedEmail && (
-              <div className="p-3 rounded-[10px] bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
-                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Commander Created</p>
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">Email: {generatedEmail}</p>
+              <div className="p-3 rounded-[10px] bg-success/10 border border-success/20 ring-1 ring-inset ring-success/10">
+                <p className="text-sm font-medium text-success">Commander Created</p>
+                <p className="text-xs text-success/80 mt-1">Email: {generatedEmail}</p>
               </div>
             )}
           </div>

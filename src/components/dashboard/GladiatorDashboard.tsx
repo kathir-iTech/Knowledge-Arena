@@ -253,7 +253,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
                 <Swords className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h2 className="text-base font-semibold">Join Arena</h2>
+                <h2 className="text-base font-headline font-semibold">Join Arena</h2>
                 <p className="text-sm text-muted-foreground">Enter the 6-digit room code to join a battle.</p>
               </div>
             </div>
@@ -356,7 +356,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
             </div>
             <Button variant="outline" size="sm" className="w-full group" onClick={() => router.push('/gladiator/profile')}>
               <UserCircle className="w-3.5 h-3.5 mr-2" /> Edit Profile
-              <ChevronRight className="w-3.5 h-3.5 ml-auto transition-transform duration-200 group-hover:translate-x-0.5" />
+              <ChevronRight className="w-3.5 h-3.5 ml-auto transition-transform duration-300 ease-out group-hover:translate-x-0.5" />
             </Button>
           </CardContent>
         </Card>
@@ -377,7 +377,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
                 </div>
               </div>
               <Button variant="outline" size="sm" asChild className="group">
-                <Link href="/gladiator/history">View <ChevronRight className="w-3.5 h-3.5 ml-1 transition-transform duration-200 group-hover:translate-x-0.5" /></Link>
+                <Link href="/gladiator/history">View <ChevronRight className="w-3.5 h-3.5 ml-1 transition-transform duration-300 ease-out group-hover:translate-x-0.5" /></Link>
               </Button>
             </div>
           </CardContent>
@@ -391,7 +391,7 @@ const StatCard = React.memo(function StatCard({ icon: Icon, label, value, iconCl
   return (
     <Card className="group/card card-hover shadow-elevation-small hover:shadow-elevation-medium">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-300 group-hover/card:scale-110 group-hover/card:shadow-sm", iconBgClass || 'bg-muted')}>
+        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-300 group-hover/card:scale-110 group-hover/card:shadow-elevation-small", iconBgClass || 'bg-muted')}>
           <Icon className={cn("w-4 h-4", iconClass || 'text-muted-foreground')} />
         </div>
         <div>

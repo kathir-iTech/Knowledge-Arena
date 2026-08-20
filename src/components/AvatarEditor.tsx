@@ -53,7 +53,7 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ isOpen, setIsOpen, c
               variant="ghost"
               aria-label={`Select ${emoji} as your avatar`}
               aria-pressed={currentAvatar === emoji}
-              className={`text-3xl sm:text-4xl h-14 w-14 sm:h-16 sm:w-16 transition-transform duration-200 hover:scale-125 ${currentAvatar === emoji ? 'border-2 border-primary' : ''}`}
+              className={`text-3xl sm:text-4xl h-14 w-14 sm:h-16 sm:w-16 transition-transform duration-300 hover:scale-125 ${currentAvatar === emoji ? 'border-2 border-primary' : ''}`}
               onClick={() => handleSelectAvatar(emoji)}
             >
               {emoji}

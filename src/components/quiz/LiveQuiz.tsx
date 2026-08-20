@@ -108,7 +108,7 @@ const CountdownTimer = React.memo(({ timeLeft, totalSec, idle }: { timeLeft: num
             <div
               key={i}
               className={cn(
-                "w-1.5 h-4 rounded-full transition-all duration-200",
+                "w-1.5 h-4 rounded-full transition-all duration-300",
                 isCritical ? "bg-destructive" : "bg-warning"
               )}
               style={{

@@ -824,7 +824,7 @@ function StatCard({ icon: Icon, label, value, sub, color, tileClass }: {
             <p className="text-sm text-muted-foreground">{label}</p>
             {sub && <p className="text-xs text-muted-foreground/70">{sub}</p>}
           </div>
-          <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-300 ease-out group-hover/card:scale-110 group-hover/card:shadow-sm", tileClass || 'bg-muted/60')}>
+          <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-300 ease-out group-hover/card:scale-110 group-hover/card:shadow-elevation-small", tileClass || 'bg-muted/60')}>
             <Icon className={cn("w-5 h-5", color || 'text-muted-foreground')} />
           </div>
         </div>

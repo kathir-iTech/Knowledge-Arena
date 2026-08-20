@@ -565,7 +565,7 @@ export default function CommanderMessagesPage() {
                             </div>
                           )}
                           <div className={cn(
-                            "max-w-[85%] sm:max-w-[75%] px-3 py-2 text-sm break-words whitespace-pre-wrap relative shadow-sm",
+                            "max-w-[85%] sm:max-w-[75%] px-3 py-2 text-sm break-words whitespace-pre-wrap relative shadow-elevation-small",
                             isMine
                               ? "bg-primary text-primary-foreground rounded-[18px] rounded-br-[4px]"
                               : "bg-card text-card-foreground border border-border/30 rounded-[18px] rounded-bl-[4px]",
@@ -640,7 +640,7 @@ export default function CommanderMessagesPage() {
                   {showScrollButton && (
                     <button
                       onClick={scrollToBottom}
-                      className="sticky bottom-2 z-10 bg-primary text-primary-foreground rounded-full p-2 shadow-lg hover:bg-primary/90 transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background mx-auto"
+                      className="sticky bottom-2 z-10 bg-primary text-primary-foreground rounded-full p-2 shadow-elevation-medium hover:bg-primary/90 transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background mx-auto"
                       aria-label="Scroll to bottom"
                     >
                       <ChevronDown className="w-4 h-4" />
