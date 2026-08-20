@@ -5,12 +5,13 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
+  QUIZ_CONFIG_SETTINGS_DOC,
   QUIZ_LIVE,
   QUIZ_PAUSED,
   QUIZ_FINISHED,
   PS_BLOCKED,
 } from '@/lib/constants';
-import { writeBattleLog, isCreator, normalizeSkipConfig, evaluateQuestionForAll, battleErrorResponse } from '@/lib/battle-server';
+import { writeBattleLog, isCreator, normalizeSkipConfig, scoringConfigFrom, quizConfigRef, evaluateQuestionForAll, battleErrorResponse } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -76,29 +77,30 @@ export async function POST(req: NextRequest) {
       const now = Date.now();
       const nextIndex = index + 1;
       ended = nextIndex >= questionCount;
-      const config = normalizeSkipConfig(quiz.scoring_config);
+      // Phase 94: scoring config lives in the gated config/settings doc (legacy
+      // parent-doc value used as a fallback for pre-migration arenas).
+      const cfgRef = quizConfigRef(quizId);
+      const cfgSnap = await tx.get(cfgRef);
+      const config = normalizeSkipConfig(scoringConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined, quiz));
 
       const quizUpdate: Record<string, any> = {
         current_question_index: nextIndex,
         question_start_at: ended ? null : now,
-        skipped_question_ids: FieldValue.arrayUnion(question.id),
       };
       if (ended) {
         quizUpdate.status = QUIZ_FINISHED;
         quizUpdate.ended_at = now;
         quizUpdate.paused_at = null;
       }
-      tx.update(quizRef, quizUpdate);
-      tx.update(
-        db.collection(COLLECTIONS.QUIZZES).doc(quizId)
-          .collection(COLLECTIONS.QUESTIONS).doc(question.id),
-        { skipped: true }
-      );
 
       const partsSnap = await getAdminDb()
         .collection(COLLECTIONS.QUIZZES).doc(quizId)
         .collection(COLLECTIONS.PARTICIPANTS)
         .get();
+
+      // Firestore transactions require all reads before any writes. Gather
+      // every read first, then apply the writes below.
+      const participantUpdates: Array<{ ref: any; data: Record<string, any> }> = [];
       for (const p of partsSnap.docs) {
         const pSnap = await tx.get(p.ref);
         if (!pSnap.exists || p.id === quiz.created_by || pSnap.data()?.status === PS_BLOCKED) continue;
@@ -119,7 +121,25 @@ export async function POST(req: NextRequest) {
             updates.score = FieldValue.increment(-config.skip_penalty);
           }
         }
-        tx.update(p.ref, updates);
+        participantUpdates.push({ ref: p.ref, data: updates });
+      }
+
+      tx.update(quizRef, quizUpdate);
+      // Quiz-level skip bookkeeping also moved into the config doc.
+      if (cfgSnap.exists) {
+        tx.update(cfgRef, { skipped_question_ids: FieldValue.arrayUnion(question.id) });
+      } else {
+        // Legacy arena without a config doc yet: backfill it in place so the
+        // skip is recorded (Admin SDK writes bypass rules).
+        tx.set(cfgRef, { skipped_question_ids: [question.id], scoring_config: quiz.scoring_config ?? null });
+      }
+      tx.update(
+        db.collection(COLLECTIONS.QUIZZES).doc(quizId)
+          .collection(COLLECTIONS.QUESTIONS).doc(question.id),
+        { skipped: true }
+      );
+      for (const pu of participantUpdates) {
+        tx.update(pu.ref, pu.data);
       }
     });
 

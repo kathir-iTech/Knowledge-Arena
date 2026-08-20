@@ -104,16 +104,30 @@ service cloud.firestore {
 
     // Client creators may only mutate a whitelist of fields, and only along
     // validated transitions. created_by (ownership) is server-only.
+    // scoring_config and skipped_question_ids were removed in Phase 94: they
+    // now live in the gated quizzes/{quizId}/config/settings document so
+    // pre-join readers of the parent doc never see scoring or internal state.
     function isLegalQuizUpdate(quizId) {
       return isQuizCreator(quizId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'title', 'archived', 'status', 'current_question_index', 'question_start_at',
-          'commanderLastSeen', 'battle_mode', 'start_config', 'scoring_config',
-          'paused_at', 'paused_ms', 'started_at', 'ended_at', 'skipped_question_ids',
+          'commanderLastSeen', 'battle_mode', 'start_config',
+          'paused_at', 'paused_ms', 'started_at', 'ended_at',
           'owner_transferred_at',
         ]) &&
         isLegalStatusTransition(resource.data.status, request.resource.data.status) &&
         request.resource.data.status in ['waiting', 'ready', 'starting', 'live', 'paused', 'finished', 'archived'];
+    }
+
+    // Arena internals live in quizzes/{quizId}/config/settings. Only the
+    // Commander, participants who have already joined, and executives may read
+    // them — never a non-participant who merely knows the room code.
+    function canReadQuizConfig(quizId) {
+      return isSignedIn() && (
+        isQuizCreator(quizId) ||
+        isQuizParticipant(quizId, request.auth.uid) ||
+        isExecutive()
+      );
     }
 
     // Least-privilege arena read: executives see everything; commanders and
@@ -259,6 +273,23 @@ service cloud.firestore {
           get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'waiting' &&
           resource.data.status != 'blocked'
         );
+      }
+
+      // Gated arena internals (Phase 94): scoring_config and skip bookkeeping
+      // moved here so a non-participant who only knows the room code can never
+      // read how scoring is calculated or which questions were skipped before
+      // joining. Server-side battle flows read/write this document via the
+      // Admin SDK (rules-bypassing) and are unaffected.
+      match /config/{docId} {
+        allow read: if canReadQuizConfig(quizId);
+        // isQuizCreatorAfter supports atomic writeBatch where the parent quiz
+        // and config doc are created in the same batch — getAfter() sees the
+        // pending parent.
+        allow create: if (isQuizCreator(quizId) || isQuizCreatorAfter(quizId) || isExecutive())
+          && request.resource.data.keys().hasOnly(['scoring_config', 'skipped_question_ids']);
+        allow update: if (isQuizCreator(quizId) || isExecutive())
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scoring_config', 'skipped_question_ids']);
+        allow delete: if isQuizCreator(quizId) || isExecutive();
       }
     }
   }

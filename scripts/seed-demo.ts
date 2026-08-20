@@ -70,7 +70,6 @@ async function main() {
     created_at: NOW - 6 * MIN,
     started_at: NOW - 4 * MIN,
     question_start_at: FieldValue.serverTimestamp(),
-    scoring_config: { score_max: 1000, score_min: 100, time_decay: true },
   }, { merge: true });
 
   const liveQids: string[] = [];
@@ -91,6 +90,13 @@ async function main() {
       sort_index: i,
     });
   }
+
+  // Phase 94: arena internals live in the gated config/settings doc, never on
+  // the parent quiz doc.
+  await db.collection('quizzes').doc(liveId).collection('config').doc('settings').set({
+    scoring_config: { score_max: 1000, score_min: 100, time_decay: true },
+    skipped_question_ids: [liveQids[0]],
+  }, { merge: true });
 
   const liveParts = [
     { name: 'Ruby', score: 1240, online: true, answered: [0, 1], timedOut: [], skipped: [] },
@@ -197,7 +203,11 @@ async function main() {
       created_by: commanderUid,
       created_at: created,
       started_at: created + 2 * MIN,
+    }, { merge: true });
+    // Phase 94: scoring config lives in the gated config/settings doc.
+    await db.collection('quizzes').doc(f.id).collection('config').doc('settings').set({
       scoring_config: { score_max: 1000, score_min: 100, time_decay: true },
+      skipped_question_ids: [],
     }, { merge: true });
     for (let i = 0; i < 10; i++) {
       await db.collection('quizzes').doc(f.id).collection('questions').doc(`Q${f.id}${i}`).set({
