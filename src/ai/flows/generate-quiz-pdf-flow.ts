@@ -9,7 +9,7 @@ import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import * as zlib from 'zlib';
 
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import type { PDFDocumentLoadingTask } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 import { COLLECTIONS } from '@/lib/constants';
@@ -509,7 +509,8 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
 
   return withTimeout<{ text: string; numpages: number; isImageOnly: boolean }>(
     (async () => {
-      const loadingTask = getDocument({ data: new Uint8Array(buffer) });
+      const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const loadingTask: PDFDocumentLoadingTask = getDocument({ data: new Uint8Array(buffer) });
       const pdf = await loadingTask.promise;
 
       try {
