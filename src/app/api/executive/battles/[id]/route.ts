@@ -36,6 +36,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     const quiz = quizSnap.data()!;
 
+    // Phase 94: scoring config lives in the gated quizzes/{id}/config/settings
+    // doc; legacy parent-doc value still works as a fallback for pre-migration
+    // arenas. Never leaks to non-participants — the rules gate the subcollection.
+    const cfgSnap = await quizRef.collection('config').doc('settings').get().catch(() => null);
+    const cfg = cfgSnap?.exists ? (cfgSnap.data() ?? {}) : {};
+    const scoringConfig = cfg.scoring_config ?? (quiz as any).scoring_config ?? {};
+
     // Commander info
     let commander: { name: string; email: string | null } | null = null;
     if (quiz.created_by) {
@@ -228,11 +235,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         config: {
           battleMode: quiz.battle_mode || null,
           requireAllReady: quiz.start_config?.require_all_ready ?? null,
-          scoreMax: quiz.scoring_config?.score_max ?? null,
-          scoreMin: quiz.scoring_config?.score_min ?? null,
-          wrongPenalty: quiz.scoring_config?.wrong_penalty ?? null,
-          skipPenalty: quiz.scoring_config?.skip_penalty ?? null,
-          timeDecay: quiz.scoring_config?.time_decay ?? null,
+          scoreMax: scoringConfig.score_max ?? null,
+          scoreMin: scoringConfig.score_min ?? null,
+          wrongPenalty: scoringConfig.wrong_penalty ?? null,
+          skipPenalty: scoringConfig.skip_penalty ?? null,
+          timeDecay: scoringConfig.time_decay ?? null,
         },
         questions,
         participants,

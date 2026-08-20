@@ -71,7 +71,15 @@ export const COLLECTIONS = {
   SECURITY_LOGS: 'security_logs',
   PLATFORM_SETTINGS: 'platform_settings',
   REQUEST_RESPONSES: 'responses',
+  // Gated arena internals (scoring_config, skipped_question_ids). A single
+  // 'settings' doc lives in this subcollection so pre-join readers of the
+  // parent quiz doc never see scoring or internal question state.
+  QUIZ_CONFIG: 'config',
 } as const;
+
+// Doc id of the single arena-internals document inside the config
+// subcollection (quizzes/{quizId}/config/settings).
+export const QUIZ_CONFIG_SETTINGS_DOC = 'settings';
 
 export const NOTIFICATION_TYPES = [
   'commander_request',

@@ -21,6 +21,7 @@ import { generateRoomCode } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import {
   COLLECTIONS,
+  QUIZ_CONFIG_SETTINGS_DOC,
   QUIZ_WAITING,
   QUIZ_LIVE,
   QUIZ_FINISHED,
@@ -178,6 +179,9 @@ export const quizService = {
     const answerKeysSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.ANSWER_KEYS));
     answerKeysSnap.docs.forEach(aDoc => allDeletions.push(deleteDoc(aDoc.ref)));
 
+    const configDocRef = doc(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC);
+    allDeletions.push(deleteDoc(configDocRef));
+
     await Promise.all(allDeletions);
 
     await deleteDoc(doc(db, COLLECTIONS.QUIZZES, id));
@@ -271,8 +275,19 @@ export const quizService = {
     if (data.archived !== undefined) updateData.archived = data.archived;
     if (data.battle_mode !== undefined) updateData.battle_mode = data.battle_mode;
     if (data.start_config !== undefined) updateData.start_config = data.start_config;
-    if (data.scoring_config !== undefined) updateData.scoring_config = data.scoring_config;
-    await updateDoc(doc(db, COLLECTIONS.QUIZZES, id), updateData);
+    if (Object.keys(updateData).length > 0) {
+      await updateDoc(doc(db, COLLECTIONS.QUIZZES, id), updateData);
+    }
+    // Phase 94: scoring_config lives in the gated config/settings document (it
+    // must never sit on the parent quiz doc). setDoc with merge creates the
+    // doc on first write and patches it on later updates.
+    if (data.scoring_config !== undefined) {
+      await setDoc(
+        doc(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
+        { scoring_config: data.scoring_config },
+        { merge: true }
+      );
+    }
   },
 
   async duplicateQuiz(id: string, creatorId: string): Promise<string> {
@@ -308,6 +323,16 @@ export const quizService = {
       created_by: creatorId,
       created_at: now,
     });
+
+    // Phase 94: copy the gated internals into the replay's config doc (the
+    // settings copy belongs in the subcollection, never on the parent doc).
+    batch.set(
+      doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
+      {
+        scoring_config: quizData.scoring_config ?? {},
+        skipped_question_ids: [],
+      }
+    );
 
     for (const q of questions) {
       const newQId = uuidv4();

@@ -13,12 +13,18 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateRoomCode } from '@/lib/utils';
 import {
   COLLECTIONS,
+  QUIZ_CONFIG_SETTINGS_DOC,
   QUIZ_WAITING,
   PS_PLAYING,
   ROOM_CODE_RETRIES,
   MAX_BATCH_OPS,
   MIN_TITLE_LENGTH,
   MIN_QUESTIONS,
+  DEFAULT_SCORE_MAX,
+  DEFAULT_SCORE_MIN,
+  DEFAULT_WRONG_PENALTY,
+  DEFAULT_SKIP_PENALTY,
+  DEFAULT_TIME_DECAY,
 } from '@/lib/constants';
 
 function getFirestore() {
@@ -97,6 +103,23 @@ export const arenaCreationService = {
         status: PS_PLAYING,
         violations_count: 0,
         lastSeen: serverTimestamp(),
+      },
+    });
+
+    // Phase 94: arena internals (scoring config + skip bookkeeping) are created
+    // in the gated config/settings document — they must NEVER live on the parent
+    // quiz doc where a pre-join reader with the room code could see them.
+    allBatchData.push({
+      ref: doc(db, COLLECTIONS.QUIZZES, roomCode, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
+      data: {
+        scoring_config: {
+          score_max: DEFAULT_SCORE_MAX,
+          score_min: DEFAULT_SCORE_MIN,
+          wrong_penalty: DEFAULT_WRONG_PENALTY,
+          skip_penalty: DEFAULT_SKIP_PENALTY,
+          time_decay: DEFAULT_TIME_DECAY,
+        },
+        skipped_question_ids: [],
       },
     });
 

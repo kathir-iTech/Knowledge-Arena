@@ -33,6 +33,10 @@ export interface ValidatedQuiz {
   commanderLastSeen?: unknown;
   battle_mode?: BattleMode;
   start_config?: StartConfig;
+  // Phase 94: scoring_config and quiz-level skipped_question_ids moved to the
+  // gated quizzes/{quizId}/config/settings document. The optional fields below
+  // are kept for reading LEGACY data still carrying them on the parent doc;
+  // new arenas never expose them here.
   scoring_config?: ScoringConfig;
   paused_at?: number | null;
   paused_ms?: number;

@@ -3,6 +3,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { NextResponse } from 'next/server';
 import {
   COLLECTIONS,
+  QUIZ_CONFIG_SETTINGS_DOC,
   QUIZ_LIVE,
   QUIZ_PAUSED,
   QUIZ_FINISHED,
@@ -59,6 +60,25 @@ export async function loadQuizDoc(quizId: string) {
 
 export function isCreator(quiz: Record<string, any>, uid: string): boolean {
   return !!quiz.created_by && quiz.created_by === uid;
+}
+
+// Phase 94: arena internals (scoring_config, skipped_question_ids) live in the
+// gated quizzes/{quizId}/config/settings document, never on the parent quiz
+// doc. These helpers centralize the location for every server-side read.
+export function quizConfigRef(quizId: string) {
+  return getAdminDb()
+    .collection(COLLECTIONS.QUIZZES).doc(quizId)
+    .collection(COLLECTIONS.QUIZ_CONFIG).doc(QUIZ_CONFIG_SETTINGS_DOC);
+}
+
+// Returns the raw scoring_config map from the config doc, falling back to a
+// legacy value still sitting on the parent quiz doc (pre-Phase 94 data) when
+// no config document exists yet.
+export function scoringConfigFrom(doc: Record<string, any> | undefined, legacyQuiz?: Record<string, any>): Record<string, any> | null | undefined {
+  if (doc && typeof doc.scoring_config !== 'undefined' && doc.scoring_config !== null) {
+    return doc.scoring_config;
+  }
+  return legacyQuiz?.scoring_config ?? null;
 }
 
 // Maps domain errors thrown by battle logic to proper HTTP status codes.
@@ -380,7 +400,10 @@ export async function evaluateQuestionForUser(
     if (!akSnap.exists) throw new Error('Answer key not found for question');
     const correctIndex = akSnap.data()?.correct_option_index as number;
 
-    const config = normalizeScoringConfig(quiz.scoring_config as ScoringConfig);
+    const cfgSnap = await tx.get(quizConfigRef(quizId));
+    const config = normalizeScoringConfig(
+      scoringConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined, quiz) as ScoringConfig
+    );
     const timeLimit = questionTimer * 1000;
 
     const partRef = participantRef(quizId, targetUserId);
@@ -534,7 +557,13 @@ export async function evaluateQuestionForAll(
   if (!akSnap.exists) throw new Error('Answer key not found');
   const correctIndex = akSnap.data()?.correct_option_index as number;
 
-  const config = normalizeScoringConfig(quiz.scoring_config as ScoringConfig);
+  const cfgSnap = await db
+    .collection(COLLECTIONS.QUIZZES).doc(quizId)
+    .collection(COLLECTIONS.QUIZ_CONFIG).doc(QUIZ_CONFIG_SETTINGS_DOC)
+    .get();
+  const config = normalizeScoringConfig(
+    scoringConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined, quiz) as ScoringConfig
+  );
   const questionStartAt = getMs(quiz.question_start_at);
   const timeLimit = (questionSnap.data()?.timer || 30) * 1000;
 
@@ -548,6 +577,11 @@ export async function evaluateQuestionForAll(
     // evaluations cannot both pass the pre-check and double-score.
     const scoredSnap = await tx.get(questionRef);
     if (scoredSnap.data()?.scored === true) return;
+
+    // All reads must complete before any writes (Firestore transaction
+    // constraint). First pass: gather reads and compute per-participant
+    // outcomes; second pass: apply the writes.
+    const plans: Array<{ ref: any; scoreToAdd: number }> = [];
     for (const p of partsSnap.docs) {
       const pSnap = await tx.get(p.ref);
       if (!pSnap.exists || pSnap.data()?.status === PS_BLOCKED) continue;
@@ -589,14 +623,17 @@ export async function evaluateQuestionForAll(
       const isCorrect = sub.selected_option === correctIndex;
       if (!isCorrect) {
         if (config.wrong_penalty > 0) {
-          tx.update(p.ref, { score: FieldValue.increment(-config.wrong_penalty) });
+          plans.push({ ref: p.ref, scoreToAdd: -config.wrong_penalty });
         }
         continue;
       }
       const scoreToAdd = computeCorrectScore(config, elapsed, timeLimit);
       if (scoreToAdd > 0) {
-        tx.update(p.ref, { score: FieldValue.increment(scoreToAdd) });
+        plans.push({ ref: p.ref, scoreToAdd });
       }
+    }
+    for (const plan of plans) {
+      tx.update(plan.ref, { score: FieldValue.increment(plan.scoreToAdd) });
     }
     tx.update(questionRef, { scored: true });
   });
