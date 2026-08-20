@@ -337,7 +337,7 @@ export default function CommanderRequestsPage() {
           {selectedRequest && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">{selectedRequest.title}</h3>
+                <h3 className="text-lg font-headline font-semibold">{selectedRequest.title}</h3>
                 <Badge variant={STATUS_VARIANT[selectedRequest.status] || 'secondary'}>
                   {selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1)}
                 </Badge>

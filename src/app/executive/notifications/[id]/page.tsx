@@ -199,7 +199,7 @@ export default function ExecutiveNotificationDetailPage({ params }: { params: Pr
             <Icon className="w-6 h-6" />
           </div>
           <div className="min-w-0 flex-1 space-y-2">
-            <h2 className="text-lg font-semibold">{notification.title}</h2>
+            <h2 className="text-lg font-headline font-semibold">{notification.title}</h2>
             <p className="text-base text-muted-foreground">{notification.description || 'No description'}</p>
             {notification.link && (
               <Button variant="outline" size="sm" asChild>

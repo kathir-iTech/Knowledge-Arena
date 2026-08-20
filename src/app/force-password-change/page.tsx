@@ -105,8 +105,8 @@ export default function ForcePasswordChangePage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
-            <div className="rounded-full bg-amber-500/10 p-3">
-              <ShieldAlert className="h-6 w-6 text-amber-500" />
+            <div className="rounded-full bg-warning/10 p-3">
+              <ShieldAlert className="h-6 w-6 text-warning" />
             </div>
           </div>
           <CardTitle>Change Your Password</CardTitle>

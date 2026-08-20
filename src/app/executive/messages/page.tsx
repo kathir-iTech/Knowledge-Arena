@@ -632,7 +632,7 @@ export default function ExecutiveMessagesPage() {
                       key={conv.id}
                       onClick={() => selectConversation(conv.id)}
                       className={cn(
-                        "w-full text-left p-3 rounded-[10px] border transition-all duration-150",
+                        "w-full text-left p-3 rounded-[10px] border transition-all duration-300 ease-out",
                         activeConvId === conv.id
                           ? "border-primary bg-primary/5 shadow-elevation-small"
                           : "border-border/40 hover:border-primary/30 hover:bg-muted/20 hover:shadow-elevation-small"
@@ -722,7 +722,7 @@ export default function ExecutiveMessagesPage() {
                             </div>
                           )}
                           <div className={cn(
-                            "max-w-[85%] sm:max-w-[75%] px-3 py-2 text-sm break-words whitespace-pre-wrap relative shadow-sm",
+                            "max-w-[85%] sm:max-w-[75%] px-3 py-2 text-sm break-words whitespace-pre-wrap relative shadow-elevation-small",
                             isMine
                               ? "bg-primary text-primary-foreground rounded-[18px] rounded-br-[4px]"
                               : "bg-card text-card-foreground border border-border/30 rounded-[18px] rounded-bl-[4px]",
@@ -839,7 +839,7 @@ export default function ExecutiveMessagesPage() {
                   {showScrollButton && (
                     <button
                       onClick={scrollToBottom}
-                      className="sticky bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all z-10"
+                      className="sticky bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-primary text-primary-foreground shadow-elevation-medium hover:bg-primary/90 transition-all z-10"
                       aria-label="Scroll to bottom"
                     >
                       <ChevronDown className="w-4 h-4" />

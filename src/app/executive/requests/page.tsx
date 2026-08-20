@@ -220,7 +220,7 @@ export default function ExecutiveRequestsPage() {
               key={status}
               onClick={() => setStatusFilter(status)}
               className={cn(
-                'px-3 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-150',
+                'px-3 py-1.5 rounded-[10px] text-xs font-medium transition-all duration-300 ease-out',
                 statusFilter === status
                   ? 'bg-primary text-primary-foreground shadow-elevation-small'
                   : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
@@ -292,7 +292,7 @@ export default function ExecutiveRequestsPage() {
           {selectedRequest && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">{selectedRequest.title}</h3>
+                <h3 className="text-lg font-headline font-semibold">{selectedRequest.title}</h3>
                 <Badge variant={STATUS_VARIANT[selectedRequest.status] || 'secondary'}>
                   {selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1)}
                 </Badge>

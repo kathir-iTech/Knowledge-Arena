@@ -669,7 +669,7 @@ export default function CommanderDashboard() {
           <div className="flex items-center justify-center w-8 h-8 rounded-[10px] bg-primary/10">
             <Swords className="w-4 h-4 text-primary" aria-hidden="true" />
           </div>
-          <h2 className="text-section-title tracking-tight">Arena Library</h2>
+          <h2 className="text-section-title font-headline tracking-tight">Arena Library</h2>
           <span className="text-sm text-muted-foreground ml-auto font-mono" aria-label={`${filteredAndSorted.length} arenas`}>{filteredAndSorted.length} arena{filteredAndSorted.length !== 1 ? 's' : ''}</span>
         </div>
 
@@ -763,7 +763,7 @@ const StatCard = React.memo(function StatCard({ icon: Icon, label, value, color 
   return (
     <Card className="group/card card-hover shadow-elevation-small hover:shadow-elevation-medium">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-300 ease-out group-hover/card:scale-110 group-hover/card:shadow-sm", statBgClass(color))}>
+        <div className={cn("w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-all duration-300 ease-out group-hover/card:scale-110 group-hover/card:shadow-elevation-small", statBgClass(color))}>
           <Icon className={cn("w-4 h-4", color || 'text-muted-foreground')} />
         </div>
         <div>

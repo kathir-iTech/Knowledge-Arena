@@ -62,8 +62,8 @@ export function SessionTimeout() {
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-amber-600" />
+            <div className="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-warning" />
             </div>
             <DialogTitle>Session Expiring</DialogTitle>
           </div>
@@ -72,7 +72,7 @@ export function SessionTimeout() {
           </DialogDescription>
         </DialogHeader>
         <div className="flex items-center justify-center gap-2 py-4">
-          <Clock className="w-5 h-5 text-amber-600" />
+          <Clock className="w-5 h-5 text-warning" />
           <span className="text-2xl font-bold tabular-nums">
             {minutes}:{seconds.toString().padStart(2, '0')}
           </span>
