@@ -16,7 +16,11 @@ export function LandingNav() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
       <div className="page-container flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="Quorena home">
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-sm"
+          aria-label="Quorena home"
+        >
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-elevation-medium">
             <BrainCircuit className="h-5 w-5 text-primary-foreground" />
           </div>
@@ -28,14 +32,18 @@ export function LandingNav() {
             <a
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="rounded-sm text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               {link.label}
             </a>
           ))}
         </nav>
 
-        <Button asChild size="sm" className="shrink-0">
+        <Button
+          asChild
+          size="sm"
+          className="shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
           <Link href="/login">
             <LogIn className="mr-1.5 h-4 w-4" />
             Enter the Arena
