@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key, RefreshCw } from 'lucide-react';
+import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key, RefreshCw, Check, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
 import { useToast } from '@/hooks/use-toast';
@@ -38,6 +38,15 @@ const STAGE_LABELS: Record<GenerationStage, string> = {
 
 const CLIENT_TIMEOUT_MS = 180000;
 
+const PIPELINE_STEPS = [
+  'Extracting text',
+  'Sending to AI',
+  'Generating questions',
+  'Reviewing answers',
+] as const;
+
+type PipelineStepStatus = 'pending' | 'active' | 'done' | 'error';
+
 const ACCEPTED_TYPES = '.pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp';
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
@@ -51,6 +60,10 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
   const [stage, setStage] = useState<GenerationStage>('idle');
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState(initialCategory || 'General');
+  const [activeStep, setActiveStep] = useState<number>(-1);
+  const [stepError, setStepError] = useState<number | null>(null);
+  const [fileStatuses, setFileStatuses] = useState<Array<{ name: string; status: 'pending' | 'reading' | 'done' | 'error' }>>([]);
+  const [failedStepInfo, setFailedStepInfo] = useState<{ step: number; guidance: string } | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
@@ -107,30 +120,50 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
 
   const handleGenerate = async () => {
     if (!files.length || !difficulty) return;
-    
+
     setIsGenerating(true);
     setError(null);
+    setFailedStepInfo(null);
+    setStepError(null);
     setStage('reading');
+    setActiveStep(0);
+    setFileStatuses(files.map(f => ({ name: f.name, status: 'pending' as const })));
 
     const timerId = setTimeout(() => {
       setIsGenerating(false);
       setStage('error');
+      setStepError(2);
+      setFailedStepInfo({ step: 2, guidance: 'The request timed out. Try reducing the question count or using smaller files.' });
       setError("Generation timed out after 3 minutes. Try with fewer questions or smaller files.");
     }, CLIENT_TIMEOUT_MS);
 
     try {
       setStage('reading');
-      const dataUris = await Promise.all(files.map(file => new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      })));
+      setActiveStep(0);
+      // Per-file extraction with status updates (same underlying FileReader logic)
+      const dataUris: string[] = [];
+      for (let idx = 0; idx < files.length; idx++) {
+        setFileStatuses(prev => prev.map((s, i) => i === idx ? { ...s, status: 'reading' as const } : s));
+        const file = files[idx];
+        const uri = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('PDF_EXTRACTION_FAILED'));
+          reader.readAsDataURL(file);
+        });
+        dataUris.push(uri);
+        setFileStatuses(prev => prev.map((s, i) => i === idx ? { ...s, status: 'done' as const } : s));
+      }
 
+      // Step 1: Sending to AI
+      if (!mountedRef.current) { clearTimeout(timerId); return; }
+      setActiveStep(1);
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!idToken) throw new Error("UNAUTHORIZED");
 
+      // Step 2: Generating questions (AI call)
       setStage('generating');
+      setActiveStep(2);
       const combinedDataUri = dataUris.join('||PDF_SEPARATOR||');
       const result = await generateQuizFromPDF({
         pdfDataUri: combinedDataUri,
@@ -144,9 +177,15 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
       }
 
       if (result.questions && result.questions.length > 0) {
+        // Step 3: Reviewing answers (brief)
+        if (!mountedRef.current) { clearTimeout(timerId); return; }
+        setActiveStep(3);
+        await new Promise(r => setTimeout(r, 400));
         clearTimeout(timerId);
         if (!mountedRef.current) return;
         setStage('complete');
+        setActiveStep(-1);
+        setFileStatuses([]);
         toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions from ${files.length} document(s).` });
         onQuestionsGenerated(result.questions, result.difficulty, dataUris[0], questionCount, category, files.length > 1 ? `${files[0].name} +${files.length - 1} more` : files[0]?.name);
       } else {
@@ -156,40 +195,66 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
       clearTimeout(timerId);
       if (!mountedRef.current) return;
       setStage('error');
-      let msg = err instanceof Error ? err.message : "Unable to generate questions. Please retry.";
-      
-      if (msg.includes("AI_FAILED")) {
+      const raw = err instanceof Error ? err.message : "Unable to generate questions. Please retry.";
+      let msg = raw;
+      let failedStep = 2;
+      let guidance = 'Please retry. If it persists, try a different PDF or reduce the question count.';
+
+      if (raw.includes("AI_FAILED")) {
         msg = "Unable to generate questions. Please retry.";
-      } else if (msg.includes("PDF_IMAGE_ONLY")) {
+        failedStep = 2; guidance = 'The AI could not produce usable questions. Retry, or try reducing the question count.';
+      } else if (raw.includes("PDF_IMAGE_ONLY")) {
         msg = "This document contains scanned images with no selectable text. Images are processed via AI vision — please retry if the AI can interpret them.";
-      } else if (msg.includes("PDF_CONTENT_TOO_SHORT")) {
+        failedStep = 0; guidance = 'Try a text-based PDF or enable vision-capable files.';
+      } else if (raw.includes("PDF_CONTENT_TOO_SHORT")) {
         msg = "Not enough content was extracted. Ensure your files contain sufficient text for question generation.";
-      } else if (msg.includes("PDF_EXTRACTION_TIMEOUT")) {
+        failedStep = 0; guidance = 'Add more text content or try a different file.';
+      } else if (raw.includes("PDF_EXTRACTION_TIMEOUT")) {
         msg = "Content extraction timed out. Try smaller or simpler files.";
-      } else if (msg.includes("PDF_EXTRACTION_FAILED")) {
+        failedStep = 0; guidance = 'Use smaller files or split the document.';
+      } else if (raw.includes("PDF_EXTRACTION_FAILED")) {
         msg = "Unable to read a file. It may be corrupted or use an unsupported format.";
-      } else if (msg.includes("PDF_ENCRYPTED")) {
+        failedStep = 0; guidance = 'Try a different file or re-export the PDF.';
+      } else if (raw.includes("PDF_ENCRYPTED")) {
         msg = "A PDF is encrypted or password-protected. Please upload unencrypted files.";
-      } else if (msg.includes("PDF_CORRUPTED")) {
+        failedStep = 0; guidance = 'Remove the password or export without encryption.';
+      } else if (raw.includes("PDF_CORRUPTED")) {
         msg = "A file appears to be corrupted. Please try a different file.";
-      } else if (msg.includes("PDF_UNSUPPORTED")) {
+        failedStep = 0; guidance = 'Re-export or try a different file.';
+      } else if (raw.includes("PDF_UNSUPPORTED")) {
         msg = "An unsupported file format was uploaded. Please check the files and try again.";
-      } else if (msg.includes("UNAUTHORIZED")) {
+        failedStep = 0; guidance = 'Upload PDF, DOCX, TXT, MD, or images only.';
+      } else if (raw.includes("UNAUTHORIZED")) {
         msg = "Your session has expired. Please log out and log back in.";
-      } else if (msg.includes("PDF_TOO_LARGE")) {
+        failedStep = 1; guidance = 'Log out and sign back in, then retry.';
+      } else if (raw.includes("PDF_TOO_LARGE")) {
         msg = "A file exceeds the maximum size limit on the server.";
-      } else if (msg.includes("PDF_FORGE_RATE_LIMITED")) {
+        failedStep = 0; guidance = 'Use files under 10MB each.';
+      } else if (raw.includes("PDF_FORGE_RATE_LIMITED")) {
         msg = "Rate limit reached (5 per minute). Please wait before trying again.";
-      } else if (msg.includes("INVALID_PDF_DATA")) {
+        failedStep = 1; guidance = 'Wait a minute before retrying.';
+      } else if (raw.includes("INVALID_PDF_DATA")) {
         msg = "Invalid file data. Please try uploading the file again.";
-      } else if (msg.includes("quota_exceeded")) {
+        failedStep = 0; guidance = 'Re-upload the file.';
+      } else if (raw.includes("quota_exceeded")) {
         msg = "AI generation quota temporarily exhausted. Please wait a few minutes before retrying.";
-      } else if (msg.includes("PARSE_FAILED_")) {
+        failedStep = 2; guidance = 'Wait a few minutes — quota will reset.';
+      } else if (raw.includes("PARSE_FAILED_")) {
         msg = "The AI returned unparseable output. Please retry.";
+        failedStep = 3; guidance = 'Retry generation; the AI may succeed on a second attempt.';
+      } else if (raw.includes("timed out")) {
+        failedStep = 2; guidance = 'Try fewer questions or smaller files.';
       }
-      
+
+      setStepError(failedStep);
+      setFailedStepInfo({ step: failedStep, guidance });
+      // Mark per-file error if extraction failed
+      if (failedStep === 0) {
+        setFileStatuses(prev => prev.map(s => s.status === 'reading' ? { ...s, status: 'error' as const } : s));
+      }
+
       setError(msg);
-      toast({ variant: 'destructive', title: "Generation Failed", description: msg });
+      toast({ variant: 'destructive', title: `Failed at: ${PIPELINE_STEPS[failedStep]}`, description: msg });
     } finally {
       clearTimeout(timerId);
       setIsGenerating(false);
@@ -350,7 +415,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
               <div className="flex flex-col items-center">
                 <Loader2 className="animate-spin mb-1" />
                 <span className="text-xs tracking-widest uppercase">
-                  {STAGE_LABELS[stage]}
+                  {activeStep >= 0 && activeStep < PIPELINE_STEPS.length ? PIPELINE_STEPS[activeStep] : STAGE_LABELS[stage]}
                 </span>
               </div>
             ) : (
@@ -362,38 +427,71 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
           </Button>
 
           {isGenerating && (
-            <div className="mt-4 rounded-xl border bg-background/60 p-4 animate-in" role="status" aria-live="polite">
+            <div className="mt-4 rounded-xl border bg-background/60 p-4 animate-in space-y-4" role="status" aria-live="polite">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-warning animate-pulse" />
-                <p className="text-xs font-semibold text-foreground">{STAGE_LABELS[stage]}</p>
+                <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+                <p className="text-xs font-semibold text-foreground">Forging questions — {activeStep >= 0 ? PIPELINE_STEPS[activeStep] : STAGE_LABELS[stage]}</p>
+                <span className="ml-auto text-[10px] text-muted-foreground">{activeStep >= 0 ? `Step ${activeStep + 1} of ${PIPELINE_STEPS.length}` : ''}</span>
               </div>
-              <div className="mt-3 space-y-2">
-                {[0, 1, 2].map(bar => (
-                  <div key={bar} className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-warning/80 via-primary/70 to-accent/70 animate-pulse"
-                      style={{ width: `${[70, 45, 85][bar]}%`, animationDelay: `${bar * 200}ms` }}
-                    />
-                  </div>
-                ))}
+              {/* Pipeline steps */}
+              <div className="grid grid-cols-4 gap-2">
+                {PIPELINE_STEPS.map((label, idx) => {
+                  const status: PipelineStepStatus = stepError === idx ? 'error' : idx < activeStep ? 'done' : idx === activeStep ? 'active' : 'pending';
+                  return (
+                    <div key={label} className={cn('flex flex-col items-center gap-1.5 rounded-lg border p-2 text-center transition-all', status === 'active' ? 'border-primary bg-primary/5' : status === 'done' ? 'border-success/40 bg-success/5' : status === 'error' ? 'border-destructive bg-destructive/5' : 'border-border/50 bg-muted/20')}>
+                      <div className={cn('flex items-center justify-center w-6 h-6 rounded-full text-xs', status === 'done' ? 'bg-success text-success-foreground' : status === 'active' ? 'bg-primary text-primary-foreground' : status === 'error' ? 'bg-destructive text-destructive-foreground' : 'bg-muted text-muted-foreground')}>
+                        {status === 'done' ? <Check className="w-3.5 h-3.5" /> : status === 'active' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : status === 'error' ? <AlertCircle className="w-3.5 h-3.5" /> : idx + 1}
+                      </div>
+                      <span className={cn('text-[10px] font-medium leading-tight', status === 'active' ? 'text-primary' : status === 'error' ? 'text-destructive' : 'text-muted-foreground')}>{label}</span>
+                    </div>
+                  );
+                })}
               </div>
-              <p className="mt-3 text-[10px] text-muted-foreground flex items-center gap-1.5">
+              {/* Per-file extraction status */}
+              {fileStatuses.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1"><FileText className="w-3 h-3" /> Files ({fileStatuses.filter(f => f.status === 'done').length}/{fileStatuses.length})</p>
+                  {fileStatuses.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs bg-background/50 border border-border/20 rounded px-2 py-1.5">
+                      <span className="truncate flex-1">{f.name}</span>
+                      {f.status === 'pending' && <span className="flex items-center gap-1 text-muted-foreground text-[10px]"><Clock className="w-3 h-3" /> Waiting</span>}
+                      {f.status === 'reading' && <span className="flex items-center gap-1 text-primary text-[10px]"><Loader2 className="w-3 h-3 animate-spin" /> Reading</span>}
+                      {f.status === 'done' && <span className="flex items-center gap-1 text-success text-[10px]"><Check className="w-3 h-3" /> Done</span>}
+                      {f.status === 'error' && <span className="flex items-center gap-1 text-destructive text-[10px]"><AlertCircle className="w-3 h-3" /> Failed</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                Crafting questions with the AI forge — this can take a minute or two.
-              </p>
+                This can take 10–30s. Please keep this tab open.
+              </div>
             </div>
           )}
-          
-          {error && !error.includes("API key") && !error.includes("INVALID_PDF_DATA") && (
+
+          {error && !error.includes("API key") && (
             <div className="mt-4 flex flex-col gap-3 bg-destructive/5 p-4 rounded-lg border border-destructive/10 animate-in">
               <div className="flex items-center gap-2 text-destructive font-bold text-sm">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                Generation Failed
+                {failedStepInfo !== null ? `Failed at: ${PIPELINE_STEPS[failedStepInfo.step]}` : 'Generation Failed'}
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">{error}</p>
-              <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating || !files.length || !difficulty} className="w-fit">
-                <RefreshCw className="w-3 h-3 mr-2" /> Retry
-              </Button>
+              {failedStepInfo && (
+                <p className="text-xs bg-background/60 border border-border/20 rounded p-2 leading-relaxed">
+                  <span className="font-semibold">What to try: </span>{failedStepInfo.guidance}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={handleGenerate} disabled={isGenerating || !files.length || !difficulty} className="w-fit">
+                  <RefreshCw className="w-3 h-3 mr-2" /> Retry
+                </Button>
+                {failedStepInfo?.step === 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => { setFiles([]); setFileStatuses([]); setError(null); setFailedStepInfo(null); setStepError(null); setActiveStep(-1); }} className="w-fit text-xs">Try a different PDF</Button>
+                )}
+                {failedStepInfo?.step !== 0 && questionCount > 5 && (
+                  <Button variant="ghost" size="sm" onClick={() => { setQuestionCount(v => Math.max(5, v - 5)); }} className="w-fit text-xs">Reduce to {Math.max(5, questionCount - 5)} questions</Button>
+                )}
+              </div>
             </div>
           )}
         </div>

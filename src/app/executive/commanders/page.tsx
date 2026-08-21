@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar, Key, Trash2, CheckSquare, ChevronRight } from 'lucide-react';
+import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar, Key, Trash2, CheckSquare, ChevronRight, Copy, CheckCircle2 as CheckCircle, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -56,10 +56,14 @@ function generatePassword(): string {
 }
 
 function validateUsername(input: string): string | null {
-  if (!input.trim()) return 'Username is required.';
-  if (input.includes('@')) return null;
-  if (input.length < 3) return 'Username must be at least 3 characters.';
-  if (!/^[a-zA-Z0-9_.-]+$/.test(input)) return 'Username can only contain letters, numbers, underscores, hyphens, and dots.';
+  const trimmed = input.trim();
+  if (!trimmed) return 'Username is required.';
+  if (trimmed.includes('@')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return 'Enter a valid email address.';
+    return null;
+  }
+  if (trimmed.length < 3) return 'Username must be at least 3 characters.';
+  if (!/^[a-zA-Z0-9_.-]+$/.test(trimmed)) return 'Username can only contain letters, numbers, underscores, hyphens, and dots.';
   return null;
 }
 
@@ -77,7 +81,10 @@ export default function CommanderManagementPage() {
   const [createPassword, setCreatePassword] = useState('');
   const [createDisplayName, setCreateDisplayName] = useState('');
   const [creating, setCreating] = useState(false);
-  const [generatedEmail, setGeneratedEmail] = useState('');
+  const [createErrors, setCreateErrors] = useState<{ username?: string; password?: string }>({});
+  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string; displayName?: string } | null>(null);
+  const [lastCreatedCredentials, setLastCreatedCredentials] = useState<{ email: string; password: string; displayName?: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [toggleConfirmCommander, setToggleConfirmCommander] = useState<Commander | null>(null);
   const [processingToggle, setProcessingToggle] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState<Commander | null>(null);
@@ -127,39 +134,66 @@ export default function CommanderManagementPage() {
 
   const handleCreate = async () => {
     const usernameError = validateUsername(usernameInput);
-    if (usernameError) {
-      toast({ variant: 'warning', title: 'Validation Error', description: usernameError });
-      return;
-    }
-    if (!createPassword || createPassword.length < 6) {
-      toast({ variant: 'warning', title: 'Validation Error', description: 'Password must be at least 6 characters.' });
-      return;
-    }
+    const passwordError = !createPassword || createPassword.length < 6 ? 'Password must be at least 6 characters.' : null;
+    const nextErrors: { username?: string; password?: string } = {};
+    if (usernameError) nextErrors.username = usernameError;
+    if (passwordError) nextErrors.password = passwordError;
+    setCreateErrors(nextErrors);
+    if (usernameError || passwordError) return;
     setCreating(true);
+    setCreateErrors({});
     try {
-      const email = getOrGenerateEmail(usernameInput);
+      const email = getOrGenerateEmail(usernameInput.trim());
       const token = await auth.currentUser!.getIdToken();
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email, password: createPassword, displayName: createDisplayName || usernameInput }),
+        body: JSON.stringify({ email, password: createPassword, displayName: createDisplayName.trim() || usernameInput.trim() }),
       });
       if (!res.ok) {
         const errBody = await safeParseJson(res).catch(() => null);
         throw new Error(errBody?.error || 'Failed to create commander.');
       }
-      setGeneratedEmail(email);
-      toast({ variant: 'success', title: 'Commander Created', description: `Email: ${email} | Password: ${createPassword}` });
-      setShowCreateDialog(false);
+      const creds = { email, password: createPassword, displayName: createDisplayName.trim() || usernameInput.trim() };
+      setCreatedCredentials(creds);
+      setLastCreatedCredentials(creds);
+      toast({ variant: 'success', title: 'Commander Created', description: `Email: ${email}` });
       setUsernameInput('');
       setCreatePassword('');
       setCreateDisplayName('');
+      setCreateErrors({});
       fetchCommanders();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Error', description: err.message });
     } finally {
       setCreating(false);
     }
+  };
+
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      toast({ title: 'Copied', description: `${field} copied to clipboard.` });
+      setTimeout(() => setCopiedField(null), 1500);
+    } catch {
+      toast({ variant: 'destructive', title: 'Copy Failed', description: 'Please copy manually.' });
+    }
+  };
+
+  const handleCloseCreateDialog = (open: boolean) => {
+    if (!open) {
+      if (createdCredentials) return; // stay open on success state until Done
+      setShowCreateDialog(false);
+      setCreateErrors({});
+      setCreatedCredentials(null);
+    }
+  };
+
+  const handleDoneCreate = () => {
+    setShowCreateDialog(false);
+    setCreatedCredentials(null);
+    setCreateErrors({});
   };
 
   const handleToggleDisable = async (commander: Commander) => {
@@ -292,7 +326,7 @@ export default function CommanderManagementPage() {
           <h1 className="text-page-title font-headline tracking-tight">Commanders</h1>
           <p className="text-base text-muted-foreground">Manage platform commanders. Enter a username — email is auto-generated.</p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)} className="w-full sm:w-auto">
+        <Button onClick={() => { setCreatedCredentials(null); setCreateErrors({}); setShowCreateDialog(true); }} className="w-full sm:w-auto">
           <Plus className="w-4 h-4 mr-2" />
           Add Commander
         </Button>
@@ -341,13 +375,56 @@ export default function CommanderManagementPage() {
         </div>
       )}
 
+      {lastCreatedCredentials && !showCreateDialog && (
+        <Card className="mb-4 border-success/30 bg-success/5">
+          <CardContent className="py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex gap-3">
+                <CheckCircle className="w-5 h-5 text-success mt-0.5 shrink-0" />
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-success">Commander created — credentials (copy now, password won&apos;t be shown again)</p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-mono bg-background border rounded px-2 py-1">{lastCreatedCredentials.email}</span>
+                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => copyToClipboard(lastCreatedCredentials.email, 'Email')}>
+                      {copiedField === 'Email' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} Copy email
+                    </Button>
+                    <span className="font-mono bg-background border rounded px-2 py-1">{lastCreatedCredentials.password}</span>
+                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => copyToClipboard(lastCreatedCredentials.password, 'Password')}>
+                      {copiedField === 'Password' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} Copy password
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => copyToClipboard(`${lastCreatedCredentials.email} / ${lastCreatedCredentials.password}`, 'Credentials')}>
+                      <Copy className="w-3.5 h-3.5 mr-1" /> Copy both
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Share this login with the Commander. They will be prompted to change the password on first sign-in.</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setLastCreatedCredentials(null)} className="shrink-0">Dismiss</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <Shield className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-            <p className="text-base text-muted-foreground">
-              {search ? 'No commanders match your search.' : 'No commanders created yet.'}
+            <p className="text-base font-medium">
+              {search || statusFilter !== 'all' ? 'No commanders match your filters.' : 'No commanders yet'}
             </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {search || statusFilter !== 'all' ? 'Try adjusting your search or status filter.' : 'Add your first commander to get started.'}
+            </p>
+            {(search || statusFilter !== 'all') && (
+              <Button variant="outline" size="sm" className="mt-4" onClick={() => { setSearch(''); setStatusFilter('all'); }}>
+                Clear filters
+              </Button>
+            )}
+            {!search && statusFilter === 'all' && (
+              <Button className="mt-4" onClick={() => { setCreatedCredentials(null); setCreateErrors({}); setShowCreateDialog(true); }}>
+                <Plus className="w-4 h-4 mr-2" /> Add Commander
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -435,69 +512,119 @@ export default function CommanderManagementPage() {
       )}
 
       {/* Create Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) { setShowCreateDialog(false); setGeneratedEmail(''); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Commander</DialogTitle>
-            <DialogDescription>
-              Enter a username — the email will be auto-generated as username@knowledgearena.app.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="username">Username *</Label>
-              <Input
-                id="username"
-                value={usernameInput}
-                onChange={e => setUsernameInput(e.target.value)}
-                placeholder="e.g. commander_smith"
-              />
-              {usernameInput && !usernameInput.includes('@') && (
-                <p className="text-xs text-muted-foreground">
-                  Email: <span className="font-mono text-primary">{usernameInput}@{COMMANDER_DOMAIN}</span>
-                </p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="displayName">Display Name</Label>
-              <Input
-                id="displayName"
-                value={createDisplayName}
-                onChange={e => setCreateDisplayName(e.target.value)}
-                placeholder="e.g. Dr. Smith"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password * (min 6 chars)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="password"
-                  type="text"
-                  value={createPassword}
-                  onChange={e => setCreatePassword(e.target.value)}
-                  placeholder="Min 6 characters"
-                  className="flex-1"
-                />
-                <Button variant="outline" size="sm" onClick={() => setCreatePassword(generatePassword())} title="Generate Password">
-                  <Key className="w-4 h-4" />
+      <Dialog open={showCreateDialog} onOpenChange={handleCloseCreateDialog}>
+        <DialogContent className="sm:max-w-lg">
+          {!createdCredentials ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Add Commander</DialogTitle>
+                <DialogDescription>
+                  Enter a username — the email will be auto-generated as username@{COMMANDER_DOMAIN}. The login email will be shown clearly after creation.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username or email *</Label>
+                  <Input
+                    id="username"
+                    value={usernameInput}
+                    onChange={e => { setUsernameInput(e.target.value); if (createErrors.username) setCreateErrors(prev => ({ ...prev, username: undefined })); }}
+                    placeholder="e.g. commander_smith or smith@college.edu"
+                    aria-invalid={!!createErrors.username}
+                    disabled={creating}
+                  />
+                  {createErrors.username && (
+                    <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="w-3 h-3" />{createErrors.username}</p>
+                  )}
+                  {usernameInput.trim() && !createErrors.username && (
+                    <p className="text-xs text-muted-foreground">
+                      Login email: <span className="font-mono font-medium text-primary">{getOrGenerateEmail(usernameInput.trim())}</span>
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="displayName">Display Name</Label>
+                  <Input
+                    id="displayName"
+                    value={createDisplayName}
+                    onChange={e => setCreateDisplayName(e.target.value)}
+                    placeholder="e.g. Dr. Smith"
+                    disabled={creating}
+                  />
+                  <p className="text-xs text-muted-foreground">Shown in rosters and analytics. Defaults to username if empty.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password * (min 6 chars)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="password"
+                      type="text"
+                      value={createPassword}
+                      onChange={e => { setCreatePassword(e.target.value); if (createErrors.password) setCreateErrors(prev => ({ ...prev, password: undefined })); }}
+                      placeholder="Min 6 characters"
+                      className="flex-1 font-mono"
+                      aria-invalid={!!createErrors.password}
+                      disabled={creating}
+                    />
+                    <Button variant="outline" size="sm" onClick={() => { setCreatePassword(generatePassword()); setCreateErrors(prev => ({ ...prev, password: undefined })); }} title="Generate Password" disabled={creating}>
+                      <Key className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {createErrors.password ? (
+                    <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="w-3 h-3" />{createErrors.password}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">The commander will be asked to change this on first login.</p>
+                  )}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setShowCreateDialog(false); setCreateErrors({}); }} disabled={creating}>
+                  Cancel
                 </Button>
+                <Button onClick={handleCreate} disabled={creating}>
+                  {creating ? <><div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" /> Creating...</> : 'Create Commander'}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-success" /> Commander Created</DialogTitle>
+                <DialogDescription>
+                  Share these credentials with the commander. The password will not be shown again after closing.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="rounded-xl border border-success/20 bg-success/5 p-4 space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Login email</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 font-mono text-sm font-medium bg-background border rounded px-3 py-2 truncate">{createdCredentials.email}</span>
+                      <Button variant="outline" size="sm" onClick={() => copyToClipboard(createdCredentials.email, 'Login email')}>
+                        {copiedField === 'Login email' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} Copy
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Temporary password</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 font-mono text-sm font-medium bg-background border rounded px-3 py-2 truncate">{createdCredentials.password}</span>
+                      <Button variant="outline" size="sm" onClick={() => copyToClipboard(createdCredentials.password, 'Password')}>
+                        {copiedField === 'Password' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} Copy
+                      </Button>
+                    </div>
+                  </div>
+                  <Button variant="secondary" size="sm" className="w-full" onClick={() => copyToClipboard(`${createdCredentials.email} / ${createdCredentials.password}`, 'Credentials')}>
+                    <Copy className="w-4 h-4 mr-2" /> Copy both
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">The commander logs in with email + password and will be prompted to change the password on first sign-in.</p>
               </div>
-            </div>
-            {generatedEmail && (
-              <div className="p-3 rounded-[10px] bg-success/10 border border-success/20 ring-1 ring-inset ring-success/10">
-                <p className="text-sm font-medium text-success">Commander Created</p>
-                <p className="text-xs text-success/80 mt-1">Email: {generatedEmail}</p>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreateDialog(false); setGeneratedEmail(''); }}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} disabled={creating || !usernameInput.trim()}>
-              {creating ? 'Creating...' : 'Create Commander'}
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button onClick={handleDoneCreate} className="w-full">Done</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

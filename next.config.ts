@@ -69,6 +69,13 @@ const nextConfig: NextConfig = {
     ];
   },
   webpack(config, { isServer }) {
+    // @opentelemetry/exporter-jaeger was an unused dep (Phase 96A). The
+    // OTEL sdk-node optionally requires it at runtime; alias to false so the
+    // missing module does not emit a "Module not found" warning after removal.
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      '@opentelemetry/exporter-jaeger': false,
+    };
     if (isServer) {
       // The ESM builds of the Firebase client SDK are bundled by webpack
       // into server chunks with broken export interop (missing named

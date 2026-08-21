@@ -29,7 +29,7 @@ function generate() {
     process.exit(1);
   }
 
-  const rawDomain = (process.env.ALLOWED_GLADIATOR_EMAIL_DOMAIN || '').trim().toLowerCase();
+  const rawDomain = (process.env.ALLOWED_GLADIATOR_EMAIL_DOMAIN || process.env.NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN || '').trim().toLowerCase();
   // The regex-escaped domain is spliced into a single-quoted rules string
   // literal, so backslashes must be doubled to survive string parsing (the
   // runtime value keeps its single backslashes for the regex).
