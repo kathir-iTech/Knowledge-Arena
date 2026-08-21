@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, XCircle, Flag, WifiOff, Pause, Play, SkipForward, Trophy } from 'lucide-react';
+import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, XCircle, Flag, WifiOff, Pause, Play, SkipForward, Trophy, TrendingUp, TrendingDown, Minus, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -307,6 +307,61 @@ const ParticipantStats = ({ participants, teacherId, submittedCount, finishedCou
   );
 };
 
+function BattleInterstitial({
+  rank,
+  total,
+  delta,
+  rankChange,
+  onDismiss,
+}: {
+  rank: number | null;
+  total: number;
+  delta: number;
+  rankChange: number | null;
+  onDismiss: () => void;
+}) {
+  const isUp = rankChange !== null && rankChange > 0;
+  const isDown = rankChange !== null && rankChange < 0;
+  const isSame = rankChange === 0 || rankChange === null;
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 pointer-events-none" role="status" aria-live="polite" aria-atomic="true">
+      {/* backdrop */}
+      <div className="absolute inset-0 bg-background/60 backdrop-blur-sm pointer-events-none" />
+      <div className="relative pointer-events-auto w-full max-w-sm bg-card border border-border/40 rounded-[20px] shadow-elevation-large p-6 text-center animate-in space-y-4">
+        <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-primary/10 mx-auto">
+          <Sparkles className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Round Complete</p>
+          {rank !== null ? (
+            <p className="mt-1 font-headline text-2xl font-bold tracking-tight">
+              #{rank} <span className="text-sm font-normal text-muted-foreground">of {total}</span>
+            </p>
+          ) : (
+            <p className="mt-1 font-headline text-lg font-semibold">Scores Updated</p>
+          )}
+        </div>
+        <div className="flex items-center justify-center gap-2">
+          <span className={cn('inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-mono font-bold', delta > 0 ? 'bg-success/10 text-success ring-1 ring-success/20' : delta < 0 ? 'bg-destructive/10 text-destructive ring-1 ring-destructive/20' : 'bg-muted text-muted-foreground ring-1 ring-border/20')}>
+            {delta > 0 ? '+' : ''}{delta} <span className="text-xs font-sans font-normal">this round</span>
+          </span>
+          <span className={cn('inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium ring-1', isUp ? 'bg-success/10 text-success ring-success/20' : isDown ? 'bg-destructive/10 text-destructive ring-destructive/20' : 'bg-muted text-muted-foreground ring-border/20')}>
+            {isUp && <TrendingUp className="w-3.5 h-3.5" />}
+            {isDown && <TrendingDown className="w-3.5 h-3.5" />}
+            {isSame && <Minus className="w-3.5 h-3.5" />}
+            {isUp ? 'Up' : isDown ? 'Down' : 'Steady'}
+            {rankChange !== null && rankChange !== 0 ? ` ${Math.abs(rankChange)}` : ''}
+          </span>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onDismiss} className="w-full h-9 text-xs">
+          Continue
+        </Button>
+        <p className="text-[10px] text-muted-foreground">Auto-continues in 2.5s — Commander can advance early</p>
+      </div>
+    </div>
+  );
+}
+
 export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants }: { quiz: ValidatedQuiz, participant: ValidatedParticipant, isTeacher: boolean, allParticipants: ValidatedParticipant[] }) {
   const { user } = useAuth();
   const router = useRouter();
@@ -346,6 +401,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const offsetRef = useRef(0);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [interstitial, setInterstitial] = useState<null | { rank: number | null; total: number; delta: number; rankChange: number | null }>(null);
+  const interstitialTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevScoresRef = useRef<Record<string, number>>({});
+  const prevRanksRef = useRef<Record<string, number>>({});
   const [hold, setHold] = useState<null | {
     question: LiveQuizQuestion;
     options: string[];
@@ -357,6 +416,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const revealSnapshotRef = useRef<null | { qid: string; selected: number | null; answered: boolean; userIndex: number }>(null);
   const prevQuestionIdRef = useRef<string | null>(null);
+  const prevQuizIndexRef = useRef<number>(quiz.current_question_index ?? -1);
   const { firestore } = useFirebase();
 
   // Clock-skew correction: battle timers compare this browser's clock against
@@ -561,6 +621,64 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     }, REVEAL_HOLD_MS);
   }, [currentQuestion, questions, isTeacher, hold, participant.option_shuffle]);
 
+  // Interstitial: track previous scores/ranks for delta display
+  useEffect(() => {
+    // initialize on first participants load
+    if (Object.keys(prevScoresRef.current).length === 0 && participants.length > 0) {
+      const m: Record<string, number> = {};
+      for (const p of participants) m[p.user_id] = p.score;
+      prevScoresRef.current = m;
+    }
+    if (Object.keys(prevRanksRef.current).length === 0) {
+      const sorted = [...participants].filter(p => p.user_id !== quiz.created_by).sort((a, b) => b.score - a.score);
+      if (sorted.length) {
+        const rm: Record<string, number> = {};
+        sorted.forEach((p, idx) => { rm[p.user_id] = idx + 1; });
+        prevRanksRef.current = rm;
+      }
+    }
+  }, [participants, quiz.created_by]);
+
+  // Show interstitial between questions (synchronized, gladiator only) — non-blocking; Commander can advance early.
+  useEffect(() => {
+    if (independent || isTeacher) return;
+    const prevIdx = prevQuizIndexRef.current;
+    const currIdx = quiz.current_question_index ?? -1;
+    if (prevIdx === currIdx) return;
+    const shouldShow = prevIdx >= 0 && currIdx > prevIdx && currIdx < (quiz.question_count ?? 999) && currIdx !== -1;
+    if (shouldShow) {
+      const prevScore = prevScoresRef.current[participant.user_id] ?? participant.score;
+      const delta = participant.score - prevScore;
+      const sorted = [...participants].filter(p => p.user_id !== quiz.created_by).sort((a, b) => b.score - a.score);
+      const currRank = sorted.findIndex(p => p.user_id === participant.user_id) + 1 || null;
+      const prevRank = prevRanksRef.current[participant.user_id] ?? currRank;
+      const rankChange = currRank !== null && prevRank !== null ? prevRank - currRank : null;
+      const total = sorted.length;
+      if (interstitialTimerRef.current) clearTimeout(interstitialTimerRef.current);
+      setInterstitial({ rank: currRank, total, delta, rankChange });
+      interstitialTimerRef.current = setTimeout(() => setInterstitial(null), 2500);
+    }
+    // refresh trackers for next round
+    const newScores: Record<string, number> = {};
+    for (const p of participants) newScores[p.user_id] = p.score;
+    prevScoresRef.current = newScores;
+    const newRanks: Record<string, number> = {};
+    const s2 = [...participants].filter(p => p.user_id !== quiz.created_by).sort((a, b) => b.score - a.score);
+    s2.forEach((p, idx) => { newRanks[p.user_id] = idx + 1; });
+    prevRanksRef.current = newRanks;
+    prevQuizIndexRef.current = currIdx;
+    return () => {
+      // do not clear timer here; let it run its course unless component unmounts
+    };
+  }, [quiz.current_question_index, quiz.question_count, quiz.created_by, independent, isTeacher, participants, participant.user_id, participant.score]);
+
+  useEffect(() => {
+    return () => {
+      if (interstitialTimerRef.current) clearTimeout(interstitialTimerRef.current);
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    };
+  }, []);
+
   const answerStartAt = useMemo(() => {
     if (independent) {
       return typeof participant.question_start_at === 'number' ? participant.question_start_at : Date.now();
@@ -730,6 +848,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
   const handleNext = async () => {
     if (!isTeacher || independent || advancingRef.current || operationLock.current) return;
+    // Interstitial is purely visual — never block advancing; dismiss immediately.
+    if (interstitial) setInterstitial(null);
+    if (interstitialTimerRef.current) { clearTimeout(interstitialTimerRef.current); interstitialTimerRef.current = null; }
     advancingRef.current = true;
     operationLock.current = true;
     setIsAdvancing(true);
@@ -917,6 +1038,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
             <p className="text-xs text-muted-foreground">The battle won't stall — once the grace period ends, the next question will advance automatically.</p>
           </div>
         </div>
+      )}
+
+      {interstitial && !isTeacher && !independent && (
+        <BattleInterstitial rank={interstitial.rank} total={interstitial.total} delta={interstitial.delta} rankChange={interstitial.rankChange} onDismiss={() => { setInterstitial(null); if (interstitialTimerRef.current) { clearTimeout(interstitialTimerRef.current); interstitialTimerRef.current = null; } }} />
       )}
 
       {isTeacher && (

@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
+import { useFirebase } from '@/firebase';
 import { arenaCreationService } from '@/services/arena-creation.service';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,7 @@ interface QuizCreatorFormProps {
 export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreatorFormProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { auth } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittedRef = useRef(false);
@@ -121,6 +123,17 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
         });
 
         toast({ title: 'Arena Created', description: `Room Code: ${roomCode}` });
+        // Fan-out notification to all gladiators — best-effort, never blocks navigation.
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          if (token) {
+            fetch('/api/arena/notify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ roomCode, title: data.title }),
+            }).catch(() => {});
+          }
+        } catch {}
         router.push(`/battle/${roomCode}`);
     } catch (error: unknown) {
         toast({ variant: 'destructive', title: 'Creation Failed', description: error instanceof Error ? error.message : "Unknown error" });

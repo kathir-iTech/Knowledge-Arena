@@ -91,6 +91,20 @@ export const NOTIFICATION_TYPES = [
   'operation_failed',
   'system_warning',
   'ownership_transferred',
+  'new_arena',
+  'arena_created',
+  'commander_created',
+  'commander_disabled',
+  'commander_enabled',
+  'password_reset',
+  'question_added',
+  'question_deleted',
+  'arena_started',
+  'arena_completed',
+  'student_joined',
+  'student_kicked',
+  'student_unblocked',
+  'settings_updated',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

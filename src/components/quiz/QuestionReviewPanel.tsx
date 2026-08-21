@@ -12,6 +12,7 @@ import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2,
 import { cn } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
+import { useFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -47,6 +48,7 @@ interface QuestionReviewPanelProps {
 export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate, onEditSettings, onRegenerateQuestion, onArenaCreated }: QuestionReviewPanelProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { auth } = useFirebase();
   const { toast } = useToast();
   
   const [questions, setQuestions] = useState<Question[]>(
@@ -212,6 +214,16 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
 
         onArenaCreated?.();
         toast({ title: "Arena Created", description: `Room Code: ${roomCode}` });
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          if (token) {
+            fetch('/api/arena/notify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ roomCode, title: quizTitle }),
+            }).catch(() => {});
+          }
+        } catch {}
         router.push(`/battle/${roomCode}`);
     } catch (e: unknown) {
         toast({ variant: 'destructive', title: "Arena Error", description: e instanceof Error ? e.message : "Unknown error" });

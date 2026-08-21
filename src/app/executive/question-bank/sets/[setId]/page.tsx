@@ -21,9 +21,10 @@ import {
 } from '@/components/ui/select';
 import {
   ChevronLeft, ChevronDown, Trash2, Pencil, Copy, Download, Send, Archive, FolderOpen,
-  Loader2, CheckCircle2, BookOpen, Clock, User, RefreshCw, AlertTriangle, Plus, X, Sparkles, FileText,
+  Loader2, CheckCircle2, BookOpen, Clock, User, RefreshCw, AlertTriangle, Plus, X, Sparkles, FileText, Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { QuestionPreviewModal } from '@/components/quiz/QuestionPreviewModal';
 
 interface SetQuestion {
   id: string;
@@ -105,6 +106,11 @@ export default function QuizSetDetailPage({ params }: { params: Promise<{ setId:
   const [editForm, setEditForm] = useState<SetQuestion | null>(null);
   const [savingQuestion, setSavingQuestion] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Preview as Gladiator state
+  const [previewQuestion, setPreviewQuestion] = useState<SetQuestion | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   useEffect(() => {
     params.then(p => setId(p.setId));
@@ -248,6 +254,12 @@ export default function QuizSetDetailPage({ params }: { params: Promise<{ setId:
   const startEditing = (q: SetQuestion) => {
     setEditing(q);
     setEditForm({ ...q, options: [...q.options], correctAnswerIndex: q.correctAnswerIndex ?? 0, difficulty: q.difficulty || 'medium', category: q.category || 'General', tags: q.tags || '', explanation: q.explanation || '' });
+  };
+
+  const openPreview = (q: SetQuestion, idx: number) => {
+    setPreviewQuestion(q);
+    setPreviewIndex(idx);
+    setPreviewOpen(true);
   };
 
   const saveQuestion = async () => {
@@ -511,7 +523,10 @@ export default function QuizSetDetailPage({ params }: { params: Promise<{ setId:
                         <p className="text-muted-foreground">{q.explanation}</p>
                       </div>
                     )}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button variant="outline" size="sm" onClick={() => openPreview(q, qi)}>
+                        <Eye className="w-3.5 h-3.5 mr-1.5" /> Preview as Gladiator
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => startEditing(q)}>
                         <Pencil className="w-3.5 h-3.5 mr-1.5" /> Edit
                       </Button>
@@ -634,6 +649,26 @@ export default function QuizSetDetailPage({ params }: { params: Promise<{ setId:
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <QuestionPreviewModal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        question={
+          previewQuestion
+            ? {
+                text: previewQuestion.text,
+                options: previewQuestion.options,
+                correctAnswerIndex: previewQuestion.correctAnswerIndex,
+                explanation: previewQuestion.explanation,
+                difficulty: previewQuestion.difficulty,
+                tags: previewQuestion.tags,
+                timer: 30,
+              }
+            : null
+        }
+        questionIndex={previewIndex}
+        totalQuestions={set?.questionCount}
+      />
     </div>
   );
 }

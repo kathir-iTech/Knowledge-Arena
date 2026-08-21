@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, LayoutDashboard, BrainCircuit, PencilRuler, History, UserCircle, Inbox, MessageSquare } from 'lucide-react';
+import { LogOut, LayoutDashboard, BrainCircuit, PencilRuler, History, UserCircle, Inbox, MessageSquare, Bell } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -27,6 +27,7 @@ const CommanderSidebar = () => {
   const pathname = usePathname();
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notifCount, setNotifCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -35,15 +36,26 @@ const CommanderSidebar = () => {
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
-        const res = await fetch('/api/messaging/conversations', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        const total = (data.conversations || []).reduce(
-          (sum: number, c: any) => sum + (c.unreadCount?.[user.id] || 0), 0
-        );
-        if (!cancelled) setUnreadCount(total);
+        const [convRes, notifRes] = await Promise.all([
+          fetch('/api/messaging/conversations', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch('/api/notifications?unreadOnly=true', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        if (cancelled) return;
+        if (convRes.ok) {
+          const data = await convRes.json();
+          const total = (data.conversations || []).reduce(
+            (sum: number, c: any) => sum + (c.unreadCount?.[user.id] || 0), 0
+          );
+          if (!cancelled) setUnreadCount(total);
+        }
+        if (notifRes.ok) {
+          const nd = await notifRes.json();
+          if (!cancelled) setNotifCount(nd.unreadCount || 0);
+        }
       } catch {}
     };
     fetchUnread();
@@ -58,6 +70,7 @@ const CommanderSidebar = () => {
     { href: '/create-quiz', label: 'Create Arena', icon: PencilRuler },
     { href: '/commander/requests', label: 'Requests', icon: Inbox },
     { href: '/commander/messages', label: 'Messages', icon: MessageSquare },
+    { href: '/commander/notifications', label: 'Notifications', icon: Bell },
     { href: '/commander/history', label: 'Battle History', icon: History },
     { href: '/commander/profile', label: 'Profile', icon: UserCircle },
   ];
@@ -98,6 +111,8 @@ const CommanderSidebar = () => {
           <SidebarMenu>
             {nav.map((item) => {
               const active = isActive(item.href);
+              const hasBadge = (item.href === '/commander/messages' && unreadCount > 0) || (item.href === '/commander/notifications' && notifCount > 0);
+              const badgeCount = item.href === '/commander/messages' ? unreadCount : item.href === '/commander/notifications' ? notifCount : 0;
               return (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
@@ -106,15 +121,15 @@ const CommanderSidebar = () => {
                     tooltip={item.label}
                     className={cn(
                       active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary",
-                      !active && item.href === '/commander/messages' && unreadCount > 0 && "relative"
+                      !active && hasBadge && "relative"
                     )}
                   >
                     <Link href={item.href}>
                       <item.icon className={cn("!size-[18px]", active && "text-primary")} />
                       <span>{item.label}</span>
-                      {item.href === '/commander/messages' && unreadCount > 0 && (
+                      {hasBadge && badgeCount > 0 && (
                         <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
-                          {unreadCount > 9 ? '9+' : unreadCount}
+                          {badgeCount > 9 ? '9+' : badgeCount}
                         </span>
                       )}
                     </Link>

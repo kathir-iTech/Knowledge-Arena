@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { useSearchParams } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -84,6 +85,8 @@ export default function CommanderRequestsPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get('requestId');
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +120,13 @@ export default function CommanderRequestsPage() {
   useEffect(() => {
     if (user) fetchRequests();
   }, [user, fetchRequests]);
+
+  useEffect(() => {
+    if (highlightId && requests.length > 0) {
+      const found = requests.find(r => r.id === highlightId);
+      if (found) setSelectedRequest(found);
+    }
+  }, [highlightId, requests]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
