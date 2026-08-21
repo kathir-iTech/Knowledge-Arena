@@ -62,7 +62,7 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleDateString();
 }
 
-export default function ExecutiveNotificationsPage() {
+export default function GladiatorNotificationsPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();
@@ -88,7 +88,7 @@ export default function ExecutiveNotificationsPage() {
         params.set('cursorCreatedAt', String(nextCursor.createdAt));
       }
       const qs = params.toString();
-      const res = await fetch(`/api/executive/notifications${qs ? `?${qs}` : ''}`, {
+      const res = await fetch(`/api/notifications${qs ? `?${qs}` : ''}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -125,7 +125,7 @@ export default function ExecutiveNotificationsPage() {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      const res = await fetch('/api/executive/notifications', {
+      const res = await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ markAllRead: true }),
@@ -145,7 +145,7 @@ export default function ExecutiveNotificationsPage() {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      const res = await fetch(`/api/executive/notifications/${id}`, {
+      const res = await fetch(`/api/notifications/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -153,8 +153,9 @@ export default function ExecutiveNotificationsPage() {
         toast({ title: 'Failed to delete notification', variant: 'destructive' });
         return;
       }
+      const wasUnread = notifications.find(n => n.id === id)?.read === false;
       setNotifications(prev => prev.filter(n => n.id !== id));
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      if (wasUnread) setUnreadCount(prev => Math.max(0, prev - 1));
     } catch {
       toast({ title: 'Failed to delete notification', variant: 'destructive' });
     }
@@ -165,7 +166,7 @@ export default function ExecutiveNotificationsPage() {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
       await Promise.all(ids.map(id =>
-        fetch(`/api/executive/notifications/${id}`, {
+        fetch(`/api/notifications/${id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         }).then(r => { if (!r.ok) throw new Error('Failed'); })
@@ -182,7 +183,7 @@ export default function ExecutiveNotificationsPage() {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      const res = await fetch('/api/executive/notifications', {
+      const res = await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ ids }),
@@ -200,12 +201,11 @@ export default function ExecutiveNotificationsPage() {
   };
 
   const handleNotificationClick = async (n: Notification) => {
-    // Mark as read (best-effort) then deep-link to notification.link if present.
     if (!n.read) {
       try {
         const token = await auth.currentUser?.getIdToken();
         if (token) {
-          fetch('/api/executive/notifications', {
+          fetch('/api/notifications', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ ids: [n.id] }),
@@ -218,7 +218,7 @@ export default function ExecutiveNotificationsPage() {
     if (n.link) {
       router.push(n.link);
     } else {
-      router.push(`/executive/notifications/${n.id}`);
+      router.push(`/gladiator/notifications/${n.id}`);
     }
   };
 
@@ -243,7 +243,7 @@ export default function ExecutiveNotificationsPage() {
       <div className="page-container animate-in space-y-4 safe-bottom">
         <div className="space-y-1.5">
           <h1 className="text-page-title font-headline tracking-tight">Notifications</h1>
-          <p className="text-base text-muted-foreground">Platform alerts and updates.</p>
+          <p className="text-base text-muted-foreground">Alerts and updates.</p>
         </div>
         <Card className="border-destructive/40">
           <CardContent className="py-16 text-center">
@@ -270,7 +270,7 @@ export default function ExecutiveNotificationsPage() {
               <Badge variant="destructive" className="h-6 px-2 text-xs">{unreadCount} unread</Badge>
             )}
           </div>
-          <p className="text-base text-muted-foreground">Platform alerts and updates.</p>
+          <p className="text-base text-muted-foreground">Alerts and updates.</p>
         </div>
         {unreadCount > 0 && (
           <Button variant="outline" onClick={handleMarkAllRead}>

@@ -28,6 +28,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
   const [isLoading, setIsLoading] = useState(true);
   const [showReview, setShowReview] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [podiumVisible, setPodiumVisible] = useState(0);
   const firstLoadRef = useRef(true);
   const reducedMotionRef = useRef(false);
 
@@ -81,6 +82,25 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
     const idx = ranked.findIndex(p => p.user_id === uid);
     return idx >= 0 ? idx + 1 : null;
   }, [ranked, uid]);
+
+  // Stagger top-3 entrance (winner first, then 2nd, then 3rd) — not simultaneous
+  useEffect(() => {
+    if (isLoading || ranked.length === 0) return;
+    if (reducedMotionRef.current) {
+      setPodiumVisible(Math.min(3, ranked.length));
+      return;
+    }
+    setPodiumVisible(0);
+    const order = [0, 1, 2].filter(i => i < ranked.length);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    order.forEach((_, seq) => {
+      const delay = 300 + seq * 220;
+      timers.push(setTimeout(() => {
+        setPodiumVisible(v => Math.max(v, seq + 1));
+      }, delay));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [isLoading, ranked.length]);
 
   const totalParticipants = ranked.length;
 
@@ -154,7 +174,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
               {ranked.slice(0, 3).length > 0 && (
                 <div className="flex items-center justify-center gap-4 md:gap-8 pb-6 mb-4 border-b border-border/30">
                   {ranked.length >= 2 && (
-                    <div className="flex flex-col items-center gap-2 text-center group">
+                    <div className={cn('flex flex-col items-center gap-2 text-center group transition-all duration-500 ease-out', podiumVisible >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4')}>
                       <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-muted-foreground/30 ring-offset-2 ring-offset-card transition-all duration-300 group-hover:scale-105 group-hover:shadow-elevation-small">
                         <AvatarFallback className="text-xl bg-secondary">{getParticipantAvatar(ranked[1])}</AvatarFallback>
                       </Avatar>
@@ -164,17 +184,21 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
                     </div>
                   )}
                   {ranked.length >= 1 && (
-                    <div className="flex flex-col items-center gap-2 text-center -mt-4 group">
-                      <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-2 ring-warning/40 ring-offset-2 ring-offset-card transition-all duration-300 group-hover:scale-105 group-hover:shadow-elevation-medium">
-                        <AvatarFallback className="text-2xl bg-secondary">{getParticipantAvatar(ranked[0])}</AvatarFallback>
-                      </Avatar>
-                      <Crown className="w-6 h-6 text-warning" />
+                    <div className={cn('flex flex-col items-center gap-2 text-center -mt-4 group transition-all duration-500 ease-out', podiumVisible >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4')}>
+                      <div className="relative">
+                        {/* neo-roman winner glow — tasteful, not cartoonish */}
+                        <div className={cn('absolute -inset-3 rounded-full bg-gradient-to-br from-warning/20 via-accent/15 to-primary/10 blur-xl transition-opacity duration-700', podiumVisible >= 1 ? 'opacity-100 animate-glow-pulse' : 'opacity-0')} aria-hidden="true" />
+                        <Avatar className={cn('relative h-16 w-16 md:h-20 md:w-20 ring-2 ring-warning/40 ring-offset-2 ring-offset-card transition-all duration-500', podiumVisible >= 1 ? 'scale-100 shadow-elevation-medium' : 'scale-90', 'group-hover:scale-105 group-hover:shadow-elevation-medium')}>
+                          <AvatarFallback className="text-2xl bg-secondary">{getParticipantAvatar(ranked[0])}</AvatarFallback>
+                        </Avatar>
+                      </div>
+                      <Crown className={cn('w-6 h-6 text-warning transition-all duration-500', podiumVisible >= 1 ? 'scale-100' : 'scale-0')} />
                       <span className="text-sm font-semibold max-w-20 truncate">{getParticipantLabel(ranked[0])}</span>
                       <span className="font-mono text-base font-bold text-warning tabular-nums">{ranked[0].score}</span>
                     </div>
                   )}
                   {ranked.length >= 3 && (
-                    <div className="flex flex-col items-center gap-2 text-center group">
+                    <div className={cn('flex flex-col items-center gap-2 text-center group transition-all duration-500 ease-out', podiumVisible >= 3 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4')}>
                       <Avatar className="h-14 w-14 md:h-16 md:w-16 ring-2 ring-warning/30 ring-offset-2 ring-offset-card transition-all duration-300 group-hover:scale-105 group-hover:shadow-elevation-small">
                         <AvatarFallback className="text-xl bg-secondary">{getParticipantAvatar(ranked[2])}</AvatarFallback>
                       </Avatar>

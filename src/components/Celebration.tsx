@@ -18,7 +18,8 @@ export function Celebration({ show, onComplete }: CelebrationProps) {
       return;
     }
 
-    const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
+    // Neo-roman palette — warm stone, laurel gold, parchment, terracotta (tasteful, not cartoonish)
+    const colors = ['#c9a063', '#a67c52', '#d4b896', '#f5f1e8', '#8b6a43', '#e8d5b7', '#6b5d4f', '#f0e6d3'];
     const newParticles = Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
       id: i,
       x: Math.random() * 100,

@@ -11,7 +11,7 @@ import {
   QUIZ_FINISHED,
   PS_BLOCKED,
 } from '@/lib/constants';
-import { writeBattleLog, isCreator, normalizeSkipConfig, scoringConfigFrom, quizConfigRef, evaluateQuestionForAll, battleErrorResponse } from '@/lib/battle-server';
+import { writeBattleLog, isCreator, normalizeSkipConfig, scoringConfigFrom, quizConfigRef, evaluateQuestionForAll, battleErrorResponse, notifyBattleCompleted } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -152,6 +152,11 @@ export async function POST(req: NextRequest) {
     });
     if (ended) {
       await writeBattleLog({ quizId, event: 'battle_finished', actor: auth.uid, actorRole: 'commander', metadata: { reason: 'question_skipped_last' } });
+      try {
+        await notifyBattleCompleted(quizId);
+      } catch (e) {
+        console.error('[skip] battle-completed notifications failed:', e);
+      }
     }
     return NextResponse.json({ ok: true, ended });
   } catch (err: unknown) {

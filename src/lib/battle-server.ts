@@ -17,6 +17,7 @@ import {
   SUBMIT_CLOCK_SKEW_TOLERANCE_MS,
 } from '@/lib/constants';
 import { logSecurityViolation } from '@/lib/security-log';
+import { notificationService } from '@/services/notification.service';
 import {
   normalizeScoringConfig,
   computeCorrectScore,
@@ -221,12 +222,14 @@ export async function finishBattle(
   metadata?: Record<string, unknown>
 ): Promise<void> {
   const db = getAdminDb();
+  let didTransition = false;
   await db.runTransaction(async (tx) => {
     const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
     const quizSnap = await tx.get(quizRef);
     if (!quizSnap.exists) throw new Error('Arena not found');
     const status = quizSnap.data()?.status;
     if (status === QUIZ_FINISHED || status === QUIZ_ARCHIVED) return;
+    didTransition = true;
 
     const now = Date.now();
     tx.update(quizRef, {
@@ -249,6 +252,7 @@ export async function finishBattle(
       });
     }
   });
+  if (!didTransition) return;
   await writeBattleLog({ quizId, event: 'battle_finished', actor, actorRole, metadata });
 
   // Denormalize analytics for every question now that the battle is final —
@@ -261,6 +265,82 @@ export async function finishBattle(
     await Promise.all(qSnap.docs.map(d => writeQuestionStats(quizId, d.id)));
   } catch (err) {
     console.error('[finishBattle] question stats collection failed:', err);
+  }
+
+  // Notify participants with their final rank — best-effort, never fails the battle.
+  try {
+    await notifyBattleCompleted(quizId);
+  } catch (err) {
+    console.error('[finishBattle] battle-completed notifications failed:', err);
+  }
+}
+
+/**
+ * Fan-out battle-completed notifications to every participant with ranking.
+ * Gladiators get rank/score; the Commander gets a summary.
+ */
+export async function notifyBattleCompleted(quizId: string): Promise<void> {
+  const db = getAdminDb();
+  const quizSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
+  const quizData = quizSnap.data() as Record<string, any> | undefined;
+  const title: string = typeof quizData?.title === 'string' ? quizData.title : quizId;
+  const creatorId: string | undefined = typeof quizData?.created_by === 'string' ? quizData.created_by : undefined;
+
+  const partsSnap = await db
+    .collection(COLLECTIONS.QUIZZES).doc(quizId)
+    .collection(COLLECTIONS.PARTICIPANTS)
+    .get();
+
+  const gladiators = partsSnap.docs
+    .map(d => ({ id: d.id, data: d.data() as Record<string, any> }))
+    .filter(p => p.id !== creatorId && p.data.status !== PS_BLOCKED);
+
+  // Sort by score descending for ranking.
+  gladiators.sort((a, b) => (Number(b.data.score) || 0) - (Number(a.data.score) || 0));
+  const total = gladiators.length;
+  const now = Date.now();
+  const link = `/battle/${quizId}`;
+
+  type PendingEntry = { type: 'battle_completed'; title: string; description: string; createdAt: number; userId: string; link: string; metadata: Record<string, unknown> };
+  const pending: PendingEntry[] = [];
+
+  for (let i = 0; i < gladiators.length; i++) {
+    const p = gladiators[i];
+    const rank = i + 1;
+    const score = Number(p.data.score) || 0;
+    pending.push({
+      type: 'battle_completed' as const,
+      title: `Battle Finished — Rank #${rank}`,
+      description: `You finished #${rank} of ${total} with ${score} pts in "${title}"`,
+      createdAt: now,
+      userId: p.id,
+      link,
+      metadata: { quizId, rank, total, score, title },
+    });
+  }
+
+  if (creatorId) {
+    const winner = gladiators[0];
+    const winnerText = winner
+      ? `${(winner.data.name as string) || winner.id.slice(0, 6)} (${Number(winner.data.score) || 0} pts)`
+      : 'no participants';
+    pending.push({
+      type: 'battle_completed' as const,
+      title: 'Battle Completed',
+      description: `Arena "${title}" finished — ${total} gladiator${total !== 1 ? 's' : ''}, winner: ${winnerText}`,
+      createdAt: now,
+      userId: creatorId,
+      link,
+      metadata: { quizId, total, title, winnerId: winner?.id ?? null },
+    });
+  }
+
+  if (pending.length === 0) return;
+  // Fan-out via notificationService.create per participant (chunked for rate control)
+  const CHUNK = 20;
+  for (let i = 0; i < pending.length; i += CHUNK) {
+    const slice = pending.slice(i, i + CHUNK);
+    await Promise.all(slice.map(entry => notificationService.create(entry)));
   }
 }
 
@@ -341,6 +421,11 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
       await Promise.all(qSnap.docs.map(d => writeQuestionStats(quizId, d.id)));
     } catch (err) {
       console.error('[advanceQuestion] question stats collection failed:', err);
+    }
+    try {
+      await notifyBattleCompleted(quizId);
+    } catch (err) {
+      console.error('[advanceQuestion] battle-completed notifications failed:', err);
     }
   }
 

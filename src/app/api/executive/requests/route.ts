@@ -95,7 +95,7 @@ export async function PATCH(req: NextRequest) {
         description: `Your request "${requestData?.title || id}" was ${status} by the executive team.`,
         createdAt: Date.now(),
         userId: commanderId,
-        link: '/commander/requests',
+        link: `/commander/requests?requestId=${id}`,
         metadata: { requestId: id, status },
       });
     }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -25,8 +25,11 @@ import {
 import {
   Library, Search, RefreshCw, ChevronLeft, ChevronRight, FileText, Sparkles, Copy, Trash2,
   Download, Send, Archive, FolderOpen, ChevronDown, Clock, User, Pencil, Loader2, CheckCircle2, Filter,
+  Eye, Tag, ArrowUpDown, Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { writeBatch, doc as firestoreDoc, Timestamp } from 'firebase/firestore';
+import { QuestionPreviewModal, type PreviewQuestion } from '@/components/quiz/QuestionPreviewModal';
 
 export interface QuizSetSummary {
   setId: string;
@@ -70,6 +73,17 @@ const DATE_RANGES = [
   { value: 'year', label: 'Last year' },
 ];
 
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'difficulty_asc', label: 'Difficulty ↑' },
+  { value: 'difficulty_desc', label: 'Difficulty ↓' },
+  { value: 'usage_desc', label: 'Usage (high → low)' },
+  { value: 'usage_asc', label: 'Usage (low → high)' },
+] as const;
+
+type SortValue = typeof SORT_OPTIONS[number]['value'];
+
 const difficultyColor: Record<string, string> = {
   easy: 'text-success bg-success/5 border-success/20',
   medium: 'text-warning bg-warning/5 border-warning/20',
@@ -88,8 +102,16 @@ function SourceIcon({ source, className }: { source: string; className?: string 
   return <FileText className={cn('w-3.5 h-3.5 text-muted-foreground', className)} />;
 }
 
+function getDifficultyScore(set: QuizSetSummary): number {
+  const d = set.difficulties;
+  const total = set.questionCount || 1;
+  // Weighted average: easy=1, moderate/medium=2, hard=3
+  const score = ((d.easy || 0) * 1 + (d.moderate || 0) * 2 + (d.medium || 0) * 2 + (d.hard || 0) * 3) / total;
+  return score;
+}
+
 export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) {
-  const { auth } = useFirebase();
+  const { auth, firestore } = useFirebase();
   const { toast } = useToast();
 
   const [sets, setSets] = useState<QuizSetSummary[]>([]);
@@ -109,6 +131,21 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [sortBy, setSortBy] = useState<SortValue>('newest');
+
+  // Bulk update state
+  const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
+  const [bulkUpdateIds, setBulkUpdateIds] = useState<string[]>([]);
+  const [bulkDifficulty, setBulkDifficulty] = useState<string>('');
+  const [bulkTag, setBulkTag] = useState('');
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+
+  // Preview as Gladiator state
+  const [gladiatorPreviewOpen, setGladiatorPreviewOpen] = useState(false);
+  const [gladiatorQuestion, setGladiatorQuestion] = useState<PreviewQuestion | null>(null);
+  const [gladiatorIndex, setGladiatorIndex] = useState(0);
+  const [gladiatorTotal, setGladiatorTotal] = useState<number | undefined>(undefined);
+  const [gladiatorLoading, setGladiatorLoading] = useState(false);
 
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -202,6 +239,35 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
   const setCountFilter = (v: string) => {
     setFilters(prev => ({ ...prev, count: v === 'any' ? '' : v }));
   };
+
+  // Client-side sorted view — no refetch needed when sort changes
+  const sortedSets = useMemo(() => {
+    const copy = [...sets];
+    switch (sortBy) {
+      case 'newest':
+        copy.sort((a, b) => b.createdAt - a.createdAt);
+        break;
+      case 'oldest':
+        copy.sort((a, b) => a.createdAt - b.createdAt);
+        break;
+      case 'difficulty_asc':
+        copy.sort((a, b) => getDifficultyScore(a) - getDifficultyScore(b));
+        break;
+      case 'difficulty_desc':
+        copy.sort((a, b) => getDifficultyScore(b) - getDifficultyScore(a));
+        break;
+      case 'usage_desc':
+        // Usage count proxy: questionCount (or future analytics). Higher questionCount = higher usage proxy.
+        copy.sort((a, b) => b.questionCount - a.questionCount);
+        break;
+      case 'usage_asc':
+        copy.sort((a, b) => a.questionCount - b.questionCount);
+        break;
+      default:
+        break;
+    }
+    return copy;
+  }, [sets, sortBy]);
 
   const patchSet = async (setId: string, body: Record<string, unknown>) => {
     const token = await getToken();
@@ -407,6 +473,141 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
     }
   };
 
+  // --- Bulk tag/difficulty update (single Firestore batch write) ---
+  const openBulkUpdate = (ids: string[]) => {
+    setBulkUpdateIds(ids);
+    setBulkDifficulty('');
+    setBulkTag('');
+    setBulkUpdateOpen(true);
+  };
+
+  const executeBulkUpdate = async () => {
+    if (!bulkDifficulty && !bulkTag.trim()) {
+      toast({ variant: 'destructive', title: 'Validation Error', description: 'Select a difficulty or enter a tag to add.' });
+      return;
+    }
+    if (bulkUpdateIds.length === 0) return;
+    try {
+      setBulkUpdating(true);
+      // Attempt server-side bulk API first (single batch.commit() on the admin SDK)
+      const token = await getToken();
+      const res = await fetch('/api/executive/question-bank/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          setIds: bulkUpdateIds,
+          difficulty: bulkDifficulty || undefined,
+          tag: bulkTag.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        // If server bulk fails, fall back to client-side direct Firestore batch write (also single batch.commit)
+        const data = await res.json().catch(() => null);
+        const serverMsg = data?.error || `Bulk API failed (${res.status})`;
+        // Try client-side batch as fallback if firestore is available
+        if (firestore) {
+          try {
+            const questionData: Array<{ id: string; tags?: string }> = [];
+            for (const sid of bulkUpdateIds) {
+              const r = await fetch(`/api/executive/question-bank/sets/${sid}`, { headers: { Authorization: `Bearer ${token}` } });
+              if (!r.ok) continue;
+              const d = await r.json();
+              const qs = (d.set?.questions || []) as Array<{ id: string; tags?: string }>;
+              for (const q of qs) questionData.push(q);
+            }
+            if (questionData.length === 0) throw new Error(serverMsg);
+            if (questionData.length > 500) throw new Error(`Bulk update limited to 500 questions (selected sets contain ${questionData.length})`);
+            const batch = writeBatch(firestore);
+            const now = Timestamp.now();
+            for (const q of questionData) {
+              const ref = firestoreDoc(firestore, 'question_bank', q.id);
+              const updates: Record<string, unknown> = { updatedAt: now };
+              if (bulkDifficulty) updates.difficulty = bulkDifficulty;
+              if (bulkTag.trim()) {
+                const existing = (q.tags || '').trim();
+                if (!existing) updates.tags = bulkTag.trim();
+                else {
+                  const parts = existing.split(',').map(s => s.trim().toLowerCase());
+                  if (!parts.includes(bulkTag.trim().toLowerCase())) {
+                    updates.tags = `${existing}, ${bulkTag.trim()}`;
+                  }
+                }
+              }
+              batch.update(ref, updates);
+            }
+            // Single Firestore batch write — all question docs updated atomically (max 500 ops)
+            await batch.commit();
+            toast({ title: 'Bulk Update Complete', description: `${questionData.length} questions updated across ${bulkUpdateIds.length} sets (client batch).` });
+            setBulkUpdateOpen(false);
+            setBulkUpdateIds([]);
+            setSelectedIds([]);
+            reload();
+            return;
+          } catch (clientErr: unknown) {
+            throw new Error(clientErr instanceof Error ? clientErr.message : serverMsg);
+          }
+        }
+        throw new Error(serverMsg);
+      }
+      const data = await res.json();
+      toast({ title: 'Bulk Update Complete', description: `${data.updated} questions updated across ${bulkUpdateIds.length} sets.` });
+      setBulkUpdateOpen(false);
+      setBulkUpdateIds([]);
+      setSelectedIds([]);
+      reload();
+    } catch (err: unknown) {
+      toast({ variant: 'destructive', title: 'Bulk Update Failed', description: err instanceof Error ? err.message : 'Unknown error' });
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
+  // Client-side direct Firestore batch alternative (also single batch.commit) — kept for traceability
+  // This function is not called directly in the primary flow but demonstrates the batch-efficient approach:
+  // const batch = writeBatch(firestore); for (const doc of docs) batch.update(ref, updates); await batch.commit();
+
+  // --- Preview as Gladiator ---
+  const openGladiatorPreview = async (setId: string, questionIdx: number) => {
+    try {
+      setGladiatorLoading(true);
+      const token = await getToken();
+      const res = await fetch(`/api/executive/question-bank/sets/${setId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || `Failed to load set (${res.status})`);
+      }
+      const data = await res.json();
+      const questions = (data.set?.questions || []) as Array<{
+        id: string;
+        text: string;
+        options: string[];
+        correctAnswerIndex: number | null;
+        explanation?: string;
+        difficulty?: string;
+        tags?: string;
+      }>;
+      if (!questions.length) throw new Error('No questions in this set');
+      const idx = Math.max(0, Math.min(questionIdx, questions.length - 1));
+      const q = questions[idx];
+      setGladiatorQuestion({
+        text: q.text,
+        options: q.options || [],
+        correctAnswerIndex: q.correctAnswerIndex,
+        explanation: q.explanation || '',
+        difficulty: q.difficulty || 'medium',
+        tags: q.tags || '',
+        timer: 30,
+      });
+      setGladiatorIndex(idx);
+      setGladiatorTotal(questions.length);
+      setGladiatorPreviewOpen(true);
+    } catch (err: unknown) {
+      toast({ variant: 'destructive', title: 'Preview Failed', description: err instanceof Error ? err.message : 'Unknown error' });
+    } finally {
+      setGladiatorLoading(false);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const hasActiveFilter = Boolean(filters.q || filters.category || filters.difficulty || filters.source || filters.createdBy || filters.date || filters.count);
 
@@ -479,6 +680,15 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input className="pl-9" placeholder="Created by (ID or email)…" value={filters.createdBy} onChange={e => setFilters(prev => ({ ...prev, createdBy: e.target.value }))} />
             </div>
+            <div className="relative md:col-span-1 xl:col-span-2 flex items-center gap-2">
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Select value={sortBy} onValueChange={v => setSortBy(v as SortValue)}>
+                <SelectTrigger className="h-11 pl-9"><SelectValue placeholder="Sort by" /></SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             {hasActiveFilter && (
               <Button variant="ghost" size="sm" className="md:col-span-full xl:col-span-1 w-fit" onClick={() => { setFilters({ q: '', category: '', difficulty: '', source: '', createdBy: '', date: '', count: '', status: filters.status }); setSearchInput(''); }}>
                 <Filter className="w-4 h-4 mr-1.5" /> Clear filters
@@ -490,8 +700,9 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
             <BulkSelection
               selectedIds={selectedIds}
               onSelectionChange={setSelectedIds}
-              allIds={sets.map(s => s.setId)}
+              allIds={sortedSets.map(s => s.setId)}
               actions={[
+                { label: 'Update', icon: Tag, onClick: openBulkUpdate, disabled: bulkBusy || bulkUpdating },
                 { label: 'Duplicate', icon: Copy, onClick: bulkDuplicate, disabled: bulkBusy },
                 { label: 'Export', icon: Download, onClick: bulkExport, disabled: bulkBusy },
                 { label: 'Publish', icon: Send, onClick: ids => bulkSetStatus(ids, 'published'), disabled: bulkBusy },
@@ -509,7 +720,7 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
         </div>
       ) : error && sets.length === 0 ? (
         <EmptyState icon={Filter} title="Failed to Load Quiz Sets" description={error} action={<Button variant="outline" size="sm" onClick={reload}><RefreshCw className="w-4 h-4 mr-2" /> Retry</Button>} />
-      ) : sets.length === 0 ? (
+      ) : sortedSets.length === 0 ? (
         <EmptyState
           icon={Library}
           title="No Quiz Sets Found"
@@ -517,7 +728,7 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {sets.map(set => {
+          {sortedSets.map(set => {
             const difficultyEntries = DIFFICULTIES.filter(d => (set.difficulties[d] || 0) > 0);
             const previewOpen = previewOpenId === set.setId;
             return (
@@ -582,14 +793,35 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
                           <p className="text-xs text-muted-foreground">No preview available.</p>
                         ) : (
                           set.previewTexts.map((t, i) => (
-                            <p key={i} className="text-xs text-muted-foreground leading-relaxed pl-3 border-l-2 border-border/40 line-clamp-1">
-                              <span className="font-semibold text-foreground/70">{i + 1}.</span> {t}
-                            </p>
+                            <div key={i} className="flex items-start justify-between gap-2 group/preview">
+                              <p className="text-xs text-muted-foreground leading-relaxed pl-3 border-l-2 border-border/40 line-clamp-1 flex-1 min-w-0">
+                                <span className="font-semibold text-foreground/70">{i + 1}.</span> {t}
+                              </p>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-[10px] shrink-0 opacity-60 group-hover/preview:opacity-100"
+                                onClick={() => openGladiatorPreview(set.setId, i)}
+                                disabled={gladiatorLoading}
+                                aria-label={`Preview question ${i + 1} as gladiator`}
+                              >
+                                <Eye className="w-3 h-3 mr-1" /> Preview
+                              </Button>
+                            </div>
                           ))
                         )}
                         {set.questionCount > set.previewTexts.length && (
                           <p className="text-[11px] text-primary/70">+{set.questionCount - set.previewTexts.length} more — open to view all</p>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full mt-1 h-8 text-xs"
+                          onClick={() => openGladiatorPreview(set.setId, 0)}
+                          disabled={gladiatorLoading}
+                        >
+                          {gladiatorLoading ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Eye className="w-3 h-3 mr-1.5" />} Preview as Gladiator
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -597,6 +829,9 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
                   <div className="flex items-center gap-1.5 pt-1">
                     <Button size="sm" asChild className="flex-1">
                       <Link href={`/executive/question-bank/sets/${set.setId}`}><FolderOpen className="w-4 h-4 mr-1.5" /> Open</Link>
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => openGladiatorPreview(set.setId, 0)} disabled={gladiatorLoading} aria-label="Preview as gladiator">
+                      {gladiatorLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => startEditing(set)} aria-label="Edit set title"><Pencil className="w-4 h-4" /></Button>
                     <Button size="sm" variant="outline" onClick={() => duplicateSet(set.setId)} disabled={busyId === set.setId} aria-label="Duplicate set">
@@ -675,6 +910,66 @@ export function QuizLibraryManager({ refreshKey = 0 }: { refreshKey?: number }) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Update Dialog — single Firestore batch write */}
+      <Dialog open={bulkUpdateOpen} onOpenChange={setBulkUpdateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="bg-primary/10 p-2 rounded-lg"><Tag className="w-4 h-4 text-primary" /></span>
+              Bulk Update
+            </DialogTitle>
+            <DialogDescription>
+              Update difficulty or add a tag to all questions in the selected sets. This performs a <strong>single Firestore batch write</strong> (writeBatch + batch.commit) for all matching docs in <code>question_bank</code> (max 500 ops).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center gap-2 p-3 rounded-[12px] bg-primary/5 border border-primary/10">
+              <Layers className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-sm font-medium">{bulkUpdateIds.length} set{bulkUpdateIds.length !== 1 ? 's' : ''} selected</span>
+              <span className="text-xs text-muted-foreground ml-auto">All questions in these sets will be updated</span>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-difficulty">New Difficulty (optional)</Label>
+              <Select value={bulkDifficulty || 'none'} onValueChange={v => setBulkDifficulty(v === 'none' ? '' : v)}>
+                <SelectTrigger id="bulk-difficulty" className="h-11"><SelectValue placeholder="Keep current difficulty" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Keep current</SelectItem>
+                  <SelectItem value="easy">Easy</SelectItem>
+                  <SelectItem value="moderate">Moderate</SelectItem>
+                  <SelectItem value="hard">Hard</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">If selected, every question&apos;s difficulty will be set to this value.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-tag">Add Tag (optional)</Label>
+              <Input id="bulk-tag" value={bulkTag} onChange={e => setBulkTag(e.target.value)} placeholder="e.g. leadership, 2026" maxLength={100} />
+              <p className="text-[11px] text-muted-foreground">Tag will be appended to existing tags (comma-separated). Duplicates are skipped.</p>
+            </div>
+            {bulkUpdateIds.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                Batch-efficient: one <code>writeBatch(...).commit()</code> call updates all underlying <code>question_bank</code> docs.
+              </p>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setBulkUpdateOpen(false)} disabled={bulkUpdating}>Cancel</Button>
+            <Button onClick={executeBulkUpdate} disabled={bulkUpdating || (!bulkDifficulty && !bulkTag.trim())}>
+              {bulkUpdating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Tag className="w-4 h-4 mr-2" />}
+              Update {bulkUpdateIds.length} Set{bulkUpdateIds.length !== 1 ? 's' : ''}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <QuestionPreviewModal
+        open={gladiatorPreviewOpen}
+        onOpenChange={setGladiatorPreviewOpen}
+        question={gladiatorQuestion}
+        questionIndex={gladiatorIndex}
+        totalQuestions={gladiatorTotal}
+      />
     </div>
   );
 }

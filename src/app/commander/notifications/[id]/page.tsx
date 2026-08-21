@@ -57,7 +57,7 @@ function formatDate(ts?: number | null): string {
   return new Date(ts).toLocaleString();
 }
 
-export default function ExecutiveNotificationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function CommanderNotificationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();
@@ -77,7 +77,7 @@ export default function ExecutiveNotificationDetailPage({ params }: { params: Pr
       setError(null);
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      const res = await fetch(`/api/executive/notifications/${id}`, {
+      const res = await fetch(`/api/notifications/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -103,7 +103,7 @@ export default function ExecutiveNotificationDetailPage({ params }: { params: Pr
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      const res = await fetch('/api/executive/notifications', {
+      const res = await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ ids: [id] }),
@@ -123,13 +123,13 @@ export default function ExecutiveNotificationDetailPage({ params }: { params: Pr
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
-      const res = await fetch(`/api/executive/notifications/${id}`, {
+      const res = await fetch(`/api/notifications/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         toast({ title: 'Notification deleted' });
-        router.push('/executive/notifications');
+        router.push('/commander/notifications');
       } else {
         toast({ title: 'Failed to delete notification', variant: 'destructive' });
       }
@@ -170,7 +170,6 @@ export default function ExecutiveNotificationDetailPage({ params }: { params: Pr
 
   return (
     <div className="page-container animate-in space-y-6 safe-bottom">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="space-y-1.5">
           <div className="flex items-center gap-3">
@@ -194,7 +193,6 @@ export default function ExecutiveNotificationDetailPage({ params }: { params: Pr
         </div>
       </div>
 
-      {/* Body */}
       <Card className="card-hover">
         <CardContent className="p-6 flex items-start gap-4">
           <div className={cn("shrink-0 w-12 h-12 rounded-[12px] flex items-center justify-center", config.color)}>
@@ -212,7 +210,6 @@ export default function ExecutiveNotificationDetailPage({ params }: { params: Pr
         </CardContent>
       </Card>
 
-      {/* Metadata */}
       {notification.metadata && Object.keys(notification.metadata).length > 0 && (
         <Card className="card-hover">
           <CardContent className="p-5">

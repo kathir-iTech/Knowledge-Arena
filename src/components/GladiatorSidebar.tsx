@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, LayoutDashboard, BrainCircuit, Swords, UserCircle } from 'lucide-react';
+import { LogOut, LayoutDashboard, BrainCircuit, Swords, UserCircle, Bell } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -16,20 +16,44 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
+import { useFirebase } from '@/firebase';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { AvatarEditor } from './AvatarEditor';
 import { cn } from '@/lib/utils';
 
 const GladiatorSidebar = () => {
   const { user, logout } = useAuth();
+  const { auth } = useFirebase();
   const pathname = usePathname();
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const fetchUnread = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch('/api/notifications?unreadOnly=true', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) setNotifCount(data.unreadCount || 0);
+      } catch {}
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [user, auth]);
 
   if (!user) return null;
 
   const nav = [
     { href: '/gladiator/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/gladiator/history', label: 'Battle History', icon: Swords },
+    { href: '/gladiator/notifications', label: 'Notifications', icon: Bell },
     { href: '/gladiator/profile', label: 'Profile', icon: UserCircle },
   ];
 
@@ -69,6 +93,7 @@ const GladiatorSidebar = () => {
           <SidebarMenu>
             {nav.map((item) => {
               const active = isActive(item.href);
+              const hasBadge = item.href === '/gladiator/notifications' && notifCount > 0;
               return (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
@@ -76,12 +101,18 @@ const GladiatorSidebar = () => {
                     isActive={active}
                     tooltip={item.label}
                     className={cn(
-                      active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary"
+                      active && "bg-primary/10 text-primary font-medium hover:bg-primary/10 hover:text-primary",
+                      !active && hasBadge && "relative"
                     )}
                   >
                     <Link href={item.href}>
                       <item.icon className={cn("!size-[18px]", active && "text-primary")} />
                       <span>{item.label}</span>
+                      {hasBadge && (
+                        <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
+                          {notifCount > 9 ? '9+' : notifCount}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
