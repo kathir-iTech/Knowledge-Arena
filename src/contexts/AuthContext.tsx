@@ -122,6 +122,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const photoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
         const avatar = photoURL || getRandomAvatar();
 
+        // Proactive domain guard BEFORE profile creation — server-side is
+        // Firestore rules, but this gives a clear error instead of a
+        // permission-denied. Existing profiles are already returned above.
+        if (ALLOWED_GLADIATOR_DOMAIN && !isAllowedGladiatorEmail(email)) {
+          throw new Error(`This arena requires a @${ALLOWED_GLADIATOR_DOMAIN} account`);
+        }
+
         const newUser: User = {
           id: uid,
           name: displayName,
@@ -139,10 +146,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return result;
     } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes(`@${ALLOWED_GLADIATOR_DOMAIN}`) || msg.includes('requires a @')) {
+        // Surface domain mismatch without falling back to a phantom local user.
+        if (auth) { void signOut(auth); }
+        setUser(null);
+        setIsLoading(false);
+        toast({
+          variant: 'destructive',
+          title: 'Access Denied',
+          description: msg,
+        });
+        throw err;
+      }
       console.error('[Profile] Firestore profile creation failed for', uid, '- using local fallback', err);
       return buildFallbackProfile(uid, defaults);
     }
-  }, [firestore, auth, getRandomAvatar, normalizeRole, buildFallbackProfile]);
+  }, [firestore, auth, getRandomAvatar, normalizeRole, buildFallbackProfile, toast]);
 
   const fetchUserDocument = useCallback(async (uid: string) => {
     if (!firestore) { setIsLoading(false); return; }
@@ -208,7 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             toast({
               variant: 'destructive',
               title: 'Access Denied',
-              description: `Gladiator sign-ups are restricted to "${ALLOWED_GLADIATOR_DOMAIN}" accounts. Please sign in with an institutional Google account.`,
+              description: `This arena requires a @${ALLOWED_GLADIATOR_DOMAIN} account`,
             });
           })
           .catch(() => fetchUserDocument(firebaseUser.uid));
