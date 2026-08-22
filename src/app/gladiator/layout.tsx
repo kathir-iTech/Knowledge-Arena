@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import GladiatorSidebar from '@/components/GladiatorSidebar';
 import { MobileSidebarHeader } from '@/components/MobileSidebarHeader';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { GlobalSearch } from '@/components/GlobalSearch';
 
 export default function GladiatorLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -24,12 +26,15 @@ export default function GladiatorLayout({ children }: { children: React.ReactNod
   }, [user, isLoading, router]);
 
   return (
-    <SidebarProvider>
-      <GladiatorSidebar />
-      <SidebarInset className="safe-top">
-        <MobileSidebarHeader />
-        <main id="main-content">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
+    <ErrorBoundary>
+      <SidebarProvider>
+        <GladiatorSidebar />
+        <SidebarInset className="safe-top">
+          <MobileSidebarHeader />
+          <GlobalSearch />
+          <main id="main-content">{children}</main>
+        </SidebarInset>
+      </SidebarProvider>
+    </ErrorBoundary>
   );
 }

@@ -74,6 +74,11 @@ export const Limits = {
   WRITE_PER_USER: { maxRequests: 15, windowMs: 60000, message: 'Too many operations. Please slow down.' },
   ADMIN_WRITE_PER_IP: { maxRequests: 10, windowMs: 60000, message: 'Too many account operations. Please wait.' },
   EXECUTIVE_EXPORT_PER_USER: { maxRequests: 5, windowMs: 60000, message: 'Export limit reached (5/min). Please wait.' },
+  READ_PER_USER: { maxRequests: 30, windowMs: 60000, message: 'Too many requests. Please slow down.' },
+  SEARCH_PER_USER: { maxRequests: 20, windowMs: 60000, message: 'Search rate limit reached (20/min). Please wait.' },
+  AI_COPILOT_PER_USER: { maxRequests: 10, windowMs: 60000, message: 'Copilot rate limit exceeded (10/min). Please try again shortly.' },
+  AI_MINDMAP_PER_USER: { maxRequests: 5, windowMs: 60000, message: 'Mind map rate limit exceeded (5/min). Please wait.' },
+  AI_EXPLANATION_PER_USER: { maxRequests: 30, windowMs: 60000, message: 'Explanation rate limit exceeded (30/min). Please wait.' },
 } as const;
 
 export function getClientIp(req: Request): string {
@@ -93,20 +98,23 @@ export function getClientIp(req: Request): string {
 }
 
 export function buildRateLimitHeaders(result: { remaining: number; resetAt: number }) {
+  const retryAfterSec = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000));
   return {
     'X-RateLimit-Remaining': String(result.remaining),
     'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000)),
+    'Retry-After': String(retryAfterSec),
   };
 }
 
 export function enforceRateLimit(key: string, config: RateLimitConfig): NextResponse | null {
   const result = rateLimiter.check(key, config);
   if (result.allowed) return null;
+  const headers = buildRateLimitHeaders(result);
   return NextResponse.json(
     {
       error: config.message ?? 'Rate limit exceeded.',
-      retryAfter: Math.ceil((result.resetAt - Date.now()) / 1000),
+      retryAfter: parseInt(headers['Retry-After'], 10),
     },
-    { status: 429, headers: buildRateLimitHeaders(result) }
+    { status: 429, headers }
   );
 }

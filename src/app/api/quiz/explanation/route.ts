@@ -3,6 +3,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/constants';
 import { getExplanation } from '@/ai/flows/explanation-flow';
 import { createHash } from 'crypto';
+import { enforceRateLimit, Limits, getClientIp } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -15,6 +16,8 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get('authorization');
     const idToken = authHeader?.replace('Bearer ', '');
     if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const rlIp = enforceRateLimit(`ai:explanation:`+ getClientIp(req), Limits.AI_EXPLANATION_PER_USER);
+    if (rlIp) return rlIp;
 
     const body = await req.json().catch(() => ({}));
     const quizId = typeof body.quizId === 'string' ? body.quizId.trim() : '';
@@ -63,6 +66,9 @@ export async function POST(req: NextRequest) {
     });
 
     if (result.error) {
+      if (result.error === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      if (result.error === 'EXPLANATION_RATE_LIMITED') return NextResponse.json({ error: Limits.AI_EXPLANATION_PER_USER.message, retryAfter: 60 }, { status: 429, headers: { 'Retry-After': '60', 'X-RateLimit-Remaining': '0' } });
+      if (result.error === 'EXPLANATION_TIMEOUT') return NextResponse.json({ error: 'Explanation generation timed out. Please try again.' }, { status: 504 });
       return NextResponse.json({ error: result.error }, { status: 500 });
     }
 
