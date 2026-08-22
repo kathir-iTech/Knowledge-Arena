@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { cn } from '@/lib/utils';
+import { WrongAnswerExplanation } from '@/components/quiz-explanation/WrongAnswerExplanation';
 
 interface ReviewQuestion {
   id: string;
@@ -166,6 +167,9 @@ export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
                   </div>
                 );
               })}
+              {!isCorrect && mySub && (
+                <WrongAnswerExplanation quizId={quizId} questionId={q.id} wrongOptionIndex={mySub.selected_option} />
+              )}
             </CardContent>
           </Card>
         );

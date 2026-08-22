@@ -376,6 +376,12 @@ service cloud.firestore {
     allow write: if false;
   }
 
+  // --- AI Explanations cache (server-only writes via Admin SDK; read by the owning gladiator) ---
+  match /ai_explanations/{docId} {
+    allow read: if isSignedIn();
+    allow write: if false;
+  }
+
   // --- Security Logs (server-only; read by executives) ---
   match /security_logs/{logId} {
     allow read: if isExecutive();

@@ -7,8 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AlertTriangle } from 'lucide-react';
 import { ArrowUp, ArrowDown, ArrowUpDown, RefreshCw, Crown, Swords } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const QUIZ_CAP = 100;
 
 interface CommanderRow {
   commanderId: string;
@@ -38,6 +41,7 @@ export function CommanderPerformanceTable() {
   const [sortKey, setSortKey] = useState<SortKey>('battlesCount');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [isCapped, setIsCapped] = useState(false);
 
   const fetchLive = useCallback(async () => {
     if (!firestore) return;
@@ -46,7 +50,10 @@ export function CommanderPerformanceTable() {
     try {
       // Live query — no cache, direct Firestore getDocs
       const quizzesSnap = await getDocs(collection(firestore, 'quizzes'));
-      const quizzes = quizzesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as { id: string; created_by?: string; title?: string }));
+      const allQuizzes = quizzesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as { id: string; created_by?: string; title?: string }));
+      const capped = allQuizzes.length > QUIZ_CAP;
+      const quizzes = allQuizzes.slice(0, QUIZ_CAP);
+      setIsCapped(capped);
 
       if (quizzes.length === 0) {
         setRows([]);
@@ -295,6 +302,11 @@ export function CommanderPerformanceTable() {
         )}
         <p className="mt-3 text-[10px] text-muted-foreground">
           Read-only live view — queries <code className="font-mono bg-muted px-1 py-0.5 rounded">quizzes</code> and <code className="font-mono bg-muted px-1 py-0.5 rounded">quizzes/&#123;id&#125;/participants</code> via getDocs on mount and on refresh.
+          {isCapped && (
+            <span className="ml-1 text-warning font-medium inline-flex items-center gap-0.5">
+              <AlertTriangle className="w-3 h-3" /> Results capped at {QUIZ_CAP} quizzes for performance.
+            </span>
+          )}
         </p>
       </CardContent>
     </Card>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useState, useRef } from 'react';
+import React, { useMemo, useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import type { ValidatedQuiz } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,13 @@ import { Home, Eye, Target, Clock, BarChart3, Award, Medal, Crown } from 'lucide
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { useAuth } from '@/hooks/useAuth';
 import { participantService } from '@/services/participant.service';
+import { useFirebase } from '@/firebase';
 import { cn } from '@/lib/utils';
 import type { ValidatedParticipant } from '@/lib/schemas';
 import { QuizReview } from './QuizReview';
 import { Celebration } from '@/components/Celebration';
+import { MindMapSVG } from '@/components/mindmap/MindMapSVG';
+import { Network, Loader2 } from 'lucide-react';
 
 function getMedalIcon(rank: number) {
   if (rank === 1) return <Crown className="w-5 h-5 text-warning" />;
@@ -24,11 +27,15 @@ function getMedalIcon(rank: number) {
 
 export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQuiz; currentUserId?: string }) {
   const { user } = useAuth();
+  const { auth } = useFirebase();
   const [participants, setParticipants] = useState<ValidatedParticipant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showReview, setShowReview] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [podiumVisible, setPodiumVisible] = useState(0);
+  const [mindMapData, setMindMapData] = useState<{ title: string; nodes: Array<{ topic: string; subtopics: string[] }>; connections: Array<{ from: string; to: string; label?: string }> } | null>(null);
+  const [mindMapLoading, setMindMapLoading] = useState(false);
+  const [mindMapError, setMindMapError] = useState<string | null>(null);
   const firstLoadRef = useRef(true);
   const reducedMotionRef = useRef(false);
 
@@ -103,6 +110,34 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
   }, [isLoading, ranked.length]);
 
   const totalParticipants = ranked.length;
+
+  const generateMindMap = useCallback(async () => {
+    if (mindMapData) return;
+    setMindMapLoading(true);
+    setMindMapError(null);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        setMindMapError('Not authenticated');
+        return;
+      }
+      const res = await fetch('/api/quiz/mindmap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ quizId: quiz.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMindMapError(data.error || 'Failed to generate mind map');
+        return;
+      }
+      setMindMapData(data);
+    } catch {
+      setMindMapError('Failed to generate mind map');
+    } finally {
+      setMindMapLoading(false);
+    }
+  }, [mindMapData, quiz.id, user]);
 
   const getParticipantLabel = (p: ValidatedParticipant) => {
     return p.name || p.user_id.slice(0, 8);
@@ -243,6 +278,12 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
                 <Eye className="mr-2 h-4 w-4" /> Review Answers
               </Button>
             )}
+            {uid && (
+              <Button variant="outline" size="lg" onClick={generateMindMap} disabled={mindMapLoading}>
+                {mindMapLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Network className="mr-2 h-4 w-4" />}
+                {mindMapData ? 'Mind Map' : 'Generate Mind Map'}
+              </Button>
+            )}
             <Link href={user?.role === 'commander' || user?.role === 'executive' ? `/${user.role}/dashboard` : user ? '/gladiator/dashboard' : '/'}>
               <Button size="lg">
                 <Home className="mr-2 h-4 w-4" />
@@ -250,6 +291,19 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
               </Button>
             </Link>
           </div>
+
+          {mindMapError && (
+            <div className="text-center text-sm text-destructive bg-destructive/5 p-3 rounded-xl border border-destructive/10">
+              {mindMapError}
+            </div>
+          )}
+
+          {mindMapData && mindMapData.nodes.length > 0 && (
+            <div className="pt-4 border-t border-border/50 space-y-3">
+              <h3 className="text-sm font-medium text-center text-muted-foreground">Topic Mind Map</h3>
+              <MindMapSVG data={mindMapData} />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

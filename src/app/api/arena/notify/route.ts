@@ -28,6 +28,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, notified: 0 });
     }
 
+    // Guard: skip fan-out if gladiator count >= 500 to prevent runaway writes on free tier
+    if (gladiators.length >= 500) {
+      console.warn(`[ArenaNotify] Skipping fan-out: ${gladiators.length} gladiators exceeds 500 limit`);
+      return NextResponse.json({ success: true, notified: 0, skipped: true, reason: 'too_many_gladiators' });
+    }
+
     const now = Date.now();
     const link = `/battle/${roomCode}`;
 
