@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { cn } from '@/lib/utils';
 
 interface MindMapNode {
   topic: string;
@@ -78,14 +79,37 @@ function radialLayout(data: MindMapData, width: number, height: number): { nodes
   return { nodes, links };
 }
 
-const COLORS = {
-  center: { fill: '#7c3aed', text: '#ffffff', stroke: '#6d28d9' },
-  topic: { fill: '#f3f4f6', text: '#1f2937', stroke: '#d1d5db' },
-  subtopic: { fill: '#ffffff', text: '#4b5563', stroke: '#e5e7eb' },
-};
+function useDarkMode() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setDark(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setDark(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return dark;
+}
+
+function getColors(isDark: boolean) {
+  if (isDark) {
+    return {
+      center: { fill: '#7c3aed', text: '#ffffff', stroke: '#6d28d9' },
+      topic: { fill: '#2a2320', text: '#e8ddd0', stroke: '#4a4038' },
+      subtopic: { fill: '#1f1a17', text: '#b8a898', stroke: '#3a3330' },
+    };
+  }
+  return {
+    center: { fill: '#7c3aed', text: '#ffffff', stroke: '#6d28d9' },
+    topic: { fill: '#f3f4f6', text: '#1f2937', stroke: '#d1d5db' },
+    subtopic: { fill: '#ffffff', text: '#4b5563', stroke: '#e5e7eb' },
+  };
+}
 
 export function MindMapSVG({ data }: { data: MindMapData }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const dark = useDarkMode();
+  const COLORS = getColors(dark);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
@@ -99,6 +123,9 @@ export function MindMapSVG({ data }: { data: MindMapData }) {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => { setLoaded(true); }, []);
 
   const { nodes, links } = radialLayout(data, dimensions.width, dimensions.height);
 
@@ -127,7 +154,7 @@ export function MindMapSVG({ data }: { data: MindMapData }) {
       <svg
         ref={svgRef}
         viewBox={'0 0 ' + dimensions.width + ' ' + dimensions.height}
-        className="w-full h-auto rounded-xl bg-white border border-border/30"
+        className={cn("w-full h-auto rounded-xl bg-card border border-border/30 transition-opacity", loaded ? "opacity-100" : "opacity-50 animate-pulse")}
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
@@ -148,7 +175,7 @@ export function MindMapSVG({ data }: { data: MindMapData }) {
                   y1={src.y}
                   x2={tgt.x}
                   y2={tgt.y}
-                  stroke={isExplicit ? '#a78bfa' : '#d1d5db'}
+                  stroke={isExplicit ? '#a78bfa' : (dark ? '#4a4038' : '#d1d5db')}
                   strokeWidth={isExplicit ? 1.5 : 1}
                   strokeDasharray={isExplicit ? '4,3' : undefined}
                   opacity={0.7}
