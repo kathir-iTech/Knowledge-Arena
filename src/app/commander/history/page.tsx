@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
-import { Swords, Users, Calendar, ArrowLeft, Search, Download, Star, Trophy, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Swords, Users, Calendar, ArrowLeft, Search, Download, Star, Trophy, AlertTriangle, RefreshCw, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
@@ -174,6 +174,9 @@ function BattleHistoryCard({ quiz }: { quiz: ValidatedQuiz }) {
           <div className="flex items-center gap-2 shrink-0">
             <Button size="sm" variant="outline" onClick={exportCSV}>
               <Download className="w-3.5 h-3.5 mr-1" /> CSV
+            </Button>
+            <Button asChild size="sm" variant="default">
+              <Link href={`/commander/analysis/${quiz.id}`}><BarChart3 className="w-3.5 h-3.5 mr-1" /> Analysis</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
               <Link href={`/battle/${quiz.id}`}>View</Link>

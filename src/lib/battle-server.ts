@@ -21,6 +21,7 @@ import { notificationService } from '@/services/notification.service';
 import {
   normalizeScoringConfig,
   computeCorrectScore,
+  computeStreakBonus,
   type ScoringConfig,
 } from '@/lib/battle-machine';
 
@@ -519,6 +520,12 @@ export async function evaluateQuestionForUser(
       ? skipped
       : [...skipped, questionId];
 
+    // Streak tracking — server-side only (Phase 99)
+    const currentStreak = typeof participant.current_streak === 'number' ? participant.current_streak : 0;
+    const bestStreak = typeof participant.best_streak === 'number' ? participant.best_streak : 0;
+    let newStreak = currentStreak;
+    let isCorrectForStreak = false;
+
     // Idempotency guard: if this question was already scored, timed out or
     // skipped for this participant, re-evaluating it must not double-apply
     // score, penalties or index advancement (e.g. on client retry).
@@ -549,6 +556,7 @@ export async function evaluateQuestionForUser(
 
         if (lateBy > ANSWER_GRACE_MS) {
           timedOut.push(questionId);
+          newStreak = 0;
           if (lateBy > ANSWER_VIOLATION_MARGIN_MS) {
             logSecurityViolation(
               targetUserId,
@@ -559,15 +567,24 @@ export async function evaluateQuestionForUser(
           }
         } else if (sub.selected_option === correctIndex) {
           const elapsed = submittedAt - participantStart;
-          scoreToAdd = computeCorrectScore(config, elapsed, timeLimit);
+          const baseScore = computeCorrectScore(config, elapsed, timeLimit);
+          newStreak = currentStreak + 1;
+          isCorrectForStreak = true;
+          const streakBonus = computeStreakBonus(newStreak, config.streak_multiplier);
+          scoreToAdd = baseScore + streakBonus;
         } else {
           scoreToAdd = config.wrong_penalty > 0 ? -config.wrong_penalty : 0;
+          newStreak = 0;
         }
       } else {
         timedOut.push(questionId);
+        newStreak = 0;
       }
-    } else if (config.skip_penalty > 0) {
-      scoreToAdd = -config.skip_penalty;
+    } else {
+      if (config.skip_penalty > 0) {
+        scoreToAdd = -config.skip_penalty;
+      }
+      newStreak = 0;
     }
 
     const idx = participant.current_question_index ?? 0;
@@ -580,9 +597,15 @@ export async function evaluateQuestionForUser(
       answered_question_ids: answered.includes(questionId) ? answered : [...answered, questionId],
       timed_out_question_ids: timedOut,
       skipped_question_ids: skippedList,
+      current_streak: newStreak,
+      best_streak: Math.max(bestStreak, newStreak),
     };
     if (scoreToAdd !== 0) {
       update.score = FieldValue.increment(scoreToAdd);
+    }
+    // Record streak bonus metadata for analytics (even when scoreToAdd is 0 but streak changed)
+    if (isCorrectForStreak && config.streak_multiplier > 0) {
+      update.last_streak_bonus = computeStreakBonus(newStreak, config.streak_multiplier);
     }
     if (finishedNow) {
       update.status = PS_FINISHED;
@@ -666,7 +689,8 @@ export async function evaluateQuestionForAll(
     // All reads must complete before any writes (Firestore transaction
     // constraint). First pass: gather reads and compute per-participant
     // outcomes; second pass: apply the writes.
-    const plans: Array<{ ref: any; scoreToAdd: number }> = [];
+    // Phase 99: streak tracking — server-side only (not client).
+    const plans: Array<{ ref: any; scoreToAdd: number; newStreak: number; bestStreak: number }> = [];
     for (const p of partsSnap.docs) {
       const pSnap = await tx.get(p.ref);
       if (!pSnap.exists || pSnap.data()?.status === PS_BLOCKED) continue;
@@ -675,6 +699,9 @@ export async function evaluateQuestionForAll(
         ? (participant.skipped_question_ids as string[])
         : [];
       if (skipped.includes(questionId)) continue;
+
+      const currentStreak = typeof participant.current_streak === 'number' ? participant.current_streak : 0;
+      const bestStreak = typeof participant.best_streak === 'number' ? participant.best_streak : 0;
 
       const subSnap = await tx.get(submissionRef(quizId, questionId, p.id));
       if (!subSnap.exists) continue;
@@ -701,24 +728,38 @@ export async function evaluateQuestionForAll(
             { quizId }
           );
         }
+        // Timeout resets streak (server-side)
+        if (currentStreak !== 0) {
+          plans.push({ ref: p.ref, scoreToAdd: 0, newStreak: 0, bestStreak });
+        }
         continue;
       }
 
       const elapsed = submittedAt - questionStartAt;
       const isCorrect = sub.selected_option === correctIndex;
       if (!isCorrect) {
-        if (config.wrong_penalty > 0) {
-          plans.push({ ref: p.ref, scoreToAdd: -config.wrong_penalty });
+        const score = config.wrong_penalty > 0 ? -config.wrong_penalty : 0;
+        // Wrong resets streak
+        if (score !== 0 || currentStreak !== 0) {
+          plans.push({ ref: p.ref, scoreToAdd: score, newStreak: 0, bestStreak });
         }
         continue;
       }
-      const scoreToAdd = computeCorrectScore(config, elapsed, timeLimit);
-      if (scoreToAdd > 0) {
-        plans.push({ ref: p.ref, scoreToAdd });
-      }
+      const newStreak = currentStreak + 1;
+      const streakBonus = computeStreakBonus(newStreak, config.streak_multiplier);
+      const baseScore = computeCorrectScore(config, elapsed, timeLimit);
+      const scoreToAdd = baseScore + streakBonus;
+      plans.push({ ref: p.ref, scoreToAdd, newStreak, bestStreak: Math.max(bestStreak, newStreak) });
     }
     for (const plan of plans) {
-      tx.update(plan.ref, { score: FieldValue.increment(plan.scoreToAdd) });
+      const update: Record<string, any> = {
+        current_streak: plan.newStreak,
+        best_streak: plan.bestStreak,
+      };
+      if (plan.scoreToAdd !== 0) {
+        update.score = FieldValue.increment(plan.scoreToAdd);
+      }
+      tx.update(plan.ref, update);
     }
     tx.update(questionRef, { scored: true });
   });

@@ -15,6 +15,8 @@ import { PageError } from '@/components/ui/page-error';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { QuizRecommendations } from '@/components/dashboard/QuizRecommendations';
+import { WeakAreas } from '@/components/dashboard/WeakAreas';
+import { UpcomingArenas } from '@/components/dashboard/UpcomingArenas';
 import { Loader2, Swords, UserCircle, History, ExternalLink, Trophy, Star, TrendingUp, Zap, Bell, ChevronRight, Play, Sparkles, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -169,13 +171,22 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
 
   const stats = dashboardData?.stats;
 
+  // Personalized time-of-day greeting — Phase 99 D
+  const greeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  })();
+  const displayName = user?.name || 'Gladiator';
+
   return (
     <div className="page-container safe-bottom animate-in">
-      {/* Header */}
+      {/* Header — personalized greeting */}
       <header className="page-section safe-top">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <h1 className="text-page-title font-headline tracking-tight">Hello, {user?.name || 'Gladiator'}.</h1>
+            <h1 className="text-page-title font-headline tracking-tight">{greeting}, {displayName}.</h1>
             <p className="text-base text-muted-foreground">Ready for your next battle?</p>
           </div>
           <Button variant="outline" size="sm" asChild>
@@ -278,6 +289,12 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
             </form>
           </CardContent>
         </Card>
+      </section>
+
+      {/* Personalization — Phase 99 D */}
+      <section className="page-section grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <WeakAreas />
+        <UpcomingArenas />
       </section>
 
       {/* AI Recommendations */}
