@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Shield, Users, Check, Sparkles, Copy, Key, AlertCircle } from 'lucide-react';
 
 const COMMANDER_DOMAIN = 'knowledgearena.app';
@@ -130,6 +131,21 @@ export function ExecutiveOnboarding() {
       setCreating(false);
     }
   };
+
+  if (!checked) {
+    return (
+      <Dialog open>
+        <DialogContent className="sm:max-w-lg">
+          <div className="space-y-4 py-4">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   if (step === 0) return null;
 

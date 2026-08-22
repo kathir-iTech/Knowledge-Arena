@@ -398,7 +398,7 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
             {shareableLink && (
               <div className="flex flex-col items-center gap-2">
                 <span className="text-xs text-muted-foreground">Or scan to join</span>
-                <div className="bg-white p-3 rounded-[12px] shadow-elevation-small ring-1 ring-black/5">
+                <div className="bg-card p-3 rounded-[12px] shadow-elevation-small ring-1 ring-foreground/5">
                   <QRCode value={shareableLink} size={120} aria-label={`QR code to join quiz ${quiz.id}`} />
                 </div>
               </div>

@@ -6,6 +6,7 @@ import { useFirebase } from '@/firebase';
 import { doc, getDoc, updateDoc, collectionGroup, query, where, limit, getDocs } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Swords, KeyRound, Trophy, X } from 'lucide-react';
 
 export function GladiatorOnboarding() {
@@ -53,6 +54,23 @@ export function GladiatorOnboarding() {
       await updateDoc(ref, { onboarding_complete: true });
     } catch {}
   };
+
+  if (!checked) {
+    return (
+      <Card className="border-primary/15">
+        <CardContent className="p-6">
+          <div className="flex gap-4">
+            <Skeleton className="w-12 h-12 rounded-[14px] shrink-0" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-3/4" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!visible) return null;
 

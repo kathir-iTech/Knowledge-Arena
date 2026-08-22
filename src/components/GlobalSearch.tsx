@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Search, Loader2, Swords, Shield, User, BookOpen, AlertCircle } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 interface SearchHit {
@@ -169,6 +170,23 @@ export function GlobalSearch() {
                   </p>
                 </div>
               )}
+              {loading && query.trim().length >= 2 && (
+                <div className="p-2 space-y-1">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                      <Skeleton className="w-8 h-8 rounded-[8px] shrink-0" />
+                      <div className="flex-1 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-3 w-12 rounded" />
+                          <Skeleton className="h-3 w-2/3 rounded" />
+                        </div>
+                        <Skeleton className="h-2.5 w-1/3 rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {!loading && !error && query.trim().length >= 2 && results.length === 0 && (
                 <div className="p-8 text-center text-sm text-muted-foreground">No results for &quot;{query}&quot;</div>
               )}

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
 import { Sparkles, Send, Loader2, Lightbulb, Copy, Check, Wand2, MessageSquare } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 export interface CopilotQuestion {
@@ -150,6 +151,19 @@ export function AICopilot({ titleContext, questionContext, onApplyQuestion, clas
             ))}
           </div>
         </div>
+
+        {loading && (
+          <div className="space-y-2 pt-2 border-t border-border/40">
+            <div className="flex items-start gap-2 p-3 rounded-[10px] bg-primary/5 border border-primary/15">
+              <div className="w-4 h-4 rounded bg-primary/20 animate-pulse mt-0.5 shrink-0" />
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {result && (
           <div className="space-y-3 pt-2 border-t border-border/40">

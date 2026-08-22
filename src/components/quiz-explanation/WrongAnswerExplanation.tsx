@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 interface ExplanationProps {
@@ -71,6 +72,15 @@ export function WrongAnswerExplanation({ quizId, questionId, wrongOptionIndex }:
         )}
         {explanation ? (expanded ? 'Hide' : 'Show') : 'Explain this'}
       </Button>
+      {loading && (
+        <div className="mt-2 p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-2">
+          <Skeleton className="h-2.5 w-16 rounded" />
+          <Skeleton className="h-3 w-full rounded" />
+          <Skeleton className="h-3 w-5/6 rounded" />
+          <Skeleton className="h-3 w-2/3 rounded" />
+        </div>
+      )}
+
       {error && <p className="text-xs text-destructive mt-1">{error}</p>}
       {explanation && expanded && (
         <div className={cn(

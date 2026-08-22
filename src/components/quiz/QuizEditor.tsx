@@ -17,9 +17,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { Trash2, PlusCircle, Loader2, PencilRuler, ArrowLeft } from 'lucide-react';
+import { Trash2, PlusCircle, Loader2, PencilRuler, ArrowLeft, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AICopilot } from '@/components/quiz/AICopilot';
+import { QuestionBankImportModal, type BankQuestion } from '@/components/quiz/QuestionBankImportModal';
 
 export interface ExistingQuestion {
   id: string;
@@ -74,6 +75,8 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittedRef = useRef(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
 
   const form = useForm<EditFormData>({
     resolver: zodResolver(editSchema),
@@ -127,6 +130,26 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
   const addOption = (qIdx: number) => {
     const opts = form.getValues(`questions.${qIdx}.options`);
     if (opts.length < 4) form.setValue(`questions.${qIdx}.options`, [...opts, '']);
+  };
+
+  const handleBankImport = (bankQuestions: BankQuestion[]) => {
+    const newImported = new Set(importedIds);
+    for (const bq of bankQuestions) {
+      const newId = uuidv4();
+      append({
+        id: newId,
+        text: bq.text,
+        options: bq.options,
+        correctAnswerIndex: bq.correct_option_index,
+        timer: 30,
+      });
+      newImported.add(newId);
+    }
+    setImportedIds(newImported);
+    toast({
+      title: 'Questions Imported',
+      description: `${bankQuestions.length} question${bankQuestions.length !== 1 ? 's' : ''} added from the question bank.`,
+    });
   };
 
   return (
@@ -183,6 +206,9 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
                 <div className="absolute top-0 left-0 w-1 h-full bg-primary/15 group-hover:bg-primary/30 transition-colors duration-300 ease-out" />
                 <div className="absolute top-3 left-4 flex items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary px-3 py-1 rounded-full">QUESTION {index + 1}</span>
+                  {importedIds.has(field.id) && (
+                    <span className="text-[9px] font-semibold uppercase tracking-wider bg-accent/15 text-accent px-2 py-0.5 rounded-full border border-accent/20">from bank</span>
+                  )}
                 </div>
 
                 <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && setDeleteConfirm(index)} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5" disabled={fields.length <= 1} aria-label="Delete question"><Trash2 className="h-4 w-4" /></Button>
@@ -273,6 +299,15 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
               Add Question
             </Button>
             <Button
+              type="button"
+              variant="outline"
+              onClick={() => setImportModalOpen(true)}
+              className="w-full md:w-auto h-14 px-8"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Import from Bank
+            </Button>
+            <Button
               type="submit"
               className="w-full md:flex-1 h-14 text-xl font-headline"
               disabled={isSubmitting}
@@ -297,6 +332,12 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <QuestionBankImportModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onImport={handleBankImport}
+      />
     </div>
   );
 }
