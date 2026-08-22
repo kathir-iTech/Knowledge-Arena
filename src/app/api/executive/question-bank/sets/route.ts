@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { fetchSetSummaries } from '@/lib/quiz-sets';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +25,8 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const _rl = enforceRateLimit(`executive:sets:${auth.uid}`, Limits.READ_PER_USER);
+    if (_rl) return _rl;
 
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get('q') || '').trim().toLowerCase();

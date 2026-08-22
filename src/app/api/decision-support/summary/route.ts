@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +17,8 @@ export async function GET(req: Request) {
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+    const _rl = enforceRateLimit(`read:${auth.uid}`, Limits.READ_PER_USER);
+    if (_rl) return _rl;
 
   return NextResponse.json(
     { error: 'Not available', message: 'The Decision Support engine is shelved and not available for use.' },

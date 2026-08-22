@@ -3,6 +3,7 @@ import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/constants';
 import { generateMindMap } from '@/ai/flows/mindmap-flow';
+import { enforceRateLimit, Limits, getClientIp } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +12,8 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get('authorization');
     const idToken = authHeader?.replace('Bearer ', '');
     if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const rlIp = enforceRateLimit(`ai:mindmap:`+ getClientIp(req), Limits.AI_MINDMAP_PER_USER);
+    if (rlIp) return rlIp;
 
     const body = await req.json().catch(() => ({}));
     const quizId = typeof body.quizId === 'string' ? body.quizId.trim() : '';
@@ -57,6 +60,9 @@ export async function POST(req: NextRequest) {
     });
 
     if (result.error) {
+      if (result.error === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      if (result.error === 'MINDMAP_RATE_LIMITED') return NextResponse.json({ error: Limits.AI_MINDMAP_PER_USER.message, retryAfter: 60 }, { status: 429, headers: { 'Retry-After': '60', 'X-RateLimit-Remaining': '0' } });
+      if (result.error === 'MINDMAP_TIMEOUT') return NextResponse.json({ error: 'Mind map generation timed out. Please try again.' }, { status: 504 });
       return NextResponse.json({ error: result.error }, { status: 500 });
     }
 

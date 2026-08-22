@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -11,5 +12,7 @@ export const runtime = 'nodejs';
 export async function GET(req: NextRequest) {
   const auth = await verifyFirebaseTokenWithAnyRole(req, ['executive', 'commander', 'gladiator']);
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const _rl = enforceRateLimit(`clock:${auth.uid}`, Limits.READ_PER_USER);
+    if (_rl) return _rl;
   return NextResponse.json({ serverTime: Date.now() });
 }

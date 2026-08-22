@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import CommanderSidebar from '@/components/CommanderSidebar';
 import { MobileSidebarHeader } from '@/components/MobileSidebarHeader';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { CommanderOnboarding } from '@/components/onboarding/CommanderOnboarding';
+import { GlobalSearch } from '@/components/GlobalSearch';
 
 export default function CommanderLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -24,12 +27,18 @@ export default function CommanderLayout({ children }: { children: React.ReactNod
   }, [user, isLoading, router]);
 
   return (
-    <SidebarProvider>
-      <CommanderSidebar />
-      <SidebarInset className="safe-top">
-        <MobileSidebarHeader />
-        <main id="main-content">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
+    <ErrorBoundary>
+      <SidebarProvider>
+        <CommanderSidebar />
+        <SidebarInset className="safe-top">
+          <MobileSidebarHeader />
+          <GlobalSearch />
+          <main id="main-content">
+            <CommanderOnboarding />
+            {children}
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </ErrorBoundary>
   );
 }

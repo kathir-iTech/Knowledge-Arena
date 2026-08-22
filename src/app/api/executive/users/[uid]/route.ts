@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import type { Firestore, Query } from 'firebase-admin/firestore';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -57,6 +58,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const _rl = enforceRateLimit(`read:${auth.uid}`, Limits.READ_PER_USER);
+    if (_rl) return _rl;
 
     const { uid } = await params;
     const db = getAdminDb();

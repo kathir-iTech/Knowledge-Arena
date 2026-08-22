@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -10,6 +11,8 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const _rl = enforceRateLimit(`gladiator:dashboard:${auth.uid}`, Limits.READ_PER_USER);
+    if (_rl) return _rl;
 
     const participantsSnap = await getAdminDb().collectionGroup('participants')
       .where('user_id', '==', auth.uid)

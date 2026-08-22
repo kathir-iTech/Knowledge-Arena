@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import ExecutiveSidebar from '@/components/ExecutiveSidebar';
 import { MobileSidebarHeader } from '@/components/MobileSidebarHeader';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ExecutiveOnboarding } from '@/components/onboarding/ExecutiveOnboarding';
+import { GlobalSearch } from '@/components/GlobalSearch';
 
 export default function ExecutiveLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -24,12 +27,18 @@ export default function ExecutiveLayout({ children }: { children: React.ReactNod
   }, [user, isLoading, router]);
 
   return (
-    <SidebarProvider>
-      <ExecutiveSidebar />
-      <SidebarInset className="safe-top">
-        <MobileSidebarHeader />
-        <main id="main-content">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
+    <ErrorBoundary>
+      <SidebarProvider>
+        <ExecutiveSidebar />
+        <SidebarInset className="safe-top">
+          <MobileSidebarHeader />
+          <GlobalSearch />
+          <main id="main-content">
+            <ExecutiveOnboarding />
+            {children}
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </ErrorBoundary>
   );
 }

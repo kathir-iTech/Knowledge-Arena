@@ -18,6 +18,7 @@ import LiveQuiz from '@/components/quiz/LiveQuiz';
 import QuizResults from '@/components/quiz/QuizResults';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import { Button } from '../ui/button';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 function StartingScreen({ quizId, startedAt }: { quizId: string; startedAt?: number | null }) {
   const [countdown, setCountdown] = useState(3);
@@ -339,15 +340,14 @@ export default function BattleRoomLoader() {
       return <LoadingScreen message="Joining the arena..." />;
     }
     return (
-      <>
+      <ErrorBoundary variant="livequiz">
         <LiveQuiz
             quiz={quiz}
             participant={participant as ValidatedParticipant}
         isTeacher={isTeacher}
             allParticipants={allParticipants}
         />
-
-      </>
+      </ErrorBoundary>
     );
   }
 

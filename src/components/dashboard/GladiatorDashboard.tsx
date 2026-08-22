@@ -17,6 +17,7 @@ import { participantService } from '@/services/participant.service';
 import { QuizRecommendations } from '@/components/dashboard/QuizRecommendations';
 import { WeakAreas } from '@/components/dashboard/WeakAreas';
 import { UpcomingArenas } from '@/components/dashboard/UpcomingArenas';
+import { GladiatorOnboarding } from '@/components/onboarding/GladiatorOnboarding';
 import { Loader2, Swords, UserCircle, History, ExternalLink, Trophy, Star, TrendingUp, Zap, Bell, ChevronRight, Play, Sparkles, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -194,6 +195,11 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
           </Button>
         </div>
       </header>
+
+      {/* Gladiator onboarding — first-time welcome card */}
+      <section className="page-section">
+        <GladiatorOnboarding />
+      </section>
 
       {/* Stats Row */}
       {stats && (
