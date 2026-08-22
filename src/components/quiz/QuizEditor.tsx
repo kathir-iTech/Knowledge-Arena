@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Trash2, PlusCircle, Loader2, PencilRuler, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AICopilot } from '@/components/quiz/AICopilot';
 
 export interface ExistingQuestion {
   id: string;
@@ -160,6 +161,16 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
               )} />
             </CardContent>
           </Card>
+
+          {/* AI Copilot — sidebar assistant */}
+          <AICopilot
+            titleContext={form.watch('title') || initialTitle}
+            questionContext={fields.length > 0 ? form.watch(`questions.0.text`) || undefined : undefined}
+            onApplyQuestion={(q) => {
+              append({ id: uuidv4(), text: q.text, options: q.options, correctAnswerIndex: q.correctAnswerIndex, timer: 30 });
+              toast({ title: 'Question added from Copilot', description: q.text.slice(0, 60) });
+            }}
+          />
 
           <div className="space-y-6">
             <div className="flex items-center justify-between">

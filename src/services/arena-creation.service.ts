@@ -25,6 +25,8 @@ import {
   DEFAULT_WRONG_PENALTY,
   DEFAULT_SKIP_PENALTY,
   DEFAULT_TIME_DECAY,
+  DEFAULT_STREAK_MULTIPLIER,
+  DEFAULT_TIME_LIMIT_SECONDS,
 } from '@/lib/constants';
 
 function getFirestore() {
@@ -42,6 +44,15 @@ export interface ArenaCreationInput {
   title: string;
   questions: ArenaQuestionInput[];
   createdBy: string;
+  scoringConfig?: {
+    score_max?: number;
+    score_min?: number;
+    wrong_penalty?: number;
+    skip_penalty?: number;
+    time_decay?: boolean;
+    streak_multiplier?: number;
+    time_limit_seconds?: number;
+  };
 }
 
 function planCreation(questionsCount: number): string[] {
@@ -109,15 +120,19 @@ export const arenaCreationService = {
     // Phase 94: arena internals (scoring config + skip bookkeeping) are created
     // in the gated config/settings document — they must NEVER live on the parent
     // quiz doc where a pre-join reader with the room code could see them.
+    // Phase 99: advanced scoring — expose via UI, default to current behavior so existing arenas unaffected.
+    const sc = input.scoringConfig;
     allBatchData.push({
       ref: doc(db, COLLECTIONS.QUIZZES, roomCode, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
       data: {
         scoring_config: {
-          score_max: DEFAULT_SCORE_MAX,
-          score_min: DEFAULT_SCORE_MIN,
-          wrong_penalty: DEFAULT_WRONG_PENALTY,
-          skip_penalty: DEFAULT_SKIP_PENALTY,
-          time_decay: DEFAULT_TIME_DECAY,
+          score_max: sc?.score_max ?? DEFAULT_SCORE_MAX,
+          score_min: sc?.score_min ?? DEFAULT_SCORE_MIN,
+          wrong_penalty: sc?.wrong_penalty ?? DEFAULT_WRONG_PENALTY,
+          skip_penalty: sc?.skip_penalty ?? DEFAULT_SKIP_PENALTY,
+          time_decay: sc?.time_decay ?? DEFAULT_TIME_DECAY,
+          streak_multiplier: sc?.streak_multiplier ?? DEFAULT_STREAK_MULTIPLIER,
+          time_limit_seconds: sc?.time_limit_seconds ?? DEFAULT_TIME_LIMIT_SECONDS,
         },
         skipped_question_ids: [],
       },

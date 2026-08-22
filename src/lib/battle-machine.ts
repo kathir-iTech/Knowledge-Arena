@@ -5,6 +5,8 @@ import {
   DEFAULT_TIME_DECAY,
   DEFAULT_WRONG_PENALTY,
   DEFAULT_SKIP_PENALTY,
+  DEFAULT_STREAK_MULTIPLIER,
+  DEFAULT_TIME_LIMIT_SECONDS,
   QUIZ_WAITING,
   QUIZ_READY,
   QUIZ_STARTING,
@@ -48,6 +50,8 @@ export interface ScoringConfig {
   wrong_penalty: number;
   skip_penalty: number;
   time_decay: boolean;
+  streak_multiplier: number;
+  time_limit_seconds: number;
 }
 
 export function normalizeScoringConfig(
@@ -59,6 +63,8 @@ export function normalizeScoringConfig(
     wrong_penalty: Math.max(0, raw?.wrong_penalty ?? DEFAULT_WRONG_PENALTY),
     skip_penalty: Math.max(0, raw?.skip_penalty ?? DEFAULT_SKIP_PENALTY),
     time_decay: raw?.time_decay ?? DEFAULT_TIME_DECAY,
+    streak_multiplier: Math.max(0, raw?.streak_multiplier ?? DEFAULT_STREAK_MULTIPLIER),
+    time_limit_seconds: Math.max(5, raw?.time_limit_seconds ?? DEFAULT_TIME_LIMIT_SECONDS),
   };
 }
 
@@ -77,6 +83,11 @@ export function computeCorrectScore(
     return config.score_max;
   }
   return Math.round(config.score_max - (1 - fraction) * (config.score_max - config.score_min));
+}
+
+export function computeStreakBonus(streak: number, multiplier: number): number {
+  if (streak <= 0 || multiplier <= 0) return 0;
+  return Math.round(streak * multiplier);
 }
 
 export function shuffledOrder<T>(items: readonly T[], rng: () => number = Math.random): T[] {

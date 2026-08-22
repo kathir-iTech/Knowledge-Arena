@@ -17,10 +17,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '../ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler, AlertTriangle } from 'lucide-react';
+import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler, AlertTriangle, ChevronDown, Trophy, Clock3 } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
+import { AICopilot } from '@/components/quiz/AICopilot';
+import { Switch } from '@/components/ui/switch';
 
 const questionSchema = z.object({
   id: z.string(),
@@ -34,6 +37,10 @@ const questionSchema = z.object({
 const quizSchema = z.object({
   title: z.string().min(3, 'Quiz title must be at least 3 characters long.'),
   questions: z.array(questionSchema).min(1, 'A quiz must have at least one question.'),
+  timeBonus: z.boolean().default(true),
+  streakMultiplier: z.coerce.number().min(0).max(100).default(0),
+  scoreMax: z.coerce.number().min(100).max(5000).default(1000),
+  scoreMin: z.coerce.number().min(0).max(1000).default(100),
 });
 
 type QuizFormData = z.infer<typeof quizSchema>;
@@ -51,6 +58,7 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittedRef = useRef(false);
   const [deleteConfirmIdx, setDeleteConfirmIdx] = useState<number | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const form = useForm<QuizFormData>({
     resolver: zodResolver(quizSchema),
@@ -65,6 +73,10 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
           timer: 30,
         },
       ],
+      timeBonus: true,
+      streakMultiplier: 0,
+      scoreMax: 1000,
+      scoreMin: 100,
     },
   });
 
@@ -83,7 +95,11 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
           correctAnswerIndex: q.correctAnswerIndex,
           timer: 30,
           explanation: q.explanation
-        }))
+        })),
+        timeBonus: true,
+        streakMultiplier: 0,
+        scoreMax: 1000,
+        scoreMin: 100,
       });
     }
   }, [initialQuestions, form]);
@@ -120,6 +136,12 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
             timer: q.timer,
           })),
           createdBy: user.id,
+          scoringConfig: {
+            score_max: data.scoreMax,
+            score_min: data.scoreMin,
+            time_decay: data.timeBonus,
+            streak_multiplier: data.streakMultiplier,
+          },
         });
 
         toast({ title: 'Arena Created', description: `Room Code: ${roomCode}` });
@@ -178,6 +200,69 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
               </FormItem>
             )} />
           </CardContent>
+        </Card>
+
+        {/* AI Copilot — sidebar assistant for commanders */}
+        <AICopilot
+          titleContext={form.watch('title') || undefined}
+          questionContext={fields.length > 0 ? form.watch(`questions.0.text`) || undefined : undefined}
+          onApplyQuestion={(q) => {
+            append({ id: uuidv4(), text: q.text, options: q.options, correctAnswerIndex: q.correctAnswerIndex, timer: 30, explanation: q.explanation });
+            toast({ title: 'Question added from Copilot', description: q.text.slice(0, 60) });
+          }}
+        />
+
+        {/* Advanced Scoring — Phase 99 */}
+        <Card className="border-warning/20">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/20 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <Trophy className="w-4 h-4 text-warning" /> Advanced Scoring
+              <Badge variant="outline" className="text-[10px]">Optional</Badge>
+            </span>
+            <ChevronDown className={cn('w-4 h-4 transition-transform', showAdvanced && 'rotate-180')} />
+          </button>
+          {showAdvanced && (
+            <CardContent className="space-y-5 pt-0">
+              <p className="text-xs text-muted-foreground">Defaults match current behavior — existing arenas are unaffected.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="timeBonus" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-[10px] border border-border/40 p-3 bg-muted/20">
+                    <div className="space-y-0.5">
+                      <FormLabel className="flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5" /> Time Bonus</FormLabel>
+                      <FormDescription className="text-xs">Faster correct answers earn more points</FormDescription>
+                    </div>
+                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="streakMultiplier" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5" /> Streak Multiplier</FormLabel>
+                    <FormControl><Input type="number" min={0} max={100} {...field} onChange={e => field.onChange(Number(e.target.value) || 0)} /></FormControl>
+                    <FormDescription className="text-xs">Bonus = streak × multiplier (0 = disabled)</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="scoreMax" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Max Score (fastest)</FormLabel>
+                    <FormControl><Input type="number" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="scoreMin" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Min Score (slowest)</FormLabel>
+                    <FormControl><Input type="number" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+            </CardContent>
+          )}
         </Card>
 
         <div className="space-y-6">
