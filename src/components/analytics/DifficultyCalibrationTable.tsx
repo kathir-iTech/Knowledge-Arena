@@ -11,6 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowUp, ArrowDown, ArrowUpDown, RefreshCw, Brain, Search, AlertTriangle, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+const QUESTION_CAP = 200;
+
 interface DifficultyRow {
   questionId: string;
   quizId: string;
@@ -41,6 +43,7 @@ export function DifficultyCalibrationTable() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [search, setSearch] = useState('');
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [isCapped, setIsCapped] = useState(false);
 
   const fetchLive = useCallback(async () => {
     if (!firestore) return;
@@ -89,7 +92,9 @@ export function DifficultyCalibrationTable() {
         }
       }
 
-      setRows(out);
+      const capped = out.length > QUESTION_CAP;
+      setIsCapped(capped);
+      setRows(capped ? out.slice(0, QUESTION_CAP) : out);
       setFetchedAt(Date.now());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load difficulty calibration');
@@ -336,6 +341,11 @@ export function DifficultyCalibrationTable() {
           Read-only live view — queries <code className="font-mono bg-muted px-1 py-0.5 rounded">quizzes</code> and{' '}
           <code className="font-mono bg-muted px-1 py-0.5 rounded">quizzes/&#123;id&#125;/questions</code> via getDocs on mount and on refresh; computes{' '}
           <code className="font-mono bg-muted px-1 py-0.5 rounded">wrongRate = 1 - correctCount/submittedCount</code> from questionStats.
+          {isCapped && (
+            <span className="ml-1 text-warning font-medium inline-flex items-center gap-0.5">
+              <AlertTriangle className="w-3 h-3" /> Results capped at {QUESTION_CAP} questions for performance.
+            </span>
+          )}
         </p>
       </CardContent>
     </Card>

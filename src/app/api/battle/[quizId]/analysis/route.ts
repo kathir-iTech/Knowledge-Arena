@@ -6,6 +6,9 @@ import { normalizeScoringConfig, computeCorrectScore, computeStreakBonus } from 
 
 export const runtime = 'nodejs';
 
+const MAX_ANALYSIS_QUESTIONS = 30;
+const MAX_ANALYSIS_GLADIATORS = 60;
+
 function getMs(v: unknown): number {
   if (typeof v === 'number') return v;
   if (v && typeof (v as { toMillis: () => number }).toMillis === 'function') return (v as { toMillis: () => number }).toMillis();
@@ -58,6 +61,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ quiz
       sort_index: Number(d.data().sort_index || 0),
     })).sort((a, b) => a.sort_index - b.sort_index);
 
+    const isQuestionsCapped = questions.length > MAX_ANALYSIS_QUESTIONS;
+    const cappedQuestions = isQuestionsCapped ? questions.slice(0, MAX_ANALYSIS_QUESTIONS) : questions;
+
     const answerKeyMap = new Map<string, number>();
     for (const d of answerKeysSnap.docs) {
       const v = d.data().correct_option_index;
@@ -76,11 +82,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ quiz
       }));
 
     const gladiators = participants.filter(p => !p.isCreator);
+    const isGladiatorsCapped = gladiators.length > MAX_ANALYSIS_GLADIATORS;
+    const cappedGladiators = isGladiatorsCapped ? gladiators.slice(0, MAX_ANALYSIS_GLADIATORS) : gladiators;
 
     // Fetch submissions per question in parallel — batch, not per gladiator-question
     const submissionsByQuestion: Record<string, Array<{ userId: string; selected_option: number; submittedAt: number; clientTime?: number }>> = {};
     const subsResults = await Promise.all(
-      questions.map(async q => {
+      cappedQuestions.map(async q => {
         const snap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.QUESTIONS).doc(q.id).collection(COLLECTIONS.SUBMISSIONS).get();
         return { qid: q.id, docs: snap.docs };
       })
@@ -98,7 +106,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ quiz
     }
 
     // Question breakdown
-    const questionBreakdown = questions.map(q => {
+    const questionBreakdown = cappedQuestions.map(q => {
       const subs = submissionsByQuestion[q.id] || [];
       const correctIdx = answerKeyMap.get(q.id) ?? null;
       let correctCount = 0;
@@ -146,11 +154,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ quiz
     // Gladiator engagement — score progression per question
     // Reconstruct progression using same scoring logic + streak
     const engagement: Array<{ gladiatorId: string; name: string; progression: number[]; total: number }> = [];
-    for (const g of gladiators) {
+    for (const g of cappedGladiators) {
       let running = 0;
       let streak = 0;
       const prog: number[] = [];
-      for (const q of questions) {
+      for (const q of cappedQuestions) {
         const subs = submissionsByQuestion[q.id] || [];
         const sub = subs.find(s => s.userId === g.id);
         const correctIdx = answerKeyMap.get(q.id) ?? null;
@@ -192,9 +200,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ quiz
     const csvRows: Array<Record<string, string | number>> = [];
     // Header for JSON: include rows
     const detailed: Array<{ gladiatorName: string; questionText: string; answerGiven: string; correct: boolean; timeTakenSec: number; pointsAwarded: number }> = [];
-    for (const g of gladiators) {
+    for (const g of cappedGladiators) {
       let streak = 0;
-      for (const q of questions) {
+      for (const q of cappedQuestions) {
         const subs = submissionsByQuestion[q.id] || [];
         const sub = subs.find(s => s.userId === g.id);
         const correctIdx = answerKeyMap.get(q.id) ?? null;
@@ -254,6 +262,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ quiz
       });
     }
 
+    const responseWarnings: string[] = [];
+    if (isQuestionsCapped) {
+      responseWarnings.push('Question count capped at ' + MAX_ANALYSIS_QUESTIONS + ' (had ' + questions.length + ')');
+    }
+    if (isGladiatorsCapped) {
+      responseWarnings.push('Gladiator count capped at ' + MAX_ANALYSIS_GLADIATORS + ' (had ' + gladiators.length + ')');
+    }
+
     return NextResponse.json({
       quizId,
       title: String(quizData.title || 'Untitled'),
@@ -261,7 +277,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ quiz
       questionBreakdown,
       engagement,
       detailed,
-      participants: gladiators.length,
+      participants: cappedGladiators.length,
+      ...(responseWarnings.length > 0 ? { warnings: responseWarnings } : {}),
     }, { headers: { 'Cache-Control': 'private, max-age=10' } });
   } catch (err) {
     console.error('[Analysis] Error', err);
