@@ -65,7 +65,7 @@ function planCreation(questionsCount: number): string[] {
 
 function batchCount(questionsCount: number): number {
   const opsPerQuestion = 2;
-  const overhead = 2;
+  const overhead = 3; // quiz + participant + config/settings
   const totalOps = overhead + questionsCount * opsPerQuestion;
   return Math.ceil(totalOps / MAX_BATCH_OPS);
 }
@@ -121,6 +121,9 @@ export const arenaCreationService = {
     // in the gated config/settings document — they must NEVER live on the parent
     // quiz doc where a pre-join reader with the room code could see them.
     // Phase 99: advanced scoring — expose via UI, default to current behavior so existing arenas unaffected.
+    // Batch-create timing fix: include created_by so firestore.rules can allow config/settings
+    // creation even when the parent quiz doc does not yet "exist" in the same batch (exists/get
+    // vs existsAfter/getAfter timing). The rule allows if request.resource.data.created_by == uid.
     const sc = input.scoringConfig;
     allBatchData.push({
       ref: doc(db, COLLECTIONS.QUIZZES, roomCode, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
@@ -135,6 +138,7 @@ export const arenaCreationService = {
           time_limit_seconds: sc?.time_limit_seconds ?? DEFAULT_TIME_LIMIT_SECONDS,
         },
         skipped_question_ids: [],
+        created_by: createdBy,
       },
     });
 

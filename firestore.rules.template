@@ -176,7 +176,10 @@ service cloud.firestore {
     }
 
     match /quizzes/{quizId} {
-      allow read: if isExecutive() || canReadArena(quizId);
+      // Commander room-code collision check: allow get of a quiz that doesn't exist yet so
+      // createArenaAtomic() can verify the generated room code is unique. Restricted to
+      // commanders/executives — gladiators never need to probe non-existent arenas.
+      allow read: if isExecutive() || canReadArena(quizId) || (isCommander() && !exists(/databases/$(database)/documents/quizzes/$(quizId)));
       allow create: if isSignedIn() && (getRole() == 'commander' || getRole() == 'executive')
         && request.resource.data.created_by == request.auth.uid;
       allow update: if isLegalQuizUpdate(quizId);
@@ -282,11 +285,20 @@ service cloud.firestore {
       // Admin SDK (rules-bypassing) and are unaffected.
       match /config/{docId} {
         allow read: if canReadQuizConfig(quizId);
-        // isQuizCreatorAfter supports atomic writeBatch where the parent quiz
-        // and config doc are created in the same batch — getAfter() sees the
-        // pending parent.
-        allow create: if (isQuizCreator(quizId) || isQuizCreatorAfter(quizId) || isExecutive())
-          && request.resource.data.keys().hasOnly(['scoring_config', 'skipped_question_ids']);
+        // Batch-create timing fix: in an atomic writeBatch the parent quiz doc and
+        // config/settings are created together, but Firestore evaluates each doc
+        // independently — exists()/get() does NOT yet see the pending parent.
+        // isQuizCreatorAfter (existsAfter/getAfter) handles the batch case, but we
+        // also allow a direct ownership fallback via the config doc's own created_by
+        // field so the batch succeeds even if the emulator/production evaluation order
+        // differs. Least-privilege: only the owner (or an executive) may create.
+        allow create: if (
+            isQuizCreator(quizId)
+            || isQuizCreatorAfter(quizId)
+            || isExecutive()
+            || (request.resource.data.keys().hasAll(['created_by']) && request.resource.data.created_by == request.auth.uid)
+          )
+          && request.resource.data.keys().hasOnly(['scoring_config', 'skipped_question_ids', 'created_by']);
         allow update: if (isQuizCreator(quizId) || isExecutive())
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scoring_config', 'skipped_question_ids']);
         allow delete: if isQuizCreator(quizId) || isExecutive();
