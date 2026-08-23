@@ -23,6 +23,8 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  authError: string | null;
+  clearAuthError: () => void;
   login: (credentials: { email: string; password: string }) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
@@ -59,6 +61,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { user: firebaseUser, isUserLoading } = useFirebaseUserHook();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const authTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
 
   const signupInProgress = useRef(false);
@@ -147,11 +151,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return result;
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
+      const code = (err as any)?.code || '';
+      const isPermissionDenied = code === 'permission-denied' || msg.includes('Missing or insufficient permissions') || msg.includes('PERMISSION_DENIED') || msg.includes('permission-denied');
       if (msg.includes(`@${ALLOWED_GLADIATOR_DOMAIN}`) || msg.includes('requires a @')) {
         // Surface domain mismatch without falling back to a phantom local user.
         if (auth) { void signOut(auth); }
         setUser(null);
         setIsLoading(false);
+        setAuthError("Sign-in failed — please try again");
         toast({
           variant: 'destructive',
           title: 'Access Denied',
@@ -159,10 +166,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         throw err;
       }
+      if (isPermissionDenied) {
+        console.error('[Profile] Firestore permission denied for', uid, err);
+        setAuthError("Sign-in failed — please try again");
+        setIsLoading(false);
+        toast({ variant: "destructive", title: "Sign-in failed", description: "Please try again" });
+        throw err;
+      }
       console.error('[Profile] Firestore profile creation failed for', uid, '- using local fallback', err);
       return buildFallbackProfile(uid, defaults);
     }
   }, [firestore, auth, getRandomAvatar, normalizeRole, buildFallbackProfile, toast]);
+
+  const clearAuthError = useCallback(() => setAuthError(null), []);
+
+  // 15-second timeout: if profile resolution doesn't complete after onAuthStateChanged
+  // fires with a user, break the infinite "Authenticating..." spinner and surface
+  // a visible error with reload action. This guards against hung Firestore
+  // transactions/gets (e.g. permission-denied that was previously swallowed).
+  useEffect(() => {
+    if (!isLoading || !firebaseUser) {
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
+      return;
+    }
+    if (authTimeoutRef.current) clearTimeout(authTimeoutRef.current);
+    authTimeoutRef.current = setTimeout(() => {
+      if (isLoading) {
+        console.error('[Auth] Profile resolution timed out after 15s for', firebaseUser.uid);
+        setAuthError("Sign-in failed — please try again");
+        setIsLoading(false);
+        setUser(null);
+        toast({ variant: "destructive", title: "Sign-in failed", description: "Please try again" });
+        if (auth) { void signOut(auth).catch(() => {}); }
+      }
+    }, 15000);
+    return () => {
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
+    };
+  }, [isLoading, firebaseUser, auth, toast]);
 
   const fetchUserDocument = useCallback(async (uid: string) => {
     if (!firestore) { setIsLoading(false); return; }
@@ -171,6 +218,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchInProgress.current = true;
     fetchInProgressUid.current = uid;
     lastFetchedUid.current = uid;
+    // Clear any prior auth error when starting a fresh profile fetch
+    setAuthError(null);
+    if (authTimeoutRef.current) {
+      clearTimeout(authTimeoutRef.current);
+      authTimeoutRef.current = null;
+    }
     try {
         const googleUser = auth?.currentUser;
         const profile = await ensureGladiatorProfile(uid, {
@@ -179,7 +232,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           photoURL: googleUser?.photoURL || undefined,
         });
         setUser(profile);
+        setAuthError(null);
     } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        const code = (err as any)?.code || '';
+        const isPermissionDenied = code === 'permission-denied' || msg.includes('Missing or insufficient permissions') || msg.includes('PERMISSION_DENIED') || msg.includes('permission-denied');
+        const isDomainError = msg.includes(`@${ALLOWED_GLADIATOR_DOMAIN}`) || msg.includes('requires a @');
+        // Domain and permission errors already surfaced with authError + toast in
+        // ensureGladiatorProfile; don't silently fall back to a phantom local user.
+        if (isPermissionDenied || isDomainError) {
+          console.error('AuthContext: fetchUserDocument permission/domain error', err);
+          // authError and isLoading already set by ensureGladiatorProfile; ensure
+          // we don't overwrite with a fallback profile that would hide the failure.
+          return;
+        }
         console.error('AuthContext: fetchUserDocument error', err);
         const googleUser = auth?.currentUser;
         setUser(buildFallbackProfile(uid, {
@@ -188,9 +254,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           photoURL: googleUser?.photoURL || undefined,
         }));
     } finally {
+        // Only clear loading if not already cleared by timeout/error path
+        // (timeout already sets isLoading false; this is idempotent)
         setIsLoading(false);
         fetchInProgress.current = false;
         fetchInProgressUid.current = null;
+        if (authTimeoutRef.current) {
+          clearTimeout(authTimeoutRef.current);
+          authTimeoutRef.current = null;
+        }
     }
   }, [firestore, auth, user, ensureGladiatorProfile, buildFallbackProfile]);
 
@@ -265,6 +337,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (credentials: { email: string, password?: string }) => {
+    setAuthError(null);
     if (!auth) throw new Error("Auth service not available");
     if (!credentials.password) {
         toast({
@@ -373,6 +446,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast({ variant: "destructive", title: "Google Sign-In Failed", description: "Auth service not available." });
       return;
     }
+    setAuthError(null);
     setIsLoading(true);
     sessionStorage.setItem('oa_pending', Date.now().toString());
     const provider = new GoogleAuthProvider();
@@ -395,6 +469,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     if (!auth) return;
+    setAuthError(null);
+    if (authTimeoutRef.current) {
+      clearTimeout(authTimeoutRef.current);
+      authTimeoutRef.current = null;
+    }
     await signOut(auth);
     setUser(null);
   };
@@ -439,13 +518,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     isAuthenticated: !!user,
     isLoading,
+    authError,
+    clearAuthError,
     login,
     signInWithGoogle,
     logout,
     updateAvatar,
     updateProfile,
     refreshUser,
-  }), [user, isLoading, signInWithGoogle, refreshUser]);
+  }), [user, isLoading, authError, clearAuthError, signInWithGoogle, refreshUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>

@@ -7,9 +7,10 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { SessionTimeout } from '@/components/session-timeout';
 import { OfflineDetector } from '@/components/offline-detector';
+import { Button } from '@/components/ui/button';
 
 function ClientLayoutInner({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, authError, clearAuthError } = useAuth() as any;
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -96,6 +97,19 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
 
     redirecting.current = null;
   }, [user, isLoading, pathname, searchParams, router]);
+
+  if (authError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-6 p-4 text-center" role="alert">
+        <p className="text-lg font-medium">Sign-in failed — please try again</p>
+        <p className="text-sm text-muted-foreground">{authError}</p>
+        <div className="flex gap-3">
+          <Button onClick={() => window.location.reload()}>Reload</Button>
+          <Button variant="outline" onClick={() => { clearAuthError?.(); window.location.href = '/login'; }}>Back to Login</Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return <LoadingScreen message="Authenticating..." />;
