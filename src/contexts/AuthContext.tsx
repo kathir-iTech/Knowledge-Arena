@@ -6,8 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc, runTransaction, getDoc } from 'firebase/firestore';
 import {
   signInWithEmailAndPassword,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   GoogleAuthProvider,
   signOut,
 } from 'firebase/auth';
@@ -106,7 +105,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signupInProgress = useRef(false);
   const signupUserId = useRef<string | null>(null);
   const lastFetchedUid = useRef<string | null>(null);
-  const redirectCheckComplete = useRef(false);
   const fetchInProgress = useRef(false);
   const fetchInProgressUid = useRef<string | null>(null);
 
@@ -345,7 +343,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // No-op: global timeout will clear loading if profile never resolves
         return;
       }
-      sessionStorage.removeItem('oa_pending');
       // Google self-sign-up is the gladiator flow. When a domain lock is
       // configured, reject sign-ups from accounts outside it before a profile
       // is created (the Firestore rules enforce the same boundary). Already
@@ -395,23 +392,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       fetchInProgress.current = false;
       fetchInProgressUid.current = null;
-      sessionStorage.removeItem('oa_pending');
-      if (redirectCheckComplete.current) {
-        setIsLoading(false);
-      } else {
-        // If no user and redirect check hasn't completed yet, keep loading briefly
-        // but ensure global timeout will clear it if getRedirectResult hangs.
-        // No immediate setIsLoading(false) here to avoid flicker during OAuth redirect,
-        // but guarantee it via timeout.
-        if (authTimeoutRef.current) clearTimeout(authTimeoutRef.current);
-        authTimeoutRef.current = setTimeout(() => {
-          if (!redirectCheckComplete.current) {
-            console.error('[Auth] No user and redirect check pending timed out after 10s');
-            redirectCheckComplete.current = true;
-            setIsLoading(false);
-          }
-        }, PROFILE_TIMEOUT_MS);
-      }
+      setIsLoading(false);
     }
   }, [firebaseUser, isUserLoading, fetchUserDocument, firestore, auth, toast]);
 
@@ -550,49 +531,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  useEffect(() => {
-    if (!auth) { redirectCheckComplete.current = true; setIsLoading(false); return; }
-    redirectCheckComplete.current = false;
-    withTimeout(getRedirectResult(auth), AUTH_OP_TIMEOUT_MS, 'Google redirect')
-      .then((result) => {
-        redirectCheckComplete.current = true;
-        if (result) {
-          sessionStorage.removeItem('oa_pending');
-        } else {
-          const oaMarker = sessionStorage.getItem('oa_pending');
-          let oaValid = false;
-          if (oaMarker) {
-            const ts = parseInt(oaMarker, 10);
-            if (!isNaN(ts) && Date.now() - ts < 180000) oaValid = true;
-            else sessionStorage.removeItem('oa_pending');
-          }
-          if (!oaValid && !auth?.currentUser) {
-            setIsLoading(false);
-          }
-        }
-      })
-      .catch((error: unknown) => {
-        redirectCheckComplete.current = true;
-        console.error('[Auth] getRedirectResult ERROR:', error);
-        setIsLoading(false);
-        sessionStorage.removeItem('oa_pending');
-        if (isTimeoutError(error)) {
-          setAuthError("Sign-in failed — please try again");
-          toast({ variant: "destructive", title: "Sign-in failed", description: "Request timed out. Please try again." });
-          return;
-        }
-        if (isPermissionDenied(error)) {
-          setAuthError("Sign-in failed — please try again");
-          toast({ variant: "destructive", title: "Sign-in failed", description: "Please try again" });
-          return;
-        }
-        const mapped = mapFirebaseAuthError(error, 'google');
-        if (!mapped.isSilent) {
-          toast({ variant: "destructive", title: mapped.title, description: mapped.message });
-        }
-      });
-  }, [auth, toast]);
-
   const signInWithGoogle = useCallback(async () => {
     if (!auth) {
       toast({ variant: "destructive", title: "Google Sign-In Failed", description: "Auth service not available." });
@@ -600,18 +538,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setAuthError(null);
     setIsLoading(true);
-    sessionStorage.setItem('oa_pending', Date.now().toString());
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({
       prompt: 'select_account',
       ...(ALLOWED_GLADIATOR_DOMAIN ? { hd: ALLOWED_GLADIATOR_DOMAIN } : {}),
     });
     try {
-      await withTimeout(signInWithRedirect(auth, provider), AUTH_OP_TIMEOUT_MS, 'Google redirect');
+      await withTimeout(signInWithPopup(auth, provider), AUTH_OP_TIMEOUT_MS, 'Google redirect');
+      // onAuthStateChanged will fire and fetchUserDocument will handle profile creation
     } catch (error: unknown) {
-      console.error('[Auth] signInWithRedirect error', error);
-      sessionStorage.removeItem('oa_pending');
+      console.error('[Auth] signInWithPopup error', error);
       setIsLoading(false);
+      const code = (error as { code?: string })?.code || '';
+      const msg = getErrorMessage(error).toLowerCase();
+      if (code === 'auth/popup-blocked' || msg.includes('popup was blocked') || msg.includes('popup_blocked')) {
+        const friendly = 'Popup was blocked. Please allow popups for this site and try again.';
+        setAuthError(friendly);
+        toast({ variant: "destructive", title: "Popup Blocked", description: friendly });
+        return;
+      }
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // User closed popup — silently reset loading, no error toast
+        return;
+      }
       if (isTimeoutError(error)) {
         setAuthError("Sign-in failed — please try again");
         toast({ variant: "destructive", title: "Google Sign-In Failed", description: "Request timed out. Please try again." });
@@ -626,8 +575,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!mapped.isSilent) {
         setAuthError(mapped.message);
         toast({ variant: "destructive", title: mapped.title, description: mapped.message });
-      } else {
-        setIsLoading(false);
       }
     }
   }, [auth, toast]);
