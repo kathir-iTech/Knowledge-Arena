@@ -133,18 +133,7 @@ export function ExecutiveOnboarding() {
   };
 
   if (!checked) {
-    return (
-      <Dialog open>
-        <DialogContent className="sm:max-w-lg">
-          <div className="space-y-4 py-4">
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
+    return null;
   }
 
   if (step === 0) return null;
