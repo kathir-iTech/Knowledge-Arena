@@ -8,12 +8,15 @@ import { LoadingScreen } from '@/components/LoadingScreen';
 import { SessionTimeout } from '@/components/session-timeout';
 import { OfflineDetector } from '@/components/offline-detector';
 import { Button } from '@/components/ui/button';
+import { ROLE_HOME, isValidRole } from '@/lib/auth-redirect';
+import { useToast } from '@/hooks/use-toast';
 
 function ClientLayoutInner({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, authError, clearAuthError } = useAuth() as any;
+  const { user, isLoading, authError, clearAuthError, logout } = useAuth() as any;
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { toast } = useToast();
   const redirecting = useRef<string | null>(null);
 
   const specialPages = ['/kicked', '/cheating-detected'];
@@ -40,15 +43,16 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!user.role || !['executive', 'commander', 'gladiator'].includes(user.role)) {
-      if (currentPath !== '/') {
-        router.replace('/');
+    // Unknown / missing role — single place handling per Phase 103 spec:
+    // sign out + show error "Account not recognized — contact your Executive"
+    if (!user.role || !isValidRole(user.role)) {
+      console.error('[Auth] Unknown role for user', user?.id, user?.role);
+      void logout().then(() => {
+        toast({ variant: 'destructive', title: 'Account Error', description: 'Account not recognized — contact your Executive' });
+      }).catch(() => {});
+      if (currentPath !== '/login') {
+        router.replace('/login');
       }
-      redirecting.current = null;
-      return;
-    }
-
-    if (currentPath.startsWith('/battle')) {
       redirecting.current = null;
       return;
     }
@@ -62,29 +66,19 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     let target: string | null = null;
 
     if (currentPath === '/') {
-      const dashboardMap: Record<string, string> = {
-        executive: '/executive/analytics',
-        commander: '/commander/dashboard',
-        gladiator: '/gladiator/dashboard',
-      };
-      const base = dashboardMap[user.role] || '/gladiator/dashboard';
+      const base = ROLE_HOME[user.role] || ROLE_HOME.gladiator;
       const qs = searchParams.toString();
       target = qs ? `${base}?${qs}` : base;
     } else if (currentPath === '/login') {
-      const dashboardMap: Record<string, string> = {
-        executive: '/executive/analytics',
-        commander: '/commander/dashboard',
-        gladiator: '/gladiator/dashboard',
-      };
-      target = dashboardMap[user.role] || '/gladiator/dashboard';
+      target = ROLE_HOME[user.role] || ROLE_HOME.gladiator;
     } else {
       const isExecutivePage = currentPath.startsWith('/executive');
       const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/create-quiz');
       const isGladiatorPage = currentPath.startsWith('/gladiator');
 
-      if (user.role === 'executive' && (isCommanderPage || isGladiatorPage)) target = '/executive/analytics';
-      else if (user.role === 'commander' && (isExecutivePage || isGladiatorPage)) target = '/commander/dashboard';
-      else if (user.role === 'gladiator' && (isExecutivePage || isCommanderPage)) target = '/gladiator/dashboard';
+      if (user.role === 'executive' && (isCommanderPage || isGladiatorPage)) target = ROLE_HOME.executive;
+      else if (user.role === 'commander' && (isExecutivePage || isGladiatorPage)) target = ROLE_HOME.commander;
+      else if (user.role === 'gladiator' && (isExecutivePage || isCommanderPage)) target = ROLE_HOME.gladiator;
     }
 
     if (target) {
@@ -96,7 +90,7 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     }
 
     redirecting.current = null;
-  }, [user, isLoading, pathname, searchParams, router]);
+  }, [user, isLoading, pathname, searchParams, router, logout, toast]);
 
   if (authError) {
     return (
