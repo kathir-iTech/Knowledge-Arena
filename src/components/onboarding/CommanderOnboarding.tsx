@@ -60,21 +60,7 @@ export function CommanderOnboarding() {
   };
 
   if (!checked) {
-    return (
-      <Dialog open>
-        <DialogContent className="sm:max-w-lg">
-          <div className="space-y-4 py-4">
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <div className="grid grid-cols-2 gap-3">
-              <Skeleton className="h-20 rounded-[12px]" />
-              <Skeleton className="h-20 rounded-[12px]" />
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
+    return null;
   }
 
   if (step === 0) return null;
