@@ -200,8 +200,9 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
     submittedRef.current = true;
     setIsSubmitting(true);
 
+    let roomCode: string | null = null;
     try {
-        const roomCode = await arenaCreationService.createArenaAtomic({
+        roomCode = await arenaCreationService.createArenaAtomic({
           title: quizTitle,
           questions: questions.map((q) => ({
             text: q.text,
@@ -211,25 +212,35 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
           })),
           createdBy: user.id,
         });
-
-        onArenaCreated?.();
-        toast({ title: "Arena Created", description: `Room Code: ${roomCode}` });
-        try {
-          const token = await auth.currentUser?.getIdToken();
-          if (token) {
-            fetch('/api/arena/notify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ roomCode, title: quizTitle }),
-            }).catch(() => {});
-          }
-        } catch {}
-        router.push(`/battle/${roomCode}`);
     } catch (e: unknown) {
+        // Batch write failed — surface as arena error. Post-creation
+        // listener/notify failures must not be shown as creation failure.
         toast({ variant: 'destructive', title: "Arena Error", description: e instanceof Error ? e.message : "Unknown error" });
-    } finally {
         setIsSubmitting(false);
         submittedRef.current = false;
+        return;
+    }
+
+    // Batch succeeded — arena is persisted. Success toast is shown before
+    // any post-creation side-effects so a streaming listener rejection never
+    // overwrites it with a false "Arena Error".
+    setIsSubmitting(false);
+    submittedRef.current = false;
+    if (roomCode) {
+      onArenaCreated?.();
+      toast({ title: "Arena Created", description: `Room Code: ${roomCode}` });
+      // Fan-out notification — best-effort, isolated from creation result.
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (token) {
+          fetch('/api/arena/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ roomCode, title: quizTitle }),
+          }).catch(() => {});
+        }
+      } catch {}
+      router.push(`/battle/${roomCode}`);
     }
   };
 

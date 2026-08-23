@@ -126,8 +126,9 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
     submittedRef.current = true;
     setIsSubmitting(true);
 
+    let roomCode: string | null = null;
     try {
-        const roomCode = await arenaCreationService.createArenaAtomic({
+        roomCode = await arenaCreationService.createArenaAtomic({
           title: data.title,
           questions: data.questions.map((q) => ({
             text: q.text,
@@ -143,25 +144,36 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
             streak_multiplier: data.streakMultiplier,
           },
         });
-
-        toast({ title: 'Arena Created', description: `Room Code: ${roomCode}` });
-        // Fan-out notification to all gladiators — best-effort, never blocks navigation.
-        try {
-          const token = await auth.currentUser?.getIdToken();
-          if (token) {
-            fetch('/api/arena/notify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ roomCode, title: data.title }),
-            }).catch(() => {});
-          }
-        } catch {}
-        router.push(`/battle/${roomCode}`);
     } catch (error: unknown) {
+        // Batch write failed — surface as creation failure. Listener or
+        // post-creation errors must NOT surface as "Creation Failed" (they are
+        // separate streaming errors that do not mean the arena wasn't created).
         toast({ variant: 'destructive', title: 'Creation Failed', description: error instanceof Error ? error.message : "Unknown error" });
-    } finally {
         setIsSubmitting(false);
         submittedRef.current = false;
+        return;
+    }
+
+    // Batch succeeded — arena is persisted. Show success before any
+    // post-creation side-effects so a listener/notify failure never
+    // overwrites the success toast with a false "Creation Failed".
+    setIsSubmitting(false);
+    submittedRef.current = false;
+    if (roomCode) {
+      toast({ title: 'Arena Created', description: `Room Code: ${roomCode}` });
+      // Fan-out notification to all gladiators — best-effort, never blocks navigation.
+      // Isolated from creation success: a notify failure must not show as arena error.
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (token) {
+          fetch('/api/arena/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ roomCode, title: data.title }),
+          }).catch(() => {});
+        }
+      } catch {}
+      router.push(`/battle/${roomCode}`);
     }
   };
 

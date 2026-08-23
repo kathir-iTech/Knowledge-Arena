@@ -179,7 +179,16 @@ service cloud.firestore {
       // Commander room-code collision check: allow get of a quiz that doesn't exist yet so
       // createArenaAtomic() can verify the generated room code is unique. Restricted to
       // commanders/executives — gladiators never need to probe non-existent arenas.
-      allow read: if isExecutive() || canReadArena(quizId) || (isCommander() && !exists(/databases/$(database)/documents/quizzes/$(quizId)));
+      // Collection-list fix: onSnapshot/getDocs with where('created_by','==',uid) or
+      // where('status','in',['waiting','ready']) must be allowed. canReadArena uses
+      // get()/exists() on the parent which returns Null for 'list' evaluation; resource
+      // checks handle list queries directly. This is the listener that was failing on
+      // create-quiz (Commander quiz list refresh).
+      allow read: if isExecutive()
+        || canReadArena(quizId)
+        || (isCommander() && !exists(/databases/$(database)/documents/quizzes/$(quizId)))
+        || (isSignedIn() && resource != null && resource.data.created_by == request.auth.uid)
+        || (isSignedIn() && resource != null && resource.data.status in ['waiting', 'ready']);
       allow create: if isSignedIn() && (getRole() == 'commander' || getRole() == 'executive')
         && request.resource.data.created_by == request.auth.uid;
       allow update: if isLegalQuizUpdate(quizId);
