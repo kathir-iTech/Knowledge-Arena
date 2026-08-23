@@ -168,7 +168,7 @@ service cloud.firestore {
       allow create: if isOwner(userId)
         && request.resource.data.role == 'gladiator'
         && isAllowedGladiatorEmail(request.resource.data)
-        && request.resource.data.keys().hasOnly(['name', 'email', 'avatar', 'role']);
+        && request.resource.data.keys().hasOnly(['name', 'email', 'avatar', 'role', 'onboarding_complete']);
       // Owners may only update their display name and avatar, and mark onboarding complete. Role, email,
       // mustChangePassword, disabled and all other fields are server-only.
       allow update: if isOwner(userId)
