@@ -80,12 +80,8 @@ export default function ForcePasswordChangePage() {
       toast({ title: "Password changed", description: "Your password has been updated successfully." });
 
       await refreshUser();
-      const dashboardMap: Record<string, string> = {
-        executive: '/executive/analytics',
-        commander: '/commander/dashboard',
-        gladiator: '/gladiator/dashboard',
-      };
-      router.replace(dashboardMap[user.role] || '/gladiator/dashboard');
+      const { ROLE_HOME: _ROLE_HOME } = await import('@/lib/auth-redirect');
+      router.replace(_ROLE_HOME[user.role] || '/gladiator/dashboard');
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to change password.';
       if (msg.includes('wrong-password') || msg.includes('invalid-credential')) {

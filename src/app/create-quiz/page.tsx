@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
+import { ROLE_HOME } from '@/lib/auth-redirect';
 
 export default function CreateQuizPage() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function CreateQuizPage() {
   const [forgeDirty, setForgeDirty] = useState(false);
   const [showDraftRestore, setShowDraftRestore] = useState(false);
   const hasUnsavedWork = manualDirty || forgeDirty;
-  const dashboardPath = user?.role === 'executive' ? '/executive/dashboard' : '/commander/dashboard';
+  const dashboardPath = ROLE_HOME[user?.role || 'commander'] || '/commander/dashboard';
 
   const draftKey = user?.id ? `ka_draft_${user.id}` : null;
 

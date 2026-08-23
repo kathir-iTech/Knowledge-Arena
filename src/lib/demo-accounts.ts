@@ -43,7 +43,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
 ];
 
 export const DEMO_ROLE_HOME: Record<DemoRole, string> = {
-  executive: '/executive/analytics',
+  executive: '/executive/workspace',
   commander: '/commander/dashboard',
   gladiator: '/gladiator/dashboard',
 };

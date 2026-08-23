@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -42,6 +41,45 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 // this only wires the Google `hd` hint and a clear error + sign-out UX.
 const ALLOWED_GLADIATOR_DOMAIN = (process.env.NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN || '').trim().toLowerCase();
 const IS_EMULATOR = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true';
+
+const PROFILE_TIMEOUT_MS = 10000;
+const AUTH_OP_TIMEOUT_MS = 10000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const tid = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms);
+    promise.then(
+      (v) => { clearTimeout(tid); resolve(v); },
+      (e) => { clearTimeout(tid); reject(e); }
+    );
+  });
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function isPermissionDenied(err: unknown): boolean {
+  const msg = getErrorMessage(err);
+  const code = (err as { code?: string })?.code || '';
+  return code === 'permission-denied'
+    || code === 'PERMISSION_DENIED'
+    || msg.includes('Missing or insufficient permissions')
+    || msg.includes('PERMISSION_DENIED')
+    || msg.includes('permission-denied')
+    || msg.toLowerCase().includes('insufficient permissions');
+}
+
+function isDomainError(err: unknown): boolean {
+  const msg = getErrorMessage(err);
+  return msg.includes(`@${ALLOWED_GLADIATOR_DOMAIN}`) || msg.includes('requires a @');
+}
+
+function isTimeoutError(err: unknown): boolean {
+  const msg = getErrorMessage(err).toLowerCase();
+  return msg.includes('timed out');
+}
 
 function isAllowedGladiatorEmail(email: string | null | undefined): boolean {
   if (!ALLOWED_GLADIATOR_DOMAIN) return true;
@@ -96,91 +134,117 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!firestore || !auth) return buildFallbackProfile(uid, defaults);
     const userRef = doc(firestore, 'users', uid);
     try {
-      const result = await runTransaction(firestore, async (transaction) => {
-        const existing = await transaction.get(userRef);
-        if (existing.exists()) {
-          const data = existing.data() as Record<string, unknown>;
-          const role = normalizeRole(data.role as string | undefined);
-          if (!role) {
-            console.warn('[Profile] Invalid role for user', uid, data.role);
-            return buildFallbackProfile(uid, defaults);
+      const result = await withTimeout(
+        runTransaction(firestore, async (transaction) => {
+          const existing = await transaction.get(userRef);
+          if (existing.exists()) {
+            const data = existing.data() as Record<string, unknown>;
+            const role = normalizeRole(data.role as string | undefined);
+            if (!role) {
+              console.warn('[Profile] Invalid role for user', uid, data.role);
+              throw new Error('Account not recognized — contact your Executive');
+            }
+            const storedAvatar = (data.avatar as string) || '';
+            const googlePhotoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
+            let finalAvatar = storedAvatar;
+            if (storedAvatar.startsWith('http') && googlePhotoURL && googlePhotoURL !== storedAvatar) {
+              finalAvatar = googlePhotoURL;
+              transaction.update(userRef, { avatar: finalAvatar });
+            }
+            return {
+              id: existing.id,
+              name: (data.name as string) || 'Gladiator',
+              email: (data.email as string) || '',
+              avatar: finalAvatar || getRandomAvatar(),
+              role,
+              mustChangePassword: data.mustChangePassword === true,
+            } as User;
           }
-          const storedAvatar = (data.avatar as string) || '';
-          const googlePhotoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
-          let finalAvatar = storedAvatar;
-          if (storedAvatar.startsWith('http') && googlePhotoURL && googlePhotoURL !== storedAvatar) {
-            finalAvatar = googlePhotoURL;
-            transaction.update(userRef, { avatar: finalAvatar });
+          const displayName = defaults?.name || auth.currentUser?.displayName || 'Gladiator';
+          const email = defaults?.email || auth.currentUser?.email || '';
+          const photoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
+          const avatar = photoURL || getRandomAvatar();
+
+          // Proactive domain guard BEFORE profile creation — server-side is
+          // Firestore rules, but this gives a clear error instead of a
+          // permission-denied. Existing profiles are already returned above.
+          if (ALLOWED_GLADIATOR_DOMAIN && !isAllowedGladiatorEmail(email)) {
+            throw new Error(`This arena requires a @${ALLOWED_GLADIATOR_DOMAIN} account`);
           }
-          return {
-            id: existing.id,
-            name: (data.name as string) || 'Gladiator',
-            email: (data.email as string) || '',
-            avatar: finalAvatar || getRandomAvatar(),
-            role,
-            mustChangePassword: data.mustChangePassword === true,
-          } as User;
-        }
-        const displayName = defaults?.name || auth.currentUser?.displayName || 'Gladiator';
-        const email = defaults?.email || auth.currentUser?.email || '';
-        const photoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
-        const avatar = photoURL || getRandomAvatar();
 
-        // Proactive domain guard BEFORE profile creation — server-side is
-        // Firestore rules, but this gives a clear error instead of a
-        // permission-denied. Existing profiles are already returned above.
-        if (ALLOWED_GLADIATOR_DOMAIN && !isAllowedGladiatorEmail(email)) {
-          throw new Error(`This arena requires a @${ALLOWED_GLADIATOR_DOMAIN} account`);
-        }
-
-        const newUser: User = {
-          id: uid,
-          name: displayName,
-          email,
-          avatar,
-          role: 'gladiator',
-        };
-        transaction.set(userRef, {
-          name: newUser.name,
-          email: newUser.email,
-          avatar: newUser.avatar,
-          role: 'gladiator',
-        });
-        return newUser;
-      });
+          const newUser: User = {
+            id: uid,
+            name: displayName,
+            email,
+            avatar,
+            role: 'gladiator',
+          };
+          transaction.set(userRef, {
+            name: newUser.name,
+            email: newUser.email,
+            avatar: newUser.avatar,
+            role: 'gladiator',
+          });
+          return newUser;
+        }),
+        PROFILE_TIMEOUT_MS,
+        'Profile creation'
+      );
       return result;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '';
-      const code = (err as any)?.code || '';
-      const isPermissionDenied = code === 'permission-denied' || msg.includes('Missing or insufficient permissions') || msg.includes('PERMISSION_DENIED') || msg.includes('permission-denied');
-      if (msg.includes(`@${ALLOWED_GLADIATOR_DOMAIN}`) || msg.includes('requires a @')) {
-        // Surface domain mismatch without falling back to a phantom local user.
-        if (auth) { void signOut(auth); }
+      const msg = getErrorMessage(err);
+      const permissionDenied = isPermissionDenied(err);
+      const domainErr = isDomainError(err);
+      const timeout = isTimeoutError(err);
+      const unknownRole = msg.includes('Account not recognized');
+      if (domainErr || unknownRole) {
+        if (auth) { void signOut(auth).catch(() => {}); }
         setUser(null);
         setIsLoading(false);
-        setAuthError("Sign-in failed — please try again");
+        const friendly = unknownRole ? 'Account not recognized — contact your Executive' : msg;
+        setAuthError(friendly);
         toast({
           variant: 'destructive',
-          title: 'Access Denied',
-          description: msg,
+          title: unknownRole ? 'Account Error' : 'Access Denied',
+          description: friendly,
         });
         throw err;
       }
-      if (isPermissionDenied) {
+      if (permissionDenied) {
         console.error('[Profile] Firestore permission denied for', uid, err);
-        setAuthError("Sign-in failed — please try again");
+        if (auth) { void signOut(auth).catch(() => {}); }
+        setUser(null);
         setIsLoading(false);
-        toast({ variant: "destructive", title: "Sign-in failed", description: "Please try again" });
+        const friendly = 'Sign-in failed — please try again';
+        setAuthError(friendly);
+        toast({ variant: "destructive", title: "Sign-in failed", description: friendly });
         throw err;
       }
-      console.error('[Profile] Firestore profile creation failed for', uid, '- using local fallback', err);
-      return buildFallbackProfile(uid, defaults);
+      if (timeout) {
+        console.error('[Profile] Firestore operation timed out for', uid, err);
+        if (auth) { void signOut(auth).catch(() => {}); }
+        setUser(null);
+        setIsLoading(false);
+        const friendly = 'Sign-in failed — please try again';
+        setAuthError(friendly);
+        toast({ variant: "destructive", title: "Sign-in failed", description: "Request timed out. Please try again." });
+        throw err;
+      }
+      // Any other error during Gladiator profile creation must sign out — do not leave half-authenticated
+      console.error('[Profile] Firestore profile creation failed for', uid, err);
+      if (auth) { void signOut(auth).catch(() => {}); }
+      setUser(null);
+      setIsLoading(false);
+      const friendly = 'Sign-in failed — please try again';
+      setAuthError(friendly);
+      toast({ variant: "destructive", title: "Sign-in failed", description: friendly });
+      throw err;
     }
   }, [firestore, auth, getRandomAvatar, normalizeRole, buildFallbackProfile, toast]);
 
   const clearAuthError = useCallback(() => setAuthError(null), []);
 
-  // 15-second timeout: if profile resolution doesn't complete after onAuthStateChanged
+  // 10-second timeout: if profile resolution doesn't complete after onAuthStateChanged
   // fires with a user, break the infinite "Authenticating..." spinner and surface
   // a visible error with reload action. This guards against hung Firestore
   // transactions/gets (e.g. permission-denied that was previously swallowed).
@@ -195,14 +259,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (authTimeoutRef.current) clearTimeout(authTimeoutRef.current);
     authTimeoutRef.current = setTimeout(() => {
       if (isLoading) {
-        console.error('[Auth] Profile resolution timed out after 15s for', firebaseUser.uid);
+        console.error('[Auth] Profile resolution timed out after 10s for', firebaseUser.uid);
         setAuthError("Sign-in failed — please try again");
         setIsLoading(false);
         setUser(null);
-        toast({ variant: "destructive", title: "Sign-in failed", description: "Please try again" });
+        toast({ variant: "destructive", title: "Sign-in failed", description: "Request timed out. Please try again." });
         if (auth) { void signOut(auth).catch(() => {}); }
       }
-    }, 15000);
+    }, PROFILE_TIMEOUT_MS);
     return () => {
       if (authTimeoutRef.current) {
         clearTimeout(authTimeoutRef.current);
@@ -231,28 +295,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: googleUser?.email || undefined,
           photoURL: googleUser?.photoURL || undefined,
         });
+        // Post-fetch unknown role guard: ensure role is valid, otherwise sign out
+        if (!profile.role || !['executive', 'commander', 'gladiator'].includes(profile.role)) {
+          throw new Error('Account not recognized — contact your Executive');
+        }
         setUser(profile);
         setAuthError(null);
     } catch (err) {
-        const msg = err instanceof Error ? err.message : '';
-        const code = (err as any)?.code || '';
-        const isPermissionDenied = code === 'permission-denied' || msg.includes('Missing or insufficient permissions') || msg.includes('PERMISSION_DENIED') || msg.includes('permission-denied');
-        const isDomainError = msg.includes(`@${ALLOWED_GLADIATOR_DOMAIN}`) || msg.includes('requires a @');
-        // Domain and permission errors already surfaced with authError + toast in
-        // ensureGladiatorProfile; don't silently fall back to a phantom local user.
-        if (isPermissionDenied || isDomainError) {
-          console.error('AuthContext: fetchUserDocument permission/domain error', err);
-          // authError and isLoading already set by ensureGladiatorProfile; ensure
-          // we don't overwrite with a fallback profile that would hide the failure.
+        const msg = getErrorMessage(err);
+        const permissionDenied = isPermissionDenied(err);
+        const domainErr = isDomainError(err);
+        const timeout = isTimeoutError(err);
+        const unknownRole = msg.includes('Account not recognized');
+        // Domain, permission, timeout and unknown-role errors already surfaced with authError + toast in
+        // ensureGladiatorProfile; don't silently fall back.
+        if (permissionDenied || domainErr || timeout || unknownRole) {
+          console.error('AuthContext: fetchUserDocument permission/domain/timeout/role error', err);
+          // authError and isLoading already set by ensureGladiatorProfile; ensure we don't overwrite
+          // But ensure loading is false if not already
+          setIsLoading(false);
           return;
         }
+        // Any other error: ensureGladiatorProfile already signed out and set error; just ensure loading false
         console.error('AuthContext: fetchUserDocument error', err);
-        const googleUser = auth?.currentUser;
-        setUser(buildFallbackProfile(uid, {
-          name: googleUser?.displayName || undefined,
-          email: googleUser?.email || undefined,
-          photoURL: googleUser?.photoURL || undefined,
-        }));
+        setIsLoading(false);
+        // Do not create fallback — leave signed out
+        return;
     } finally {
         // Only clear loading if not already cleared by timeout/error path
         // (timeout already sets isLoading false; this is idempotent)
@@ -264,7 +332,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           authTimeoutRef.current = null;
         }
     }
-  }, [firestore, auth, user, ensureGladiatorProfile, buildFallbackProfile]);
+  }, [firestore, auth, user, ensureGladiatorProfile]);
 
   useEffect(() => {
     if (isUserLoading) {
@@ -273,6 +341,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     if (firebaseUser) {
       if (signupInProgress.current && signupUserId.current === firebaseUser.uid) {
+        // Ensure we don't hang forever if signup stalls
+        // No-op: global timeout will clear loading if profile never resolves
         return;
       }
       sessionStorage.removeItem('oa_pending');
@@ -286,24 +356,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fetchUserDocument(firebaseUser.uid);
           return;
         }
-        getDoc(doc(firestore, 'users', firebaseUser.uid))
+        withTimeout(getDoc(doc(firestore, 'users', firebaseUser.uid)), PROFILE_TIMEOUT_MS, 'Profile read')
           .then((docSnap) => {
             if (docSnap.exists()) {
               fetchUserDocument(firebaseUser.uid);
               return;
             }
-            if (auth) { void signOut(auth); }
+            if (auth) { void signOut(auth).catch(() => {}); }
             setUser(null);
             fetchInProgress.current = false;
             fetchInProgressUid.current = null;
             setIsLoading(false);
+            const msg = `This arena requires a @${ALLOWED_GLADIATOR_DOMAIN} account`;
+            setAuthError(msg);
             toast({
               variant: 'destructive',
               title: 'Access Denied',
-              description: `This arena requires a @${ALLOWED_GLADIATOR_DOMAIN} account`,
+              description: msg,
             });
           })
-          .catch(() => fetchUserDocument(firebaseUser.uid));
+          .catch((err) => {
+            if (isPermissionDenied(err) || isTimeoutError(err)) {
+              console.error('[Auth] domain guard getDoc failed', err);
+              if (auth) { void signOut(auth).catch(() => {}); }
+              setUser(null);
+              setIsLoading(false);
+              const friendly = isTimeoutError(err) ? 'Sign-in failed — please try again' : 'Sign-in failed — please try again';
+              setAuthError(friendly);
+              toast({ variant: "destructive", title: "Sign-in failed", description: isTimeoutError(err) ? "Request timed out. Please try again." : friendly });
+              return;
+            }
+            fetchUserDocument(firebaseUser.uid);
+          });
         return;
       }
       fetchUserDocument(firebaseUser.uid);
@@ -314,9 +398,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.removeItem('oa_pending');
       if (redirectCheckComplete.current) {
         setIsLoading(false);
+      } else {
+        // If no user and redirect check hasn't completed yet, keep loading briefly
+        // but ensure global timeout will clear it if getRedirectResult hangs.
+        // No immediate setIsLoading(false) here to avoid flicker during OAuth redirect,
+        // but guarantee it via timeout.
+        if (authTimeoutRef.current) clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = setTimeout(() => {
+          if (!redirectCheckComplete.current) {
+            console.error('[Auth] No user and redirect check pending timed out after 10s');
+            redirectCheckComplete.current = true;
+            setIsLoading(false);
+          }
+        }, PROFILE_TIMEOUT_MS);
       }
     }
-  }, [firebaseUser, isUserLoading, fetchUserDocument]);
+  }, [firebaseUser, isUserLoading, fetchUserDocument, firestore, auth, toast]);
 
   const checkRateLimit = async (type: 'login' | 'signup', identifier?: string) => {
     try {
@@ -349,8 +446,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       const email = mapStaffIdToEmail(credentials.email);
-      await checkRateLimit('login', email);
-      await signInWithEmailAndPassword(auth, email, credentials.password);
+      await withTimeout(checkRateLimit('login', email), AUTH_OP_TIMEOUT_MS, 'Rate limit check');
+      await withTimeout(signInWithEmailAndPassword(auth, email, credentials.password), AUTH_OP_TIMEOUT_MS, 'Sign in');
 
       const uid = auth.currentUser?.uid;
       if (!uid) {
@@ -365,23 +462,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Service not available.");
       }
 
-      const userDoc = await getDoc(doc(firestore, 'users', uid));
+      let userDoc;
+      try {
+        userDoc = await withTimeout(getDoc(doc(firestore, 'users', uid)), PROFILE_TIMEOUT_MS, 'Profile read');
+      } catch (e) {
+        if (isPermissionDenied(e)) {
+          await signOut(auth);
+          setAuthError("Sign-in failed — please try again");
+          toast({ variant: "destructive", title: "Sign In Failed", description: "Please try again" });
+          throw new Error("Sign-in failed — please try again");
+        }
+        if (isTimeoutError(e)) {
+          await signOut(auth);
+          setAuthError("Sign-in failed — please try again");
+          toast({ variant: "destructive", title: "Sign In Failed", description: "Request timed out. Please try again." });
+          throw new Error("Request timed out. Please try again.");
+        }
+        throw e;
+      }
 
       if (!userDoc.exists()) {
         await signOut(auth);
+        setAuthError("Account not recognized — contact your Executive");
         toast({ variant: "destructive", title: "Access Denied", description: "Staff account not found. Contact your Executive." });
         throw new Error("Staff account not found.");
       }
 
       const role = userDoc.data()?.role;
-      // Demo Mode: allow the seeded demo gladiator to sign in with a password on the
-      // local emulator only. Production (emulator flag off) keeps the Google-only rule.
-      const isDemoGladiator =
-        role === 'gladiator' &&
-        process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true' &&
-        email === getDemoAccount('gladiator')?.email;
-      if (!role || !['executive', 'commander'].includes(role)) {
+      const normalized = normalizeRole(role);
+      if (!normalized || !['executive', 'commander'].includes(normalized)) {
+        const isDemoGladiator =
+          normalized === 'gladiator' &&
+          process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true' &&
+          email === getDemoAccount('gladiator')?.email;
         if (!isDemoGladiator) {
+          // Unknown or gladiator trying staff login
+          if (!normalized) {
+            await signOut(auth);
+            setAuthError("Account not recognized — contact your Executive");
+            toast({ variant: "destructive", title: "Access Denied", description: "Account not recognized — contact your Executive" });
+            throw new Error("Account not recognized — contact your Executive");
+          }
           await signOut(auth);
           toast({ variant: "destructive", title: "Access Denied", description: "Staff login is not available for this account. Gladiators must use Google Sign-In." });
           throw new Error("Staff login is not available for this account.");
@@ -390,28 +511,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: unknown) {
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
         toast({ variant: "destructive", title: "Too Many Attempts", description: "Too many attempts. Please wait a moment and try again." });
+        // Ensure loading is not stuck
+        setIsLoading(false);
         throw error;
       }
       if (error instanceof Error && (
         error.message.includes('Access Denied') ||
         error.message.includes('Staff account not found') ||
-        error.message.includes('Staff login is not available')
+        error.message.includes('Staff login is not available') ||
+        error.message.includes('Account not recognized') ||
+        error.message.includes('Sign-in failed') ||
+        error.message.includes('Request timed out')
       )) {
+        // Already handled with toast/authError above
+        setIsLoading(false);
         throw error;
       }
       if (error instanceof Error && error.message.includes('Unable to verify')) {
+        setIsLoading(false);
         throw error;
+      }
+      if (isPermissionDenied(error)) {
+        setAuthError("Sign-in failed — please try again");
+        setIsLoading(false);
+        toast({ variant: "destructive", title: "Sign In Failed", description: "Please try again" });
+        throw new Error("Sign-in failed — please try again");
+      }
+      if (isTimeoutError(error)) {
+        setAuthError("Sign-in failed — please try again");
+        setIsLoading(false);
+        toast({ variant: "destructive", title: "Sign In Failed", description: "Request timed out. Please try again." });
+        throw new Error("Request timed out. Please try again.");
       }
       const mapped = mapFirebaseAuthError(error, 'login');
       toast({ variant: "destructive", title: mapped.title, description: mapped.message });
+      setIsLoading(false);
       throw new Error(mapped.message);
     }
   };
 
   useEffect(() => {
-    if (!auth) { redirectCheckComplete.current = true; return; }
+    if (!auth) { redirectCheckComplete.current = true; setIsLoading(false); return; }
     redirectCheckComplete.current = false;
-    getRedirectResult(auth)
+    withTimeout(getRedirectResult(auth), AUTH_OP_TIMEOUT_MS, 'Google redirect')
       .then((result) => {
         redirectCheckComplete.current = true;
         if (result) {
@@ -434,6 +576,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('[Auth] getRedirectResult ERROR:', error);
         setIsLoading(false);
         sessionStorage.removeItem('oa_pending');
+        if (isTimeoutError(error)) {
+          setAuthError("Sign-in failed — please try again");
+          toast({ variant: "destructive", title: "Sign-in failed", description: "Request timed out. Please try again." });
+          return;
+        }
+        if (isPermissionDenied(error)) {
+          setAuthError("Sign-in failed — please try again");
+          toast({ variant: "destructive", title: "Sign-in failed", description: "Please try again" });
+          return;
+        }
         const mapped = mapFirebaseAuthError(error, 'google');
         if (!mapped.isSilent) {
           toast({ variant: "destructive", title: mapped.title, description: mapped.message });
@@ -455,14 +607,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...(ALLOWED_GLADIATOR_DOMAIN ? { hd: ALLOWED_GLADIATOR_DOMAIN } : {}),
     });
     try {
-      await signInWithRedirect(auth, provider);
+      await withTimeout(signInWithRedirect(auth, provider), AUTH_OP_TIMEOUT_MS, 'Google redirect');
     } catch (error: unknown) {
       console.error('[Auth] signInWithRedirect error', error);
       sessionStorage.removeItem('oa_pending');
       setIsLoading(false);
+      if (isTimeoutError(error)) {
+        setAuthError("Sign-in failed — please try again");
+        toast({ variant: "destructive", title: "Google Sign-In Failed", description: "Request timed out. Please try again." });
+        return;
+      }
+      if (isPermissionDenied(error)) {
+        setAuthError("Sign-in failed — please try again");
+        toast({ variant: "destructive", title: "Sign-in failed", description: "Please try again" });
+        return;
+      }
       const mapped = mapFirebaseAuthError(error, 'google');
       if (!mapped.isSilent) {
+        setAuthError(mapped.message);
         toast({ variant: "destructive", title: mapped.title, description: mapped.message });
+      } else {
+        setIsLoading(false);
       }
     }
   }, [auth, toast]);
@@ -476,6 +641,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     await signOut(auth);
     setUser(null);
+    setIsLoading(false);
+    lastFetchedUid.current = null;
+    fetchInProgress.current = false;
+    fetchInProgressUid.current = null;
   };
 
   const updateAvatar = async (avatar: string) => {
