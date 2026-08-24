@@ -544,7 +544,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...(ALLOWED_GLADIATOR_DOMAIN ? { hd: ALLOWED_GLADIATOR_DOMAIN } : {}),
     });
     try {
-      await withTimeout(signInWithPopup(auth, provider), AUTH_OP_TIMEOUT_MS, 'Google redirect');
+      await withTimeout(signInWithPopup(auth, provider), 120000, 'Google redirect');
       // onAuthStateChanged will fire and fetchUserDocument will handle profile creation
     } catch (error: unknown) {
       console.error('[Auth] signInWithPopup error', error);
