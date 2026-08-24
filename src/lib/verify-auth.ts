@@ -76,10 +76,17 @@ export async function verifyFirebaseTokenWithRole(
     return null;
   }
 
+  // Determine the user's role: check token customClaims first, then Firestore
   try {
-    const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
-    if (!userDoc.exists) return null;
-    const role = userDoc.data()?.role;
+    let role: string | undefined;
+    if (typeof decoded.customClaims !== 'undefined' && decoded.customClaims?.role) {
+      role = decoded.customClaims.role as string;
+    } else {
+      const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
+      if (!userDoc.exists) return null;
+      role = userDoc.data()?.role;
+    }
+
     if (role !== requiredRole) {
       if (typeof tokenOrRequest !== 'string') {
         logAuthFailure(`role:${decoded.uid}`, `role_mismatch:expected_${requiredRole}`);
@@ -88,7 +95,8 @@ export async function verifyFirebaseTokenWithRole(
     }
     // Users under a forced password change may not use the platform until
     // they set a new password through /api/auth/change-password.
-    if (userDoc.data()?.mustChangePassword === true) {
+    const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
+    if (userDoc.exists && userDoc.data()?.mustChangePassword === true) {
       if (typeof tokenOrRequest !== 'string') {
         logAuthFailure(`auth:${decoded.uid}`, 'must_change_password');
       }
