@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     const unreadCount = await notificationService.getUnreadCount(auth.uid);
     return NextResponse.json({ notifications, unreadCount, nextCursor });
   } catch (err: any) {
-    console.error('[Notifications GET] Error:', err?.name, err?.message);
+    console.error('[Notifications GET] Error:', err?.name, err?.message, err?.stack);
     return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
   }
 }
