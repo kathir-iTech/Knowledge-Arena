@@ -165,7 +165,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pb-20">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pb-40">
           <Card>
             <CardHeader>
               <CardTitle className="text-xl font-headline text-primary flex items-center gap-2">

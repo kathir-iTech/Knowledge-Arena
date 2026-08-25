@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { arenaCreationService } from '@/services/arena-creation.service';
 import { validateQuiz, type QuizValidationIssue } from '@/lib/quiz-validator';
+import { AdvancedScoringSection, DEFAULT_ADVANCED_SCORING, toScoringConfig } from '@/components/quiz/AdvancedScoringSection';
 
 interface Question {
   id: string;
@@ -149,6 +150,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   // Modal State
   const [quizTitle, setQuizTitle] = useState('');
   const [globalTimer, setGlobalTimer] = useState(30);
+  const [scoring, setScoring] = useState<typeof DEFAULT_ADVANCED_SCORING>(DEFAULT_ADVANCED_SCORING);
 
   const handleDelete = (id: string) => {
     setDeleteConfirmId(id);
@@ -211,6 +213,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             timer: globalTimer,
           })),
           createdBy: user.id,
+          scoringConfig: toScoringConfig(scoring),
         });
     } catch (e: unknown) {
         // Batch write failed — surface as arena error. Post-creation
@@ -245,7 +248,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   };
 
   return (
-      <div className="space-y-6 pb-32">
+      <div className="space-y-6 pb-40">
         {(() => {
           const globalIssues = validationIssues.filter(i => i.questionIndex === -1);
           if (!globalIssues.length) return null;
@@ -260,7 +263,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
             </div>
           );
         })()}
-        <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-secondary/20 border border-border/20 rounded-lg gap-4 sticky top-0 z-40">
+        <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-background border border-border/40 rounded-lg gap-4 sticky top-0 z-40 shadow-elevation-small">
         <div className="flex items-center gap-3">
           <div className="bg-primary/10 p-2 rounded-lg">
             <Sparkles className="w-5 h-5 text-primary" />
@@ -394,7 +397,9 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         ))}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 md:p-6 bg-background/80 backdrop-blur-xl border-t border-border/20 z-50 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6">
+      <AdvancedScoringSection value={scoring} onChange={setScoring} />
+
+      <div className="fixed bottom-0 left-0 right-0 p-4 md:p-6 bg-background border-t border-border/20 z-50 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6 shadow-elevation-medium">
         <div className="flex items-center gap-3 text-sm">
            <div className={cn(
                "w-3 h-3 rounded-full",
