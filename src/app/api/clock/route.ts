@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
-import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
+import { enforceRateLimit, Limits, getClientIp } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
@@ -9,10 +8,10 @@ export const runtime = 'nodejs';
 // timestamps (question_start_at etc.); a skewed client clock otherwise causes
 // premature timer expiry and locks gladiators out of submitting for questions
 // the server still accepts.
+// No auth required: server time is non-sensitive and needed for gameplay sync.
 export async function GET(req: NextRequest) {
-  const auth = await verifyFirebaseTokenWithAnyRole(req, ['executive', 'commander', 'gladiator']);
-  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const _rl = enforceRateLimit(`clock:${auth.uid}`, Limits.READ_PER_USER);
-    if (_rl) return _rl;
+  const ip = getClientIp(req);
+  const rl = enforceRateLimit(`clock:${ip}`, Limits.READ_PER_USER);
+  if (rl) return rl;
   return NextResponse.json({ serverTime: Date.now() });
 }
