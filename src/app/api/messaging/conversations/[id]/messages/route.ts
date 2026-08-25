@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { auditService } from '@/services/audit.service';
 import { notificationService } from '@/services/notification.service';
@@ -7,35 +8,28 @@ import { validateAttachments } from '@/lib/file-security';
 
 export const runtime = 'nodejs';
 
+// Use the app-standard verifier instead of a hand-rolled duplicate. The old
+// verifyParticipant read `role` ONLY from the Firestore `users` doc and required
+// that doc to exist, so any commander/executive whose role is carried via
+// customClaims (or whose users doc is missing/out of sync) was 401'd — which
+// broke every message GET/POST even though the rest of the app authenticated
+// fine via verifyFirebaseTokenWithRole (Phase 106, Workstream B). This now also
+// enforces the mustChangePassword gate consistent with other routes.
 async function verifyParticipant(req: NextRequest, convId: string) {
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const idToken = authHeader.slice(7);
-  let decodedToken;
-  try {
-    decodedToken = await getAdminAuth().verifyIdToken(idToken);
-  } catch {
-    return null;
-  }
+  const executiveAuth = await verifyFirebaseTokenWithRole(req, 'executive');
+  const commanderAuth = await verifyFirebaseTokenWithRole(req, 'commander');
+  const auth = executiveAuth || commanderAuth;
+  if (!auth) return null;
+  const role = executiveAuth ? 'executive' : 'commander';
 
   try {
-    const result = await getAdminDb().runTransaction(async (tx) => {
-      const userRef = getAdminDb().collection('users').doc(decodedToken.uid);
-      const userSnap = await tx.get(userRef);
-      if (!userSnap.exists) return null;
-      const role = userSnap.data()?.role;
-      if (role !== 'executive' && role !== 'commander') return null;
+    const convRef = getAdminDb().collection('conversations').doc(convId);
+    const convSnap = await convRef.get();
+    if (!convSnap.exists) return null;
+    const convData = convSnap.data()!;
+    if (!convData.participants?.includes(auth.uid)) return null;
 
-      const convRef = getAdminDb().collection('conversations').doc(convId);
-      const convSnap = await tx.get(convRef);
-      if (!convSnap.exists) return null;
-      const convData = convSnap.data()!;
-      if (!convData.participants?.includes(decodedToken.uid)) return null;
-
-      return { auth: { uid: decodedToken.uid, email: decodedToken.email ?? null }, role, convRef };
-    });
-    return result;
+    return { auth, role, convRef };
   } catch {
     return null;
   }

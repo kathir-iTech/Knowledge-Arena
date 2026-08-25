@@ -384,6 +384,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const [submittedCount, setSubmittedCount] = useState(0);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
@@ -937,6 +938,15 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     }
   };
 
+  // Commander "Leave Arena": navigates the Commander away WITHOUT ending the
+  // battle. The Commander's RTDB presence node is removed on disconnect, so the
+  // existing gladiator-triggered auto-advance (Phase 64) keeps the battle
+  // running for the gladiators (Workstream E).
+  const handleLeaveArena = () => {
+    setShowLeaveConfirm(false);
+    router.push('/commander/dashboard');
+  };
+
   const handleUnblock = async (userId: string) => {
     if (!isTeacher || unblockingId) return;
     setUnblockingId(userId);
@@ -1278,6 +1288,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
               {isEnding ? <Loader2 className="animate-spin mr-2" /> : <Flag className="mr-2 h-5 w-5" />}
               End Battle
             </Button>
+            <Button onClick={() => setShowLeaveConfirm(true)} variant="ghost" disabled={isAdvancing || isEnding || isSkipping} size="lg" className="w-full sm:w-auto text-muted-foreground hover:text-foreground">
+              <ArrowRight className="mr-2 h-5 w-5" />
+              Leave Arena
+            </Button>
           </div>
           <p className="text-sm text-muted-foreground">{submittedCount} / {studentCount} gladiators answered</p>
           {studentCount > 0 && submittedCount < studentCount && (
@@ -1303,6 +1317,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
             <Button onClick={() => setShowEndConfirm(true)} variant="outline" disabled={isEnding} size="lg" className="w-full sm:w-auto">
               {isEnding ? <Loader2 className="animate-spin mr-2" /> : <Flag className="mr-2 h-5 w-5" />}
               End Battle
+            </Button>
+            <Button onClick={() => setShowLeaveConfirm(true)} variant="ghost" disabled={isEnding} size="lg" className="w-full sm:w-auto text-muted-foreground hover:text-foreground">
+              <ArrowRight className="mr-2 h-5 w-5" />
+              Leave Arena
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">{finishedCount} / {studentCount} gladiators finished</p>
@@ -1342,6 +1360,24 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
             <AlertDialogAction onClick={handleSkip} disabled={isSkipping}>
               {isSkipping ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
               Skip Question
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showLeaveConfirm} onOpenChange={(o) => { if (!o && !isEnding) setShowLeaveConfirm(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave this battle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It will continue running for your gladiators. You can rejoin later from your dashboard — no scores or progress will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isEnding}>Stay in Battle</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLeaveArena}>
+              <ArrowRight className="mr-2 h-4 w-4" />
+              Leave Arena
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

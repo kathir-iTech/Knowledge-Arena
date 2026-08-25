@@ -44,7 +44,15 @@ export async function POST(req: NextRequest) {
       if (Date.now() - startedAt < STARTING_TRANSITION_MS) {
         throw new Error('Battle has not finished its starting countdown yet');
       }
-      tx.update(quizRef, { status: QUIZ_LIVE, question_start_at: Date.now() });
+      // current_question_index must be reset to 0 here: the quiz doc is created
+      // with -1 (waiting state) and startBattle/activate never set it. Without
+      // this the client guard `(current_question_index ?? -1) < 0` stays true and
+      // LiveQuiz renders "Preparing question..." forever (Phase 106, Workstream A).
+      tx.update(quizRef, {
+        status: QUIZ_LIVE,
+        current_question_index: 0,
+        question_start_at: Date.now(),
+      });
     });
 
     await writeBattleLog({ quizId, event: 'battle_activated', actor: auth.uid, actorRole: auth.role });

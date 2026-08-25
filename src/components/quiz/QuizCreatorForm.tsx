@@ -17,13 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '../ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler, AlertTriangle, ChevronDown, Trophy, Clock3 } from 'lucide-react';
+import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler, AlertTriangle } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { AICopilot } from '@/components/quiz/AICopilot';
-import { Switch } from '@/components/ui/switch';
+import { AdvancedScoringSection } from '@/components/quiz/AdvancedScoringSection';
 
 const questionSchema = z.object({
   id: z.string(),
@@ -58,7 +57,6 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittedRef = useRef(false);
   const [deleteConfirmIdx, setDeleteConfirmIdx] = useState<number | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const form = useForm<QuizFormData>({
     resolver: zodResolver(quizSchema),
@@ -194,7 +192,7 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
 
   return (<>
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl mx-auto pb-20">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl mx-auto pb-40">
         <Card>
           <CardHeader>
               <CardTitle className="text-xl font-headline text-primary flex items-center gap-2">
@@ -224,58 +222,21 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
           }}
         />
 
-        {/* Advanced Scoring — Phase 99 */}
-        <Card className="border-warning/20">
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/20 transition-colors"
-          >
-            <span className="flex items-center gap-2 text-sm font-semibold">
-              <Trophy className="w-4 h-4 text-warning" /> Advanced Scoring
-              <Badge variant="outline" className="text-[10px]">Optional</Badge>
-            </span>
-            <ChevronDown className={cn('w-4 h-4 transition-transform', showAdvanced && 'rotate-180')} />
-          </button>
-          {showAdvanced && (
-            <CardContent className="space-y-5 pt-0">
-              <p className="text-xs text-muted-foreground">Defaults match current behavior — existing arenas are unaffected.</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={form.control} name="timeBonus" render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-[10px] border border-border/40 p-3 bg-muted/20">
-                    <div className="space-y-0.5">
-                      <FormLabel className="flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5" /> Time Bonus</FormLabel>
-                      <FormDescription className="text-xs">Faster correct answers earn more points</FormDescription>
-                    </div>
-                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="streakMultiplier" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5" /> Streak Multiplier</FormLabel>
-                    <FormControl><Input type="number" min={0} max={100} {...field} onChange={e => field.onChange(Number(e.target.value) || 0)} /></FormControl>
-                    <FormDescription className="text-xs">Bonus = streak × multiplier (0 = disabled)</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="scoreMax" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Max Score (fastest)</FormLabel>
-                    <FormControl><Input type="number" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="scoreMin" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Min Score (slowest)</FormLabel>
-                    <FormControl><Input type="number" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </div>
-            </CardContent>
-          )}
-        </Card>
+        {/* Advanced Scoring — Phase 99, shared with AI Forge (Phase 106 D) */}
+        <AdvancedScoringSection
+          value={{
+            timeBonus: form.watch('timeBonus'),
+            streakMultiplier: form.watch('streakMultiplier'),
+            scoreMax: form.watch('scoreMax'),
+            scoreMin: form.watch('scoreMin'),
+          }}
+          onChange={(v) => {
+            form.setValue('timeBonus', v.timeBonus);
+            form.setValue('streakMultiplier', v.streakMultiplier);
+            form.setValue('scoreMax', v.scoreMax);
+            form.setValue('scoreMin', v.scoreMin);
+          }}
+        />
 
         <div className="space-y-6">
             <div className="flex items-center justify-between">
