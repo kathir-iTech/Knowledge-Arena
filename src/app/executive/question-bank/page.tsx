@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
 
 const PDFQuizGenerator = dynamic(() => import('@/components/quiz/PDFQuizGenerator').then(m => m.PDFQuizGenerator), { ssr: false });
@@ -51,9 +52,37 @@ export default function QuestionBankPage() {
     forgeParams.current = null;
   };
 
-  const handleEditSettings = () => {
+  const [showEditConfirm, setShowEditConfirm] = useState(false);
+
+  const handleEditSettingsClick = () => {
+    setShowEditConfirm(true);
+  };
+
+  const confirmEditSettings = () => {
+    setShowEditConfirm(false);
     setShowForgeWithPreserved(true);
   };
+
+  const cancelEditSettings = () => {
+    setShowEditConfirm(false);
+  };
+
+  const editConfirmDialog = (
+    <Dialog open={showEditConfirm} onOpenChange={(open) => { if (!open) { setShowEditConfirm(false); } }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Parameters</DialogTitle>
+          <DialogDescription>
+            Changing parameters will discard your current {generatedQuestions ? generatedQuestions.length : 0} questions. Continue?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={cancelEditSettings}>Cancel</Button>
+          <Button variant="destructive" onClick={confirmEditSettings}>Continue</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   const handleRegenerateQuestion = async (index: number) => {
     if (!forgeParams.current || !generatedQuestions) return;
@@ -142,7 +171,7 @@ export default function QuestionBankPage() {
                 category={forgeCategory}
                 documentTitle={documentTitle || undefined}
                 onRegenerate={handleRegenerate}
-                onEditSettings={handleEditSettings}
+                onEditSettings={handleEditSettingsClick}
                 onRegenerateQuestion={forgeParams.current ? handleRegenerateQuestion : undefined}
                 onImportComplete={handleImportComplete}
               />
@@ -170,7 +199,7 @@ export default function QuestionBankPage() {
           </div>
         )}
 
-        <div className={cn('mt-8 md:mt-10', generatedQuestions && !showForgeWithPreserved ? 'hidden' : '')}>
+<div className={cn('mt-8 md:mt-10', generatedQuestions && !showForgeWithPreserved ? 'hidden' : '')}>
           <Suspense fallback={
             <div className="h-64 bg-secondary/10 rounded-xl animate-pulse" />
           }>
@@ -178,6 +207,7 @@ export default function QuestionBankPage() {
           </Suspense>
         </div>
       </div>
+      {editConfirmDialog}
     </div>
   );
 }

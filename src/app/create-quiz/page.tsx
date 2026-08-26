@@ -148,8 +148,19 @@ export default function CreateQuizPage() {
     forgeParams.current = null;
   };
 
-  const handleEditSettings = () => {
+  const [showEditConfirm, setShowEditConfirm] = useState(false);
+
+  const handleEditSettingsClick = () => {
+    setShowEditConfirm(true);
+  };
+
+  const confirmEditSettings = () => {
+    setShowEditConfirm(false);
     setShowForgeWithPreserved(true);
+  };
+
+  const cancelEditSettings = () => {
+    setShowEditConfirm(false);
   };
 
   const handleRegenerateQuestion = async (index: number) => {
@@ -224,6 +235,23 @@ export default function CreateQuizPage() {
     </Dialog>
   );
 
+  const editConfirmDialog = (
+    <Dialog open={showEditConfirm} onOpenChange={(open) => { if (!open) { setShowEditConfirm(false); } }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Parameters</DialogTitle>
+          <DialogDescription>
+            Changing parameters will discard your current {generatedQuestions ? generatedQuestions.length : 0} questions. Continue?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={cancelEditSettings}>Cancel</Button>
+          <Button variant="destructive" onClick={confirmEditSettings}>Continue</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (generatedQuestions && !showForgeWithPreserved) {
     return (<>
         <header className="page-section flex items-center justify-between">
@@ -237,7 +265,7 @@ export default function CreateQuizPage() {
               initialQuestions={generatedQuestions} 
               difficulty={difficulty}
               onRegenerate={handleRegenerate}
-              onEditSettings={handleEditSettings}
+              onEditSettings={handleEditSettingsClick}
               onRegenerateQuestion={forgeParams.current ? handleRegenerateQuestion : undefined}
               onArenaCreated={clearDraft}
           />
@@ -283,6 +311,7 @@ export default function CreateQuizPage() {
 
        </Tabs>
        {backConfirmDialog}
+       {editConfirmDialog}
 
       <Dialog open={showDraftRestore} onOpenChange={(open) => { if (!open) { clearDraft(); } }}>
         <DialogContent className="sm:max-w-md">
