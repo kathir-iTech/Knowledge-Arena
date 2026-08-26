@@ -53,6 +53,13 @@ export interface ArenaCreationInput {
     streak_multiplier?: number;
     time_limit_seconds?: number;
   };
+  governanceConfig?: {
+    reveal_timing?: string;
+    show_live_leaderboard?: boolean;
+    allow_late_join?: boolean;
+    negative_marking?: boolean;
+    anti_cheat_strictness?: string;
+  };
 }
 
 function planCreation(questionsCount: number): string[] {
@@ -125,17 +132,34 @@ export const arenaCreationService = {
     // creation even when the parent quiz doc does not yet "exist" in the same batch (exists/get
     // vs existsAfter/getAfter timing). The rule allows if request.resource.data.created_by == uid.
     const sc = input.scoringConfig;
+    const gc = input.governanceConfig;
+    // Negative marking toggle maps to wrong_penalty for friendlier UX:
+    // when governance says negative_marking=true, ensure wrong_penalty >0.
+    let effectiveWrongPenalty = sc?.wrong_penalty ?? DEFAULT_WRONG_PENALTY;
+    if (gc?.negative_marking === true && effectiveWrongPenalty === 0) {
+      effectiveWrongPenalty = 250;
+    }
+    if (gc?.negative_marking === false) {
+      effectiveWrongPenalty = 0;
+    }
     allBatchData.push({
       ref: doc(db, COLLECTIONS.QUIZZES, roomCode, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
       data: {
         scoring_config: {
           score_max: sc?.score_max ?? DEFAULT_SCORE_MAX,
           score_min: sc?.score_min ?? DEFAULT_SCORE_MIN,
-          wrong_penalty: sc?.wrong_penalty ?? DEFAULT_WRONG_PENALTY,
+          wrong_penalty: effectiveWrongPenalty,
           skip_penalty: sc?.skip_penalty ?? DEFAULT_SKIP_PENALTY,
           time_decay: sc?.time_decay ?? DEFAULT_TIME_DECAY,
           streak_multiplier: sc?.streak_multiplier ?? DEFAULT_STREAK_MULTIPLIER,
           time_limit_seconds: sc?.time_limit_seconds ?? DEFAULT_TIME_LIMIT_SECONDS,
+        },
+        governance_config: {
+          reveal_timing: gc?.reveal_timing ?? 'after_timer',
+          show_live_leaderboard: gc?.show_live_leaderboard ?? true,
+          allow_late_join: gc?.allow_late_join ?? true,
+          negative_marking: gc?.negative_marking ?? false,
+          anti_cheat_strictness: gc?.anti_cheat_strictness ?? 'warn_only',
         },
         skipped_question_ids: [],
         created_by: createdBy,

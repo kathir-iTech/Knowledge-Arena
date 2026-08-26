@@ -20,6 +20,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { arenaCreationService } from '@/services/arena-creation.service';
 import { validateQuiz, type QuizValidationIssue } from '@/lib/quiz-validator';
 import { AdvancedScoringSection, DEFAULT_ADVANCED_SCORING, toScoringConfig } from '@/components/quiz/AdvancedScoringSection';
+import { AdvancedGovernanceSection, DEFAULT_ADVANCED_GOVERNANCE, toGovernanceConfig } from '@/components/quiz/AdvancedGovernanceSection';
 
 interface Question {
   id: string;
@@ -151,6 +152,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
   const [quizTitle, setQuizTitle] = useState('');
   const [globalTimer, setGlobalTimer] = useState(30);
   const [scoring, setScoring] = useState<typeof DEFAULT_ADVANCED_SCORING>(DEFAULT_ADVANCED_SCORING);
+  const [governance, setGovernance] = useState<typeof DEFAULT_ADVANCED_GOVERNANCE>(DEFAULT_ADVANCED_GOVERNANCE);
 
   const handleDelete = (id: string) => {
     setDeleteConfirmId(id);
@@ -214,6 +216,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
           })),
           createdBy: user.id,
           scoringConfig: toScoringConfig(scoring),
+          governanceConfig: toGovernanceConfig(governance),
         });
     } catch (e: unknown) {
         // Batch write failed — surface as arena error. Post-creation
@@ -398,6 +401,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
       </div>
 
       <AdvancedScoringSection value={scoring} onChange={setScoring} />
+      <AdvancedGovernanceSection value={governance} onChange={setGovernance} />
 
       <div className="fixed bottom-0 left-0 right-0 p-4 md:p-6 bg-background border-t border-border/20 z-50 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6 shadow-elevation-medium">
         <div className="flex items-center gap-3 text-sm">

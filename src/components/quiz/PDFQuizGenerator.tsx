@@ -204,8 +204,8 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
         msg = "Unable to generate questions. Please retry.";
         failedStep = 2; guidance = 'The AI could not produce usable questions. Retry, or try reducing the question count.';
       } else if (raw.includes("PDF_IMAGE_ONLY")) {
-        msg = "This document contains scanned images with no selectable text. Images are processed via AI vision — please retry if the AI can interpret them.";
-        failedStep = 0; guidance = 'Try a text-based PDF or enable vision-capable files.';
+        msg = "This PDF appears to be scanned images with no text — try a text-based PDF or a different file.";
+        failedStep = 0; guidance = 'This PDF has no selectable text layer (scanned images). Export the document as a text-based PDF or upload a different file.';
       } else if (raw.includes("PDF_CONTENT_TOO_SHORT")) {
         msg = "Not enough content was extracted. Ensure your files contain sufficient text for question generation.";
         failedStep = 0; guidance = 'Add more text content or try a different file.';

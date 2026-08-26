@@ -48,7 +48,7 @@ export interface ValidatedQuiz {
 
 export interface ValidatedParticipant {
   user_id: string;
-  status: 'playing' | 'finished' | 'blocked';
+  status: 'playing' | 'finished' | 'blocked' | 'flagged';
   score: number;
   name?: string;
   avatar?: string;

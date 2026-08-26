@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { applyOptionShuffle } from '@/lib/battle-machine';
-import { COMMANDER_PRESENCE_WINDOW_MS } from '@/lib/constants';
+import { COMMANDER_PRESENCE_WINDOW_MS, COLLECTIONS, QUIZ_CONFIG_SETTINGS_DOC } from '@/lib/constants';
 import { getServerOffset } from '@/lib/client-clock';
 
 interface LiveQuizQuestion {
@@ -247,8 +247,10 @@ const ParticipantStats = ({ participants, teacherId, submittedCount, finishedCou
     : allStudents.filter(p => presence[p.user_id] != null);
   const playing = students.filter(p => p.status === 'playing').length;
   const blocked = allStudents.filter(p => p.status === 'blocked').length;
+  const flagged = allStudents.filter(p => p.status === 'flagged').length;
   const finished = allStudents.filter(p => p.status === 'finished').length;
   const blockedStudents = allStudents.filter(p => p.status === 'blocked');
+  const flaggedStudents = allStudents.filter(p => p.status === 'flagged');
 
   return (
     <div className="flex flex-wrap gap-2 justify-center mb-4 md:mb-6">
@@ -282,6 +284,13 @@ const ParticipantStats = ({ participants, teacherId, submittedCount, finishedCou
           <span className="text-muted-foreground">blocked</span>
         </div>
       )}
+      {flagged > 0 && (
+        <div className="flex items-center gap-1.5 bg-warning/10 px-3 py-1.5 rounded-[12px] text-xs">
+          <Flag className="w-3.5 h-3.5 text-warning" />
+          <span className="font-semibold text-warning">{flagged}</span>
+          <span className="text-muted-foreground">flagged</span>
+        </div>
+      )}
       {finished > 0 && !independent && (
         <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-[12px] text-xs">
           <span className="font-semibold text-primary">{finished}</span>
@@ -297,6 +306,21 @@ const ParticipantStats = ({ participants, teacherId, submittedCount, finishedCou
                 <span className="max-w-28 truncate">{p.name || p.user_id.slice(0, 8)}</span>
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onUnblock(p.user_id)} disabled={unblockingId === p.user_id}>
                   {unblockingId === p.user_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Unblock'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {flaggedStudents.length > 0 && (
+        <div className="w-full max-w-xl basis-full rounded-[12px] border border-warning/10 bg-warning/5 p-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-warning">Flagged gladiators (review required)</div>
+          <div className="flex flex-wrap gap-2">
+            {flaggedStudents.map(p => (
+              <div key={p.user_id} className="flex items-center gap-2 rounded-[10px] bg-background/70 px-2.5 py-1.5 text-xs">
+                <span className="max-w-28 truncate">{p.name || p.user_id.slice(0, 8)}</span>
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onUnblock(p.user_id)} disabled={unblockingId === p.user_id}>
+                  {unblockingId === p.user_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Clear Flag'}
                 </Button>
               </div>
             ))}
@@ -420,6 +444,40 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const prevQuizIndexRef = useRef<number>(quiz.current_question_index ?? -1);
   const { firestore } = useFirebase();
 
+  // Phase 107: governance config from quizzes/{quizId}/config/settings (defaults preserve current behavior)
+  const [governance, setGovernance] = useState<{
+    revealTiming: 'after_timer' | 'never_during_battle';
+    showLiveLeaderboard: boolean;
+    allowLateJoin: boolean;
+    negativeMarking: boolean;
+    antiCheatStrictness: 'warn_only' | 'auto_flag';
+  }>({
+    revealTiming: 'after_timer',
+    showLiveLeaderboard: true,
+    allowLateJoin: true,
+    negativeMarking: false,
+    antiCheatStrictness: 'warn_only',
+  });
+
+  useEffect(() => {
+    if (!firestore) return;
+    const cfgRef = doc(firestore, COLLECTIONS.QUIZZES, quiz.id, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC);
+    const unsub = onSnapshot(cfgRef, (snap) => {
+      const data = snap.data() as Record<string, unknown> | undefined;
+      const gc = (data?.governance_config ?? null) as Record<string, unknown> | null;
+      if (gc) {
+        setGovernance({
+          revealTiming: gc.reveal_timing === 'never_during_battle' ? 'never_during_battle' : 'after_timer',
+          showLiveLeaderboard: typeof gc.show_live_leaderboard === 'boolean' ? gc.show_live_leaderboard as boolean : true,
+          allowLateJoin: typeof gc.allow_late_join === 'boolean' ? gc.allow_late_join as boolean : true,
+          negativeMarking: typeof gc.negative_marking === 'boolean' ? gc.negative_marking as boolean : false,
+          antiCheatStrictness: gc.anti_cheat_strictness === 'auto_flag' ? 'auto_flag' : 'warn_only',
+        });
+      }
+    }, () => {});
+    return () => unsub();
+  }, [firestore, quiz.id]);
+
   // Clock-skew correction: battle timers compare this browser's clock against
   // server-written question_start_at timestamps. Sample the offset at mount
   // and refresh it periodically so skewed clients stop locking out of the
@@ -459,6 +517,11 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
       router.push('/kicked');
     }
   }, [isTeacher, participant.status, router]);
+  useEffect(() => {
+    if (!isTeacher && participant.status === 'flagged') {
+      toast({ title: 'Flagged for Review', description: 'Your session has been flagged for Commander review due to repeated focus loss.', variant: 'destructive' });
+    }
+  }, [isTeacher, participant.status, toast]);
 
   useEffect(() => {
     if (participant.status === 'blocked') return;
@@ -580,23 +643,38 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const displaySelected = hold ? hold.selected : selectedAnswer;
   const displayAnswered = hold ? hold.answered : hasAnswered;
 
+  // Phase 107 governance: reveal_timing governs when a gladiator may see
+  // correct/incorrect. 'after_timer' (default) hides the signal until the
+  // question timer expires (or the REVEAL_HOLD after advance). 'never_during_battle'
+  // hides it entirely during live/paused — only the podium shows at the end.
+  // Security finding: answer_key data lives in questionStats.correctOptionIndex
+  // (written only after server evaluation). The visual "selected" style (primary
+  // ring) is distinct from the "correct" reveal style (success/destructive).
+  const shouldRevealByGovernance = useMemo(() => {
+    if (governance.revealTiming === 'never_during_battle') return false;
+    if (governance.revealTiming === 'after_timer' && timeLeft > 0) return false;
+    return true;
+  }, [governance.revealTiming, timeLeft]);
+
   const liveReveal = useMemo(() => {
     if (isTeacher || hold || !currentQuestion) return null;
+    if (!shouldRevealByGovernance) return null;
     const ci = currentQuestion.questionStats?.correctOptionIndex;
     if (typeof ci !== 'number') return null;
     if (!hasAnswered && timeLeft > 0) return null;
     return { correctIndex: ci, selected: selectedAnswer, answered: hasAnswered };
-  }, [isTeacher, hold, currentQuestion, hasAnswered, selectedAnswer, timeLeft]);
+  }, [isTeacher, hold, currentQuestion, hasAnswered, selectedAnswer, timeLeft, shouldRevealByGovernance]);
 
   // Arm the reveal snapshot while the evaluated question is still on screen,
   // so an incoming question switch can freeze it for a satisfying flash.
   useEffect(() => {
     if (isTeacher || hold || !currentQuestion) { revealSnapshotRef.current = null; return; }
+    if (!shouldRevealByGovernance) { revealSnapshotRef.current = null; return; }
     const ci = currentQuestion.questionStats?.correctOptionIndex;
     if (typeof ci !== 'number') return;
     if (!hasAnswered && timeLeft > 0) return;
     revealSnapshotRef.current = { qid: currentQuestion.id, selected: selectedAnswer, answered: hasAnswered, userIndex: myIndex };
-  }, [currentQuestion, hasAnswered, selectedAnswer, timeLeft, myIndex, isTeacher, hold]);
+  }, [currentQuestion, hasAnswered, selectedAnswer, timeLeft, myIndex, isTeacher, hold, shouldRevealByGovernance]);
 
   // When the question advances with a reveal armed, freeze the old question on
   // screen (with options as the gladiator saw them) so the verdict lands.
@@ -746,26 +824,37 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     return () => { unsub(); };
   }, [isTeacher, currentQuestion?.id, quiz.id, firestore, independent]);
 
+  // Phase 107: anti_cheat_strictness governance. 'warn_only' (default) warns
+  // on first violation and blocks at 2 (original Phase 90 M3 behavior).
+  // 'auto_flag' marks the participant as 'flagged' at 2 for Commander review
+  // instead of hard-blocking, so the Commander sees it in the blocked list.
   const onMalpractice = useCallback(async () => {
-    if (isTeacher || !user || participant.status === 'blocked' || quiz.status !== 'live') return;
+    if (isTeacher || !user || participant.status === 'blocked' || participant.status === 'flagged' || quiz.status !== 'live') return;
     const now = Date.now();
     if (now - lastViolationRef.current < 2000) return;
     lastViolationRef.current = now;
     const newCount = (participant.violations_count || 0) + 1;
     try {
-      const newStatus = newCount >= 2 ? 'blocked' : 'playing';
+      let newStatus: 'playing' | 'blocked' | 'flagged' = 'playing';
+      if (newCount >= 2) {
+        newStatus = governance.antiCheatStrictness === 'auto_flag' ? 'flagged' : 'blocked';
+      }
       await participantService.updateParticipant(quiz.id, user.id, {
         violations_count: newCount,
         status: newStatus,
-      });
+      } as any);
       if (newStatus === 'blocked') {
         try { sessionStorage.setItem('blocked_at', Date.now().toString()); sessionStorage.setItem('blocked_violations', String(newCount)); } catch {}
       }
-      if (newCount < 2) setShowViolationWarning(true);
+      if (newStatus === 'flagged') {
+        toast({ title: 'Flagged for Review', description: 'Repeated focus loss — a Commander has been notified to review your session.' });
+      } else if (newCount < 2) {
+        setShowViolationWarning(true);
+      }
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to record violation.' });
     }
-  }, [isTeacher, user, quiz.id, quiz.status, participant, toast]);
+  }, [isTeacher, user, quiz.id, quiz.status, participant, toast, governance.antiCheatStrictness]);
 
   usePageFocusChange(onMalpractice, quiz.status === 'live' && !isTeacher);
 
@@ -780,7 +869,17 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
 
   const handleAnswerSubmit = async (idx: number) => {
     const qId = currentQuestion?.id;
-    if (!qId || hasAnswered || isTeacher || !user || timeLeft === 0 || quiz.status !== 'live' || participant.status === 'blocked' || isAdvancing) return;
+    // Phase 107: timer-initialization race — timeLeft is 0 for ~200ms before
+    // the first interval tick. Use deadline-based expiry so the first-render
+    // question is not falsely blocked.
+    const isExpired = (() => {
+      if (!currentQuestion || !isQuestionTimerActive) return timeLeft === 0;
+      if (timeLeft > 0) return false;
+      const deadline = answerStartAt + currentQuestion.timer * 1000;
+      const now = Date.now() + offsetRef.current;
+      return now >= deadline;
+    })();
+    if (!qId || hasAnswered || isTeacher || !user || isExpired || quiz.status !== 'live' || participant.status === 'blocked' || participant.status === 'flagged' || isAdvancing) return;
     if (confirmedQuestionIds.current.has(qId)) return;
     setHasAnswered(true);
     setSelectedAnswer(idx);
@@ -979,8 +1078,22 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
               </div>
               <DialogPrimitive.Title className="font-headline text-xl font-semibold">Battle Paused</DialogPrimitive.Title>
               <DialogPrimitive.Description className="text-sm text-muted-foreground">
-                The Commander has paused the battle. Timers and answers are frozen and will resume exactly where they left off.
+                {isTeacher
+                  ? 'You paused the battle. Timers and answers are frozen — resume when ready.'
+                  : 'The Commander has paused the battle. Timers and answers are frozen and will resume exactly where they left off.'}
               </DialogPrimitive.Description>
+              {isTeacher && (
+                <Button
+                  onClick={handleResume}
+                  disabled={isResuming}
+                  size="lg"
+                  className="w-full"
+                  aria-label="Resume Battle"
+                >
+                  {isResuming ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Play className="mr-2 h-5 w-5" />}
+                  {isResuming ? 'Resuming...' : 'Resume Battle'}
+                </Button>
+              )}
             </div>
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
@@ -1327,7 +1440,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         </div>
       )}
 
-      <LiveLeaderboard participants={participants} teacherId={quiz.created_by} currentUserId={user?.id || ''} presence={presence} />
+      {/* show_live_leaderboard governance: gladiators don't see standings during the battle when false; Commander always sees it; visible at podium (finished) */}
+      {(isTeacher || governance.showLiveLeaderboard || quiz.status === 'finished') && (
+        <LiveLeaderboard participants={participants} teacherId={quiz.created_by} currentUserId={user?.id || ''} presence={presence} />
+      )}
 
       <AlertDialog open={showEndConfirm} onOpenChange={(o) => { if (!o && !isEnding) setShowEndConfirm(false); }}>
         <AlertDialogContent>

@@ -10,8 +10,10 @@ import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { battleService, getSessionToken } from '@/services/battle.service';
 import { presenceService } from '@/services/presence.service';
-import { STARTING_TRANSITION_MS, QUIZ_WAITING, QUIZ_READY, QUIZ_STARTING, QUIZ_LIVE, QUIZ_PAUSED, QUIZ_FINISHED, QUIZ_ARCHIVED } from '@/lib/constants';
+import { STARTING_TRANSITION_MS, QUIZ_WAITING, QUIZ_READY, QUIZ_STARTING, QUIZ_LIVE, QUIZ_PAUSED, QUIZ_FINISHED, QUIZ_ARCHIVED, COLLECTIONS, QUIZ_CONFIG_SETTINGS_DOC } from '@/lib/constants';
 import { isBattleActive } from '@/lib/battle-machine';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { useFirebase } from '@/firebase';
 import { ShieldX, RefreshCw, MonitorX } from 'lucide-react';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import LiveQuiz from '@/components/quiz/LiveQuiz';
@@ -116,13 +118,43 @@ export default function BattleRoomLoader() {
   const [replaced, setReplaced] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isRetryingJoin, setIsRetryingJoin] = useState(false);
+  const [allowLateJoin, setAllowLateJoin] = useState(true);
   const initialJoinDoneRef = useRef(false);
+  const lateJoinAttemptedRef = useRef(false);
   const firstPartSnapRef = useRef(false);
   const reconnectLoggedRef = useRef(false);
   const quizRef = useRef<ValidatedQuiz | null>(null);
 
   const quizId = roomCode as string;
   const sessionToken = user ? getSessionToken(quizId) : '';
+  const { firestore } = useFirebase();
+
+  // Phase 107: governance allow_late_join — fetch so the "Battle Already Started"
+  // late-join screen only blocks when governance explicitly disallows it.
+  useEffect(() => {
+    if (!firestore || !quizId) return;
+    const cfgRef = doc(firestore, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC);
+    const unsub = onSnapshot(cfgRef, (snap) => {
+      const gc = (snap.data() as any)?.governance_config;
+      if (gc && typeof gc.allow_late_join === 'boolean') setAllowLateJoin(gc.allow_late_join);
+      else setAllowLateJoin(true);
+    }, () => {});
+    return () => unsub();
+  }, [firestore, quizId]);
+
+  // Phase 107: late-join auto-attempt — when allow_late_join is true, a
+  // gladiator who lands on a live battle without a participant doc should be
+  // auto-joined (side-effect must live in useEffect, not render).
+  useEffect(() => {
+    if (!quiz || !user || isLoading) return;
+    if (quiz.created_by === user.id) return;
+    const isLive = quiz.status === QUIZ_LIVE || quiz.status === QUIZ_PAUSED;
+    if (!isLive || !allowLateJoin || lateJoinAttemptedRef.current || participant || !firstPartSnapRef.current) return;
+    lateJoinAttemptedRef.current = true;
+    participantService.joinQuiz(quizId, user.id, user.name, sessionToken).catch(() => {
+      lateJoinAttemptedRef.current = false;
+    });
+  }, [quiz, user, isLoading, allowLateJoin, participant, quizId, sessionToken]);
 
   const handleRetry = useCallback(() => {
     setRetryCount(c => c + 1);
@@ -322,7 +354,7 @@ export default function BattleRoomLoader() {
 
   if (quiz.status === QUIZ_LIVE || quiz.status === QUIZ_PAUSED) {
     const isTeacher = (user?.role === 'commander' || user?.role === 'executive') && quiz.created_by === user.id;
-    if (!participant && !isTeacher && firstPartSnapRef.current) {
+    if (!participant && !isTeacher && firstPartSnapRef.current && !allowLateJoin) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in safe-top safe-bottom">
           <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">

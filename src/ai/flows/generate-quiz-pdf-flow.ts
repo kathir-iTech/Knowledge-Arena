@@ -595,8 +595,11 @@ async function extractTextFromDocument(dataUri: string): Promise<string> {
       case 'pdf': {
         const buffer = Buffer.from(rawBase64, 'base64');
         const result = await extractTextFromPdfBuffer(buffer);
-        if (result.isImageOnly && result.text.length < 20) {
-          return ''; // Will be handled as image
+        if (result.isImageOnly) {
+          // Scanned/image-only PDFs have no selectable text layer — surface a
+          // distinct error so the UI can show the clearer "scanned images"
+          // message instead of the generic "Not enough content" fallback.
+          throw new Error('PDF_IMAGE_ONLY');
         }
         return result.text;
       }
@@ -634,9 +637,12 @@ async function extractTextFromAllDocuments(dataUris: string[]): Promise<{
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (msg === 'PDF_IMAGE_ONLY' || msg === 'PDF_CONTENT_TOO_SHORT') {
+      if (msg === 'PDF_CONTENT_TOO_SHORT') {
         continue;
       }
+      // PDF_IMAGE_ONLY is a legitimate user-facing error for scanned PDFs —
+      // do not swallow it; let it propagate so the caller can return the
+      // specific "This PDF appears to be scanned images with no text" message.
       throw e;
     }
   }
