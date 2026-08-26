@@ -16,11 +16,12 @@ export const QUIZ_FINISHED: QuizStatus = 'finished';
 export const QUIZ_ARCHIVED: QuizStatus = 'archived';
 export const QUIZ_DRAFT: QuizStatus = 'draft';
 
-export const PARTICIPANT_STATUSES = ['playing', 'finished', 'blocked'] as const;
+export const PARTICIPANT_STATUSES = ['playing', 'finished', 'blocked', 'flagged'] as const;
 export type ParticipantStatus = (typeof PARTICIPANT_STATUSES)[number];
 export const PS_PLAYING: ParticipantStatus = 'playing';
 export const PS_FINISHED: ParticipantStatus = 'finished';
 export const PS_BLOCKED: ParticipantStatus = 'blocked';
+export const PS_FLAGGED: ParticipantStatus = 'flagged';
 
 export const BATTLE_MODES = ['synchronized', 'independent'] as const;
 export type BattleMode = (typeof BATTLE_MODES)[number];

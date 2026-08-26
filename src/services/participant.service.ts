@@ -61,8 +61,24 @@ export const participantService = {
       const quizSnap = await transaction.get(quizRef);
       const quizData = quizSnap.data();
       if (!quizSnap.exists || !quizData) throw new Error('Quiz not found');
+      // Governance-aware late-join check (Phase 107): when status has moved
+      // past waiting/ready, consult governance_config.allow_late_join (default
+      // true for legacy arenas so existing behavior is preserved).
       if (quizData.status !== QUIZ_WAITING && quizData.status !== 'ready') {
-        throw new Error('This battle has already started. Late joining is not permitted.');
+        let allowLateJoin = true;
+        try {
+          const cfgRef = doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUIZ_CONFIG, 'settings');
+          const cfgSnap = await transaction.get(cfgRef);
+          if (cfgSnap.exists() && cfgSnap.data()?.governance_config?.allow_late_join === false) {
+            allowLateJoin = false;
+          }
+        } catch {
+          // Config read failure — fall back to default (allow late join) so a
+          // transient read does not incorrectly block a legitimate join.
+        }
+        if (!allowLateJoin) {
+          throw new Error('This battle has already started. Late joining is not permitted.');
+        }
       }
 
       const userRef = doc(db, COLLECTIONS.USERS, userId);
@@ -109,7 +125,7 @@ export const participantService = {
   async updateParticipant(
     quizId: string,
     userId: string,
-    data: { violations_count?: number; status?: 'playing' | 'blocked' | 'finished'; ready?: boolean }
+    data: { violations_count?: number; status?: 'playing' | 'blocked' | 'finished' | 'flagged'; ready?: boolean }
   ): Promise<void> {
     const db = getFirestore();
     const ref = doc(db, participantPath(quizId, userId));

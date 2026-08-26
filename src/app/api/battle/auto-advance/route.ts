@@ -6,14 +6,12 @@ import {
   COLLECTIONS,
   QUIZ_LIVE,
   PS_BLOCKED,
-  COMMANDER_PRESENCE_WINDOW_MS,
 } from '@/lib/constants';
 import {
   evaluateQuestionForAll,
   advanceQuestion,
   writeBattleLog,
   battleErrorResponse,
-  getMs,
   loadQuizDoc,
 } from '@/lib/battle-server';
 
@@ -67,16 +65,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Commander is present' }, { status: 409 });
     }
 
-    // (c) The Commander must have been absent for the grace window. Presence is
-    // written/removed by the clients, so the server uses the fine-grained signal
-    // (missing node) plus an elapsed-time floor on the current question start.
-    const absentFor = Date.now() - getMs(quiz.question_start_at);
-    if (absentFor < COMMANDER_PRESENCE_WINDOW_MS) {
-      return NextResponse.json(
-        { error: `Commander disconnect grace period not yet elapsed (${absentFor}ms)` },
-        { status: 409 }
-      );
-    }
+    // (c) Grace window is enforced client-side via commanderAbsentSinceRef +
+    // COMMANDER_PRESENCE_WINDOW_MS (LiveQuiz tryAutoAdvance). Server re-validates
+    // only that the Commander's RTDB presence node is still missing (step b above).
+    // The previous server check used `question_start_at` age as a proxy for
+    // absence duration, which is incorrect (question age ≠ absence duration).
+    // Trust the client's elapsed-since-absent check plus the presence-node check.
 
     const index = quiz.current_question_index ?? 0;
     const qSnap = await db

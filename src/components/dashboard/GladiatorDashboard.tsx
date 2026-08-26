@@ -106,7 +106,11 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
     quizService.getQuizById(code)
       .then(async (quiz) => {
         if (quiz.status === 'finished') throw new Error('Battle has ended');
-        if (quiz.status === 'live') throw new Error('This battle has already started. Late joining is not permitted.');
+        // Live check is governance-aware: participantService.joinQuiz enforces
+        // allow_late_join (default true). Don't hard-block here; delegate to service.
+        if (quiz.status !== 'waiting' && quiz.status !== 'ready' && quiz.status !== 'live' && quiz.status !== 'paused') {
+          throw new Error(`Cannot join arena in state: ${quiz.status}`);
+        }
         const participants = await participantService.getAllParticipants(code);
         const existing = participants.find(p => p.user_id === user.id);
         if (!existing) {
@@ -131,7 +135,9 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
     try {
       const quiz = await quizService.getQuizById(code);
       if (quiz.status === 'finished') throw new Error('Battle has ended');
-      if (quiz.status === 'live') throw new Error('This battle has already started. Late joining is not permitted.');
+      if (quiz.status !== 'waiting' && quiz.status !== 'ready' && quiz.status !== 'live' && quiz.status !== 'paused') {
+        throw new Error(`Cannot join arena in state: ${quiz.status}`);
+      }
       const participants = await participantService.getAllParticipants(code);
       const existing = participants.find(p => p.user_id === user.id);
       if (!existing) {

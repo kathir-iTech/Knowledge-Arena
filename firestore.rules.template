@@ -248,8 +248,8 @@ service cloud.firestore {
           && request.resource.data.lastSeen == request.time
           && request.resource.data.keys().hasOnly(['user_id', 'score', 'status', 'violations_count', 'ready', 'lastSeen', 'session_token', 'name'])
           && getAfter(/databases/$(database)/documents/quizzes/$(quizId)).data.status in ['waiting', 'ready'];
-        // Commander can update everyone (block/reset). Gladiators can only:
-        //  - increment violations (or block themselves) in a single write
+        // Commander can update everyone (block/reset/flag). Gladiators can only:
+        //  - increment violations (or block/flag themselves) in a single write
         //  - send heartbeat (lastSeen) updates, optionally with their session token
         //  - toggle the ready flag while the arena is waiting/ready
         allow update: if isQuizCreator(quizId) || (
@@ -260,7 +260,7 @@ service cloud.firestore {
                 request.resource.data.diff(resource.data).affectedKeys().hasOnly(['violations_count']) ||
                 (
                   request.resource.data.diff(resource.data).affectedKeys().hasOnly(['violations_count', 'status']) &&
-                  request.resource.data.status == 'blocked'
+                  request.resource.data.status in ['blocked', 'flagged']
                 )
               )
             ) ||
@@ -307,9 +307,9 @@ service cloud.firestore {
             || isExecutive()
             || (request.resource.data.keys().hasAll(['created_by']) && request.resource.data.created_by == request.auth.uid)
           )
-          && request.resource.data.keys().hasOnly(['scoring_config', 'skipped_question_ids', 'created_by']);
+          && request.resource.data.keys().hasOnly(['scoring_config', 'governance_config', 'skipped_question_ids', 'created_by']);
         allow update: if (isQuizCreator(quizId) || isExecutive())
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scoring_config', 'skipped_question_ids']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scoring_config', 'governance_config', 'skipped_question_ids']);
         allow delete: if isQuizCreator(quizId) || isExecutive();
       }
     }

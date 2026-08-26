@@ -23,6 +23,7 @@ import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler, AlertTriangle
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { AICopilot } from '@/components/quiz/AICopilot';
 import { AdvancedScoringSection } from '@/components/quiz/AdvancedScoringSection';
+import { AdvancedGovernanceSection, DEFAULT_ADVANCED_GOVERNANCE, toGovernanceConfig } from '@/components/quiz/AdvancedGovernanceSection';
 
 const questionSchema = z.object({
   id: z.string(),
@@ -40,6 +41,12 @@ const quizSchema = z.object({
   streakMultiplier: z.coerce.number().min(0).max(100).default(0),
   scoreMax: z.coerce.number().min(100).max(5000).default(1000),
   scoreMin: z.coerce.number().min(0).max(1000).default(100),
+  // Governance toggles — default values preserve current behavior so existing arenas are unaffected
+  revealTiming: z.enum(['after_timer', 'never_during_battle']).default('after_timer'),
+  showLiveLeaderboard: z.boolean().default(true),
+  allowLateJoin: z.boolean().default(true),
+  negativeMarking: z.boolean().default(false),
+  antiCheatStrictness: z.enum(['warn_only', 'auto_flag']).default('warn_only'),
 });
 
 type QuizFormData = z.infer<typeof quizSchema>;
@@ -75,6 +82,11 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
       streakMultiplier: 0,
       scoreMax: 1000,
       scoreMin: 100,
+      revealTiming: DEFAULT_ADVANCED_GOVERNANCE.revealTiming,
+      showLiveLeaderboard: DEFAULT_ADVANCED_GOVERNANCE.showLiveLeaderboard,
+      allowLateJoin: DEFAULT_ADVANCED_GOVERNANCE.allowLateJoin,
+      negativeMarking: DEFAULT_ADVANCED_GOVERNANCE.negativeMarking,
+      antiCheatStrictness: DEFAULT_ADVANCED_GOVERNANCE.antiCheatStrictness,
     },
   });
 
@@ -98,6 +110,11 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
         streakMultiplier: 0,
         scoreMax: 1000,
         scoreMin: 100,
+        revealTiming: DEFAULT_ADVANCED_GOVERNANCE.revealTiming,
+        showLiveLeaderboard: DEFAULT_ADVANCED_GOVERNANCE.showLiveLeaderboard,
+        allowLateJoin: DEFAULT_ADVANCED_GOVERNANCE.allowLateJoin,
+        negativeMarking: DEFAULT_ADVANCED_GOVERNANCE.negativeMarking,
+        antiCheatStrictness: DEFAULT_ADVANCED_GOVERNANCE.antiCheatStrictness,
       });
     }
   }, [initialQuestions, form]);
@@ -141,6 +158,13 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
             time_decay: data.timeBonus,
             streak_multiplier: data.streakMultiplier,
           },
+          governanceConfig: toGovernanceConfig({
+            revealTiming: data.revealTiming as any,
+            showLiveLeaderboard: data.showLiveLeaderboard,
+            allowLateJoin: data.allowLateJoin,
+            negativeMarking: data.negativeMarking,
+            antiCheatStrictness: data.antiCheatStrictness as any,
+          }),
         });
     } catch (error: unknown) {
         // Batch write failed — surface as creation failure. Listener or
@@ -235,6 +259,24 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
             form.setValue('streakMultiplier', v.streakMultiplier);
             form.setValue('scoreMax', v.scoreMax);
             form.setValue('scoreMin', v.scoreMin);
+          }}
+        />
+
+        {/* Advanced Governance — Phase 107, sibling to AdvancedScoringSection */}
+        <AdvancedGovernanceSection
+          value={{
+            revealTiming: form.watch('revealTiming') as any,
+            showLiveLeaderboard: form.watch('showLiveLeaderboard'),
+            allowLateJoin: form.watch('allowLateJoin'),
+            negativeMarking: form.watch('negativeMarking'),
+            antiCheatStrictness: form.watch('antiCheatStrictness') as any,
+          }}
+          onChange={(v) => {
+            form.setValue('revealTiming', v.revealTiming as any);
+            form.setValue('showLiveLeaderboard', v.showLiveLeaderboard);
+            form.setValue('allowLateJoin', v.allowLateJoin);
+            form.setValue('negativeMarking', v.negativeMarking);
+            form.setValue('antiCheatStrictness', v.antiCheatStrictness as any);
           }}
         />
 

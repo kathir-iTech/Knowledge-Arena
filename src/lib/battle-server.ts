@@ -83,6 +83,40 @@ export function scoringConfigFrom(doc: Record<string, any> | undefined, legacyQu
   return legacyQuiz?.scoring_config ?? null;
 }
 
+export type GovernanceConfig = {
+  reveal_timing: 'after_timer' | 'never_during_battle';
+  show_live_leaderboard: boolean;
+  allow_late_join: boolean;
+  negative_marking: boolean;
+  anti_cheat_strictness: 'warn_only' | 'auto_flag';
+};
+
+export const DEFAULT_GOVERNANCE_CONFIG: GovernanceConfig = {
+  reveal_timing: 'after_timer',
+  show_live_leaderboard: true,
+  allow_late_join: true,
+  negative_marking: false,
+  anti_cheat_strictness: 'warn_only',
+};
+
+export function normalizeGovernanceConfig(raw?: Record<string, any> | null): GovernanceConfig {
+  if (!raw) return { ...DEFAULT_GOVERNANCE_CONFIG };
+  return {
+    reveal_timing: raw.reveal_timing === 'never_during_battle' ? 'never_during_battle' : 'after_timer',
+    show_live_leaderboard: typeof raw.show_live_leaderboard === 'boolean' ? raw.show_live_leaderboard : true,
+    allow_late_join: typeof raw.allow_late_join === 'boolean' ? raw.allow_late_join : true,
+    negative_marking: typeof raw.negative_marking === 'boolean' ? raw.negative_marking : false,
+    anti_cheat_strictness: raw.anti_cheat_strictness === 'auto_flag' ? 'auto_flag' : 'warn_only',
+  };
+}
+
+export function governanceConfigFrom(doc: Record<string, any> | undefined): Record<string, any> | null | undefined {
+  if (doc && typeof doc.governance_config !== 'undefined' && doc.governance_config !== null) {
+    return doc.governance_config;
+  }
+  return null;
+}
+
 // Maps domain errors thrown by battle logic to proper HTTP status codes.
 // Unknown errors return a generic 500 without leaking internals.
 const DOMAIN_ERROR_STATUS: Array<[RegExp, number]> = [
@@ -363,53 +397,106 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
   let nextIndex = 0;
   let ended = false;
   let alreadyAdvanced = false;
-  await db.runTransaction(async (tx) => {
-    const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
-    const snap = await tx.get(quizRef);
-    if (!snap.exists) throw new Error('Arena not found');
-    const quiz = snap.data() as Record<string, any>;
-    if (quiz.status !== QUIZ_LIVE && quiz.status !== QUIZ_PAUSED) {
-      throw new Error(`Cannot advance a question in state: ${quiz.status}`);
-    }
 
-    const index = quiz.current_question_index ?? 0;
-    if (index !== expectedFromIndex) {
-      alreadyAdvanced = true;
-      nextIndex = index;
-      ended = false;
-      return;
-    }
-    const questionCount = quiz.question_count ?? 0;
-    const now = Date.now();
-    nextIndex = index + 1;
-    ended = nextIndex >= questionCount;
+  // Pre-fetch participants outside the transaction so the transaction does
+  // not need to do a non-transactional collection get() inside it (which
+  // would interleave with writes on the last-question path).
+  let preFetchedParts: Array<{ ref: any; id: string }> | null = null;
 
-    const quizUpdate: Record<string, any> = {
-      current_question_index: nextIndex,
-      question_start_at: ended ? null : now,
-    };
-    if (ended) {
-      quizUpdate.status = QUIZ_FINISHED;
-      quizUpdate.ended_at = now;
-      quizUpdate.paused_at = null;
-    }
-    tx.update(quizRef, quizUpdate);
+  const doAdvance = async (): Promise<void> => {
+    await db.runTransaction(async (tx) => {
+      const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
+      const snap = await tx.get(quizRef);
+      if (!snap.exists) throw new Error('Arena not found');
+      const quiz = snap.data() as Record<string, any>;
+      if (quiz.status !== QUIZ_LIVE && quiz.status !== QUIZ_PAUSED) {
+        throw new Error(`Cannot advance a question in state: ${quiz.status}`);
+      }
 
-    if (ended) {
-      const partsSnap = await db
-        .collection(COLLECTIONS.QUIZZES).doc(quizId)
-        .collection(COLLECTIONS.PARTICIPANTS)
-        .get();
-      for (const p of partsSnap.docs) {
-        const pSnap = await tx.get(p.ref);
-        if (!pSnap.exists || p.id === quiz.created_by || pSnap.data()?.status === PS_BLOCKED) continue;
-        tx.update(p.ref, {
-          status: PS_FINISHED,
-          finished_at: now,
-        });
+      const index = quiz.current_question_index ?? 0;
+      if (index !== expectedFromIndex) {
+        alreadyAdvanced = true;
+        nextIndex = index;
+        ended = false;
+        return;
+      }
+      const questionCount = quiz.question_count ?? 0;
+      const now = Date.now();
+      nextIndex = index + 1;
+      ended = nextIndex >= questionCount;
+
+      // Firestore transactions require ALL reads before ANY writes. On the
+      // last-question path we must finish gladiators — gather those reads
+      // before the quiz update write.
+      let pendingFinishes: Array<{ ref: any; data: Record<string, any> }> = [];
+      if (ended && preFetchedParts) {
+        for (const p of preFetchedParts) {
+          const pSnap: any = await tx.get(p.ref);
+          if (!pSnap.exists || p.id === quiz.created_by || pSnap.data()?.status === PS_BLOCKED) continue;
+          pendingFinishes.push({
+            ref: p.ref,
+            data: { status: PS_FINISHED, finished_at: now },
+          });
+        }
+      } else if (ended) {
+        // Fallback: participants were not pre-fetched (retry path below will have them)
+        const partsCol = db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.PARTICIPANTS);
+        // Use tx.get on a query is not directly supported; fetch via admin outside
+        // is not allowed inside tx either — surface a retryable error so caller
+        // retries with pre-fetched data.
+        throw new Error('Participants not pre-fetched for battle finish — retry');
+      }
+
+      const quizUpdate: Record<string, any> = {
+        current_question_index: nextIndex,
+        question_start_at: ended ? null : now,
+      };
+      if (ended) {
+        quizUpdate.status = QUIZ_FINISHED;
+        quizUpdate.ended_at = now;
+        quizUpdate.paused_at = null;
+      }
+      tx.update(quizRef, quizUpdate);
+      for (const pf of pendingFinishes) {
+        tx.update(pf.ref, pf.data);
+      }
+    });
+  };
+
+  // Detect whether this call will end the battle so we can pre-fetch
+  // participants. A lightweight optimistic check outside the transaction.
+  try {
+    const preSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
+    if (preSnap.exists) {
+      const preData = preSnap.data() as Record<string, any>;
+      const preIdx = preData.current_question_index ?? 0;
+      const preCount = preData.question_count ?? 0;
+      if (preIdx === expectedFromIndex && preIdx + 1 >= preCount) {
+        const partsSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.PARTICIPANTS).get();
+        preFetchedParts = partsSnap.docs.map(d => ({ ref: d.ref, id: d.id }));
       }
     }
-  });
+  } catch {
+    // Pre-fetch is best-effort; transaction will handle fallback
+  }
+
+  try {
+    await doAdvance();
+  } catch (err) {
+    // If the transaction failed because participants weren't pre-fetched
+    // (e.g., index changed between pre-check and tx), re-fetch and retry once.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Participants not pre-fetched')) {
+      const partsSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.PARTICIPANTS).get();
+      preFetchedParts = partsSnap.docs.map(d => ({ ref: d.ref, id: d.id }));
+      alreadyAdvanced = false;
+      ended = false;
+      nextIndex = 0;
+      await doAdvance();
+    } else {
+      throw err;
+    }
+  }
 
   if (ended) {
     // The last question may end the battle without a final evaluateQuestion
@@ -487,9 +574,13 @@ export async function evaluateQuestionForUser(
     const correctIndex = akSnap.data()?.correct_option_index as number;
 
     const cfgSnap = await tx.get(quizConfigRef(quizId));
-    const config = normalizeScoringConfig(
+    const rawGov = governanceConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined);
+    const governance = normalizeGovernanceConfig(rawGov as any);
+    const rawConfig = normalizeScoringConfig(
       scoringConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined, quiz) as ScoringConfig
     );
+    // negative_marking governance: when false, wrong answers must not subtract points
+    const config = governance.negative_marking ? rawConfig : { ...rawConfig, wrong_penalty: 0 };
     const timeLimit = questionTimer * 1000;
 
     const partRef = participantRef(quizId, targetUserId);
@@ -669,9 +760,12 @@ export async function evaluateQuestionForAll(
     .collection(COLLECTIONS.QUIZZES).doc(quizId)
     .collection(COLLECTIONS.QUIZ_CONFIG).doc(QUIZ_CONFIG_SETTINGS_DOC)
     .get();
-  const config = normalizeScoringConfig(
+  const rawGov2 = governanceConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined);
+  const gov2 = normalizeGovernanceConfig(rawGov2 as any);
+  const rawConfig2 = normalizeScoringConfig(
     scoringConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined, quiz) as ScoringConfig
   );
+  const config = gov2.negative_marking ? rawConfig2 : { ...rawConfig2, wrong_penalty: 0 };
   const questionStartAt = getMs(quiz.question_start_at);
   const timeLimit = (questionSnap.data()?.timer || 30) * 1000;
 
