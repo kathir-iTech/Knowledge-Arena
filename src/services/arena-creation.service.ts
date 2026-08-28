@@ -120,7 +120,7 @@ export const arenaCreationService = {
         score: 0,
         status: PS_PLAYING,
         violations_count: 0,
-        lastSeen: Date.now(),
+        lastSeen: serverTimestamp(),
       },
     });
 
