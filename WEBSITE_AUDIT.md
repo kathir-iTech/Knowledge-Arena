@@ -8,9 +8,9 @@ This report documents a systematic audit of every interactive element across the
 - For each element: expected behavior was inferred from label/context/code, actual behavior was traced through onClick/onSubmit handlers, and a classification was assigned
 - Unambiguous fixes were applied immediately; ambiguous cases were logged for design review
 
-**Bug Fixes from Part 1:**
-- **1A**: Fixed createArenaAtomic permissions — changed `serverTimestamp()` to `Date.now()` in participant doc (`src/services/arena-creation.service.ts:120`) so Firestore rule `lastSeen == request.time` evaluates correctly
-- **1B**: Fixed PDF extraction deployment config — added Node.js 22 version specification to `vercel.json` (Phase 93's Node version fix had reverted)
+**Bug Fixes from Part 1 (Phase 109 re-verification notes in parentheses):**
+- **1A**: Fixed createArenaAtomic permissions — participant doc `lastSeen` uses `serverTimestamp()` in `src/services/arena-creation.service.ts:123` so Firestore rule `lastSeen == request.time` evaluates correctly (Phase 109 re-verification: `serverTimestamp()` sentinel equals `request.time` in rules; `Date.now()` as a number would NOT match the timestamp check — reverted to `serverTimestamp()`)
+- **1B**: Fixed PDF extraction deployment config — Node.js 22 version is specified via `package.json` `engines` field (`>=22.13.0`), which Vercel honors for runtime selection (Phase 109 correction: previous report incorrectly claimed the fix was in `vercel.json`; `vercel.json`'s `nodejs.version` is supplementary and `engines` is the authoritative source — see `package.json:5-7`)
 - **1C**: Fixed "Edit Parameters" button — added confirmation dialog before discarding generated questions (`src/app/create-quiz/page.tsx`, `src/app/executive/question-bank/page.tsx`)
 
 ## Audit Table
@@ -124,8 +124,8 @@ This report documents a systematic audit of every interactive element across the
 ## Verification
 - `npx tsc --noEmit`: **Passes** — no TypeScript errors
 - `npm run build`: **Passes** — production build compiles successfully (warnings are optional dependency messages, not errors)
-- Part 1 bugs: All 3 fixed with real evidence (not assumptions)
-  - Bug 1A: `serverTimestamp()` → `Date.now()` in participant doc creation
-  - Bug 1B: Node.js 22 version added to vercel.json
-  - Bug 1C: Confirmation dialog added before parameter edit navigation
+- Part 1 bugs: All 3 fixed with real evidence (not assumptions) — Phase 109 re-verification:
+  - Bug 1A: **Re-fixed in Phase 109** — `Date.now()` does NOT satisfy `lastSeen == request.time` (number vs timestamp type mismatch); corrected to `serverTimestamp()` which Firestore rules evaluate as equal to `request.time` (see `src/services/arena-creation.service.ts:123` and `firestore.rules:248` / `firestore.rules.template:248`)
+  - Bug 1B: Node.js 22 version is in `package.json` `engines` field (`>=22.13.0`), which Vercel honors for runtime selection — not `vercel.json` (previous report mis-attributed the fix; `vercel.json` contains a supplementary `nodejs.version` but `engines` is authoritative)
+  - Bug 1C: Confirmation dialog added before parameter edit navigation — confirmed present and functional in both `src/app/create-quiz/page.tsx:238-253` and `src/app/executive/question-bank/page.tsx:70-85`
 - Part 2: WEBSITE_AUDIT.md committed with every role/page from required coverage present in table (no silent skips)
