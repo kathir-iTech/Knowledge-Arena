@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
+import { getConfiguredKeys, getKeyHealth } from '@/ai/key-resolver';
 
 export const runtime = 'nodejs';
 
@@ -40,9 +41,17 @@ async function getSystemHealth() {
     checks.messaging = { status: 'warning' };
   }
 
-  // AI — check Genkit is configured (env vars present)
-  const hasGeminiKey = !!process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  checks.ai = hasGeminiKey ? { status: 'healthy' } : { status: 'warning' };
+  // AI — check via centralized key-resolver (supports multi-key GEMINI_API_KEYS + legacy fallback)
+  const keyCount = getConfiguredKeys().length;
+  const hasGeminiKey = keyCount > 0;
+  if (hasGeminiKey) {
+    const health = getKeyHealth();
+    const available = health.filter(h => !h.inCooldown).length;
+    // healthy if at least one key available; warning if all in cooldown
+    checks.ai = available > 0 ? { status: 'healthy' } : { status: 'warning' };
+  } else {
+    checks.ai = { status: 'warning' };
+  }
 
   // Storage — verify Firebase storage bucket is configured
   const hasStorageBucket = !!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;

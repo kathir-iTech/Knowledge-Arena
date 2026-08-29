@@ -16,11 +16,14 @@ Variables prefixed with `NEXT_PUBLIC_` are exposed to client-side code.
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `GOOGLE_GENERATIVE_AI_API_KEY` | ✅ | Google Generative AI API key for Genkit AI features. Used for quiz generation from PDFs and the health checks in the executive workspace. | `AIzaSy...` |
+| `GEMINI_API_KEYS` | ✅ (recommended) | Comma-separated list of Gemini API keys from **different Google accounts** for automatic rotation/fallback via `src/ai/key-resolver.ts`. Each free-tier account contributes its own ~20 req/min quota, so 3 keys ≈ 3× capacity. The resolver round-robins, skips keys that hit 429 for Google's `retryDelay` (or 60s default), and fails fast with `ALL_GEMINI_KEYS_EXHAUSTED` if all are cooling (bounded 15s wait). Supports optional `scope` param for future per-client key assignment without call-site changes. | `AIzaSy...key1...,AIzaSy...key2...` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | ✅ (fallback) | Single-key fallback (backward compat). If `GEMINI_API_KEYS` is unset, the resolver falls back to this var, then `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `GOOGLE_GENAI_API_KEY`. Single-key mode behaves exactly as before (no behavior change) — multi-key simply extends capacity. | `AIzaSy...` |
 
-**Where to get it:** [Google AI Studio](https://aistudio.google.com/app/apikey) → Create API key.
+**Where to get it:** [Google AI Studio](https://aistudio.google.com/app/apikey) → Create API key (one per Google account for multi-key).
 
-**Note:** This key is auto-detected by the Genkit library; the app also reads `process.env.GOOGLE_GENERATIVE_AI_API_KEY` directly for workspace health checks.
+**Note:** All Gemini key reads are now **centralized in `src/ai/key-resolver.ts`** — no other `src/` file reads `process.env.*API_KEY` directly. `src/ai/genkit.ts` delegates to `getConfiguredKeys()` and `src/app/api/executive/workspace/route.ts` health check uses `getKeyHealth()`. `GEMINI_API_KEYS` (plural) is the new recommended var; the single-key vars remain supported.
+
+**Production recommendation:** Upgrade the underlying Google Cloud project(s) to **billed pay-as-you-go** — this removes the low free-tier ceiling entirely and is the recommended production path. Free-tier multi-key rotation is a low-stakes optimization for development / low-volume use; billing is what truly scales quota.
 
 ---
 
@@ -98,6 +101,9 @@ These are only used by CLI scripts in `scripts/`. Not required for normal app op
 # ═══════════════════════════════════════════════════════════════
 
 # ─── AI / Genkit ───────────────────────────────────────────────
+# Preferred multi-key (comma-separated, one per Google account):
+GEMINI_API_KEYS=
+# Fallback single-key (backward compat):
 GOOGLE_GENERATIVE_AI_API_KEY=
 
 # ─── Firebase Admin SDK ────────────────────────────────────────
@@ -126,7 +132,7 @@ cp .env.example .env.local
 
 # Edit .env.local with your actual values
 # At minimum, set:
-#   GOOGLE_GENERATIVE_AI_API_KEY
+#   GEMINI_API_KEYS (or GOOGLE_GENERATIVE_AI_API_KEY for single-key)
 #   FIREBASE_SERVICE_ACCOUNT_KEY (for production)
 
 # For production deployment (Vercel):
@@ -141,8 +147,8 @@ These variables are no longer read by the application:
 
 | Variable | Reason Removed |
 |---|---|
-| `GEMINI_API_KEY` | Replaced by `GOOGLE_GENERATIVE_AI_API_KEY` |
-| `GOOGLE_GENAI_API_KEY` | Alias, not actively used |
+| `GEMINI_API_KEY` | Legacy single-key var — still read as fallback by `key-resolver.ts` if `GEMINI_API_KEYS` is unset |
+| `GOOGLE_GENAI_API_KEY` | Legacy alias — still read as fallback by `key-resolver.ts` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase was replaced by Firestore |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase was replaced by Firestore |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase was replaced by Firestore |

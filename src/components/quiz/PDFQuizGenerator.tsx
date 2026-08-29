@@ -236,13 +236,26 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
       } else if (raw.includes("INVALID_PDF_DATA")) {
         msg = "Invalid file data. Please try uploading the file again.";
         failedStep = 0; guidance = 'Re-upload the file.';
-      } else if (raw.includes("quota_exceeded")) {
-        msg = "AI generation quota temporarily exhausted. Please wait a few minutes before retrying.";
-        failedStep = 2; guidance = 'Wait a few minutes — quota will reset.';
+      } else if (raw.includes("ALL_GEMINI_KEYS_EXHAUSTED") || raw.includes("GEMINI_QUOTA_EXCEEDED") || raw.includes("quota_exceeded") || raw.includes("quota") || raw.includes("429") || raw.includes("RESOURCE_EXHAUSTED")) {
+        // Check for retryAfter in message
+        const retryMatch = raw.match(/retry after ~?(\d+)s/i);
+        const retryHint = retryMatch ? ` Retry after ~${retryMatch[1]}s.` : '';
+        if (raw.includes("ALL_GEMINI_KEYS_EXHAUSTED")) {
+          msg = `All AI capacity exhausted — all configured Gemini keys are temporarily quota-limited.${retryHint} Please wait a few minutes before retrying.`;
+        } else {
+          msg = `AI generation quota temporarily exhausted.${retryHint} Please wait a few minutes before retrying.`;
+        }
+        failedStep = 2; guidance = 'Wait a few minutes — quota will reset. Adding multiple GEMINI_API_KEYS (one per Google account) increases capacity: each key has its own free-tier quota.';
+      } else if (raw.includes("GEMINI_API_KEY_MISSING") || raw.includes("API key")) {
+        msg = "AI is not configured — Gemini API key missing. Contact your administrator.";
+        failedStep = 1; guidance = 'Ask an admin to set GEMINI_API_KEYS in the environment.';
       } else if (raw.includes("PARSE_FAILED_")) {
         msg = "The AI returned unparseable output. Please retry.";
         failedStep = 3; guidance = 'Retry generation; the AI may succeed on a second attempt.';
-      } else if (raw.includes("timed out")) {
+      } else if (raw.includes("TIMEOUT:") || raw.includes("timed out") || raw.includes("timed out after")) {
+        const timeoutMatch = raw.match(/exceeded\s*(\d+)ms/i);
+        const secHint = timeoutMatch ? ` after ${Math.round(parseInt(timeoutMatch[1],10)/1000)}s` : '';
+        msg = `AI generation timed out${secHint}. Try with fewer questions or smaller files.`;
         failedStep = 2; guidance = 'Try fewer questions or smaller files.';
       }
 

@@ -4,7 +4,7 @@
  * Engine: Google Gemini (Genkit Plugin) — free tier, with multi-model fallback.
  */
 
-import { ai } from '@/ai/genkit';
+import { ai, createGenkitForKey } from '@/ai/genkit';
 import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import * as zlib from 'zlib';
@@ -14,10 +14,17 @@ import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 import { COLLECTIONS } from '@/lib/constants';
 import { aiLogService } from '@/services/ai-log.service';
+import {
+  getGeminiApiKey,
+  isQuotaError as isResolverQuotaError,
+  parseRetryDelayMs,
+  markKeyCooldown,
+  getConfiguredKeys,
+} from '@/ai/key-resolver';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const EXTRACTION_TIMEOUT_MS = 30000;
-const GEMINI_TIMEOUT_MS = 30000;
+const GEMINI_TIMEOUT_MS = 35000;
 
 const QuizQuestionOutputSchema = z.object({
   text: z.string().describe('The question text.'),
@@ -100,12 +107,14 @@ function formatError(err: unknown): string {
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`TIMEOUT:${label} exceeded ${ms}ms`)), ms)
-    ),
-  ]);
+  // Same pattern as src/contexts/AuthContext.tsx — clears timer on settle, avoids leak vs bare Promise.race
+  return new Promise<T>((resolve, reject) => {
+    const tid = setTimeout(() => reject(new Error(`TIMEOUT:${label} exceeded ${ms}ms`)), ms);
+    promise.then(
+      (v) => { clearTimeout(tid); resolve(v); },
+      (e) => { clearTimeout(tid); reject(e); }
+    );
+  });
 }
 
 function isAuthError(err: unknown): boolean {
@@ -120,21 +129,26 @@ function isAuthError(err: unknown): boolean {
 }
 
 function isRateLimitError(err: unknown): boolean {
+  // Delegate to central resolver's robust detection (covers status, details, message), but keep local fallback for raw string checks.
+  if (isResolverQuotaError(err)) return true;
   const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
   return (
-    msg.includes('429') ||
-    msg.includes('RESOURCE_EXHAUSTED') ||
-    msg.includes('rate limit') ||
-    msg.includes('quota') ||
-    msg.includes('500') ||
-    msg.includes('503') ||
-    msg.includes('temporarily')
+    lower.includes('500') ||
+    lower.includes('503') ||
+    lower.includes('temporarily')
   );
 }
 
 function isTimeoutError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.startsWith('TIMEOUT:');
+  // Must use includes, not startsWith, because errors are prefixed like "gemini-3.6-flash attempt 1: TIMEOUT:..."
+  return msg.includes('TIMEOUT:');
+}
+
+function getRetryDelaySeconds(err: unknown): number | null {
+  const ms = parseRetryDelayMs(err);
+  return ms !== null ? Math.ceil(ms / 1000) : null;
 }
 
 type QuizQuestions = z.infer<typeof QuizQuestionOutputSchema>[];
@@ -213,11 +227,18 @@ function tryParseQuestions(raw: string): { questions: QuizQuestions } | null {
 async function callModelWithRetry(promptText: string, modelName: string): Promise<GeminiResult> {
   const errors: string[] = [];
   const maxAttempts = MAX_RETRIES_PER_MODEL;
+  // Track keys used for this model call to avoid retrying the same exhausted key immediately.
+  const keyHistoryForModel = new Set<string>();
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let apiKeyUsed: string | null = null;
     try {
+      // Resolve next available key with quota-aware rotation. Single-key mode returns same key.
+      apiKeyUsed = await getGeminiApiKey();
+      keyHistoryForModel.add(apiKeyUsed);
+      const tmpAi = createGenkitForKey(apiKeyUsed);
       const _response = await withTimeout(
-        ai.generate({
+        tmpAi.generate({
           model: googleAI.model(modelName),
           prompt: promptText,
           output: {
@@ -248,13 +269,53 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
       throw new Error(`PARSE_FAILED_${modelName}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      errors.push(`${modelName} attempt ${attempt}: ${msg}`);
+      const retrySec = getRetryDelaySeconds(err);
+      const enriched = retrySec ? `${msg} (retryAfter ${retrySec}s)` : msg;
+      errors.push(`${modelName} attempt ${attempt}: ${enriched}`);
       console.error(`[Forge] Gemini call failed (${modelName}, attempt ${attempt}/${maxAttempts})`, '\n' + formatError(err));
 
       if (isAuthError(err)) {
         throw err;
       }
 
+      // Quota / 429 handling: mark cooldown and rotate key on next iteration instead of blind same-key retry.
+      if (isResolverQuotaError(err)) {
+        const delayMs = parseRetryDelayMs(err);
+        if (apiKeyUsed) markKeyCooldown(apiKeyUsed, delayMs);
+        // If we have spare keys and haven't exhausted them, retry immediately with next key (no backoff).
+        // Otherwise cap retries: if we already tried all configured keys, return quota_exceeded fast.
+        const configured = getConfiguredKeys().length;
+        if (keyHistoryForModel.size >= configured && configured > 1) {
+          // Already tried every key once for this model — don't burn remaining attempts on same set.
+          // Return early with quota reason so callGeminiWithFallback can surface correctly.
+          return { ok: false, reason: 'quota_exceeded', errors };
+        }
+        if (isTimeoutError(err)) {
+          // quota errors that also look like timeout should not double-count; still treat as quota
+        }
+        if (attempt === maxAttempts) {
+          return { ok: false, reason: 'quota_exceeded', errors };
+        }
+        // For multi-key rotation, don't wait exponential backoff — try next key right away.
+        const keys = getConfiguredKeys();
+        if (keys.length > 1 && keyHistoryForModel.size < keys.length) {
+          continue;
+        }
+        // Single-key mode: exponential backoff but capped at 2-3 attempts total (already)
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        continue;
+      }
+
+      // Timeout: do not retry indefinitely; cap at MAX_RETRIES_PER_MODEL with backoff ceiling.
+      if (isTimeoutError(err)) {
+        if (attempt === maxAttempts) {
+          return { ok: false, reason: 'timeout', errors };
+        }
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        continue;
+      }
+
+      // Non-quota, non-timeout errors (e.g., 500/503) — still retry with exponential backoff but bounded.
       if (attempt === maxAttempts) {
         return { ok: false, reason: 'all_models_failed', errors };
       }
@@ -675,6 +736,7 @@ async function generatePromptWithImages(
 
   for (const modelName of chain) {
     for (let attempt = 1; attempt <= MAX_RETRIES_PER_MODEL; attempt++) {
+      let apiKeyUsed: string | null = null;
       try {
         const promptText = `Generate exactly ${questionCount} high-quality multiple-choice questions based on the following content${imageDataUris.length > 0 ? ' and the provided image(s)' : ''}.
 
@@ -704,8 +766,10 @@ ${chunks[0]}`;
           parts.push({ inlineData: { data: imgUri.split(',')[1], mimeType: 'image/png' } });
         }
 
+        apiKeyUsed = await getGeminiApiKey();
+        const tmpAi = createGenkitForKey(apiKeyUsed);
         const _response = await withTimeout(
-          ai.generate({
+          tmpAi.generate({
             model: googleAI.model(modelName),
             prompt: parts,
             output: {
@@ -736,10 +800,26 @@ ${chunks[0]}`;
         throw new Error(`PARSE_FAILED_${modelName}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        errors.push(`${modelName} attempt ${attempt}: ${msg}`);
+        const retrySec = getRetryDelaySeconds(err);
+        const enriched = retrySec ? `${msg} (retryAfter ${retrySec}s)` : msg;
+        errors.push(`${modelName} attempt ${attempt}: ${enriched}`);
         console.error(`[Forge] Gemini vision call failed (${modelName}, attempt ${attempt}/${MAX_RETRIES_PER_MODEL})`, '\n' + formatError(err));
 
         if (isAuthError(err)) throw err;
+        if (isResolverQuotaError(err)) {
+          const delayMs = parseRetryDelayMs(err);
+          if (apiKeyUsed) markKeyCooldown(apiKeyUsed, delayMs);
+          // If we have spare keys, try next key immediately without backoff
+          if (getConfiguredKeys().length > 1) {
+            continue;
+          }
+        }
+        if (isTimeoutError(err)) {
+          if (attempt < MAX_RETRIES_PER_MODEL) {
+            await new Promise((r) => setTimeout(r, 1000 * attempt));
+          }
+          continue;
+        }
         if (attempt < MAX_RETRIES_PER_MODEL) {
           await new Promise((r) => setTimeout(r, 1000 * attempt));
         }
@@ -747,6 +827,11 @@ ${chunks[0]}`;
     }
   }
 
+  // Classify reason similarly to callGeminiWithFallback for vision path
+  const anyQuota = errors.some(e => isRateLimitError(e));
+  const anyTimeout = errors.some(e => isTimeoutError(e));
+  if (anyQuota && !anyTimeout) return { ok: false, reason: 'quota_exceeded', errors };
+  if (anyTimeout && !anyQuota) return { ok: false, reason: 'timeout', errors };
   return { ok: false, reason: 'all_models_failed', errors };
 }
 
@@ -837,15 +922,30 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       const rawErrors = result.errors.join(' || ');
       console.error('[Forge] All models failed. RAW errors:', '\n' + rawErrors);
       let errorMsg: string;
+      // Extract retryAfter if any error contains it (e.g., "retryAfter 32s")
+      const retryMatch = rawErrors.match(/retryAfter\s*(\d+)s/i);
+      const retryHint = retryMatch ? ` Retry after ~${retryMatch[1]}s.` : '';
+      const quotaPrefix = rawErrors.includes('ALL_GEMINI_KEYS_EXHAUSTED')
+        ? 'ALL_GEMINI_KEYS_EXHAUSTED: All AI capacity exhausted.'
+        : 'quota_exceeded';
       switch (result.reason) {
         case 'quota_exceeded':
-          errorMsg = `AI generation temporarily unavailable due to quota limits. RAW: ${rawErrors}`;
+          errorMsg = `${quotaPrefix}: AI generation temporarily unavailable due to quota limits.${retryHint} Please wait a few minutes before retrying. RAW: ${rawErrors}`;
           break;
         case 'timeout':
-          errorMsg = `AI generation timed out. RAW: ${rawErrors}`;
+          errorMsg = `AI generation timed out after ${Math.round(GEMINI_TIMEOUT_MS / 1000)}s.${retryHint} Your PDF may be too large or complex. Try with fewer questions or a smaller PDF. RAW: ${rawErrors}`;
           break;
-        default:
-          errorMsg = `AI generation failed. RAW: ${rawErrors}`;
+        default: {
+          // For all_models_failed, check if underlying was actually quota or timeout but misclassified due to mixed errors
+          if (rawErrors.toLowerCase().includes('quota') || rawErrors.includes('429') || rawErrors.includes('ALL_GEMINI_KEYS_EXHAUSTED')) {
+            errorMsg = `${quotaPrefix}: AI generation quota exhausted.${retryHint} RAW: ${rawErrors}`;
+          } else if (rawErrors.includes('TIMEOUT:')) {
+            errorMsg = `AI generation timed out.${retryHint} RAW: ${rawErrors}`;
+          } else {
+            errorMsg = `AI generation failed. RAW: ${rawErrors}`;
+          }
+          break;
+        }
       }
       return {
         questions: [],

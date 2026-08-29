@@ -30,6 +30,12 @@ export async function POST(req: NextRequest) {
       if (err === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       if (err === 'COPILOT_RATE_LIMITED') return NextResponse.json({ error: 'Rate limited. Try again in a minute.', retryAfter: 60 }, { status: 429, headers: { 'Retry-After': '60', 'X-RateLimit-Remaining': '0' } });
       if (err === 'COPILOT_TIMEOUT') return NextResponse.json({ error: 'Copilot timed out. Please try again.' }, { status: 504 });
+      if (err.includes('GEMINI_QUOTA_EXCEEDED') || err.includes('ALL_GEMINI_KEYS_EXHAUSTED') || err.includes('quota_exceeded')) {
+        const m = err.match(/retry after ~?(\d+)s/i);
+        const retryAfter = m ? parseInt(m[1], 10) : 60;
+        return NextResponse.json({ error: 'AI quota exhausted. Please wait a few minutes before retrying.', retryAfter }, { status: 429, headers: { 'Retry-After': String(retryAfter), 'X-RateLimit-Remaining': '0' } });
+      }
+      if (err.includes('TIMEOUT') || err.includes('timed out')) return NextResponse.json({ error: 'Copilot timed out. Please try again.' }, { status: 504 });
       return NextResponse.json({ error: err }, { status: 500 });
     }
 
