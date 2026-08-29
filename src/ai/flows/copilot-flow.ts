@@ -6,14 +6,15 @@
  * Uses the existing Gemini free-tier pattern (googleAI model, single call).
  */
 
-import { ai } from '@/ai/genkit';
+import { ai, createGenkitForKey } from '@/ai/genkit';
 import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 import { aiLogService } from '@/services/ai-log.service';
+import { getGeminiApiKey, isQuotaError, parseRetryDelayMs, markKeyCooldown, getConfiguredKeys } from '@/ai/key-resolver';
 
-const COPILOT_TIMEOUT_MS = 20000;
+const COPILOT_TIMEOUT_MS = 30000;
 
 const CopilotQuestionSchema = z.object({
   text: z.string().describe('The suggested question text.'),
@@ -38,10 +39,50 @@ const CopilotOutputSchema = z.object({
 export type CopilotOutput = z.infer<typeof CopilotOutputSchema>;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('COPILOT_TIMEOUT')), ms)),
-  ]);
+  return new Promise<T>((resolve, reject) => {
+    const tid = setTimeout(() => reject(new Error('COPILOT_TIMEOUT')), ms);
+    promise.then(
+      (v) => { clearTimeout(tid); resolve(v); },
+      (e) => { clearTimeout(tid); reject(e); }
+    );
+  });
+}
+
+async function callCopilotWithRotation(promptText: string): Promise<{ response: unknown }> {
+  const keys = getConfiguredKeys();
+  const maxAttempts = Math.min(keys.length || 1, 3);
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const apiKey = await getGeminiApiKey();
+    const tmpAi = createGenkitForKey(apiKey);
+    try {
+      const res = await withTimeout(
+        tmpAi.generate({
+          model: googleAI.model('gemini-3.6-flash'),
+          prompt: promptText,
+          output: {
+            schema: z.object({
+              suggestion: z.string(),
+              generatedQuestion: CopilotQuestionSchema.nullable(),
+            }),
+          },
+        }),
+        COPILOT_TIMEOUT_MS
+      );
+      return { response: res };
+    } catch (err) {
+      lastError = err;
+      if (isQuotaError(err)) {
+        const delay = parseRetryDelayMs(err);
+        markKeyCooldown(apiKey, delay);
+        if (attempt < maxAttempts - 1 && keys.length > 1) continue;
+        const sec = delay ? Math.ceil(delay / 1000) : 60;
+        throw new Error(`GEMINI_QUOTA_EXCEEDED: Copilot quota exhausted. Retry after ~${sec}s. Raw: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      throw err;
+    }
+  }
+  throw lastError;
 }
 
 // The actual Genkit flow — makes a real Gemini API call.
@@ -64,19 +105,7 @@ Respond with:
 
 Output JSON must match the schema: { suggestion, generatedQuestion: { text, options[4], correctAnswerIndex, explanation } }`;
 
-    const response = await withTimeout(
-      ai.generate({
-        model: googleAI.model('gemini-3.6-flash'),
-        prompt: promptText,
-        output: {
-          schema: z.object({
-            suggestion: z.string(),
-            generatedQuestion: CopilotQuestionSchema.nullable(),
-          }),
-        },
-      }),
-      COPILOT_TIMEOUT_MS
-    );
+    const { response } = await callCopilotWithRotation(promptText);
 
     const out = (response as { output?: CopilotOutput; text?: string }).output;
     if (out?.suggestion) {

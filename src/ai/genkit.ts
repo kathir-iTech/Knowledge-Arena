@@ -6,26 +6,24 @@ import { googleAI } from '@genkit-ai/googleai';
  * Configured with the Google AI plugin for tactical intelligence workflows.
  * The default model is overridden per-call in PDF flow based on platform_settings.
  *
- * IMPORTANT: The @genkit-ai/googleai plugin only reads GEMINI_API_KEY,
- * GOOGLE_API_KEY, or GOOGLE_GENAI_API_KEY from the environment. This app
- * documents GOOGLE_GENERATIVE_AI_API_KEY (`.env.example`, CI, PDF Forge UI),
- * so the key is passed in explicitly to keep that variable working.
+ * All key resolution is now centralized in key-resolver.ts. This file no longer
+ * reads process.env.GEMINI_API_KEY directly — it delegates to getConfiguredKeys().
+ * When multiple keys are configured via GEMINI_API_KEYS, per-request calls should
+ * use createGenkitForKey() with a key from getGeminiApiKey(scope) instead of
+ * this singleton, so quota rotation works correctly.
  */
-function resolveGoogleAiApiKey(): string | undefined {
-  return (
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY ||
-    undefined
-  );
+import { getConfiguredKeys } from './key-resolver';
+
+function resolveInitialApiKey(): string | undefined {
+  const keys = getConfiguredKeys();
+  return keys[0];
 }
 
-const apiKey = resolveGoogleAiApiKey();
+const apiKey = resolveInitialApiKey();
 
-const ENV_VAR_CANDIDATES = ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY'] as const;
-const envPresence = ENV_VAR_CANDIDATES.map(v => `${v}=${process.env[v] ? 'SET' : 'MISSING'}`).join(', ');
-console.log(`[Genkit] AI env var check: ${envPresence} | plugin key source: ${apiKey ? 'explicit (GOOGLE_GENERATIVE_AI_API_KEY or first available)' : 'none set'}`);
+const configuredCount = getConfiguredKeys().length;
+const keyPreview = apiKey ? `${apiKey.slice(0, 4)}…${apiKey.slice(-4)}` : 'none';
+console.log(`[Genkit] AI keys configured: ${configuredCount} | default key: ${apiKey ? keyPreview : 'none set'} (multi-key rotation via key-resolver)`);
 
 export const ai = genkit({
   plugins: [
@@ -34,3 +32,15 @@ export const ai = genkit({
   // gemini-2.0-flash was shut down by Google on 2026-06-01; gemini-3.6-flash is the current GA replacement.
   model: googleAI.model('gemini-3.6-flash'),
 });
+
+/**
+ * Create a Genkit instance bound to a specific Gemini API key.
+ * Use this for per-request generation so key rotation on 429 works correctly.
+ * The singleton `ai` above is still used for flow definitions (defineFlow/definePrompt).
+ */
+export function createGenkitForKey(apiKeyForRequest: string) {
+  return genkit({
+    plugins: [googleAI({ apiKey: apiKeyForRequest })],
+    model: googleAI.model('gemini-3.6-flash'),
+  });
+}

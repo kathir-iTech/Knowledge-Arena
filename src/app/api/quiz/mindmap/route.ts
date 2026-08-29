@@ -62,7 +62,12 @@ export async function POST(req: NextRequest) {
     if (result.error) {
       if (result.error === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       if (result.error === 'MINDMAP_RATE_LIMITED') return NextResponse.json({ error: Limits.AI_MINDMAP_PER_USER.message, retryAfter: 60 }, { status: 429, headers: { 'Retry-After': '60', 'X-RateLimit-Remaining': '0' } });
-      if (result.error === 'MINDMAP_TIMEOUT') return NextResponse.json({ error: 'Mind map generation timed out. Please try again.' }, { status: 504 });
+      if (result.error === 'MINDMAP_TIMEOUT' || result.error.includes('MINDMAP_TIMEOUT') || result.error.includes('TIMEOUT')) return NextResponse.json({ error: 'Mind map generation timed out. Please try again.' }, { status: 504 });
+      if (result.error.includes('GEMINI_QUOTA_EXCEEDED') || result.error.includes('ALL_GEMINI_KEYS_EXHAUSTED') || result.error.includes('quota_exceeded')) {
+        const m = result.error.match(/retry after ~?(\d+)s/i);
+        const retryAfter = m ? parseInt(m[1], 10) : 60;
+        return NextResponse.json({ error: 'AI quota exhausted. Please wait a few minutes before retrying.', retryAfter }, { status: 429, headers: { 'Retry-After': String(retryAfter), 'X-RateLimit-Remaining': '0' } });
+      }
       return NextResponse.json({ error: result.error }, { status: 500 });
     }
 

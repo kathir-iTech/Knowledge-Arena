@@ -4,14 +4,15 @@
  * from quiz questions and correct answers using Gemini.
  */
 
-import { ai } from '@/ai/genkit';
+import { ai, createGenkitForKey } from '@/ai/genkit';
 import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 import { aiLogService } from '@/services/ai-log.service';
+import { getGeminiApiKey, isQuotaError, parseRetryDelayMs, markKeyCooldown, getConfiguredKeys } from '@/ai/key-resolver';
 
-const MINDMAP_TIMEOUT_MS = 30000;
+const MINDMAP_TIMEOUT_MS = 35000;
 
 const MindMapNodeSchema = z.object({
   topic: z.string().describe('Topic or concept name'),
@@ -42,10 +43,45 @@ const MindMapInputSchema = z.object({
 export type MindMapInput = z.infer<typeof MindMapInputSchema>;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('MINDMAP_TIMEOUT')), ms)),
-  ]);
+  return new Promise<T>((resolve, reject) => {
+    const tid = setTimeout(() => reject(new Error('MINDMAP_TIMEOUT')), ms);
+    promise.then(
+      (v) => { clearTimeout(tid); resolve(v); },
+      (e) => { clearTimeout(tid); reject(e); }
+    );
+  });
+}
+
+async function callMindmapWithRotation(promptText: string): Promise<unknown> {
+  const keys = getConfiguredKeys();
+  const maxAttempts = Math.min(keys.length || 1, 3);
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const apiKey = await getGeminiApiKey();
+    const tmpAi = createGenkitForKey(apiKey);
+    try {
+      const res = await withTimeout(
+        tmpAi.generate({
+          model: googleAI.model('gemini-3.6-flash'),
+          prompt: promptText,
+          output: { schema: MindMapOutputSchema },
+        }),
+        MINDMAP_TIMEOUT_MS
+      );
+      return res;
+    } catch (err) {
+      lastError = err;
+      if (isQuotaError(err)) {
+        const delay = parseRetryDelayMs(err);
+        markKeyCooldown(apiKey, delay);
+        if (attempt < maxAttempts - 1 && keys.length > 1) continue;
+        const sec = delay ? Math.ceil(delay / 1000) : 60;
+        throw new Error(`GEMINI_QUOTA_EXCEEDED: Mind map quota exhausted. Retry after ~${sec}s. Raw: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      throw err;
+    }
+  }
+  throw lastError;
 }
 
 export const mindmapFlow = ai.defineFlow(
@@ -70,16 +106,7 @@ Generate a mind map with:
 
 Return JSON matching the schema: { title, nodes: [{topic, subtopics[]}], connections: [{from, to, label?}] }`;
 
-    const response = await withTimeout(
-      ai.generate({
-        model: googleAI.model('gemini-3.6-flash'),
-        prompt: promptText,
-        output: {
-          schema: MindMapOutputSchema,
-        },
-      }),
-      MINDMAP_TIMEOUT_MS
-    );
+    const response = await callMindmapWithRotation(promptText) as { output?: MindMapData; text?: string };
 
     const out = (response as { output?: MindMapData; text?: string }).output;
     if (out?.nodes && out.nodes.length > 0) {

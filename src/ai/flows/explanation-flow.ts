@@ -4,14 +4,15 @@
  * for why a wrong answer is incorrect and why the correct answer is right.
  */
 
-import { ai } from '@/ai/genkit';
+import { ai, createGenkitForKey } from '@/ai/genkit';
 import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 import { aiLogService } from '@/services/ai-log.service';
+import { getGeminiApiKey, isQuotaError, parseRetryDelayMs, markKeyCooldown, getConfiguredKeys } from '@/ai/key-resolver';
 
-const EXPLANATION_TIMEOUT_MS = 20000;
+const EXPLANATION_TIMEOUT_MS = 30000;
 
 const ExplanationOutputSchema = z.object({
   explanation: z.string().describe('Clear, educational explanation of why the correct answer is right and why the wrong answer is a common misconception'),
@@ -30,10 +31,45 @@ const ExplanationInputSchema = z.object({
 export type ExplanationInput = z.infer<typeof ExplanationInputSchema>;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('EXPLANATION_TIMEOUT')), ms)),
-  ]);
+  return new Promise<T>((resolve, reject) => {
+    const tid = setTimeout(() => reject(new Error('EXPLANATION_TIMEOUT')), ms);
+    promise.then(
+      (v) => { clearTimeout(tid); resolve(v); },
+      (e) => { clearTimeout(tid); reject(e); }
+    );
+  });
+}
+
+async function callExplanationWithRotation(promptText: string): Promise<unknown> {
+  const keys = getConfiguredKeys();
+  const maxAttempts = Math.min(keys.length || 1, 3);
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const apiKey = await getGeminiApiKey();
+    const tmpAi = createGenkitForKey(apiKey);
+    try {
+      const res = await withTimeout(
+        tmpAi.generate({
+          model: googleAI.model('gemini-3.6-flash'),
+          prompt: promptText,
+          output: { schema: ExplanationOutputSchema },
+        }),
+        EXPLANATION_TIMEOUT_MS
+      );
+      return res;
+    } catch (err) {
+      lastError = err;
+      if (isQuotaError(err)) {
+        const delay = parseRetryDelayMs(err);
+        markKeyCooldown(apiKey, delay);
+        if (attempt < maxAttempts - 1 && keys.length > 1) continue;
+        const sec = delay ? Math.ceil(delay / 1000) : 60;
+        throw new Error(`GEMINI_QUOTA_EXCEEDED: Explanation quota exhausted. Retry after ~${sec}s. Raw: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      throw err;
+    }
+  }
+  throw lastError;
 }
 
 export const explanationFlow = ai.defineFlow(
@@ -60,16 +96,7 @@ Provide an explanation that:
 
 Keep the explanation concise (2-4 paragraphs) and educational. Do not just restate the answer — explain the reasoning.`;
 
-    const response = await withTimeout(
-      ai.generate({
-        model: googleAI.model('gemini-3.6-flash'),
-        prompt: promptText,
-        output: {
-          schema: ExplanationOutputSchema,
-        },
-      }),
-      EXPLANATION_TIMEOUT_MS
-    );
+    const response = await callExplanationWithRotation(promptText) as { output?: ExplanationData; text?: string };
 
     const out = (response as { output?: ExplanationData; text?: string }).output;
     if (out?.explanation) {
