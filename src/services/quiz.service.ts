@@ -197,38 +197,41 @@ export const quizService = {
     }
 
     await runTransaction(db, async (transaction) => {
-      // Delete all submission docs per question
+      // All reads are performed via transaction.get so they are part of the
+      // transaction's read set and benefit from optimistic concurrency control.
+      // Cast to any because the SDK overloads transaction.get for Query vs
+      // DocumentReference and CollectionReference is a Query subtype.
       const questionsRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS);
-      const questionsSnap = await getDocs(questionsRef);
+      const questionsSnap = await (transaction as any).get(questionsRef);
       for (const qDoc of questionsSnap.docs) {
         const subRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS, qDoc.id, COLLECTIONS.SUBMISSIONS);
-        const subSnap = await getDocs(subRef);
+        const subSnap = await (transaction as any).get(subRef);
         for (const subDoc of subSnap.docs) {
-          transaction.delete(subDoc.ref);
+          (transaction as any).delete(subDoc.ref);
         }
       }
 
-      // Delete all participant docs
+      // Delete all participant docs — read inside transaction
       const participantsRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.PARTICIPANTS);
-      const participantsSnap = await getDocs(participantsRef);
+      const participantsSnap = await (transaction as any).get(participantsRef);
       for (const pDoc of participantsSnap.docs) {
-        transaction.delete(pDoc.ref);
+        (transaction as any).delete(pDoc.ref);
       }
 
-      // Delete all answer key docs
+      // Delete all answer key docs — read inside transaction
       const answerKeysRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.ANSWER_KEYS);
-      const answerKeysSnap = await getDocs(answerKeysRef);
+      const answerKeysSnap = await (transaction as any).get(answerKeysRef);
       for (const aDoc of answerKeysSnap.docs) {
-        transaction.delete(aDoc.ref);
+        (transaction as any).delete(aDoc.ref);
       }
 
       // Delete the config doc
       const configDocRef = doc(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC);
-      transaction.delete(configDocRef);
+      (transaction as any).delete(configDocRef);
 
       // Update quiz status to waiting — atomic with the deletes
       const quizRef = doc(db, COLLECTIONS.QUIZZES, id);
-      transaction.update(quizRef, {
+      (transaction as any).update(quizRef, {
         status: QUIZ_WAITING,
         current_question_index: -1,
         question_start_at: null,

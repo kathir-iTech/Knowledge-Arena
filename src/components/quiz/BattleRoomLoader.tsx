@@ -16,11 +16,17 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 import { ShieldX, RefreshCw, MonitorX } from 'lucide-react';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import LiveQuiz from '@/components/quiz/LiveQuiz';
 import QuizResults from '@/components/quiz/QuizResults';
 import WaitingRoom from '@/components/quiz/WaitingRoom';
 import { Button } from '../ui/button';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import dynamic from 'next/dynamic';
+import { Suspense } from 'react';
+
+const LiveQuiz = dynamic(
+  () => import('@/components/quiz/LiveQuiz').then(m => ({ default: m.default })),
+  { ssr: false, loading: () => <LoadingScreen message="Loading the arena..." /> }
+);
 
 function StartingScreen({ quizId, startedAt }: { quizId: string; startedAt?: number | null }) {
   const [countdown, setCountdown] = useState(3);

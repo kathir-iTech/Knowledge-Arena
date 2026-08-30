@@ -417,10 +417,11 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
       // before the quiz update write.
       let pendingFinishes: Array<{ ref: any; data: Record<string, any> }> = [];
       if (ended) {
-        // Participants must be pre-fetched for the finish-gladiators path.
-        // If they weren't captured in the same transaction, surface a retryable
-        // error so the caller re-fetches with fresh data (see the catch block below).
-        const partsSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.PARTICIPANTS).get();
+        // All reads use tx.get so they are part of the transaction's read set.
+        // This ensures the participant finish on last-question path is serialised
+        // correctly vs concurrent advances (Fs transaction: reads before writes).
+        const partsCol = db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.PARTICIPANTS);
+        const partsSnap = await tx.get(partsCol);
         preFetchedParts = partsSnap.docs.map(d => ({ ref: d.ref, id: d.id }));
 
         for (const p of preFetchedParts) {
