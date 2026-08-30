@@ -1,5 +1,4 @@
 'use server';
-export const maxDuration = 30;
 /**
  * @fileOverview AI flow for generating multiple-choice questions from PDF, DOCX, TXT, MD, and images.
  * Engine: Google Gemini (Genkit Plugin) — free tier, with multi-model fallback.
@@ -601,7 +600,7 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
       // build, but on server we also nullify the workerSrc so any static
       // top-level import of pdf.worker.mjs cannot be evaluated.
       if (typeof window === 'undefined' && (pdfjs as any).GlobalWorkerOptions) {
-        (pdfjs as any).GlobalWorkerOptions.workerSrc = '';
+        (pdfjs as any).GlobalWorkerOptions.workerSrc = 'pdf.worker.mjs';
       }
       const { getDocument } = pdfjs;
       // Vercel serverless does not bundle pdf.worker.mjs; disable the
