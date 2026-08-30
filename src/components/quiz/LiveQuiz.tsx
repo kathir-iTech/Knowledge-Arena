@@ -20,7 +20,7 @@ import { usePageFocusChange } from '@/hooks/usePageFocusChange';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, limit, onSnapshot, query, doc } from 'firebase/firestore';
 import { applyOptionShuffle } from '@/lib/battle-machine';
 import { COMMANDER_PRESENCE_WINDOW_MS, COLLECTIONS, QUIZ_CONFIG_SETTINGS_DOC } from '@/lib/constants';
 import { getServerOffset } from '@/lib/client-clock';
@@ -422,6 +422,10 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   const timeUpAttemptsRef = useRef<Record<string, number>>({});
   const autoEndedRef = useRef<string | null>(null);
   const commanderAbsentSinceRef = useRef<number | null>(null);
+  const timeLeftRef = useRef(timeLeft);
+  useEffect(() => {
+    timeLeftRef.current = timeLeft;
+  });
   const autoAdvanceAttemptedRef = useRef(new Set<string>());
   const offsetRef = useRef(0);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
@@ -474,7 +478,9 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
           antiCheatStrictness: gc.anti_cheat_strictness === 'auto_flag' ? 'auto_flag' : 'warn_only',
         });
       }
-    }, () => {});
+    }, (error) => {
+      console.error('[LiveQuiz] Failed to load governance config:', error);
+    });
     return () => unsub();
   }, [firestore, quiz.id]);
 
@@ -485,7 +491,8 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   useEffect(() => {
     let mounted = true;
     const sample = () => {
-      getServerOffset().then(o => { if (mounted) offsetRef.current = o; });
+      getServerOffset().then(o => { if (mounted) offsetRef.current = o; })
+        .catch(() => { /* ignored: offset defaults to 0 */ });
     };
     sample();
     const interval = setInterval(sample, 60 * 1000);
@@ -591,13 +598,13 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
   // Gladiator-triggered Commander auto-advance: once the Commander has been
   // absent for the grace window and the current question's timer has expired,
   // the lowest-sorted online gladiator calls the server route once per question.
-  const tryAutoAdvance = useCallback(() => {
+const tryAutoAdvance = useCallback(() => {
     if (isTeacher || independent || !user) return;
     if (quiz.status !== 'live') return;
     if (commanderOnline) return;
     const since = commanderAbsentSinceRef.current;
     if (since == null || Date.now() - since < COMMANDER_PRESENCE_WINDOW_MS) return;
-    if (currentQuestion && timeLeft > 0) return;
+    if (currentQuestion && timeLeftRef.current > 0) return;
     const qid = currentQuestion?.id ?? '__idle__';
     if (autoAdvanceAttemptedRef.current.has(qid)) return;
     // Debounce: only the gladiator whose uid sorts first among the currently
@@ -615,7 +622,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
         // lock so a later cycle can retry; rate limiting bounds the retries.
         autoAdvanceAttemptedRef.current.delete(qid);
       });
-  }, [isTeacher, independent, user, quiz.status, commanderOnline, currentQuestion, timeLeft, presence, quiz.id]);
+  }, [isTeacher, independent, user, quiz.status, commanderOnline, currentQuestion, presence, quiz.id]);
 
   useEffect(() => {
     if (isTeacher || independent) return;
@@ -817,7 +824,7 @@ export default function LiveQuiz({ quiz, participant, isTeacher, allParticipants
     if (!isTeacher || !firestore || independent) return;
     const qId = currentQuestion?.id;
     if (!qId || !quiz.id) return;
-    const subsRef = collection(firestore, 'quizzes', quiz.id, 'questions', qId, 'submissions');
+    const subsRef = query(collection(firestore, 'quizzes', quiz.id, 'questions', qId, 'submissions'), limit(100));
     const unsub = onSnapshot(subsRef, (snap) => {
       setSubmittedCount(snap.docs.filter(d => d.data()?.selected_option !== undefined).length);
     });

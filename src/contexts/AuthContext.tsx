@@ -586,7 +586,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearTimeout(authTimeoutRef.current);
       authTimeoutRef.current = null;
     }
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } catch {
+      // ensure cleanup runs even if signOut fails
+    }
     setUser(null);
     setIsLoading(false);
     lastFetchedUid.current = null;
