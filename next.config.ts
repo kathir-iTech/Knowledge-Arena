@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '20mb',
     },
   },
+  // Native canvas is required for pdfjs-dist DOMMatrix polyfill in Node.
+  // Keeping it external avoids bundling the .node binary and lets the
+  // runtime require succeed (or gracefully fall back to the JS stub).
+  serverExternalPackages: ['@napi-rs/canvas'],
   images: {
     remotePatterns: [
       {

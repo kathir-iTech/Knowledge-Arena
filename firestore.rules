@@ -197,8 +197,12 @@ service cloud.firestore {
       match /questions/{questionId} {
         allow read: if canReadArenaContent(quizId);
         // isQuizCreatorAfter supports atomic writeBatch where parent quiz is created
-        // in the same batch — getAfter() sees the pending parent.
-        allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId);
+        // in the same batch — getAfter() sees the pending parent. The created_by
+        // fallback mirrors the config/settings rule: it lets a batch with many
+        // questions stay under the 10-get limit by carrying ownership in the
+        // document itself, avoiding a parent get() per question.
+        allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId)
+          || (request.resource.data.keys().hasAll(['created_by']) && request.resource.data.created_by == request.auth.uid);
         allow update, delete: if isQuizCreator(quizId);
 
         match /submissions/{userId} {
@@ -228,8 +232,10 @@ service cloud.firestore {
           isQuizParticipant(quizId, request.auth.uid)
         );
         // isQuizCreatorAfter supports atomic writeBatch where parent quiz is created
-        // in the same batch.
-        allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId);
+        // in the same batch. The created_by fallback (same as questions) avoids
+        // per-document parent gets for large batches.
+        allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId)
+          || (request.resource.data.keys().hasAll(['created_by']) && request.resource.data.created_by == request.auth.uid);
         allow update, delete: if isQuizCreator(quizId);
       }
 

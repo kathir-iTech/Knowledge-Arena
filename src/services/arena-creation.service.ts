@@ -177,6 +177,7 @@ export const arenaCreationService = {
           options: q.options,
           timer: q.timer,
           sort_index: i,
+          created_by: createdBy,
         },
       });
 
@@ -184,6 +185,7 @@ export const arenaCreationService = {
         ref: doc(db, COLLECTIONS.QUIZZES, roomCode, COLLECTIONS.ANSWER_KEYS, qId),
         data: {
           correct_option_index: q.correctAnswerIndex,
+          created_by: createdBy,
         },
       });
     }
