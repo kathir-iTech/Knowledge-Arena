@@ -16,6 +16,7 @@ import {
   runTransaction,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import type { QuestionDoc } from '@/lib/schemas';
@@ -50,12 +51,13 @@ export const questionService = {
     }>
   ): Promise<Array<QuestionDoc>> {
     const db = getFirestore();
+    const batch = writeBatch(db);
     const results: Array<QuestionDoc> = [];
 
     for (const q of questions) {
       const questionId = uuidv4();
       const questionRef = doc(db, COLLECTIONS.QUIZZES, q.quiz_id, COLLECTIONS.QUESTIONS, questionId);
-      await setDoc(questionRef, {
+      batch.set(questionRef, {
         text: q.text,
         options: q.options,
         timer: q.timer,
@@ -64,6 +66,7 @@ export const questionService = {
       results.push({ id: questionId, ...q });
     }
 
+    await batch.commit();
     return results;
   },
 
@@ -135,17 +138,26 @@ export const questionService = {
         const timerSeconds = qSnap.data().timer || DEFAULT_TIMER_SECONDS;
         const timeLimit = timerSeconds * 1000;
 
-        const participantsSnap = await getDocs(
-          collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS)
-        );
+        // Pre-fetch participant refs OUTSIDE the transaction so the transaction
+        // can use transaction.get() on each ref with proper consistency guarantees.
+        // (A full collection-group get inside a transaction is not supported in
+        // the Firestore Admin SDK; we pre-fetch and then read individually inside.)
+        let participantRefsOutside: Array<{ ref: any; uid: string }> = [];
+        try {
+          const pSnap = await getDocs(
+            collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS)
+          );
+          participantRefsOutside = pSnap.docs.map(d => ({
+            ref: doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS, d.id),
+            uid: d.id,
+          }));
+        } catch {}
 
-        for (const pDoc of participantsSnap.docs) {
-          const uid = pDoc.id;
-
-          const participantRef = doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS, uid);
-          const pSnap = await transaction.get(participantRef);
+        for (const { ref, uid } of participantRefsOutside) {
+          const participantRef = ref;
+          const pSnap = await transaction.get(ref);
           if (!pSnap.exists()) continue;
-          if (pSnap.data().status === PS_BLOCKED) continue;
+          if ((pSnap.data() as Record<string, any>).status === PS_BLOCKED) continue;
 
           const subRef = doc(
             db,

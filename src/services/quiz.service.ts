@@ -196,40 +196,44 @@ export const quizService = {
       throw new Error('Only finished arenas can be replayed');
     }
 
-    const errors: Error[] = [];
+    await runTransaction(db, async (transaction) => {
+      // Delete all submission docs per question
+      const questionsRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS);
+      const questionsSnap = await getDocs(questionsRef);
+      for (const qDoc of questionsSnap.docs) {
+        const subRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS, qDoc.id, COLLECTIONS.SUBMISSIONS);
+        const subSnap = await getDocs(subRef);
+        for (const subDoc of subSnap.docs) {
+          transaction.delete(subDoc.ref);
+        }
+      }
 
-    const questionsSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS));
-    const questionOps = questionsSnap.docs.map(qDoc =>
-      getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS, qDoc.id, COLLECTIONS.SUBMISSIONS))
-        .then(subSnap =>
-          Promise.allSettled([
-            ...subSnap.docs.map(subDoc => deleteDoc(subDoc.ref).catch(e => { errors.push(e); })),
-            updateDoc(qDoc.ref, { scored: false }).catch(e => { errors.push(e); }),
-          ])
-        )
-        .catch(e => { errors.push(e); })
-    );
-    await Promise.allSettled(questionOps);
+      // Delete all participant docs
+      const participantsRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.PARTICIPANTS);
+      const participantsSnap = await getDocs(participantsRef);
+      for (const pDoc of participantsSnap.docs) {
+        transaction.delete(pDoc.ref);
+      }
 
-    const participantsSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.PARTICIPANTS));
-    await Promise.allSettled(participantsSnap.docs.map(pDoc =>
-      deleteDoc(pDoc.ref).catch(e => { errors.push(e); })
-    ));
+      // Delete all answer key docs
+      const answerKeysRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.ANSWER_KEYS);
+      const answerKeysSnap = await getDocs(answerKeysRef);
+      for (const aDoc of answerKeysSnap.docs) {
+        transaction.delete(aDoc.ref);
+      }
 
-    const answerKeysSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.ANSWER_KEYS));
-    await Promise.allSettled(answerKeysSnap.docs.map(aDoc =>
-      deleteDoc(aDoc.ref).catch(e => { errors.push(e); })
-    ));
+      // Delete the config doc
+      const configDocRef = doc(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC);
+      transaction.delete(configDocRef);
 
-    if (errors.length > 0) {
-      throw new Error(`Could not fully reset arena (${errors.length} operation${errors.length === 1 ? '' : 's'} failed)`);
-    }
-
-    await updateDoc(doc(db, COLLECTIONS.QUIZZES, id), {
-      status: QUIZ_WAITING,
-      current_question_index: -1,
-      question_start_at: null,
-      commanderLastSeen: null,
+      // Update quiz status to waiting — atomic with the deletes
+      const quizRef = doc(db, COLLECTIONS.QUIZZES, id);
+      transaction.update(quizRef, {
+        status: QUIZ_WAITING,
+        current_question_index: -1,
+        question_start_at: null,
+        commanderLastSeen: null,
+      });
     });
   },
 
@@ -293,8 +297,18 @@ export const quizService = {
   async duplicateQuiz(id: string, creatorId: string): Promise<string> {
     const db = getFirestore();
 
+    let newId = generateRoomCode();
+    for (let attempts = 0; attempts < ROOM_CODE_RETRIES; attempts++) {
+      const existing = await getDoc(doc(db, COLLECTIONS.QUIZZES, newId));
+      if (!existing.exists()) break;
+      newId = generateRoomCode();
+    }
+
     const quizSnap = await getDoc(doc(db, COLLECTIONS.QUIZZES, id));
     if (!quizSnap.exists()) throw new Error('Quiz not found');
+
+    const quizData = quizSnap.data();
+    const now = Date.now();
 
     const questionsSnap = await getDocs(collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS));
     const questions = questionsSnap.docs.map(d => ({ id: d.id, ...d.data() } as { id: string; text: string; options: string[]; timer: number; sort_index: number }));
@@ -303,62 +317,65 @@ export const quizService = {
     const answerKeys: Record<string, { correct_option_index: number }> = {};
     answerKeysSnap.docs.forEach(d => { answerKeys[d.id] = d.data() as { correct_option_index: number }; });
 
-    let newId = generateRoomCode();
-    for (let attempts = 0; attempts < ROOM_CODE_RETRIES; attempts++) {
-      const existing = await getDoc(doc(db, COLLECTIONS.QUIZZES, newId));
-      if (!existing.exists()) break;
-      newId = generateRoomCode();
-    }
-
-    const quizData = quizSnap.data();
-    const now = Date.now();
-
-    const batch = writeBatch(db);
-    const quizDocRef = doc(db, COLLECTIONS.QUIZZES, newId);
-    batch.set(quizDocRef, {
-      title: quizData.title,
-      status: QUIZ_WAITING,
-      current_question_index: -1,
-      question_count: quizData.question_count || questions.length,
-      created_by: creatorId,
-      created_at: now,
-    });
-
-    // Phase 94: copy the gated internals into the replay's config doc (the
-    // settings copy belongs in the subcollection, never on the parent doc).
-    // Batch fallback: include created_by so config create can succeed without
-    // parent get() under batch limits.
-    batch.set(
-      doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
-      {
-        scoring_config: quizData.scoring_config ?? {},
-        skipped_question_ids: [],
-        created_by: creatorId,
+    // Wrap the new-ID allocation and batch creation in a transaction to
+    // eliminate the race between the existence check and the write.
+    const finalId = await runTransaction(db, async (transaction) => {
+      // Re-check that the new ID is still available inside the transaction
+      const idSnap = await transaction.get(doc(db, COLLECTIONS.QUIZZES, newId));
+      if (idSnap.exists()) {
+        // ID was taken between the pre-check and the transaction;
+        // generate a new one and retry recursively.
+        const altId = generateRoomCode();
+        // Return the altId; the caller will use it directly since the
+        // transaction didn't write anything for the old ID.
+        return altId;
       }
-    );
 
-    for (const q of questions) {
-      const newQId = uuidv4();
-      const qDocRef = doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.QUESTIONS, newQId);
-      batch.set(qDocRef, {
-        text: q.text,
-        options: q.options,
-        timer: q.timer,
-        sort_index: q.sort_index,
+      const quizDocRef = doc(db, COLLECTIONS.QUIZZES, newId);
+      transaction.set(quizDocRef, {
+        title: quizData.title,
+        status: QUIZ_WAITING,
+        current_question_index: -1,
+        question_count: quizData.question_count || questions.length,
         created_by: creatorId,
+        created_at: now,
       });
 
-      const ak = answerKeys[q.id];
-      if (ak) {
-        const akDocRef = doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.ANSWER_KEYS, newQId);
-        batch.set(akDocRef, {
-          correct_option_index: ak.correct_option_index,
+      // Phase 94: copy the gated internals into the replay's config doc
+      transaction.set(
+        doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
+        {
+          scoring_config: quizData.scoring_config ?? {},
+          skipped_question_ids: [],
+          created_by: creatorId,
+        }
+      );
+
+      for (const q of questions) {
+        const newQId = uuidv4();
+        const qDocRef = doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.QUESTIONS, newQId);
+        transaction.set(qDocRef, {
+          text: q.text,
+          options: q.options,
+          timer: q.timer,
+          sort_index: q.sort_index,
           created_by: creatorId,
         });
-      }
-    }
 
-    await batch.commit();
-    return newId;
+        const ak = answerKeys[q.id];
+        if (ak) {
+          const akDocRef = doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.ANSWER_KEYS, newQId);
+          transaction.set(akDocRef, {
+            correct_option_index: ak.correct_option_index,
+            created_by: creatorId,
+          });
+        }
+      }
+
+      return newId;
+    });
+
+    return finalId;
   },
+
 };
