@@ -6,10 +6,10 @@ export const usePageFocusChange = (onFocusLoss: () => void, enabled: boolean = t
   const callbackRef = useRef(onFocusLoss);
   const enabledRef = useRef(enabled);
 
-  callbackRef.current = onFocusLoss;
-  enabledRef.current = enabled;
-
   useEffect(() => {
+    callbackRef.current = onFocusLoss;
+    enabledRef.current = enabled;
+
     const handleVisibilityChange = () => {
       if (document.hidden && enabledRef.current) {
         callbackRef.current();
@@ -37,5 +37,5 @@ export const usePageFocusChange = (onFocusLoss: () => void, enabled: boolean = t
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('pagehide', handlePageHide);
     };
-  }, []);
+  }, [onFocusLoss, enabled]);
 };
