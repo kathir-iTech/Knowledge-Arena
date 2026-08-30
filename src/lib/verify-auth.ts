@@ -4,6 +4,7 @@ import { logAuthFailure } from '@/lib/security-log';
 interface AuthResult {
   uid: string;
   email: string | null;
+  role?: string | null;
 }
 
 function isRequest(value: unknown): value is Request {
@@ -85,28 +86,28 @@ export async function verifyFirebaseTokenWithRole(
       const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
       if (!userDoc.exists) return null;
       role = userDoc.data()?.role;
+      // Cache the user doc for the mustChangePassword check below
+      const cachedUserDoc = userDoc;
+      if (role !== requiredRole) {
+        if (typeof tokenOrRequest !== 'string') {
+          logAuthFailure(`role:${decoded.uid}`, `role_mismatch:expected_${requiredRole}`);
+        }
+        return null;
+      }
+      // Users under a forced password change may not use the platform until
+      // they set a new password through /api/auth/change-password.
+      if (cachedUserDoc.data()?.mustChangePassword === true) {
+        if (typeof tokenOrRequest !== 'string') {
+          logAuthFailure(`auth:${decoded.uid}`, 'must_change_password');
+        }
+        return null;
+      }
     }
 
-    if (role !== requiredRole) {
-      if (typeof tokenOrRequest !== 'string') {
-        logAuthFailure(`role:${decoded.uid}`, `role_mismatch:expected_${requiredRole}`);
-      }
-      return null;
-    }
-    // Users under a forced password change may not use the platform until
-    // they set a new password through /api/auth/change-password.
-    const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
-    if (userDoc.exists && userDoc.data()?.mustChangePassword === true) {
-      if (typeof tokenOrRequest !== 'string') {
-        logAuthFailure(`auth:${decoded.uid}`, 'must_change_password');
-      }
-      return null;
-    }
+    return { uid: decoded.uid, email: decoded.email ?? null, role };
   } catch {
     return null;
   }
-
-  return { uid: decoded.uid, email: decoded.email ?? null };
 }
 
 export async function verifyFirebaseTokenWithAnyRole(

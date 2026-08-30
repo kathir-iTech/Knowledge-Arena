@@ -10,6 +10,7 @@ import {
   isCreator,
   battleErrorResponse,
 } from '@/lib/battle-server';
+import { collection, getDocs } from 'firebase/firestore';
 
 export const runtime = 'nodejs';
 
@@ -29,10 +30,17 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getAdminDb();
-    const quizSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
+    const quizRef = db.doc(`quizzes/${quizId}`);
+    const quizSnap = await quizRef.get();
     if (!quizSnap.exists) throw new Error('Arena not found');
     const quiz = quizSnap.data() as Record<string, any>;
     const mode = quiz.battle_mode || 'synchronized';
+
+    // Verify the question actually belongs to this quiz.
+    const questionsRef = quizRef.collection(COLLECTIONS.QUESTIONS);
+    const questionsSnap = await questionsRef.get();
+    const questionExists = questionsSnap.docs.some(d => d.id === questionId);
+    if (!questionExists) throw new Error('Question does not belong to this quiz');
 
     if (auth.role === 'commander' && isCreator(quiz, auth.uid)) {
       await evaluateQuestionForAll(quizId, questionId, auth.uid, 'commander');

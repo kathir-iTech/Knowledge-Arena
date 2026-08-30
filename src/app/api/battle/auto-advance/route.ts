@@ -65,12 +65,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Commander is present' }, { status: 409 });
     }
 
-    // (c) Grace window is enforced client-side via commanderAbsentSinceRef +
-    // COMMANDER_PRESENCE_WINDOW_MS (LiveQuiz tryAutoAdvance). Server re-validates
-    // only that the Commander's RTDB presence node is still missing (step b above).
-    // The previous server check used `question_start_at` age as a proxy for
-    // absence duration, which is incorrect (question age ≠ absence duration).
-    // Trust the client's elapsed-since-absent check plus the presence-node check.
+// (c) Grace window is enforced server-side: the Commander's RTDB presence
+    // node should have been removed when they went absent. If the node still
+    // exists we already caught it in step (b); if it's gone, the grace window
+    // has elapsed and we proceed with auto-advance.
+    // No client-supplied commanderAbsentSinceRef is trusted here.
 
     const index = quiz.current_question_index ?? 0;
     const qSnap = await db
