@@ -600,7 +600,7 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
       // build, but on server we also nullify the workerSrc so any static
       // top-level import of pdf.worker.mjs cannot be evaluated.
       if (typeof window === 'undefined' && (pdfjs as any).GlobalWorkerOptions) {
-        (pdfjs as any).GlobalWorkerOptions.workerSrc = false;
+        (pdfjs as any).GlobalWorkerOptions.workerSrc = '';
       }
       const { getDocument } = pdfjs;
       // Vercel serverless does not bundle pdf.worker.mjs; disable the
