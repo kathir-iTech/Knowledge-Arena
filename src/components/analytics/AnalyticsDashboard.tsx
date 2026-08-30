@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/hooks/useAuth';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { QuizOverviewCards } from './QuizOverviewCards';
@@ -11,7 +12,7 @@ import { SystemInsightsSection } from './SystemInsightsSection';
 import { CommanderPerformanceTable } from './CommanderPerformanceTable';
 import { DifficultyCalibrationTable } from './DifficultyCalibrationTable';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { RefreshCw, Download, FileText, BarChart3, TrendingUp, Users, MessageSquare, BrainCircuit, Swords } from 'lucide-react';
@@ -22,12 +23,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { exportAnalyticsCSV, exportAnalyticsHTML, type ExportPreferences } from '@/services/analytics.service';
-import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
-} from 'recharts';
 import { useFirebase } from '@/firebase';
-
-const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 interface AnalyticsChartData {
   dailyBattles: { date: string; value: number }[];
@@ -53,6 +49,11 @@ const defaultExportPrefs: ExportPreferences = {
   includeScores: true,
   includeTimestamps: true,
 };
+
+const AnalyticsCharts = dynamic(
+  () => import('./AnalyticsCharts').then(m => ({ default: m.AnalyticsCharts })),
+  { ssr: false, loading: () => <LoadingScreen /> }
+);
 
 export function AnalyticsDashboard() {
   const { user } = useAuth();
@@ -184,18 +185,6 @@ export function AnalyticsDashboard() {
         </div>
       </div>
 
-      {!chartsLoading && chartsError && (
-        <Card className="border-destructive/40">
-          <CardContent className="py-10 text-center">
-            <p className="text-destructive mb-2 text-sm font-medium" role="alert">Failed to load chart data</p>
-            <p className="text-xs text-muted-foreground mb-4">{chartsError}</p>
-            <Button onClick={fetchCharts} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" /> Retry
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -204,93 +193,18 @@ export function AnalyticsDashboard() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-8">
-          {!chartsLoading && chartData && (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <MiniChartStat icon={Swords} label="Total Battles" value={chartData.summary.totalBattles} />
-                <MiniChartStat icon={Users} label="Total Users" value={chartData.summary.totalUsers} />
-                <MiniChartStat icon={Users} label="Commanders" value={chartData.summary.totalCommanders} />
-                <MiniChartStat icon={Users} label="Gladiators" value={chartData.summary.totalGladiators} />
-                <MiniChartStat icon={BarChart3} label="Questions" value={chartData.summary.totalQuestions} />
-                <MiniChartStat icon={MessageSquare} label="Conversations" value={chartData.summary.totalConversations} />
-              </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <MiniChartStat icon={Swords} label="Total Battles" value={chartData?.summary.totalBattles ?? 0} />
+            <MiniChartStat icon={Users} label="Total Users" value={chartData?.summary.totalUsers ?? 0} />
+            <MiniChartStat icon={Users} label="Commanders" value={chartData?.summary.totalCommanders ?? 0} />
+            <MiniChartStat icon={Users} label="Gladiators" value={chartData?.summary.totalGladiators ?? 0} />
+            <MiniChartStat icon={BarChart3} label="Questions" value={chartData?.summary.totalQuestions ?? 0} />
+            <MiniChartStat icon={MessageSquare} label="Conversations" value={chartData?.summary.totalConversations ?? 0} />
+          </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ChartCard title="Daily Battles (30 days)" icon={<Swords className="w-4 h-4" />}>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <AreaChart data={chartData.dailyBattles}>
-                      <defs><linearGradient id="db" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient></defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
-                      <Area type="monotone" dataKey="value" stroke="#6366f1" fill="url(#db)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </ChartCard>
-
-                <ChartCard title="Monthly Users (30 days)" icon={<Users className="w-4 h-4" />}>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={chartData.monthlyUsers}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
-                      <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartCard>
-
-                <ChartCard title="Commander Activity (Top 10)" icon={<TrendingUp className="w-4 h-4" />}>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={chartData.commanderActivity} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis type="number" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={100} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
-                      <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartCard>
-
-                <ChartCard title="Category Usage" icon={<BarChart3 className="w-4 h-4" />}>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie data={chartData.categoryUsage} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`} labelLine={false}>
-                        {chartData.categoryUsage.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </ChartCard>
-
-                <ChartCard title="AI Usage (30 days)" icon={<BrainCircuit className="w-4 h-4" />}>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={chartData.aiUsage}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
-                      <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </ChartCard>
-
-                <ChartCard title="Message Activity (30 days)" icon={<MessageSquare className="w-4 h-4" />}>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={chartData.messageActivity}>
-                      <defs><linearGradient id="ma" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/><stop offset="95%" stopColor="#ec4899" stopOpacity={0}/></linearGradient></defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} stroke="hsl(var(--muted-foreground))" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
-                      <Area type="monotone" dataKey="value" stroke="#ec4899" fill="url(#ma)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </ChartCard>
-              </div>
-            </>
-          )}
+          <Suspense fallback={<LoadingScreen />}>
+            <AnalyticsCharts chartData={chartData} chartsLoading={chartsLoading} chartsError={chartsError} />
+          </Suspense>
 
           <QuizOverviewCards overview={data.overview} />
           <SystemInsightsSection getToken={async () => auth.currentUser?.getIdToken() ?? null} />
@@ -321,20 +235,6 @@ function MiniChartStat({ icon: Icon, label, value }: { icon: React.ElementType; 
           <p className="text-[10px] text-muted-foreground">{label}</p>
         </div>
       </CardContent>
-    </Card>
-  );
-}
-
-function ChartCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm flex items-center gap-2">
-          {icon}
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
     </Card>
   );
 }

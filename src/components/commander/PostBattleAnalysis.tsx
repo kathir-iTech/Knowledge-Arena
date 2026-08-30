@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { useFirebase } from '@/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { Download, BarChart3, Clock, Target, TrendingUp, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -37,6 +38,11 @@ interface AnalysisData {
   detailed: Array<{ gladiatorName: string; questionText: string; answerGiven: string; correct: boolean; timeTakenSec: number; pointsAwarded: number }>;
   participants: number;
 }
+
+const PostBattleCharts = dynamic(
+  () => import('./PostBattleCharts').then(m => ({ default: m.PostBattleCharts })),
+  { ssr: false, loading: () => <LoadingScreen /> }
+);
 
 export function PostBattleAnalysis({ quizId }: { quizId: string }) {
   const { auth } = useFirebase();
@@ -143,7 +149,16 @@ export function PostBattleAnalysis({ quizId }: { quizId: string }) {
         </Button>
       </div>
 
-      {/* Question-by-question breakdown */}
+      <Suspense fallback={<LoadingScreen />}>
+        <PostBattleCharts
+          questionChartData={questionChartData}
+          engagementChartData={engagementChartData}
+          engagement={data.engagement}
+          colors={colors}
+        />
+      </Suspense>
+
+      {/* Question-by-question breakdown details */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -151,20 +166,6 @@ export function PostBattleAnalysis({ quizId }: { quizId: string }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={questionChartData}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                <XAxis dataKey="name" fontSize={11} />
-                <YAxis fontSize={11} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="correct" fill="#10b981" name="Correct" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="incorrect" fill="#ef4444" name="Incorrect" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
           <div className="space-y-3">
             {data.questionBreakdown.map((q, idx) => (
               <div key={q.questionId} className="p-3 rounded-[12px] border border-border/40 bg-muted/20">
@@ -204,7 +205,7 @@ export function PostBattleAnalysis({ quizId }: { quizId: string }) {
         </CardContent>
       </Card>
 
-      {/* Gladiator engagement chart */}
+      {/* Gladiator engagement details */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -215,30 +216,16 @@ export function PostBattleAnalysis({ quizId }: { quizId: string }) {
           {data.engagement.length === 0 ? (
             <p className="text-sm text-muted-foreground">No gladiator data.</p>
           ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={engagementChartData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="question" fontSize={11} />
-                  <YAxis fontSize={11} />
-                  <Tooltip />
-                  <Legend />
-                  {data.engagement.slice(0, 6).map((g, idx) => (
-                    <Line key={g.gladiatorId} type="monotone" dataKey={g.name} stroke={colors[idx % colors.length]} strokeWidth={2} dot={{ r: 3 }} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {data.engagement.map(g => (
+                <div key={g.gladiatorId} className="p-2.5 rounded-[10px] bg-muted/20 border border-border/30">
+                  <p className="text-xs font-medium truncate">{g.name}</p>
+                  <p className="text-sm font-bold text-primary">{g.total} pts</p>
+                  <p className="text-[11px] text-muted-foreground">Prog: {g.progression.join(' → ')}</p>
+                </div>
+              ))}
             </div>
           )}
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {data.engagement.map(g => (
-              <div key={g.gladiatorId} className="p-2.5 rounded-[10px] bg-muted/20 border border-border/30">
-                <p className="text-xs font-medium truncate">{g.name}</p>
-                <p className="text-sm font-bold text-primary">{g.total} pts</p>
-                <p className="text-[11px] text-muted-foreground">Prog: {g.progression.join(' → ')}</p>
-              </div>
-            ))}
-          </div>
         </CardContent>
       </Card>
 

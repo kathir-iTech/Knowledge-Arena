@@ -15,9 +15,9 @@ export function LandingHero() {
   return (
     <section className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-primary/15 blur-3xl animate-orb" />
-        <div className="absolute top-24 -right-24 h-96 w-96 rounded-full bg-accent/15 blur-3xl animate-orb" style={{ animationDelay: '-4s' }} />
-        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-warning/10 blur-3xl animate-glow-pulse" />
+        <div className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-primary/15 blur-3xl animate-orb will-change-transform" style={{ willChange: 'transform' }} />
+        <div className="absolute top-24 -right-24 h-96 w-96 rounded-full bg-accent/15 blur-3xl animate-orb will-change-transform" style={{ animationDelay: '-4s', willChange: 'transform' }} />
+        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-warning/10 blur-3xl animate-glow-pulse will-change-transform" style={{ willChange: 'transform, opacity' }} />
       </div>
 
       <div className="page-container relative grid items-center gap-12 py-20 md:py-28 lg:grid-cols-2 lg:gap-8">
@@ -80,8 +80,8 @@ export function LandingHero() {
 
         {/* Arena preview card — leaderboard mockup */}
         <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-          <div className="absolute -inset-6 rounded-[32px] bg-gradient-to-br from-primary/20 via-accent/10 to-transparent blur-2xl animate-glow-pulse" aria-hidden="true" />
-          <div className="relative rounded-3xl border bg-card/90 p-5 shadow-elevation-large backdrop-blur animate-float">
+          <div className="absolute -inset-6 rounded-[32px] bg-gradient-to-br from-primary/20 via-accent/10 to-transparent blur-2xl animate-glow-pulse" aria-hidden="true" style={{ willChange: 'transform, opacity' }} />
+          <div className="relative rounded-3xl border bg-card/90 p-5 shadow-elevation-large backdrop-blur animate-float" style={{ willChange: 'transform' }}>
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-headline text-lg font-bold tracking-tight">Midnight Clash</p>

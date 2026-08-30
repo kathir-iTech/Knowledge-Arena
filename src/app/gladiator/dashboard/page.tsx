@@ -1,4 +1,6 @@
-import GladiatorDashboard from '@/components/dashboard/GladiatorDashboard';
+import { Suspense } from 'react';
+import { LoadingScreen } from '@/components/LoadingScreen';
+import DynamicGladiatorDashboard from './DynamicGladiatorDashboard';
 
 export default async function GladiatorDashboardPage({
   searchParams,
@@ -7,5 +9,9 @@ export default async function GladiatorDashboardPage({
 }) {
   const params = await searchParams;
   const roomCode = params?.roomCode;
-  return <GladiatorDashboard initialRoomCode={typeof roomCode === 'string' ? roomCode.toUpperCase() : undefined} />;
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <DynamicGladiatorDashboard initialRoomCode={typeof roomCode === 'string' ? roomCode.toUpperCase() : undefined} />
+    </Suspense>
+  );
 }
