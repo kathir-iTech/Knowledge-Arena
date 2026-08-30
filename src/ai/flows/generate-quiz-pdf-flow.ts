@@ -805,7 +805,10 @@ ${chunks[0]}`;
 
         const parts: any[] = [{ text: promptText }];
         for (const imgUri of imageDataUris) {
-          parts.push({ inlineData: { data: imgUri.split(',')[1], mimeType: 'image/png' } });
+          // Genkit expects { media: { url: dataUri } }, not raw inlineData
+          // (inlineData is the underlying Google API type that caused
+          // "Unsupported Part type" for gemini-3.6-flash).
+          parts.push({ media: { url: imgUri } });
         }
 
         apiKeyUsed = await getGeminiApiKey();
