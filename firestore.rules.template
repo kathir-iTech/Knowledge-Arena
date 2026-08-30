@@ -19,10 +19,6 @@ service cloud.firestore {
       return isSignedIn() && getRole() == 'executive';
     }
 
-    function isGladiator() {
-      return isSignedIn() && getRole() == 'gladiator';
-    }
-
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
