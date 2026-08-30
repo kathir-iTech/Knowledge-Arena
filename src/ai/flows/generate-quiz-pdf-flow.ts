@@ -1,4 +1,5 @@
 'use server';
+export const maxDuration = 30;
 /**
  * @fileOverview AI flow for generating multiple-choice questions from PDF, DOCX, TXT, MD, and images.
  * Engine: Google Gemini (Genkit Plugin) — free tier, with multi-model fallback.
