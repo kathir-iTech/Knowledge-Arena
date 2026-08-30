@@ -319,7 +319,6 @@ service cloud.firestore {
         allow delete: if isQuizCreator(quizId) || isExecutive();
       }
     }
-  }
 
   // --- Executive Requests ---
   match /executive_requests/{requestId} {
@@ -421,5 +420,6 @@ service cloud.firestore {
   // Collection group queries for student history
   match /{path=**}/participants/{userId} {
     allow read: if request.auth != null && request.auth.uid == userId;
+  }
   }
 }
