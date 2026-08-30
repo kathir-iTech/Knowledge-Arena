@@ -596,7 +596,17 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
     (async () => {
       await ensurePdfJsPolyfills();
       const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      const loadingTask: PDFDocumentLoadingTask = getDocument({ data: new Uint8Array(buffer) });
+      // Vercel serverless does not bundle pdf.worker.mjs; disable the
+      // separate worker thread and run pdf.js on the main thread (Node).
+      // This is the documented Node configuration and avoids
+      // "failed to locate pdf.worker.mjs" deployment errors.
+      const loadingTask: PDFDocumentLoadingTask = getDocument({
+        data: new Uint8Array(buffer),
+        disableWorker: true,
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
+      } as any);
       const pdf = await loadingTask.promise;
 
       try {
