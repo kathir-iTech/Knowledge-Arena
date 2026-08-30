@@ -562,35 +562,23 @@ async function ensurePdfJsPolyfills(): Promise<void> {
   // pdfjs-dist legacy build in Node requires DOMMatrix/Path2D globals.
   // It tries to load @napi-rs/canvas internally, but that package was
   // previously only an optionalDependency (not guaranteed installed in
-  // production). Explicitly ensure the polyfill here before importing pdfjs,
-  // and fall back to a minimal stub so text extraction still works when the
-  // native canvas binary is unavailable.
+  // production). For text extraction we do NOT need the heavy native
+  // canvas (it inflates memory and can trigger Vercel ERR_ABORTED);
+  // a minimal JS stub is sufficient and keeps the server action lean.
+  // @napi-rs/canvas remains in dependencies so pdfjs's internal require
+  // can succeed if the native binary is available, but we do not load it
+  // here to avoid the extra memory cost.
   if (typeof (globalThis as any).DOMMatrix !== 'undefined' && typeof (globalThis as any).Path2D !== 'undefined') return;
-  try {
-    const canvas = await import('@napi-rs/canvas');
-    if (!(globalThis as any).DOMMatrix && (canvas as any).DOMMatrix) {
-      (globalThis as any).DOMMatrix = (canvas as any).DOMMatrix;
-      (global as any).DOMMatrix = (canvas as any).DOMMatrix;
-    }
-    if (!(globalThis as any).Path2D && (canvas as any).Path2D) {
-      (globalThis as any).Path2D = (canvas as any).Path2D;
-      (global as any).Path2D = (canvas as any).Path2D;
-    }
-  } catch (e) {
-    console.warn('[PdfExtract] @napi-rs/canvas unavailable, installing minimal DOMMatrix stub', e);
-    if (typeof (globalThis as any).DOMMatrix === 'undefined') {
-      // Minimal stub: pdfjs only constructs DOMMatrix for text extraction fallback;
-      // a no-op implementation prevents ReferenceError without affecting text layer.
-      (globalThis as any).DOMMatrix = class DOMMatrix {
-        constructor(_init?: string | number[]) {}
-        toString() { return 'matrix(1, 0, 0, 1, 0, 0)'; }
-      };
-      (global as any).DOMMatrix = (globalThis as any).DOMMatrix;
-    }
-    if (typeof (globalThis as any).Path2D === 'undefined') {
-      (globalThis as any).Path2D = class Path2D {};
-      (global as any).Path2D = (globalThis as any).Path2D;
-    }
+  if (typeof (globalThis as any).DOMMatrix === 'undefined') {
+    (globalThis as any).DOMMatrix = class DOMMatrix {
+      constructor(_init?: string | number[]) {}
+      toString() { return 'matrix(1, 0, 0, 1, 0, 0)'; }
+    };
+    (global as any).DOMMatrix = (globalThis as any).DOMMatrix;
+  }
+  if (typeof (globalThis as any).Path2D === 'undefined') {
+    (globalThis as any).Path2D = class Path2D {};
+    (global as any).Path2D = (globalThis as any).Path2D;
   }
 }
 
