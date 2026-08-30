@@ -92,7 +92,7 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
 
   useEffect(() => {
     onDirtyChange?.(form.formState.isDirty);
-  }, [form.formState.isDirty, onDirtyChange]);
+  }, [onDirtyChange]);
 
   useEffect(() => {
     if (initialQuestions) {
