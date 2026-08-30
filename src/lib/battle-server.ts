@@ -273,19 +273,6 @@ export async function finishBattle(
       question_start_at: null,
       paused_at: null,
     });
-
-    const partsSnap = await getAdminDb()
-      .collection(COLLECTIONS.QUIZZES).doc(quizId)
-      .collection(COLLECTIONS.PARTICIPANTS)
-      .get();
-    for (const p of partsSnap.docs) {
-      const pSnap = await tx.get(p.ref);
-      if (!pSnap.exists || pSnap.data()?.status === PS_BLOCKED) continue;
-      tx.update(p.ref, {
-        status: PS_FINISHED,
-        finished_at: now,
-      });
-    }
   });
   if (!didTransition) return;
   await writeBattleLog({ quizId, event: 'battle_finished', actor, actorRole, metadata });
@@ -429,7 +416,13 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
       // last-question path we must finish gladiators — gather those reads
       // before the quiz update write.
       let pendingFinishes: Array<{ ref: any; data: Record<string, any> }> = [];
-      if (ended && preFetchedParts) {
+      if (ended) {
+        // Participants must be pre-fetched for the finish-gladiators path.
+        // If they weren't captured in the same transaction, surface a retryable
+        // error so the caller re-fetches with fresh data (see the catch block below).
+        const partsSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.PARTICIPANTS).get();
+        preFetchedParts = partsSnap.docs.map(d => ({ ref: d.ref, id: d.id }));
+
         for (const p of preFetchedParts) {
           const pSnap: any = await tx.get(p.ref);
           if (!pSnap.exists || p.id === quiz.created_by || pSnap.data()?.status === PS_BLOCKED) continue;
@@ -438,13 +431,6 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
             data: { status: PS_FINISHED, finished_at: now },
           });
         }
-      } else if (ended) {
-        // Fallback: participants were not pre-fetched (retry path below will have them)
-        const partsCol = db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.PARTICIPANTS);
-        // Use tx.get on a query is not directly supported; fetch via admin outside
-        // is not allowed inside tx either — surface a retryable error so caller
-        // retries with pre-fetched data.
-        throw new Error('Participants not pre-fetched for battle finish — retry');
       }
 
       const quizUpdate: Record<string, any> = {
@@ -462,23 +448,6 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
       }
     });
   };
-
-  // Detect whether this call will end the battle so we can pre-fetch
-  // participants. A lightweight optimistic check outside the transaction.
-  try {
-    const preSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
-    if (preSnap.exists) {
-      const preData = preSnap.data() as Record<string, any>;
-      const preIdx = preData.current_question_index ?? 0;
-      const preCount = preData.question_count ?? 0;
-      if (preIdx === expectedFromIndex && preIdx + 1 >= preCount) {
-        const partsSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).collection(COLLECTIONS.PARTICIPANTS).get();
-        preFetchedParts = partsSnap.docs.map(d => ({ ref: d.ref, id: d.id }));
-      }
-    }
-  } catch {
-    // Pre-fetch is best-effort; transaction will handle fallback
-  }
 
   try {
     await doAdvance();
