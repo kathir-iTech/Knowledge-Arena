@@ -17,10 +17,12 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '20mb',
     },
   },
-  // Native canvas is required for pdfjs-dist DOMMatrix polyfill in Node.
-  // Keeping it external avoids bundling the .node binary and lets the
-  // runtime require succeed (or gracefully fall back to the JS stub).
-  serverExternalPackages: ['@napi-rs/canvas'],
+  // pdfjs-dist contains `new URL('pdf.worker.mjs', import.meta.url)` which
+  // Webpack tries to bundle as `/var/task/.next/server/chunks/pdf.worker.mjs`
+  // and fails at runtime even with `disableWorker:true`. Externalizing
+  // prevents that bundling and uses Node's native require in prod.
+  // @napi-rs/canvas is also external to avoid bundling the .node binary.
+  serverExternalPackages: ['@napi-rs/canvas', 'pdfjs-dist'],
   images: {
     remotePatterns: [
       {
