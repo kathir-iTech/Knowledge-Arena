@@ -595,7 +595,14 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
   return withTimeout<{ text: string; numpages: number; isImageOnly: boolean }>(
     (async () => {
       await ensurePdfJsPolyfills();
-      const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      // Defense in depth for Vercel: legacy build is already the Node-compatible
+      // build, but on server we also nullify the workerSrc so any static
+      // top-level import of pdf.worker.mjs cannot be evaluated.
+      if (typeof window === 'undefined' && (pdfjs as any).GlobalWorkerOptions) {
+        (pdfjs as any).GlobalWorkerOptions.workerSrc = false;
+      }
+      const { getDocument } = pdfjs;
       // Vercel serverless does not bundle pdf.worker.mjs; disable the
       // separate worker thread and run pdf.js on the main thread (Node).
       // This is the documented Node configuration and avoids
