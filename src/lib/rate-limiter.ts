@@ -8,6 +8,7 @@ export interface RateLimitConfig {
 
 interface RateLimitEntry {
   timestamps: number[];
+  windowMs: number;
 }
 
 class SlidingWindowLimiter {
@@ -20,11 +21,14 @@ class SlidingWindowLimiter {
     const now = Date.now();
     let entry = this.store.get(key);
     if (!entry) {
-      entry = { timestamps: [] };
+      entry = { timestamps: [], windowMs: config.windowMs };
       this.store.set(key, entry);
+    } else {
+      // Respect the per-entry windowMs from the config passed at check time.
+      entry.windowMs = config.windowMs;
     }
 
-    entry.timestamps = entry.timestamps.filter(t => now - t < config.windowMs);
+    entry.timestamps = entry.timestamps.filter(t => now - t < entry.windowMs);
 
     if (entry.timestamps.length >= config.maxRequests) {
       const oldest = entry.timestamps[0];
@@ -36,9 +40,9 @@ class SlidingWindowLimiter {
     }
 
     entry.timestamps.push(now);
-    if (this.store.size > 10000) {
-      this.cleanup(now);
-    }
+    // Clean up on every check to prevent memory leak, not just when store > 10000.
+    // The per-entry windowMs filtering ensures old timestamps are removed.
+    this.cleanup(now);
     return {
       allowed: true,
       remaining: config.maxRequests - entry.timestamps.length,
@@ -52,7 +56,7 @@ class SlidingWindowLimiter {
 
   private cleanup(now: number) {
     for (const [key, entry] of this.store.entries()) {
-      entry.timestamps = entry.timestamps.filter(t => now - t < 120000);
+      entry.timestamps = entry.timestamps.filter(t => now - t < entry.windowMs);
       if (entry.timestamps.length === 0) {
         this.store.delete(key);
       }
@@ -90,7 +94,7 @@ export function getClientIp(req: Request): string {
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1];
+    if (parts.length > 0) return parts[0]; // leftmost trusted IP
   }
   const cf = req.headers.get('cf-connecting-ip');
   if (cf) return cf.trim();
