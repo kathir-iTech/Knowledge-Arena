@@ -326,11 +326,14 @@ export const quizService = {
 
     // Phase 94: copy the gated internals into the replay's config doc (the
     // settings copy belongs in the subcollection, never on the parent doc).
+    // Batch fallback: include created_by so config create can succeed without
+    // parent get() under batch limits.
     batch.set(
       doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
       {
         scoring_config: quizData.scoring_config ?? {},
         skipped_question_ids: [],
+        created_by: creatorId,
       }
     );
 
@@ -342,6 +345,7 @@ export const quizService = {
         options: q.options,
         timer: q.timer,
         sort_index: q.sort_index,
+        created_by: creatorId,
       });
 
       const ak = answerKeys[q.id];
@@ -349,6 +353,7 @@ export const quizService = {
         const akDocRef = doc(db, COLLECTIONS.QUIZZES, newId, COLLECTIONS.ANSWER_KEYS, newQId);
         batch.set(akDocRef, {
           correct_option_index: ak.correct_option_index,
+          created_by: creatorId,
         });
       }
     }
