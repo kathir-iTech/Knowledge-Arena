@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/constants';
 import { generateMindMap } from '@/ai/flows/mindmap-flow';
-import { enforceRateLimit, Limits, getClientIp } from '@/lib/rate-limiter';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
+import { verifyFirebaseToken } from '@/lib/verify-auth';
 import { createHash } from 'crypto';
 
 export const runtime = 'nodejs';
@@ -13,8 +13,12 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get('authorization');
     const idToken = authHeader?.replace('Bearer ', '');
     if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const rlIp = enforceRateLimit(`ai:mindmap:`+ getClientIp(req), Limits.AI_MINDMAP_PER_USER);
-    if (rlIp) return rlIp;
+
+    // Verify token to get UID for per-user rate limiting (not per-IP).
+    const auth = await verifyFirebaseToken(idToken);
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const uidRl = enforceRateLimit(`ai:mindmap:${auth.uid}`, Limits.AI_MINDMAP_PER_USER);
+    if (uidRl) return uidRl;
 
     const body = await req.json().catch(() => ({}));
     const quizId = typeof body.quizId === 'string' ? body.quizId.trim() : '';
