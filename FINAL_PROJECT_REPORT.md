@@ -1,6 +1,9 @@
-# Knowledge Arena — Final Project Report
+# Knowledge Arena — Final Project Report — SUPERSEDED as of Phase 113 (2026-09-03)
 
-**Date:** July 31, 2026
+> **⚠️ This report is superseded by `AUDIT.md` (Phase 113) and `PHASE113B-REPORT.md`.**
+> It is retained for historical reference only. Do NOT use it as ground truth — it claims `pdfreader` for PDF parsing (now `pdfjs-dist`), and that `npm run build` fails due to SWC binary (now passes with 94 pages). The live audit is `AUDIT.md`.
+
+**Date:** July 31, 2026 (stale)
 **Baseline:** commit `085ee42` (Phase 4) → `ff1aec7` (Phase 5) → final audit commit
 **Author:** Final engineering milestone — full certification review of the sole implementation in this repository.
 
