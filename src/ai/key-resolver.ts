@@ -372,6 +372,10 @@ export async function withGeminiKeyRotation<T>(
         try {
           return await operation(apiKey);
         } catch (err) {
+          if (isAuthError(err)) {
+            markKeyCooldown(apiKey, 24 * 60 * 60 * 1000);
+            throw new Error(`GEMINI_AUTH_FAILED: Invalid API key. Check GEMINI_API_KEYS. Raw: ${err instanceof Error ? err.message : String(err)}`);
+          }
           if (isQuotaError(err)) {
             const delay = parseRetryDelayMs(err) ?? DEFAULT_COOLDOWN_MS;
             markKeyCooldown(apiKey, delay);
@@ -390,6 +394,14 @@ export async function withGeminiKeyRotation<T>(
       return result;
     } catch (err) {
       lastQuotaError = err;
+      if (isAuthError(err)) {
+        markKeyCooldown(apiKey, 24 * 60 * 60 * 1000);
+        if (tried.size >= keys.length) {
+          throw new Error(`GEMINI_AUTH_FAILED: Invalid API key ${previewKey(apiKey)}. Check GEMINI_API_KEYS. Last error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        console.warn(`[KeyResolver] Auth failure on ${previewKey(apiKey)} — rotating to next key (${tried.size}/${keys.length} tried).`);
+        continue;
+      }
       if (isQuotaError(err)) {
         const delay = parseRetryDelayMs(err) ?? DEFAULT_COOLDOWN_MS;
         markKeyCooldown(apiKey, delay);
@@ -402,7 +414,7 @@ export async function withGeminiKeyRotation<T>(
         console.warn(`[KeyResolver] Quota on ${previewKey(apiKey)} — rotating to next key (${tried.size}/${keys.length} tried).`);
         continue;
       }
-      // Non-quota error — do not rotate
+      // Non-quota, non-auth error — do not rotate
       throw err;
     }
   }

@@ -10,7 +10,6 @@ import {
   isCreator,
   battleErrorResponse,
 } from '@/lib/battle-server';
-import { collection, getDocs } from 'firebase/firestore';
 
 export const runtime = 'nodejs';
 
