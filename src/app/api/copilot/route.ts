@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { copilotAssist } from '@/ai/flows/copilot-flow';
-import { enforceRateLimit, Limits, getClientIp } from '@/lib/rate-limiter';
+import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
+import { verifyFirebaseToken } from '@/lib/verify-auth';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
-  const ipRl = enforceRateLimit(`ai:copilot:${getClientIp(req)}`, Limits.AI_COPILOT_PER_USER);
-  if (ipRl) return ipRl;
   try {
     const body = await req.json().catch(() => null);
     if (!body || typeof body.userMessage !== 'string' || !body.userMessage.trim()) {
@@ -17,6 +16,15 @@ export async function POST(req: NextRequest) {
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Verify token to get UID for per-user rate limiting (not per-IP, which
+    // throttles an entire college NAT behind a single shared IP).
+    const auth = await verifyFirebaseToken(token);
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const uidRl = enforceRateLimit(`ai:copilot:${auth.uid}`, Limits.AI_COPILOT_PER_USER);
+    if (uidRl) return uidRl;
 
     const result = await copilotAssist({
       userMessage: body.userMessage,
