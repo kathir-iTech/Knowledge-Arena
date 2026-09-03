@@ -151,3 +151,24 @@ Vercel still **UNVERIFIED** until live upload tested on production (required by 
 - **Full end-to-end loop confirmed?** **NO — UNVERIFIED** (the continuous Playwright run covering Executive → Commander → PDF Forge → publish → Gladiator join → battle → leaderboard → mind map → explanation → history was not yet run against a real deployed environment in this phase; required for Step 4).
 
 Phase 114 status: key-resolver cooldown race **CONFIRMED none**; negative-marking copy **no fix needed** (design); AI rate limiting now per-UID **CONFIRMED**; deps cleaned + 5 audit advisories closed **CONFIRMED**; remaining vulns gated (see SECURITY_NOTES.md).
+
+### Phase 114 — Production (Vercel) verification (Step 0/4)
+
+Re-ran the full unauth E2E suite against `https://knowledge-arena.vercel.app` after all
+Tier 1-3 changes: **15/15 pass** (manifest, icons, Quorena rename, AI-Forge tab presence,
+401 auth-gating on copilot/evaluate/advance/mindmap/explanation/executive-search/
+commander-search/gladiator-search, security headers, skip-link/toast a11y). This confirms
+none of the dependency/rate-limit/score changes broke the live unauth surface.
+
+**Authenticated legs remain BLOCKED (UNVERIFIED):**
+- **PDF Forge upload on production** — needs one real test Commander login (email+password)
+  created through the product (Executive → create Commander), which this sandbox cannot
+  provide (no service account; and a full service account is over-broad for this check).
+- **Full end-to-end loop** (Executive → Commander → PDF Forge → publish → Gladiator join →
+  battle → leaderboard → mindmap → explanation → history) — additionally needs a Gladiator,
+  which is **Google-OAuth + domain-locked**; no credential can fix that leg. Requires a real
+  account on the college domain, done by hand.
+
+Planned follow-up: a scoped test-Commander login (not a service account) supplied as a local
+`.env.test` / env var, then close out the two authenticated checks. **For now: UNVERIFIED, blocked
+on credentials — no emulator substitute (works-locally/fails-on-Vercel is PDF Forge's known trap).**
