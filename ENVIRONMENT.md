@@ -62,10 +62,41 @@ Variables prefixed with `NEXT_PUBLIC_` are exposed to client-side code.
 | Variable | Required | Description | Example |
 |---|---|---|---|
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | ❌ | Firebase Storage bucket for file uploads. Used for file attachments in requests and messaging. When unset, the health endpoint shows a "warning" status, and file uploads fall back to base64 storage in Firestore. | `your-project.appspot.com` |
+| `FIREBASE_STORAGE_BUCKET` | ❌ (script) | Fallback for scripts (`scripts/wipe-to-clean-slate.mjs`) that reads `FIREBASE_STORAGE_BUCKET` before `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`. | `your-project.appspot.com` |
 
 **Where to get it:** Firebase Console → Storage → Get the bucket URL (e.g., `your-project.appspot.com`).
 
-**Must have `NEXT_PUBLIC_` prefix** (read by client-side code).
+**Must have `NEXT_PUBLIC_` prefix** (read by client-side code for browser uploads; scripts accept either).
+
+---
+
+## Firebase Realtime Database
+
+| Variable | Required | Description | Example |
+|---|---|---|---|
+| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | ❌ | Realtime Database URL for live battle presence (`presence/{quizId}/{uid}` via `getAdminRtdb()` / client). When unset, falls back to `https://studio-4092189688-c74a7-default-rtdb.firebaseio.com` (default instance). | `https://your-project-default-rtdb.firebaseio.com` |
+| `FIREBASE_DATABASE_URL` | ❌ (script) | Server-side fallback used by `src/lib/firebase-admin.ts` (`process.env.FIREBASE_DATABASE_URL \|\| firebaseConfig.databaseURL`) and `scripts/wipe-to-clean-slate.mjs`. | `https://your-project-default-rtdb.firebaseio.com` |
+
+**Where to get it:** Firebase Console → Realtime Database → Data tab → URL shown at top (region-specific).
+
+---
+
+## Gladiator Email Domain Lock
+
+| Variable | Required | Description | Example |
+|---|---|---|---|
+| `ALLOWED_GLADIATOR_EMAIL_DOMAIN` | ❌ | Restricts self-registered Gladiators to a single institutional domain (e.g., `university.edu`). Enforced at sign-up (Google `hd` hint + client rejection in `AuthContext.tsx:41`, `LoginForm.tsx:24`) and in `firestore.rules` (server of record, baked via `npm run rules:generate` from this value). Leave empty to allow any Google account. | `university.edu` |
+| `NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN` | ❌ | Same value with `NEXT_PUBLIC_` prefix so browser code can read it. Must match `ALLOWED_GLADIATOR_EMAIL_DOMAIN` when set. | `university.edu` |
+
+**How it works:** `scripts/generate-firestore-rules.js:32` reads `ALLOWED_GLADIATOR_EMAIL_DOMAIN` (or `NEXT_PUBLIC_` fallback), regex-escapes it, and bakes it into `firestore.rules` (`allowedGladiatorEmailDomain()`). `firebase.json:5` runs this as `predeploy`.
+
+---
+
+## Emulator (Local Dev)
+
+| Variable | Required | Description | Example |
+|---|---|---|---|
+| `NEXT_PUBLIC_FIREBASE_EMULATOR` | ❌ (dev) | When `true`, `src/firebase/index.ts:14` and `src/contexts/AuthContext.tsx:42` switch to Firebase Emulator (Firestore `:8080`, Auth `:9099`, RTDB `:9000`, Hosting `:5000`). Set automatically by `npm run demo` / `npm run dev` with emulator flags. | `true` |
 
 ---
 
@@ -111,15 +142,21 @@ FIREBASE_SERVICE_ACCOUNT_KEY=
 
 # ─── Firebase Auth ─────────────────────────────────────────────
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-
-# ─── Firebase Storage (optional) ───────────────────────────────
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://studio-4092189688-c74a7-default-rtdb.firebaseio.com
+
+# ─── Gladiator Email Domain Lock (optional) ────────────────────
+ALLOWED_GLADIATOR_EMAIL_DOMAIN=
+NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN=
 
 # ─── Script-Only Variables ─────────────────────────────────────
 SERVICE_ACCOUNT_PATH=
 # EXECUTIVE_SEQ=001
 # EXECUTIVE_PASSWORD=1234567
 # EXECUTIVE_NAME=
+
+# ─── Emulator (local dev, auto-set) ────────────────────────────
+# NEXT_PUBLIC_FIREBASE_EMULATOR=true
 ```
 
 ---

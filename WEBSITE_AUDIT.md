@@ -1,4 +1,6 @@
-# Phase 108: Website Systematic Audit
+# Phase 108: Website Systematic Audit — Phase 113 Re-verified
+
+> **Scope:** Phase 108 (240+ elements, 3 auto-fixes). Re-verified in Phase 113: still accurate for its page coverage, but PDF Forge section was re-audited and fixed in Phase 113A — see `AUDIT.md` for the current PDF Forge status. Do not treat this as the live audit.
 
 ## Overview
 This report documents a systematic audit of every interactive element across the Quorena website for all three roles (Executive, Commander, Gladiator). The audit covers all required pages specified in the Phase 108 scope.
