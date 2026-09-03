@@ -596,11 +596,39 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
     (async () => {
       await ensurePdfJsPolyfills();
       const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      // Defense in depth for Vercel: legacy build is already the Node-compatible
-      // build, but on server we also nullify the workerSrc so any static
-      // top-level import of pdf.worker.mjs cannot be evaluated.
+      // pdfjs-dist legacy build in Node uses a fake worker (in-process) but
+      // still requires GlobalWorkerOptions.workerSrc to resolve to a real
+      // module. The default is "./pdf.worker.mjs" (relative to pdf.mjs), which
+      // works when bare. Previous code used "pdf.worker.mjs" (missing "./")
+      // which Node ESM rejects as a bare specifier ("Cannot find package").
+      // Use an absolute file:// URL via require.resolve for Vercel/Linux and
+      // Windows correctness; fall back to the relative default if resolution
+      // fails (e.g., bundler edge).
       if (typeof window === 'undefined' && (pdfjs as any).GlobalWorkerOptions) {
-        (pdfjs as any).GlobalWorkerOptions.workerSrc = 'pdf.worker.mjs';
+        try {
+          const { pathToFileURL } = await import('node:url');
+          let resolved: string | null = null;
+          const gReq: any = (globalThis as any).require;
+          if (gReq?.resolve) {
+            try {
+              resolved = gReq.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+            } catch {}
+          }
+          if (!resolved) {
+            try {
+              const { createRequire } = await import('node:module');
+              const base = pathToFileURL(process.cwd() + '/package.json').href;
+              resolved = createRequire(base).resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+            } catch {}
+          }
+          if (resolved) {
+            (pdfjs as any).GlobalWorkerOptions.workerSrc = pathToFileURL(resolved).href;
+          } else {
+            (pdfjs as any).GlobalWorkerOptions.workerSrc = './pdf.worker.mjs';
+          }
+        } catch {
+          (pdfjs as any).GlobalWorkerOptions.workerSrc = './pdf.worker.mjs';
+        }
       }
       const { getDocument } = pdfjs;
       // Vercel serverless does not bundle pdf.worker.mjs; disable the
