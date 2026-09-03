@@ -10,7 +10,7 @@ import { googleAI } from '@genkit-ai/googleai';
 import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 import { aiLogService } from '@/services/ai-log.service';
-import { getGeminiApiKey, isQuotaError, parseRetryDelayMs, markKeyCooldown, getConfiguredKeys } from '@/ai/key-resolver';
+import { getGeminiApiKey, isQuotaError, isAuthError, parseRetryDelayMs, markKeyCooldown, getConfiguredKeys } from '@/ai/key-resolver';
 
 const MINDMAP_TIMEOUT_MS = 35000;
 
@@ -71,6 +71,11 @@ async function callMindmapWithRotation(promptText: string): Promise<unknown> {
       return res;
     } catch (err) {
       lastError = err;
+      if (isAuthError(err)) {
+        markKeyCooldown(apiKey, 24 * 60 * 60 * 1000);
+        if (attempt < maxAttempts - 1 && keys.length > 1) continue;
+        throw new Error(`GEMINI_AUTH_FAILED: Invalid API key. Check GEMINI_API_KEYS. Raw: ${err instanceof Error ? err.message : String(err)}`);
+      }
       if (isQuotaError(err)) {
         const delay = parseRetryDelayMs(err);
         markKeyCooldown(apiKey, delay);

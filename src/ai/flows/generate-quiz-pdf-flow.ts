@@ -17,6 +17,7 @@ import { aiLogService } from '@/services/ai-log.service';
 import {
   getGeminiApiKey,
   isQuotaError as isResolverQuotaError,
+  isAuthError as isResolverAuthError,
   parseRetryDelayMs,
   markKeyCooldown,
   getConfiguredKeys,
@@ -274,7 +275,14 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
       errors.push(`${modelName} attempt ${attempt}: ${enriched}`);
       console.error(`[Forge] Gemini call failed (${modelName}, attempt ${attempt}/${maxAttempts})`, '\n' + formatError(err));
 
-      if (isAuthError(err)) {
+      // Auth / invalid-key handling: mark long cooldown (24h) and rotate if spare keys exist, else fail fast.
+      if (isAuthError(err) || isResolverAuthError(err)) {
+        if (apiKeyUsed) markKeyCooldown(apiKeyUsed, 24 * 60 * 60 * 1000);
+        const configured = getConfiguredKeys().length;
+        if (configured > 1 && keyHistoryForModel.size < configured) {
+          // Try next key immediately — don't burn retries on known-invalid key.
+          continue;
+        }
         throw err;
       }
 
@@ -878,7 +886,13 @@ ${chunks[0]}`;
         errors.push(`${modelName} attempt ${attempt}: ${enriched}`);
         console.error(`[Forge] Gemini vision call failed (${modelName}, attempt ${attempt}/${MAX_RETRIES_PER_MODEL})`, '\n' + formatError(err));
 
-        if (isAuthError(err)) throw err;
+        if (isAuthError(err) || isResolverAuthError(err)) {
+          if (apiKeyUsed) markKeyCooldown(apiKeyUsed, 24 * 60 * 60 * 1000);
+          if (getConfiguredKeys().length > 1) {
+            continue;
+          }
+          throw err;
+        }
         if (isResolverQuotaError(err)) {
           const delayMs = parseRetryDelayMs(err);
           if (apiKeyUsed) markKeyCooldown(apiKeyUsed, delayMs);

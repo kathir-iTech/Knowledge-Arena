@@ -4,6 +4,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/constants';
 import { generateMindMap } from '@/ai/flows/mindmap-flow';
 import { enforceRateLimit, Limits, getClientIp } from '@/lib/rate-limiter';
+import { createHash } from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -53,6 +54,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No questions found' }, { status: 400 });
     }
 
+    // Cost/quota: cache mind maps per quiz content hash (same as explanation caching).
+    // Prevents duplicate Gemini calls for identical quiz content on free tier.
+    const hash = createHash('sha256')
+      .update(quizId + ':' + quizTitle + ':' + questions.map(q => q.text + '|' + q.correctAnswer).join('||'))
+      .digest('hex')
+      .slice(0, 40);
+    const cacheRef = db.collection('ai_mindmaps').doc(hash);
+    const cached = await cacheRef.get();
+    if (cached.exists) {
+      const data = cached.data() as { title: string; nodes: unknown; connections: unknown };
+      return NextResponse.json({ title: data.title, nodes: data.nodes, connections: data.connections, cached: true });
+    }
+
     const result = await generateMindMap({
       quizTitle,
       questions,
@@ -71,10 +85,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: 500 });
     }
 
+    // Cache successful result best-effort (Admin SDK bypasses rules; no client read needed)
+    try {
+      await cacheRef.set({ quizId, title: result.title, nodes: result.nodes, connections: result.connections, createdAt: Date.now(), hash });
+    } catch {}
+
     return NextResponse.json({
       title: result.title,
       nodes: result.nodes,
       connections: result.connections,
+      cached: false,
     });
   } catch (err: any) {
     console.error('[MindMap POST] Error:', err?.name, err?.message);
