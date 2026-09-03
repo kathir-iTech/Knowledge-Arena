@@ -1,8 +1,8 @@
-# Quorena — Live Audit (Phase 113)
+# Quorena — Live Audit (Phase 114)
 
-**Date:** 2026-09-03
-**Commit:** `2dab742` (Phase 113C) + `7f88495` (Phase 113B)
-**Auditor:** Phase 113 (full repo audit, PDF Forge final resolution)
+**Date:** 2026-09-04
+**Commit:** `08a684f` (T2) + `29996f5` (T1C), building on `2dab742`/`7f88495` (Phase 113)
+**Auditor:** Phase 114 (production verification, key-resolver/scoring/rate-limit, dependency cleanup, UI sweep)
 **Status:** This is the current source of truth. Supersedes `FINAL_PROJECT_REPORT.md` (2026-07-31, stale) and `AUDIT.md` (deleted 2026-07-14) which were caught stale in Phase 108/109.
 
 ---
@@ -131,7 +131,23 @@ Vercel still **UNVERIFIED** until live upload tested on production (required by 
 
 ---
 
+## 5b. Phase 114 — Key-resolver race, scoring copy, rate-limiting, deps
+
+**Tier 1A — key-resolver cooldown-wait race (re-opened):** `src/ai/key-resolver.ts:294-326`. After `await sleep(minRemaining)` (`:296`), all index/cool-down-modifying code (`:298-324`) is **synchronous** (only `Date.now()` and in-memory `cooldowns.get`/`keys.indexOf`, no further `await`). Node's single-threaded event loop serializes them, so a waiter cannot interleave with a competing `getGeminiApiKey` between its sleep-return and its round-robin write. Per-instance in-memory state means there is also no cross-instance claim. **CONFIRMED — no race; no change.**
+
+**Tier 1B — "Wrong answers subtract points" copy vs skip_penalty:** `src/components/quiz/AdvancedGovernanceSection.tsx:124-125` UI copy states "Wrong answers subtract points". `battle-machine.ts:57-91` gates `wrong_penalty` under `negative_marking` but applies `skip_penalty` independently. UI copy agrees with the code's negative-marking contract, so **no fix** — `skip_penalty` is an independent, correctly-documented setting, not a UI/code mismatch. **TRACED — designed behavior.**
+
+**Tier 1C — UID-based rate limiting (FIXED):** `copilot`, `quiz/mindmap`, `quiz/explanation` routes previously rate-limited by `getClientIp(req)`, which would throttle an entire college behind one shared NAT IP. Now they `verifyFirebaseToken` first, then rate-limit per `auth.uid`. **CONFIRMED** — `src/app/api/copilot/route.ts:20-26`, `src/app/api/quiz/mindmap/route.ts:16-20`, `src/app/api/quiz/explanation/route.ts:20-24`. `getClientIp` remains IP-based only where IP is the correct key (`clock`, `rate-limit/check`, `admin/users`).
+
+**Tier 2 — dependency cleanup + security (DONE):** Removed 6 dead deps (radix accordion/menubar/popover/progress, @vercel/speed-insights, react-is — zero `src/` imports). Bumped `next` 15.5.9→15.5.20. Added safe audit overrides (brace-expansion 2.1.4, fast-uri 3.1.6, nanoid 3.3.18, fast-xml-parser 5.10.1, ip-address 10.3.1) — all cleared from `npm audit`. Remaining 68 vulns are gated behind firebase-admin→@google-cloud, genkit→OTEL, and next→sharp chains; `npm audit fix` hangs on them. See `SECURITY_NOTES.md`. **CONFIRMED.**
+
+**Tier 3D — arena/notify fan-out:** `src/app/api/arena/notify/route.ts:23-59` — 1 read (gladiators query) + N writes (per-gladiator `notificationService.create`, chunked concurrency 20), with a 500-gladiator hard cap (`:32-35`). Inherent fan-out; bounded and guarded. **TRACED — accepted, no change.**
+
+---
+
 ## 6. Plain-Language Summary
 
-- **PDF Forge actually fixed and proven on production?** Locally **YES** (3 PDFs, tsc+build clean). On Vercel **NO — UNVERIFIED** (needs live upload on https://... via AI Forge; historical "works locally / fails on Vercel" pattern requires that).
+- **PDF Forge actually fixed and proven on production?** Locally **YES** (3 PDFs, tsc+build clean). On Vercel **NO — UNVERIFIED** (needs live upload on https://knowledge-arena.vercel.app via AI Forge; historical "works locally / fails on Vercel" pattern requires that).
 - **Full end-to-end loop confirmed?** **NO — UNVERIFIED** (the continuous Playwright run covering Executive → Commander → PDF Forge → publish → Gladiator join → battle → leaderboard → mind map → explanation → history was not yet run against a real deployed environment in this phase; required for Step 4).
+
+Phase 114 status: key-resolver cooldown race **CONFIRMED none**; negative-marking copy **no fix needed** (design); AI rate limiting now per-UID **CONFIRMED**; deps cleaned + 5 audit advisories closed **CONFIRMED**; remaining vulns gated (see SECURITY_NOTES.md).
