@@ -5,7 +5,7 @@ export const ROLE_EXECUTIVE: Role = 'executive';
 export const ROLE_COMMANDER: Role = 'commander';
 export const ROLE_GLADIATOR: Role = 'gladiator';
 
-export const QUIZ_STATUSES = ['draft', 'waiting', 'ready', 'starting', 'live', 'paused', 'finished', 'archived'] as const;
+export const QUIZ_STATUSES = ['draft', 'waiting', 'ready', 'starting', 'live', 'paused', 'finished', 'archived', 'abandoned'] as const;
 export type QuizStatus = (typeof QUIZ_STATUSES)[number];
 export const QUIZ_WAITING: QuizStatus = 'waiting';
 export const QUIZ_READY: QuizStatus = 'ready';
@@ -15,6 +15,7 @@ export const QUIZ_PAUSED: QuizStatus = 'paused';
 export const QUIZ_FINISHED: QuizStatus = 'finished';
 export const QUIZ_ARCHIVED: QuizStatus = 'archived';
 export const QUIZ_DRAFT: QuizStatus = 'draft';
+export const QUIZ_ABANDONED: QuizStatus = 'abandoned';
 
 export const PARTICIPANT_STATUSES = ['playing', 'finished', 'blocked', 'flagged'] as const;
 export type ParticipantStatus = (typeof PARTICIPANT_STATUSES)[number];
@@ -33,11 +34,19 @@ export const ALLOWED_QUIZ_TRANSITIONS: Record<string, readonly string[]> = {
   waiting: ['ready', 'starting'],
   ready: ['waiting', 'starting'],
   starting: ['live', 'waiting'],
-  live: ['paused', 'finished'],
-  paused: ['live', 'finished'],
+  live: ['paused', 'finished', 'abandoned'],
+  paused: ['live', 'finished', 'abandoned'],
   finished: ['archived'],
+  // Zombie-battle sweep (Phase 115B): 'abandoned' is terminal — an abandoned
+  // battle cannot transition anywhere else.
+  abandoned: [],
   archived: [],
 };
+
+// Zombie-battle threshold (Phase 115B): a 'live' arena with no question
+// activity for this long is treated as abandoned and swept. Kept as a named
+// constant rather than a magic number.
+export const QUIZ_ABANDONED_AFTER_MS = 3 * 60 * 60 * 1000;
 
 export const DEFAULT_SCORE_MAX = 1000;
 export const DEFAULT_SCORE_MIN = 100;

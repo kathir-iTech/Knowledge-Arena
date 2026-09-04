@@ -4,5 +4,11 @@
     "app/**/*.js": {
       "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/sweep-battles",
+      "schedule": "0 8 * * *"
+    }
+  ]
 }

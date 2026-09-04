@@ -23,7 +23,7 @@ export interface ScoringConfig {
 export interface ValidatedQuiz {
   id: string;
   title: string;
-  status: 'waiting' | 'ready' | 'starting' | 'live' | 'paused' | 'finished' | 'archived';
+  status: 'waiting' | 'ready' | 'starting' | 'live' | 'paused' | 'finished' | 'archived' | 'abandoned';
   created_by: string;
   current_question_index?: number;
   question_count?: number;
@@ -42,6 +42,8 @@ export interface ValidatedQuiz {
   paused_ms?: number;
   started_at?: number | null;
   ended_at?: number | null;
+  // Phase 115B: set when a zombie-battle sweep marks a live arena 'abandoned'.
+  abandoned_at?: number | null;
   skipped_question_ids?: string[];
   owner_transferred_at?: number | null;
 }

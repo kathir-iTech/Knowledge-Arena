@@ -92,8 +92,8 @@ service cloud.firestore {
         (from == 'waiting' && (to == 'ready' || to == 'starting')) ||
         (from == 'ready' && (to == 'waiting' || to == 'starting')) ||
         (from == 'starting' && (to == 'live' || to == 'waiting')) ||
-        (from == 'live' && (to == 'paused' || to == 'finished')) ||
-        (from == 'paused' && (to == 'live' || to == 'finished')) ||
+        (from == 'live' && (to == 'paused' || to == 'finished' || to == 'abandoned')) ||
+        (from == 'paused' && (to == 'live' || to == 'finished' || to == 'abandoned')) ||
         (from == 'finished' && to == 'archived') ||
         from == to;
     }
@@ -105,14 +105,14 @@ service cloud.firestore {
     // pre-join readers of the parent doc never see scoring or internal state.
     function isLegalQuizUpdate(quizId) {
       return isQuizCreator(quizId) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        request.resource.data.diff(resource.data).affectedKeys().        hasOnly([
           'title', 'archived', 'status', 'current_question_index', 'question_start_at',
           'commanderLastSeen', 'battle_mode', 'start_config',
-          'paused_at', 'paused_ms', 'started_at', 'ended_at',
+          'paused_at', 'paused_ms', 'started_at', 'ended_at', 'abandoned_at',
           'owner_transferred_at',
         ]) &&
         isLegalStatusTransition(resource.data.status, request.resource.data.status) &&
-        request.resource.data.status in ['waiting', 'ready', 'starting', 'live', 'paused', 'finished', 'archived'];
+        request.resource.data.status in ['waiting', 'ready', 'starting', 'live', 'paused', 'finished', 'archived', 'abandoned'];
     }
 
     // Arena internals live in quizzes/{quizId}/config/settings. Only the

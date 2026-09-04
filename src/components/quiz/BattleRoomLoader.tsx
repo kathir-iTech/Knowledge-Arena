@@ -10,7 +10,7 @@ import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { battleService, getSessionToken } from '@/services/battle.service';
 import { presenceService } from '@/services/presence.service';
-import { STARTING_TRANSITION_MS, QUIZ_WAITING, QUIZ_READY, QUIZ_STARTING, QUIZ_LIVE, QUIZ_PAUSED, QUIZ_FINISHED, QUIZ_ARCHIVED, COLLECTIONS, QUIZ_CONFIG_SETTINGS_DOC } from '@/lib/constants';
+import { STARTING_TRANSITION_MS, QUIZ_WAITING, QUIZ_READY, QUIZ_STARTING, QUIZ_LIVE, QUIZ_PAUSED, QUIZ_FINISHED, QUIZ_ARCHIVED, QUIZ_ABANDONED, COLLECTIONS, QUIZ_CONFIG_SETTINGS_DOC } from '@/lib/constants';
 import { isBattleActive } from '@/lib/battle-machine';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
@@ -361,8 +361,23 @@ export default function BattleRoomLoader() {
   if (quiz.status === QUIZ_LIVE || quiz.status === QUIZ_PAUSED) {
     const isTeacher = (user?.role === 'commander' || user?.role === 'executive') && quiz.created_by === user.id;
     if (!participant && !isTeacher && firstPartSnapRef.current && !allowLateJoin) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in safe-top safe-bottom">
+  if (quiz.status === QUIZ_ABANDONED) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in safe-top safe-bottom">
+        <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
+          <ShieldX className="w-8 h-8 text-destructive" />
+        </div>
+        <div className="space-y-2 max-w-sm">
+          <h1 className="text-page-title font-headline tracking-tight text-destructive">Battle Abandoned</h1>
+          <p className="text-base text-muted-foreground">This battle ended because it was left inactive for too long. Contact your Commander if you believe this was a mistake.</p>
+        </div>
+        <Button onClick={() => router.push('/')}>Return to Dashboard</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in safe-top safe-bottom">
           <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
             <ShieldX className="w-8 h-8 text-destructive" />
           </div>

@@ -8,6 +8,8 @@ import {
   QUIZ_PAUSED,
   QUIZ_FINISHED,
   QUIZ_ARCHIVED,
+  QUIZ_ABANDONED,
+  QUIZ_ABANDONED_AFTER_MS,
   PS_FINISHED,
   PS_BLOCKED,
   BATTLE_MODE_INDEPENDENT,
@@ -34,6 +36,7 @@ export type BattleLogEvent =
   | 'question_skipped'
   | 'battle_finished'
   | 'battle_archived'
+  | 'battle_abandoned'
   | 'reconnect'
   | 'ownership_transferred'
   | 'gladiator_joined'
@@ -295,6 +298,77 @@ export async function finishBattle(
   } catch (err) {
     console.error('[finishBattle] battle-completed notifications failed:', err);
   }
+}
+
+/**
+ * Abandon a live arena as a zombie (Phase 115B).
+ *
+ * Atomically transitions a still-`live` arena to `abandoned` and records the
+ * abandonment time. Only a genuinely `live` arena is touched; if a transaction
+ * races with a normal finish (status already finished/archived/abandoned), the
+ * transition is a no-op. Unlike `finishBattle`, an abandoned arena does NOT run
+ * the win/rank notification fan-out — it was not a proper conclusion.
+ */
+export async function abandonBattle(
+  quizId: string,
+  actor: string,
+  actorRole: string,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  const db = getAdminDb();
+  let didTransition = false;
+  await db.runTransaction(async (tx) => {
+    const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
+    const snap = await tx.get(quizRef);
+    if (!snap.exists) return;
+    const status = snap.data()?.status;
+    // Only sweep arenas still mid-flight as `live`. Guard inside the
+    // transaction so a concurrent finish does not get overwritten.
+    if (status !== QUIZ_LIVE) return;
+    didTransition = true;
+    const now = Date.now();
+    tx.update(quizRef, {
+      status: QUIZ_ABANDONED,
+      abandoned_at: now,
+      question_start_at: null,
+      paused_at: null,
+    });
+  });
+  if (!didTransition) return;
+  await writeBattleLog({ quizId, event: 'battle_abandoned', actor, actorRole, metadata });
+}
+
+/**
+ * Lazy zombie sweep (Phase 115B) — the hot-path half of the sweeper.
+ *
+ * Call right after a battle route reads an arena's data. If the arena is still
+ * `live` and its current question started more than `QUIZ_ABANDONED_AFTER_MS`
+ * ago (i.e. nobody advanced it in the threshold window), it is considered a
+ * zombie and is abandoned. Returns `true` when it abandoned, so the caller can
+ * stop processing against a stale arena.
+ *
+ * `question_start_at` is the natural "last activity" marker for a `live` arena:
+ * it is rewritten on every advance/activation and is nulled on finish. A live
+ * question that has not been advanced inside the threshold is stuck by
+ * definition (normal question timers are seconds, far below the threshold), so
+ * treating it as abandoned is safe and conservative.
+ *
+ * @returns true if the arena was (or already had been) abandoned.
+ */
+export async function sweepStaleLiveArena(
+  quizId: string,
+  quiz: Record<string, any>
+): Promise<boolean> {
+  if (quiz.status !== QUIZ_LIVE) return false;
+  const lastActivityMs = getMs(quiz.question_start_at);
+  // getMs(null) falls back to Date.now(); refuse to abandon when no reliable
+  // last-activity marker exists (be conservative — never sweep on a guess).
+  if (typeof lastActivityMs !== 'number' || !Number.isFinite(lastActivityMs)) return false;
+  if (lastActivityMs <= 0) return false;
+  if (Date.now() - lastActivityMs < QUIZ_ABANDONED_AFTER_MS) return false;
+
+  await abandonBattle(quizId, 'system', 'system', { reason: 'stale_live_arena' });
+  return true;
 }
 
 /**

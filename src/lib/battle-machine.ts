@@ -14,6 +14,7 @@ import {
   QUIZ_PAUSED,
   QUIZ_FINISHED,
   QUIZ_ARCHIVED,
+  QUIZ_ABANDONED,
 } from './constants';
 
 export function canTransitionQuiz(from: string, to: string): boolean {
@@ -41,7 +42,7 @@ export function isBattleActive(status: string): boolean {
 }
 
 export function isBattleTerminal(status: string): boolean {
-  return status === QUIZ_FINISHED || status === QUIZ_ARCHIVED;
+  return status === QUIZ_FINISHED || status === QUIZ_ARCHIVED || status === QUIZ_ABANDONED;
 }
 
 export interface ScoringConfig {
