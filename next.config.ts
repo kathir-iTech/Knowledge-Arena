@@ -6,6 +6,20 @@ const FIREBASE_AUTH_BACKEND = 'studio-4092189688-c74a7.firebaseapp.com';
 const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: __dirname,
+  // Ensure Vercel standalone trace includes pdfjs worker & resources
+  // which are loaded via `new URL('pdf.worker.mjs', import.meta.url)` and
+  // `require('@napi-rs/canvas')` at runtime (not static imports).
+  // Without this, standalone trace omits pdf.worker.mjs → runtime
+  // "Cannot find module pdf.worker.mjs" and canvas .node binaries.
+  outputFileTracingIncludes: {
+    '/*': [
+      './node_modules/pdfjs-dist/**/*',
+      './node_modules/@napi-rs/**/*',
+      './node_modules/pdfjs-dist/cmaps/**/*',
+      './node_modules/pdfjs-dist/standard_fonts/**/*',
+      './node_modules/pdfjs-dist/wasm/**/*',
+    ],
+  },
   typescript: {
     ignoreBuildErrors: false,
   },

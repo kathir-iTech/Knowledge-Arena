@@ -500,10 +500,12 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
 const SEPARATOR = '||PDF_SEPARATOR||';
 
 function detectFileType(dataUri: string): 'pdf' | 'docx' | 'txt' | 'md' | 'image' | 'unknown' {
-  const lower = dataUri.slice(0, 100).toLowerCase();
+  const lower = dataUri.slice(0, 120).toLowerCase();
   if (lower.startsWith('data:application/pdf') || lower.includes('%pdf')) return 'pdf';
-  if (lower.startsWith('data:application/vnd.openxmlformats-officedocument.wordprocessingml') || lower.includes('application/vnd.openxmlformats')) return 'docx';
-  if (lower.startsWith('data:text/plain') || lower.startsWith('data:text/markdown')) return 'txt';
+  if (lower.includes('wordprocessingml')) return 'docx';
+  if (lower.includes('presentationml') || lower.includes('spreadsheetml')) return 'unknown'; // not supported — UI will reject, backend treats as unknown
+  if (lower.startsWith('data:text/markdown')) return 'md';
+  if (lower.startsWith('data:text/plain')) return 'txt';
   if (lower.startsWith('data:image/')) return 'image';
   if (lower.startsWith('data:text/')) return 'txt';
   return 'unknown';
@@ -568,14 +570,11 @@ function extractTextFromDocxBuffer(buffer: Buffer): string {
 
 async function ensurePdfJsPolyfills(): Promise<void> {
   // pdfjs-dist legacy build in Node requires DOMMatrix/Path2D globals.
-  // It tries to load @napi-rs/canvas internally, but that package was
-  // previously only an optionalDependency (not guaranteed installed in
-  // production). For text extraction we do NOT need the heavy native
-  // canvas (it inflates memory and can trigger Vercel ERR_ABORTED);
-  // a minimal JS stub is sufficient and keeps the server action lean.
-  // @napi-rs/canvas remains in dependencies so pdfjs's internal require
-  // can succeed if the native binary is available, but we do not load it
-  // here to avoid the extra memory cost.
+  // We stub minimal versions so pdfjs does not need the heavy native
+  // canvas (@napi-rs/canvas) for text extraction — keeps memory low on
+  // Vercel and avoids ERR_ABORTED. The package stays in dependencies so
+  // pdfjs's internal try-require can succeed if present, but we don't
+  // load it here.
   if (typeof (globalThis as any).DOMMatrix !== 'undefined' && typeof (globalThis as any).Path2D !== 'undefined') return;
   if (typeof (globalThis as any).DOMMatrix === 'undefined') {
     (globalThis as any).DOMMatrix = class DOMMatrix {
@@ -587,6 +586,12 @@ async function ensurePdfJsPolyfills(): Promise<void> {
   if (typeof (globalThis as any).Path2D === 'undefined') {
     (globalThis as any).Path2D = class Path2D {};
     (global as any).Path2D = (globalThis as any).Path2D;
+  }
+  // Also stub ImageData/canvas elements that pdfjs may probe in Node.
+  if (typeof (globalThis as any).ImageData === 'undefined') {
+    (globalThis as any).ImageData = class ImageData {
+      constructor() {}
+    };
   }
 }
 
@@ -603,52 +608,44 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
   return withTimeout<{ text: string; numpages: number; isImageOnly: boolean }>(
     (async () => {
       await ensurePdfJsPolyfills();
-      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      // pdfjs-dist legacy build in Node uses a fake worker (in-process) but
-      // still requires GlobalWorkerOptions.workerSrc to resolve to a real
-      // module. The default is "./pdf.worker.mjs" (relative to pdf.mjs), which
-      // works when bare. Previous code used "pdf.worker.mjs" (missing "./")
-      // which Node ESM rejects as a bare specifier ("Cannot find package").
-      // Use an absolute file:// URL via require.resolve for Vercel/Linux and
-      // Windows correctness; fall back to the relative default if resolution
-      // fails (e.g., bundler edge).
-      if (typeof window === 'undefined' && (pdfjs as any).GlobalWorkerOptions) {
-        try {
-          const { pathToFileURL } = await import('node:url');
-          let resolved: string | null = null;
-          const gReq: any = (globalThis as any).require;
-          if (gReq?.resolve) {
-            try {
-              resolved = gReq.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
-            } catch {}
-          }
-          if (!resolved) {
-            try {
-              const { createRequire } = await import('node:module');
-              const base = pathToFileURL(process.cwd() + '/package.json').href;
-              resolved = createRequire(base).resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
-            } catch {}
-          }
-          if (resolved) {
-            (pdfjs as any).GlobalWorkerOptions.workerSrc = pathToFileURL(resolved).href;
-          } else {
-            (pdfjs as any).GlobalWorkerOptions.workerSrc = './pdf.worker.mjs';
-          }
-        } catch {
-          (pdfjs as any).GlobalWorkerOptions.workerSrc = './pdf.worker.mjs';
+      // Vercel standalone trace fix: `outputFileTracingIncludes` in next.config.ts
+      // now ensures pdf.worker.* and @napi-rs/canvas are present at
+      // /var/task/node_modules/... Without that, Node ESM import of
+      // pdf.mjs fails at top-level: "Cannot find module pdf.worker.mjs".
+      // We also set disableWorker:true so no separate thread is needed, and
+      // set workerSrc to '' to avoid any fetch. The dynamic import is wrapped
+      // to allow a fallback to pdfjs build/ variant if legacy is missing.
+      let pdfjs: any;
+      try {
+        pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      } catch (e) {
+        const msg = errorToString(e);
+        if (msg.includes('pdf.worker') || msg.includes('Cannot find module')) {
+          console.warn('[Forge] legacy pdf.mjs import failed, trying build/pdf.mjs fallback', msg);
+          // @ts-ignore — build/pdf.mjs has no types
+          pdfjs = await import('pdfjs-dist/build/pdf.mjs');
+        } else {
+          throw e;
         }
       }
+      // For Node with disableWorker:true, workerSrc should be empty / disabled.
+      // Previously we set an absolute file:// URL which still required the file
+      // to exist (tracing miss → fatal). Now we explicitly disable and leave
+      // workerSrc empty; pdf.js will use the in-process fake worker.
+      if (typeof window === 'undefined' && (pdfjs as any).GlobalWorkerOptions) {
+        try {
+          (pdfjs as any).GlobalWorkerOptions.workerSrc = '';
+        } catch {}
+      }
       const { getDocument } = pdfjs;
-      // Vercel serverless does not bundle pdf.worker.mjs; disable the
-      // separate worker thread and run pdf.js on the main thread (Node).
-      // This is the documented Node configuration and avoids
-      // "failed to locate pdf.worker.mjs" deployment errors.
       const loadingTask: PDFDocumentLoadingTask = getDocument({
         data: new Uint8Array(buffer),
         disableWorker: true,
         useWorkerFetch: false,
         isEvalSupported: false,
         useSystemFonts: true,
+        disableFontFace: true,
+        verbosity: 0,
       } as any);
       const pdf = await loadingTask.promise;
 
@@ -661,7 +658,7 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
           try {
             const textContent = await page.getTextContent();
             const pageText = textContent.items
-              .map((item) => ('str' in item ? item.str : ''))
+              .map((item: any) => ('str' in item ? item.str : ''))
               .join(' ')
               .trim();
             textsByPage.push(pageText);
@@ -693,6 +690,10 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
     }
     if (lower.includes('format') || lower.includes('invalid') || lower.includes('corrupt') || lower.includes('parse')) {
       throw new Error('PDF_CORRUPTED');
+    }
+    // Worker/canvas missing should be surfaced as extraction failed but with tracing hint
+    if (lower.includes('pdf.worker') || lower.includes('cannot find module')) {
+      console.error('[Forge] Worker/canvas missing — check outputFileTracingIncludes', readable);
     }
     throw new Error(`PDF_EXTRACTION_FAILED: ${readable}`);
   });
