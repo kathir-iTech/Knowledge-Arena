@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const _rl = enforceRateLimit(`read:${auth.uid}`, Limits.READ_PER_USER);
+    const _rl = await enforceRateLimit(`read:${auth.uid}`, Limits.READ_PER_USER);
     if (_rl) return _rl;
 
     const snap = await getAdminDb()

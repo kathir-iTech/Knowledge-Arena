@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const rl = enforceRateLimit(`gladiator:search:${auth.uid}`, Limits.SEARCH_PER_USER);
+    const rl = await enforceRateLimit(`gladiator:search:${auth.uid}`, Limits.SEARCH_PER_USER);
     if (rl) return rl;
 
     const { searchParams } = new URL(req.url);

@@ -78,6 +78,10 @@ export const COLLECTIONS = {
   // 'settings' doc lives in this subcollection so pre-join readers of the
   // parent quiz doc never see scoring or internal question state.
   QUIZ_CONFIG: 'config',
+  // Distributed rate-limit counters (Phase 115A). One doc per rate-limit key;
+  // fields { windowStart, count, expiresAt }. TTL on expiresAt auto-purges
+  // stale counters so the collection does not grow unbounded.
+  RATE_LIMITS: 'rate_limits',
 } as const;
 
 // Doc id of the single arena-internals document inside the config

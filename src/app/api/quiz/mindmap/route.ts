@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     // Verify token to get UID for per-user rate limiting (not per-IP).
     const auth = await verifyFirebaseToken(idToken);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const uidRl = enforceRateLimit(`ai:mindmap:${auth.uid}`, Limits.AI_MINDMAP_PER_USER);
+    const uidRl = await enforceRateLimit(`ai:mindmap:${auth.uid}`, Limits.AI_MINDMAP_PER_USER);
     if (uidRl) return uidRl;
 
     const body = await req.json().catch(() => ({}));

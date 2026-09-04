@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     if (!verified) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const rateLimitResponse = enforceRateLimit(`messages:${verified.auth.uid}`, Limits.MESSAGE_POST_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`messages:${verified.auth.uid}`, Limits.MESSAGE_POST_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const { searchParams } = url;
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rateLimitResponse = enforceRateLimit(`messaging:${verified.auth.uid}`, Limits.MESSAGE_POST_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`messaging:${verified.auth.uid}`, Limits.MESSAGE_POST_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const { text, attachments, idempotencyKey } = await req.json();

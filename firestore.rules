@@ -404,6 +404,14 @@ service cloud.firestore {
     allow write: if false;
   }
 
+  // --- Rate Limits (Phase 115A) ---
+  // Distributed rate-limit counters are written and read exclusively by the
+  // Admin SDK (server-side transactions, rules-bypassing). Clients must never
+  // read or write these, or they could reset their own limits.
+  match /rate_limits/{key} {
+    allow read, write: if false;
+  }
+
   // --- Executive Requests subcollection ---
   match /executive_requests/{requestId}/responses/{responseId} {
     allow read: if isExecutive() || (

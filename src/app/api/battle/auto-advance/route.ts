@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await verifyFirebaseTokenWithAnyRole(req, ['gladiator']);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const rateLimitResponse = enforceRateLimit(`battle:${auth.uid}`, Limits.BATTLE_ACTION_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`battle:${auth.uid}`, Limits.BATTLE_ACTION_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const body = await req.json().catch(() => ({}));

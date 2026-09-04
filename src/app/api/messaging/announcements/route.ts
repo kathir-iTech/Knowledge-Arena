@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   if (!executiveAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const rateLimitResponse = enforceRateLimit(`msg:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
+  const rateLimitResponse = await enforceRateLimit(`msg:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
@@ -119,7 +119,7 @@ export async function PUT(req: NextRequest) {
   if (!executiveAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const rateLimitResponse = enforceRateLimit(`msg:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
+  const rateLimitResponse = await enforceRateLimit(`msg:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
@@ -164,7 +164,7 @@ export async function DELETE(req: NextRequest) {
   if (!executiveAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const rateLimitResponse = enforceRateLimit(`msg:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
+  const rateLimitResponse = await enforceRateLimit(`msg:${executiveAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {

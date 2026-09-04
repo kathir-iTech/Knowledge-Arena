@@ -18,9 +18,9 @@ export async function POST(req: Request) {
     const ip = getClientIp(req);
 
     if (type === 'login') {
-      const ipResult = rateLimiter.check(`login:ip:${ip}`, Limits.LOGIN_PER_IP);
+      const ipResult = await rateLimiter.check(`login:ip:${ip}`, Limits.LOGIN_PER_IP);
       const emailResult = identifier
-        ? rateLimiter.check(`login:email:${identifier.toLowerCase()}`, Limits.LOGIN_PER_EMAIL)
+        ? await rateLimiter.check(`login:email:${identifier.toLowerCase()}`, Limits.LOGIN_PER_EMAIL)
         : { allowed: true, remaining: Infinity, resetAt: 0 };
 
       if (!ipResult.allowed) {
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     }
 
     if (type === 'signup') {
-      const ipResult = rateLimiter.check(`signup:ip:${ip}`, Limits.SIGNUP_PER_IP);
+      const ipResult = await rateLimiter.check(`signup:ip:${ip}`, Limits.SIGNUP_PER_IP);
       if (!ipResult.allowed) {
         return NextResponse.json(
           { error: Limits.SIGNUP_PER_IP.message, retryAfter: Math.ceil((ipResult.resetAt - Date.now()) / 1000) },

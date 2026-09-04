@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ quiz
     if (res) { authResult = { uid: res.uid, role: r }; break; }
   }
   if (!authResult) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const _rl = enforceRateLimit(`read:${authResult.uid}`, Limits.READ_PER_USER);
+    const _rl = await enforceRateLimit(`read:${authResult.uid}`, Limits.READ_PER_USER);
     if (_rl) return _rl;
   const uid = authResult.uid;
   const role = authResult.role;

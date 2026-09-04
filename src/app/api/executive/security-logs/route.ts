@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const _rl = enforceRateLimit(`executive:security:${auth.uid}`, Limits.READ_PER_USER);
+    const _rl = await enforceRateLimit(`executive:security:${auth.uid}`, Limits.READ_PER_USER);
     if (_rl) return _rl;
 
     const { searchParams } = new URL(req.url);

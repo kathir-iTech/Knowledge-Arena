@@ -120,7 +120,7 @@ export async function getExplanation(input: ExplanationInput): Promise<Explanati
       return { explanation: '', error: 'UNAUTHORIZED' };
     }
 
-    const rl = rateLimiter.check(`ai:explanation:${auth.uid}`, { maxRequests: 30, windowMs: 60000, message: 'Explanation rate limit exceeded (30/min).' });
+    const rl = await rateLimiter.check(`ai:explanation:${auth.uid}`, { maxRequests: 30, windowMs: 60000, message: 'Explanation rate limit exceeded (30/min).' });
     if (!rl.allowed) {
       return { explanation: '', error: 'EXPLANATION_RATE_LIMITED' };
     }

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const rateLimitResponse = enforceRateLimit(`ai:${auth.uid}`, Limits.AI_API_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`ai:${auth.uid}`, Limits.AI_API_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const recommendations = await getQuizRecommendations(auth.uid);

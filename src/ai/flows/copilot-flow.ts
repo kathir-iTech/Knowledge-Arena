@@ -142,7 +142,7 @@ export async function copilotAssist(input: CopilotInput): Promise<CopilotOutput 
     const uid = execAuth?.uid ?? cmdAuth!.uid;
     const role = execAuth ? 'executive' : 'commander';
 
-    const rl = rateLimiter.check(`ai:copilot:${uid}`, { maxRequests: 10, windowMs: 60000, message: 'Copilot rate limit exceeded (10/min).' });
+    const rl = await rateLimiter.check(`ai:copilot:${uid}`, { maxRequests: 10, windowMs: 60000, message: 'Copilot rate limit exceeded (10/min).' });
     if (!rl.allowed) {
       return { suggestion: '', generatedQuestion: null, error: 'COPILOT_RATE_LIMITED' };
     }
