@@ -143,6 +143,18 @@ Vercel still **UNVERIFIED** until live upload tested on production (required by 
 
 **Tier 3D — arena/notify fan-out:** `src/app/api/arena/notify/route.ts:23-59` — 1 read (gladiators query) + N writes (per-gladiator `notificationService.create`, chunked concurrency 20), with a 500-gladiator hard cap (`:32-35`). Inherent fan-out; bounded and guarded. **TRACED — accepted, no change.**
 
+**Tier 4 — UI regression sweep (46 routes, grouped T4-1..T4-6):** All groups share the same static + responsive results. **Palette — CLEAN:** the app uses only semantic CSS variables (`--primary` 15 68%, `--accent` 38 59%, `--success` 106 23%, `--warning` 38 59% — earthy red/amber/olive theme; `themeColor #8B1E2A` in `layout.tsx:32`); grep for hardcoded Tailwind color families (`emerald/amber/rose/blue/indigo/violet/teal/cyan/pink/orange/green/red/yellow`) and arbitrary `bg-[#]/text-[#]` across all `src/**/*.tsx` → **0 violations**. **Dead buttons/links — CLEAN:** no empty `onClick={()=>{}}`, no `href="#"`, no placeholder-destination Links; all `<Link href>` resolve to real routes (verified across landing, dashboard, portals). Only in-page anchors are legitimate a11y/nav (`#main-content` skip-link, `#demo` hero CTA). **Responsive overflow — CLEAN:** new `tests/phase114-responsive.spec.ts` renders 5 public pages (shared layout + landing + login + special states) at 375/768/1440 and asserts no horizontal scroll — **15/15 pass** (see §4 evidence). Authenticated portal pages render behind role gate (middleware 307) so can't be visually swept without creds; their shared shell uses the same clean layout.
+
+Per-group route coverage:
+- **T4-1 Auth/shared/layout:** `/`, `/login`, `/kicked`, `/cheating-detected`, `/force-password-change`, `/create-quiz` — static + responsive CLEAN.
+- **T4-2 Commander:** `/commander/*` (dashboard, requests, profile, notifications ×[id], messages, history, edit-arena/[quizId], analysis/[quizId]) — static CLEAN.
+- **T4-3 Gladiator + battle:** `/gladiator/*` (dashboard, history, profile, notifications ×[id]) + `/battle/[roomCode]` — static CLEAN.
+- **T4-4 Executive ops/overview:** dashboard, command-center, analytics, settings, workspace, search, messages — static CLEAN.
+- **T4-5 Executive people:** commanders, students, users/[uid], requests, profile — static CLEAN.
+- **T4-6 Executive content/systems:** question-bank (+[id], +sets/[setId]), battles (+[id]), announcements ×[id], notifications ×[id], backup, audit-logs, ai-logs, security — static CLEAN.
+
+No code changes required — Tier 4 findings are all **CONFIRMED clean**; the only new artifact is the responsive regression spec.
+
 ---
 
 ## 6. Plain-Language Summary
