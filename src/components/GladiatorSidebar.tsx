@@ -20,13 +20,16 @@ import { useFirebase } from '@/firebase';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { AvatarEditor } from './AvatarEditor';
 import { cn } from '@/lib/utils';
+import { QUIZ_ABANDONED_AFTER_MS } from '@/lib/constants';
+import { collectionGroup, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 const GladiatorSidebar = () => {
   const { user, logout } = useAuth();
-  const { auth } = useFirebase();
+  const { auth, firestore } = useFirebase();
   const pathname = usePathname();
   const [isAvatarEditorOpen, setAvatarEditorOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const [isInBattle, setIsInBattle] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -47,6 +50,70 @@ const GladiatorSidebar = () => {
     const interval = setInterval(fetchUnread, 15000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [user, auth]);
+
+  // Part 6B: real-time listener (replaces 15s polling) + zombie staleness.
+  // Listens to participants COLLECTION_GROUP where user_id==uid; on change
+  // fetches parent quizzes and applies QUIZ_ABANDONED_AFTER_MS staleness so
+  // a zombie live arena does not trap logout. Reads only on actual changes.
+  useEffect(() => {
+    if (!user) {
+      setIsInBattle(false);
+      return;
+    }
+    const uid = user.id;
+    const partsQ = query(collectionGroup(firestore, 'participants'), where('user_id', '==', uid));
+    let cancelled = false;
+    const unsub = onSnapshot(
+      partsQ,
+      async partsSnap => {
+        try {
+          const activeParts = partsSnap.docs.filter(d => {
+            const s = d.data()?.status;
+            return s === 'playing' || s === 'waiting' || s === 'live';
+          });
+          if (activeParts.length === 0) {
+            if (!cancelled) setIsInBattle(false);
+            return;
+          }
+          const quizIds = activeParts.map(d => d.ref.parent.parent?.id).filter(Boolean) as string[];
+          const uniqIds = Array.from(new Set(quizIds));
+          const quizDocs = await Promise.all(uniqIds.map(id => getDoc(doc(firestore, 'quizzes', id))));
+          let hasActive = false;
+          for (const qd of quizDocs) {
+            if (!qd.exists()) continue;
+            const data = qd.data() as any;
+            const status: string = data.status;
+            const isActiveStatus =
+              status === 'waiting' || status === 'ready' || status === 'starting' || status === 'live' || status === 'paused';
+            if (!isActiveStatus) continue;
+            if (status === 'live') {
+              const qsa = data.question_start_at;
+              const lastMs = typeof qsa === 'number' ? qsa : (qsa?.toMillis?.() ?? 0);
+              if (lastMs && Date.now() - lastMs >= QUIZ_ABANDONED_AFTER_MS) continue;
+            }
+            if (status === 'waiting') {
+              const created = typeof data.created_at === 'number' ? data.created_at : 0;
+              if (created && Date.now() - created >= QUIZ_ABANDONED_AFTER_MS) continue;
+            }
+            hasActive = true;
+            break;
+          }
+          if (!cancelled) setIsInBattle(hasActive);
+        } catch (e) {
+          console.error('[GladiatorSidebar] battle status check failed', e);
+          if (!cancelled) setIsInBattle(false);
+        }
+      },
+      err => {
+        console.error('[GladiatorSidebar] participants listener failed', err);
+        if (!cancelled) setIsInBattle(false);
+      }
+    );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [user, firestore]);
 
   if (!user) return null;
 
@@ -123,10 +190,22 @@ const GladiatorSidebar = () => {
         <SidebarFooter className="border-t border-sidebar-border/50 pt-3">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={logout} tooltip="Log Out" className="text-sidebar-foreground hover:text-destructive hover:bg-destructive/5">
+              <SidebarMenuButton
+                onClick={isInBattle ? undefined : logout}
+                tooltip={isInBattle ? 'Logout disabled while in battle' : 'Log Out'}
+                className={cn(
+                  'text-sidebar-foreground hover:text-destructive hover:bg-destructive/5',
+                  isInBattle && 'opacity-50 pointer-events-none'
+                )}
+                aria-disabled={isInBattle}
+                aria-label={isInBattle ? 'Logout disabled while in battle' : 'Log Out'}
+              >
                 <LogOut className="!size-[18px]" />
-                <span>Log Out</span>
+                <span>{isInBattle ? "Logout is disabled while you're in an active battle." : 'Log Out'}</span>
               </SidebarMenuButton>
+              {isInBattle && (
+                <p className="text-[11px] text-muted-foreground px-3 pt-1 leading-tight">Logout is disabled while you&apos;re in an active battle.</p>
+              )}
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

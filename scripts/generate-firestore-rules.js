@@ -24,9 +24,14 @@ function escapeRegExp(str) {
 
 function generate() {
   const template = fs.readFileSync(templatePath, 'utf8');
+  // Part 5A: per-arena domain (allowed_gladiator_domain snapshot) replaces
+  // the old global ALLOWED_GLADIATOR_EMAIL_DOMAIN placeholder. If the
+  // template still contains the placeholder, keep the legacy injection for
+  // backward compat; otherwise just copy the template verbatim (per-arena).
   if (!template.includes(placeholder)) {
-    console.error('[rules:generate] Placeholder not found; template may be out of date.');
-    process.exit(1);
+    fs.writeFileSync(outPath, template, 'utf8');
+    console.log('[rules:generate] firestore.rules written (per-arena domain — no global placeholder)');
+    return;
   }
 
   const rawDomain = (process.env.ALLOWED_GLADIATOR_EMAIL_DOMAIN || process.env.NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN || '').trim().toLowerCase();

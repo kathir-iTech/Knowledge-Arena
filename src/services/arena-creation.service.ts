@@ -95,6 +95,25 @@ export const arenaCreationService = {
       if (!existing.exists()) break;
       roomCode = generateRoomCode();
     }
+    // Part 5A: per-arena domain — copy Commander's institution_domain snapshot
+    // onto the arena document. Blank/null = open arena (fail-open).
+    let allowedDomain: string | null = null;
+    try {
+      const commanderSnap = await getDoc(doc(db, COLLECTIONS.USERS, createdBy));
+      if (commanderSnap.exists()) {
+        const raw = (commanderSnap.data() as any).institution_domain;
+        if (typeof raw === 'string' && raw.trim() !== '') {
+          const t = raw.trim().toLowerCase();
+          if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(t)) allowedDomain = t;
+        }
+        // fallback for legacy commanders without field: keep open (null) — the
+        // backfill script should set psgitech.ac.in for the real account.
+      }
+    } catch {
+      // Fail-open on read error: leave allowedDomain null so arena is open
+      // rather than blocking creation. Logged for visibility.
+      console.warn('[ArenaCreation] Could not read institution_domain for', createdBy);
+    }
     const allBatchData: Array<{
       ref: ReturnType<typeof doc>;
       data: Record<string, unknown>;
@@ -110,6 +129,7 @@ export const arenaCreationService = {
         created_by: createdBy,
         created_at: Date.now(),
         battle_mode: 'synchronized',
+        allowed_gladiator_domain: allowedDomain, // Part 5A: snapshot of institution_domain
       },
     });
 

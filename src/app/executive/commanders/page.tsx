@@ -39,6 +39,7 @@ interface Commander {
   uid: string;
   email: string;
   displayName: string;
+  institution_domain?: string | null;
   disabled: boolean;
   deleted?: boolean;
   createdAt: number;
@@ -80,8 +81,9 @@ export default function CommanderManagementPage() {
   const [usernameInput, setUsernameInput] = useState('');
   const [createPassword, setCreatePassword] = useState('');
   const [createDisplayName, setCreateDisplayName] = useState('');
+  const [createInstitutionDomain, setCreateInstitutionDomain] = useState('psgitech.ac.in');
   const [creating, setCreating] = useState(false);
-  const [createErrors, setCreateErrors] = useState<{ username?: string; password?: string }>({});
+  const [createErrors, setCreateErrors] = useState<{ username?: string; password?: string; institution_domain?: string }>({});
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string; displayName?: string } | null>(null);
   const [lastCreatedCredentials, setLastCreatedCredentials] = useState<{ email: string; password: string; displayName?: string } | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -135,11 +137,14 @@ export default function CommanderManagementPage() {
   const handleCreate = async () => {
     const usernameError = validateUsername(usernameInput);
     const passwordError = !createPassword || createPassword.length < 6 ? 'Password must be at least 6 characters.' : null;
-    const nextErrors: { username?: string; password?: string } = {};
+    const instRaw = createInstitutionDomain.trim().toLowerCase();
+    const instError = instRaw && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(instRaw) ? 'Use a domain like psgitech.ac.in or leave blank for open.' : null;
+    const nextErrors: { username?: string; password?: string; institution_domain?: string } = {};
     if (usernameError) nextErrors.username = usernameError;
     if (passwordError) nextErrors.password = passwordError;
+    if (instError) nextErrors.institution_domain = instError;
     setCreateErrors(nextErrors);
-    if (usernameError || passwordError) return;
+    if (usernameError || passwordError || instError) return;
     setCreating(true);
     setCreateErrors({});
     try {
@@ -148,7 +153,7 @@ export default function CommanderManagementPage() {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email, password: createPassword, displayName: createDisplayName.trim() || usernameInput.trim() }),
+        body: JSON.stringify({ email, password: createPassword, displayName: createDisplayName.trim() || usernameInput.trim(), institution_domain: instRaw || null }),
       });
       if (!res.ok) {
         const errBody = await safeParseJson(res).catch(() => null);
@@ -161,6 +166,7 @@ export default function CommanderManagementPage() {
       setUsernameInput('');
       setCreatePassword('');
       setCreateDisplayName('');
+      setCreateInstitutionDomain('psgitech.ac.in');
       setCreateErrors({});
       fetchCommanders();
     } catch (err: any) {
@@ -446,6 +452,13 @@ export default function CommanderManagementPage() {
                       {c.displayName}
                     </button>
                     <p className="text-sm text-muted-foreground truncate">{c.email}</p>
+                    <p className="text-xs truncate">
+                      {c.institution_domain ? (
+                        <span className="font-mono bg-secondary rounded px-1.5 py-0.5">@{c.institution_domain}</span>
+                      ) : (
+                        <span className="text-muted-foreground italic">Open (no domain)</span>
+                      )}
+                    </p>
                   </div>
                 </div>
                 <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground mx-4">
@@ -574,6 +587,22 @@ export default function CommanderManagementPage() {
                     <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="w-3 h-3" />{createErrors.password}</p>
                   ) : (
                     <p className="text-xs text-muted-foreground">The commander will be asked to change this on first login.</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="institutionDomain">Institution domain</Label>
+                  <Input
+                    id="institutionDomain"
+                    value={createInstitutionDomain}
+                    onChange={e => { setCreateInstitutionDomain(e.target.value); if (createErrors.institution_domain) setCreateErrors(prev => ({ ...prev, institution_domain: undefined })); }}
+                    placeholder="psgitech.ac.in (blank = open to anyone)"
+                    aria-invalid={!!createErrors.institution_domain}
+                    disabled={creating}
+                  />
+                  {createErrors.institution_domain ? (
+                    <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="w-3 h-3" />{createErrors.institution_domain}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Gladiators must have this email domain to join this commander&apos;s arenas. Blank = open.</p>
                   )}
                 </div>
               </div>
