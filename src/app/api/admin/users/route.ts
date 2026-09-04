@@ -29,7 +29,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { email, password, displayName } = await req.json();
+    const { email, password, displayName, institution_domain, institutionDomain } = await req.json();
+    // institution_domain: per-Commander allowed gladiator email domain (e.g. psgitech.ac.in).
+    // Blank/null = open (no restriction) — fail-open is safer than failing closed. Default new commanders to psgitech.ac.in.
+    let rawInstDomain = (institution_domain ?? institutionDomain ?? 'psgitech.ac.in') as string | null;
+    if (typeof rawInstDomain === 'string') rawInstDomain = rawInstDomain.trim().toLowerCase();
+    else rawInstDomain = null;
+    // Normalize blank to null (open) but keep explicit empty as open; validate if non-empty.
+    if (rawInstDomain === '') rawInstDomain = null;
+    if (rawInstDomain && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(rawInstDomain)) {
+      return NextResponse.json({ error: 'Invalid institution_domain. Use a domain like psgitech.ac.in or leave blank for open.' }, { status: 400 });
+    }
+    const institutionDomainToStore = rawInstDomain || null; // null = open
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
@@ -55,6 +66,7 @@ export async function POST(req: NextRequest) {
         email,
         displayName: displayName || email.split('@')[0],
         role: 'commander',
+        institution_domain: institutionDomainToStore, // per-Commander domain (Part 5A)
         createdAt: Date.now(),
         createdBy: auth.uid,
         disabled: false,
@@ -138,6 +150,7 @@ export async function GET(req: NextRequest) {
         email: data.email || null,
         displayName: data.displayName || data.name || null,
         role: data.role || role,
+        institution_domain: data.institution_domain ?? null, // Part 5A
         disabled: typeof data.disabled === 'boolean' ? data.disabled : false,
         createdAt: data.createdAt || null,
       };
@@ -241,7 +254,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { uid, disabled, password, resetPassword, displayName } = await req.json();
+    const { uid, disabled, password, resetPassword, displayName, institution_domain, institutionDomain } = await req.json();
 
     if (!uid) {
       return NextResponse.json({ error: 'uid is required' }, { status: 400 });
@@ -339,6 +352,32 @@ export async function PATCH(req: NextRequest) {
         metadata: { commanderId: uid, displayName: trimmed },
       });
       return NextResponse.json({ success: true, uid, displayName: trimmed });
+    }
+
+    if (typeof institution_domain !== 'undefined' || typeof institutionDomain !== 'undefined') {
+      const raw = (institution_domain ?? institutionDomain) as string | null;
+      let normalized: string | null = null;
+      if (raw === null || raw === '') normalized = null; // open
+      else if (typeof raw === 'string') {
+        const t = raw.trim().toLowerCase();
+        if (t === '') normalized = null;
+        else {
+          if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(t)) {
+            return NextResponse.json({ error: 'Invalid institution_domain. Use like psgitech.ac.in or blank for open.' }, { status: 400 });
+          }
+          normalized = t;
+        }
+      }
+      await getAdminDb().collection('users').doc(uid).set({ institution_domain: normalized }, { merge: true });
+      await auditService.record({
+        timestamp: Date.now(),
+        actor: auth.uid,
+        actorRole: 'executive',
+        action: 'commander_domain_updated',
+        target: uid,
+        metadata: { institution_domain: normalized },
+      });
+      return NextResponse.json({ success: true, uid, institution_domain: normalized });
     }
 
     return NextResponse.json({ error: 'No valid operation specified' }, { status: 400 });

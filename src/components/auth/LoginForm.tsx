@@ -21,8 +21,6 @@ interface LoginFormProps {
   initialValues?: { email?: string; password?: string };
 }
 
-const GLADIATOR_DOMAIN = (process.env.NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN || '').trim().toLowerCase();
-
 export function LoginForm({ initialValues }: LoginFormProps = {}) {
   const { login, signInWithGoogle } = useAuth();
   const { toast } = useToast();
@@ -57,14 +55,10 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
   return (
     <Card>
       <CardContent className="pt-6 px-4 sm:px-6 space-y-6">
-        {/* Section 1: Gladiators — Sign in with Google */}
+        {/* Section 1: Gladiators — Sign in with Google (Part 5A: open signup) */}
         <div className="space-y-3">
           <h2 className="text-sm font-semibold">Gladiators — Sign in with Google</h2>
-          {GLADIATOR_DOMAIN ? (
-            <p className="text-xs text-muted-foreground" role="note">
-              Use your <span className="font-semibold text-foreground">@{GLADIATOR_DOMAIN}</span> account to continue
-            </p>
-          ) : null}
+          <p className="text-xs text-muted-foreground" role="note">Any Google account can sign in. Battle access is controlled per arena.</p>
           <Button type="button" variant="outline" className="w-full h-11" onClick={onGoogleSignIn} disabled={isLoading} aria-label="Continue with Google — Gladiators">
             <svg className="mr-2 h-4 w-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>

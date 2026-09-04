@@ -86,6 +86,19 @@ export const participantService = {
       if (userSnap.exists() && userSnap.data()?.disabled === true) {
         throw new Error('Your account has been disabled. Please contact an administrator.');
       }
+      // Part 5A: per-arena domain — friendly client check before Firestore rule rejects.
+      // Commander/creator and blank domain are allowed through.
+      const allowedDomainRaw = (quizData as any).allowed_gladiator_domain as string | null | undefined;
+      const allowedDomain = typeof allowedDomainRaw === 'string' ? allowedDomainRaw.trim().toLowerCase() : '';
+      if (allowedDomain && userId !== quizData.created_by) {
+        const emailRaw = (userSnap.exists() ? (userSnap.data() as any).email : null) as string | null | undefined;
+        const emailLower = typeof emailRaw === 'string' ? emailRaw.trim().toLowerCase() : '';
+        const parts = emailLower.split('@');
+        const emailDomain = parts.length === 2 ? parts[1] : '';
+        if (emailDomain !== allowedDomain) {
+          throw new Error(`This battle is only open to @${allowedDomain} students.`);
+        }
+      }
 
       const participantRef = doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS, userId);
       const existingPartSnap = await transaction.get(participantRef);

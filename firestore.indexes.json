@@ -143,6 +143,13 @@
       "collectionGroup": "participants",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "participants",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
         { "fieldPath": "user_id", "order": "ASCENDING" },
         { "fieldPath": "finished_at", "order": "DESCENDING" }
       ]

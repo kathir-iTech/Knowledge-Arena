@@ -1,3 +1,7 @@
+// Storage is NOT provisioned on this Firebase project (Spark plan, requires Blaze).
+// This file is inert — kept only so `firebase.json` storage block does not error
+// on `firebase init`. Do NOT deploy with `firebase deploy --only storage`; use
+// `firebase deploy --only firestore:rules,firestore:indexes` (see Part 2 hotfix).
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {

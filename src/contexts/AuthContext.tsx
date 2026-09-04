@@ -33,12 +33,11 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Gladiator sign-up email-domain lock (Phase 68). Configured via
-// NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN (public twin of the server-side
-// ALLOWED_GLADIATOR_EMAIL_DOMAIN used by scripts/generate-firestore-rules.js).
-// Empty means unrestricted. Database-rules enforcement is the source of truth;
-// this only wires the Google `hd` hint and a clear error + sign-out UX.
-const ALLOWED_GLADIATOR_DOMAIN = (process.env.NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN || '').trim().toLowerCase();
+// Part 5A: Gladiator signup is OPEN — any Google account may create a
+// gladiator profile. Domain restriction is now per-arena at join time
+// (arena.allowed_gladiator_domain snapshot of Commander institution_domain).
+// The old global ALLOWED_GLADIATOR_DOMAIN env var is no longer used for
+// signup enforcement; it remains only for reference / legacy.
 const IS_EMULATOR = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true';
 
 const PROFILE_TIMEOUT_MS = 10000;
@@ -70,22 +69,9 @@ function isPermissionDenied(err: unknown): boolean {
     || msg.toLowerCase().includes('insufficient permissions');
 }
 
-function isDomainError(err: unknown): boolean {
-  const msg = getErrorMessage(err);
-  return msg.includes(`@${ALLOWED_GLADIATOR_DOMAIN}`) || msg.includes('requires a @');
-}
-
 function isTimeoutError(err: unknown): boolean {
   const msg = getErrorMessage(err).toLowerCase();
   return msg.includes('timed out');
-}
-
-function isAllowedGladiatorEmail(email: string | null | undefined): boolean {
-  if (!ALLOWED_GLADIATOR_DOMAIN) return true;
-  if (!email) return false;
-  const lower = email.toLowerCase();
-  if (IS_EMULATOR && lower === getDemoAccount('gladiator')?.email) return true;
-  return lower.endsWith(`@${ALLOWED_GLADIATOR_DOMAIN}`);
 }
 
 const EMOJIS = [
@@ -163,13 +149,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const photoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
           const avatar = photoURL || getRandomAvatar();
 
-          // Proactive domain guard BEFORE profile creation — server-side is
-          // Firestore rules, but this gives a clear error instead of a
-          // permission-denied. Existing profiles are already returned above.
-          if (ALLOWED_GLADIATOR_DOMAIN && !isAllowedGladiatorEmail(email)) {
-            throw new Error(`This arena requires a @${ALLOWED_GLADIATOR_DOMAIN} account`);
-          }
-
           const newUser: User = {
             id: uid,
             name: displayName,
@@ -192,19 +171,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       const msg = getErrorMessage(err);
       const permissionDenied = isPermissionDenied(err);
-      const domainErr = isDomainError(err);
       const timeout = isTimeoutError(err);
       const unknownRole = msg.includes('Account not recognized');
-      if (domainErr || unknownRole) {
+      if (unknownRole) {
         if (auth) { void signOut(auth).catch(() => {}); }
         setUser(null);
         setIsLoading(false);
-        const friendly = unknownRole ? 'Account not recognized — contact your Executive' : msg;
-        setAuthError(friendly);
+        setAuthError('Account not recognized — contact your Executive');
         toast({
           variant: 'destructive',
-          title: unknownRole ? 'Account Error' : 'Access Denied',
-          description: friendly,
+          title: 'Account Error',
+          description: 'Account not recognized — contact your Executive',
         });
         throw err;
       }
@@ -302,12 +279,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
         const msg = getErrorMessage(err);
         const permissionDenied = isPermissionDenied(err);
-        const domainErr = isDomainError(err);
         const timeout = isTimeoutError(err);
         const unknownRole = msg.includes('Account not recognized');
-        // Domain, permission, timeout and unknown-role errors already surfaced with authError + toast in
+        // Permission, timeout and unknown-role errors already surfaced with authError + toast in
         // ensureGladiatorProfile; don't silently fall back.
-        if (permissionDenied || domainErr || timeout || unknownRole) {
+        if (permissionDenied || timeout || unknownRole) {
           console.error('AuthContext: fetchUserDocument permission/domain/timeout/role error', err);
           // authError and isLoading already set by ensureGladiatorProfile; ensure we don't overwrite
           // But ensure loading is false if not already
@@ -343,50 +319,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // No-op: global timeout will clear loading if profile never resolves
         return;
       }
-      // Google self-sign-up is the gladiator flow. When a domain lock is
-      // configured, reject sign-ups from accounts outside it before a profile
-      // is created (the Firestore rules enforce the same boundary). Already
-      // provisioned profiles — including staff provisioned by an executive —
-      // keep working regardless of the sign-up domain.
-      if (ALLOWED_GLADIATOR_DOMAIN && !isAllowedGladiatorEmail(firebaseUser.email)) {
-        if (!firestore) {
-          fetchUserDocument(firebaseUser.uid);
-          return;
-        }
-        withTimeout(getDoc(doc(firestore, 'users', firebaseUser.uid)), PROFILE_TIMEOUT_MS, 'Profile read')
-          .then((docSnap) => {
-            if (docSnap.exists()) {
-              fetchUserDocument(firebaseUser.uid);
-              return;
-            }
-            if (auth) { void signOut(auth).catch(() => {}); }
-            setUser(null);
-            fetchInProgress.current = false;
-            fetchInProgressUid.current = null;
-            setIsLoading(false);
-            const msg = `This arena requires a @${ALLOWED_GLADIATOR_DOMAIN} account`;
-            setAuthError(msg);
-            toast({
-              variant: 'destructive',
-              title: 'Access Denied',
-              description: msg,
-            });
-          })
-          .catch((err) => {
-            if (isPermissionDenied(err) || isTimeoutError(err)) {
-              console.error('[Auth] domain guard getDoc failed', err);
-              if (auth) { void signOut(auth).catch(() => {}); }
-              setUser(null);
-              setIsLoading(false);
-              const friendly = isTimeoutError(err) ? 'Sign-in failed — please try again' : 'Sign-in failed — please try again';
-              setAuthError(friendly);
-              toast({ variant: "destructive", title: "Sign-in failed", description: isTimeoutError(err) ? "Request timed out. Please try again." : friendly });
-              return;
-            }
-            fetchUserDocument(firebaseUser.uid);
-          });
-        return;
-      }
+      // Part 5A: signup is open — no domain gate at sign-in. Domain is enforced
+      // at arena-join time via allowed_gladiator_domain.
       fetchUserDocument(firebaseUser.uid);
     } else {
       setUser(null);
@@ -541,11 +475,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({
       prompt: 'select_account',
-      ...(ALLOWED_GLADIATOR_DOMAIN ? { hd: ALLOWED_GLADIATOR_DOMAIN } : {}),
     });
     try {
       await withTimeout(signInWithPopup(auth, provider), 120000, 'Google redirect');
-      // onAuthStateChanged will fire and fetchUserDocument will handle profile creation
+      // onAuthStateChanged will fire and fetchUserDocument will handle profile creation.
+      // Part 5A: domain is enforced at arena-join, not at Google sign-in.
     } catch (error: unknown) {
       console.error('[Auth] signInWithPopup error', error);
       setIsLoading(false);

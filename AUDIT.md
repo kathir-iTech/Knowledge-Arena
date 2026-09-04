@@ -119,7 +119,13 @@ Warnings are only `@opentelemetry/instrumentation` expression (dev) — not erro
 
 ---
 
-## 5. PDF Forge — Final Resolution (Step 1)
+## 2. Storage Dependency Note
+
+- **Storage backend**: This project uses local file-based processing only. Firebase/Blob storage integration is not implemented.  
+  Running `firebase deploy --only storage` on a Spark/Free tier project will fail because Storage requires a Blaze plan.  
+  **Recommendation**: Remove `storage` from the firebase deploy command and add this note to future deploy scripts to avoid confusion.
+
+- **AUDIT.md** — updated with this finding (see section above).
 
 See `src/ai/flows/generate-quiz-pdf-flow.ts:597-628` fix. Root cause: `GlobalWorkerOptions.workerSrc = 'pdf.worker.mjs'` is a bare specifier rejected by Node ESM ("Cannot find package 'pdf.worker.mjs'"). Fix resolves absolute `file://` URL via `require.resolve` + `pathToFileURL`, fallback to `./pdf.worker.mjs` (relative to `pdf.mjs`). DOMMatrix/Path2D polyfill untouched. Verified locally with 3 real PDFs:
 

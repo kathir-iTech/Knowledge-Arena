@@ -23,23 +23,47 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // --- Gladiator email-domain lock ---
-    // The allowed domain is injected at deploy time by
-    // scripts/generate-firestore-rules.js (npm run rules:generate); it reads the
-    // ALLOWED_GLADIATOR_EMAIL_DOMAIN environment variable. An empty value
-    // disables the restriction. The value is regex-escaped by the generator.
-    function allowedGladiatorEmailDomain() {
-      return '';
+    // --- Gladiator email-domain lock (signup is OPEN — no domain restriction) ---
+    // Sign-up for gladiator role is unrestricted; any authenticated Google account
+    // may create a profile. Domain restriction is enforced at arena-join time
+    // instead, tied to the creating Commander's institution domain.
+    //
+    // Per-arena domain: each arena document has an optional
+    // allowed_gladiator_domain field set at creation time (copied from the
+    // creating Commander's institution_domain). If blank, the arena is open
+    // to all gladiators. If set, joining gladiators' email domain must match.
+    //
+    // This function reads the arena's field; returns '' when blank.
+    function getAllowedGladiatorDomain() {
+      let data = get(/databases/$(database)/documents/quizzes/$(quizId)).data;
+      // allowed_gladiator_domain is snapshot of Commander's institution_domain; null/'' = open.
+      return data.keys().hasAll(['allowed_gladiator_domain']) ? data.allowed_gladiator_domain : '';
     }
 
-    function isAllowedGladiatorEmail(data) {
-      let domain = allowedGladiatorEmailDomain();
-      let email = data.keys().hasAll(['email']) ? data.email : '';
-      let notAllowed = !(email is string) || email == '';
-      // Firestore rules are expression-only (no if statements), so the guard is
-      // a ternary chain; the matches() branch is only evaluated when the email is
-      // a non-empty string.
-      return domain == '' ? true : (notAllowed ? false : email.lower().matches('.*@' + domain + '$'));
+    // For quiz create: ensure requested allowed_gladiator_domain matches
+    // creator's institution_domain (or both open). Prevents spoofing other
+    // institution's domain. Executives may set any.
+    function isAllowedDomainValidForCreate() {
+      if (isExecutive()) return true;
+      let requested = request.resource.data.keys().hasAll(['allowed_gladiator_domain'])
+        ? request.resource.data.allowed_gladiator_domain : null;
+      let commanderDomain = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.institution_domain;
+      let reqNorm = requested is string ? requested : '';
+      let cmdNorm = commanderDomain is string ? commanderDomain : '';
+      // Normalize: trim not possible in rules, but treat '' and null as open; compare lowercased
+      return reqNorm.lower() == cmdNorm.lower();
+    }
+
+    function isEmailDomainAllowed(email) {
+      let domain = getAllowedGladiatorDomain();
+      // Blank/null/empty = open arena (fail-open per product call).
+      if (!(domain is string) || domain == '' || domain.trim() == '') return true;
+      if (!(email is string) || email == '') return false;
+      let lowerEmail = email.lower();
+      let lowerDomain = domain.lower();
+      // Exact domain match after @ (prevents notpsgitech.ac.in bypass). Use split to avoid regex-escaping dots.
+      let parts = lowerEmail.split('@');
+      return parts.size() == 2 && parts[1] == lowerDomain;
     }
 
     function isQuizCreator(quizId) {
@@ -69,12 +93,12 @@ service cloud.firestore {
       let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
       let questionPath = /databases/$(database)/documents/quizzes/$(quizId)/questions/$(questionId);
       let partPath = /databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId);
-      // Member access on a missing map key raises an evaluation error in rules,
-      // and `??` is not supported, so field presence is probed via keys().hasAll.
       let part = exists(partPath) ? get(partPath).data : null;
       let hasOrder = part != null && part.keys().hasAll(['question_order']);
+      let idx = part != null && part.keys().hasAll(['current_question_index']) ? part.current_question_index : 0;
+      // Bounds check prevents evaluation error when index out of range (e.g. stale client)
       return hasOrder ? (
-        part.question_order[(part.keys().hasAll(['current_question_index']) ? part.current_question_index : 0)] == questionId
+        part.question_order.size() > idx && part.question_order[idx] == questionId
       ) : (
         exists(questionPath) && get(questionPath).data.sort_index == get(quizPath).data.current_question_index
       );
@@ -158,12 +182,12 @@ service cloud.firestore {
       // executive workspace/search/analytics) go through the Admin SDK, so
       // commanders have no client-side read need — preventing roster enumeration.
       allow read: if isOwner(userId) || isExecutive();
-      // Self-signup: only gladiator role allowed (no privilege escalation),
-      // only the profile fields a gladiator may set for themselves, and only an
-      // email inside the institution's allowed domain (where one is configured).
+      // Self-signup: only gladiator role allowed (no privilege escalation).
+      // Part 5A: signup is open — any authenticated Google account may create a
+      // gladiator profile. Domain restriction is enforced at arena-join time
+      // (participants create rule) via the arena's allowed_gladiator_domain.
       allow create: if isOwner(userId)
         && request.resource.data.role == 'gladiator'
-        && isAllowedGladiatorEmail(request.resource.data)
         && request.resource.data.keys().hasOnly(['name', 'email', 'avatar', 'role', 'onboarding_complete']);
       // Owners may only update their display name and avatar, and mark onboarding complete. Role, email,
       // mustChangePassword, disabled and all other fields are server-only.
@@ -186,7 +210,8 @@ service cloud.firestore {
         || (isSignedIn() && resource != null && resource.data.created_by == request.auth.uid)
         || (isSignedIn() && resource != null && resource.data.status in ['waiting', 'ready']);
       allow create: if isSignedIn() && (getRole() == 'commander' || getRole() == 'executive')
-        && request.resource.data.created_by == request.auth.uid;
+        && request.resource.data.created_by == request.auth.uid
+        && isAllowedDomainValidForCreate();
       allow update: if isLegalQuizUpdate(quizId);
       allow delete: if isQuizCreator(quizId);
 
@@ -244,12 +269,22 @@ service cloud.firestore {
         // the arena creation batch AND Gladiators joining later.
         // getAfter(quizPath) supports atomic batch where parent quiz is created
         // in the same batch — getAfter() sees the pending parent with status 'waiting'.
+        // NEW: joining gladiators' email domain must match the arena's
+        // allowed_gladiator_domain (set at creation time from the Commander's
+        // institution_domain). If the arena has no domain restriction (blank),
+        // the check is skipped and all gladiators may join.
         allow create: if isOwner(userId)
           && isNotBlocked(quizId, userId)
           && request.resource.data.user_id == userId
           && request.resource.data.lastSeen == request.time
           && request.resource.data.keys().hasOnly(['user_id', 'score', 'status', 'violations_count', 'ready', 'lastSeen', 'session_token', 'name'])
-          && getAfter(/databases/$(database)/documents/quizzes/$(quizId)).data.status in ['waiting', 'ready'];
+          && getAfter(/databases/$(database)/documents/quizzes/$(quizId)).data.status in ['waiting', 'ready']
+          // Domain check: gladiator's auth token email must match arena's
+          // allowed_gladiator_domain (snapshot of Commander's institution_domain).
+          // Blank = open. Commander creating their own participant in the same
+          // batch is exempt (their email is @knowledgearena.app, not the
+          // institution domain) — checked via isQuizCreatorAfter.
+          && (isQuizCreatorAfter(quizId) || isEmailDomainAllowed(request.auth.token.email));
         // Commander can update everyone (block/reset/flag). Gladiators can only:
         //  - increment violations (or block/flag themselves) in a single write
         //  - send heartbeat (lastSeen) updates, optionally with their session token
