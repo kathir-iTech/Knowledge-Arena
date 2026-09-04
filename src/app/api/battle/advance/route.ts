@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
-import { writeBattleLog, isCreator, battleErrorResponse, advanceQuestion, loadQuizDoc } from '@/lib/battle-server';
+import { writeBattleLog, isCreator, battleErrorResponse, advanceQuestion, loadQuizDoc, sweepStaleLiveArena } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +17,13 @@ export async function POST(req: NextRequest) {
     if (!quizId) return NextResponse.json({ error: 'Missing quizId' }, { status: 400 });
 
     const { data: quiz } = await loadQuizDoc(quizId);
+    if (await sweepStaleLiveArena(quizId, quiz)) {
+      // The arena was a zombie — do not advance it; warn the Commander.
+      return NextResponse.json(
+        { error: 'This battle was abandoned because it was inactive for too long.' },
+        { status: 409 }
+      );
+    }
     if (!isCreator(quiz, auth.uid)) {
       throw new Error('Only the Commander can advance the question');
     }

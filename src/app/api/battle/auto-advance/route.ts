@@ -13,6 +13,7 @@ import {
   writeBattleLog,
   battleErrorResponse,
   loadQuizDoc,
+  sweepStaleLiveArena,
 } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
@@ -46,6 +47,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: quiz } = await loadQuizDoc(quizId);
+    if (await sweepStaleLiveArena(quizId, quiz)) {
+      return NextResponse.json(
+        { error: 'This battle was abandoned because it was inactive for too long.' },
+        { status: 409 }
+      );
+    }
     if (quiz.status !== QUIZ_LIVE) {
       return NextResponse.json(
         { error: `Auto-advance requires a live arena (state: ${quiz.status})` },
