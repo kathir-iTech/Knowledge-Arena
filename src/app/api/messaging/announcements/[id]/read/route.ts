@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   if (!commanderAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const rateLimitResponse = enforceRateLimit(`msg:${commanderAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
+  const rateLimitResponse = await enforceRateLimit(`msg:${commanderAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {

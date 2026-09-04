@@ -437,7 +437,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
     const uid = execAuth?.uid || cmdAuth!.uid;
     const role = execAuth ? 'executive' : 'commander';
 
-    const rl = rateLimiter.check(`ai:pdf:${uid}`, { maxRequests: 5, windowMs: 60000, message: 'PDF Forge rate limit exceeded (5/min).' });
+    const rl = await rateLimiter.check(`ai:pdf:${uid}`, { maxRequests: 5, windowMs: 60000, message: 'PDF Forge rate limit exceeded (5/min).' });
     if (!rl.allowed) {
       console.error('[Forge] Rate limited');
       return { questions: [], difficulty: input.difficulty, error: 'PDF_FORGE_RATE_LIMITED' };

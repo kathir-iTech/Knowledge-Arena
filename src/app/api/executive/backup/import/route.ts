@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rateLimitResponse = enforceRateLimit(`executive:backup:${auth.uid}`, Limits.EXECUTIVE_EXPORT_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`executive:backup:${auth.uid}`, Limits.EXECUTIVE_EXPORT_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const body = await req.json();

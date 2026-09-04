@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rateLimitResponse = enforceRateLimit(`auth:change:${decoded.uid}`, Limits.WRITE_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`auth:change:${decoded.uid}`, Limits.WRITE_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();

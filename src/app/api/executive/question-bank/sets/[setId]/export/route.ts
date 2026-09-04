@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ setI
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const rateLimitResponse = enforceRateLimit(`export:${auth.uid}`, Limits.EXECUTIVE_EXPORT_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`export:${auth.uid}`, Limits.EXECUTIVE_EXPORT_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const { setId } = await params;

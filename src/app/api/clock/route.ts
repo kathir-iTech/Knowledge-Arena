@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 // No auth required: server time is non-sensitive and needed for gameplay sync.
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = enforceRateLimit(`clock:${ip}`, Limits.READ_PER_USER);
+  const rl = await enforceRateLimit(`clock:${ip}`, Limits.READ_PER_USER);
   if (rl) return rl;
   return NextResponse.json({ serverTime: Date.now() });
 }

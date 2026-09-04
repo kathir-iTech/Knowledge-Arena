@@ -14,7 +14,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const auth = executiveAuth || commanderAuth!;
-    const rateLimitResponse = enforceRateLimit(`msg:${auth.uid}`, Limits.MESSAGE_POST_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`msg:${auth.uid}`, Limits.MESSAGE_POST_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const { id } = await params;
@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!commanderAuth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const rateLimitResponse = enforceRateLimit(`msg:${commanderAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`msg:${commanderAuth.uid}`, Limits.MESSAGE_POST_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const { id } = await params;

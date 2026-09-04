@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const rateLimitResponse = enforceRateLimit(`insights:${auth.uid}`, Limits.AI_API_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`insights:${auth.uid}`, Limits.AI_API_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const now = Date.now();

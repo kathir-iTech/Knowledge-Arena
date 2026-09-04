@@ -144,7 +144,7 @@ export async function generateMindMap(input: MindMapInput): Promise<MindMapData 
       return { title: '', nodes: [], connections: [], error: 'UNAUTHORIZED' };
     }
 
-    const rl = rateLimiter.check(`ai:mindmap:${auth.uid}`, { maxRequests: 5, windowMs: 60000, message: 'Mind map rate limit exceeded (5/min).' });
+    const rl = await rateLimiter.check(`ai:mindmap:${auth.uid}`, { maxRequests: 5, windowMs: 60000, message: 'Mind map rate limit exceeded (5/min).' });
     if (!rl.allowed) {
       return { title: '', nodes: [], connections: [], error: 'MINDMAP_RATE_LIMITED' };
     }

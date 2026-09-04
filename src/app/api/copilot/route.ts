@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const uidRl = enforceRateLimit(`ai:copilot:${auth.uid}`, Limits.AI_COPILOT_PER_USER);
+    const uidRl = await enforceRateLimit(`ai:copilot:${auth.uid}`, Limits.AI_COPILOT_PER_USER);
     if (uidRl) return uidRl;
 
     const result = await copilotAssist({

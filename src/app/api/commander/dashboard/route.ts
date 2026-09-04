@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const _rl = enforceRateLimit(`commander:dashboard:${auth.uid}`, Limits.READ_PER_USER);
+    const _rl = await enforceRateLimit(`commander:dashboard:${auth.uid}`, Limits.READ_PER_USER);
     if (_rl) return _rl;
 
     const quizzesSnap = await getAdminDb().collection('quizzes')

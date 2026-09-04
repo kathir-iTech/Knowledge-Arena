@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     const auth = executiveAuth || commanderAuth!;
     const role = executiveAuth ? 'executive' : 'commander';
 
-    const rateLimitResponse = enforceRateLimit(`audit:${auth.uid}`, Limits.AUDIT_WRITE_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`audit:${auth.uid}`, Limits.AUDIT_WRITE_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     let action: unknown;

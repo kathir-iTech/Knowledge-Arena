@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 export async function GET(req: NextRequest) {
   const auth = await verifyFirebaseTokenWithRole(req, 'gladiator');
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const _rl = enforceRateLimit(`gladiator:personalization:${auth.uid}`, Limits.READ_PER_USER);
+    const _rl = await enforceRateLimit(`gladiator:personalization:${auth.uid}`, Limits.READ_PER_USER);
     if (_rl) return _rl;
 
   const uid = auth.uid;

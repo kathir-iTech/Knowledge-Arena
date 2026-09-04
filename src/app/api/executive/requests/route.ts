@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
     const body = await req.json();
     const { id, status, comment, replyAttachments } = body;
@@ -113,7 +113,7 @@ export async function DELETE(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const { searchParams } = new URL(req.url);

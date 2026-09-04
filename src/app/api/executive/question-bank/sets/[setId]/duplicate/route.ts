@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ set
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const rateLimitResponse = enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
+    const rateLimitResponse = await enforceRateLimit(`write:${auth.uid}`, Limits.WRITE_PER_USER);
     if (rateLimitResponse) return rateLimitResponse;
 
     const { setId } = await params;
