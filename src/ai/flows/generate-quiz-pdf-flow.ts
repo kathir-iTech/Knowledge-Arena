@@ -495,6 +495,128 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
   }
 }
 
+// ── Client-side-extraction entry point ───────────────────────────────
+// The Commander-facing upload flow extracts text and per-page images in
+// the browser (src/lib/prepare-documents.ts) and sends only this small
+// derived payload. This sidesteps Vercel's hard 4.5 MB Function
+// request/response ceiling that previously rejected multi-megabyte
+// base64 data URIs with 413 FUNCTION_PAYLOAD_TOO_LARGE (which surfaced
+// to the UI as the opaque "unexpected response" error).
+//
+// Vercel Functions cap the request body at ~4.5 MB; base64 inflates a
+// raw file by ~33%. A 4.44 MB PDF became ~5.92 MB of base64 in the old
+// `pdfDataUri` JSON body. The legacy generateQuizFromPDF route remains
+// for non-browser/API consumers with smaller files.
+
+const ExtractedDocumentSchema = z.object({
+  name: z.string().optional(),
+  kind: z.enum(['pdf', 'docx', 'txt', 'md', 'image']),
+  text: z.string().optional(),
+  imageDataUris: z.array(z.string()).optional(),
+});
+
+const GenerateQuizFromExtractedInputSchema = z.object({
+  documents: z.array(ExtractedDocumentSchema).min(1).max(10),
+  difficulty: z.enum(['easy', 'moderate', 'hard']),
+  questionCount: z.number().min(1).max(30),
+  idToken: z.string(),
+});
+type GenerateQuizFromExtractedInput = z.infer<typeof GenerateQuizFromExtractedInputSchema>;
+
+const MAX_EXTRACTED_IMAGES = 24;
+const MAX_EXTRACTED_TEXT_CHARS = 500000;
+
+async function authorizeForgeRequest(idToken: string): Promise<{ uid: string; role: 'executive' | 'commander' } | null> {
+  const execAuth = await verifyFirebaseTokenWithRole(idToken, 'executive');
+  if (execAuth) return { uid: execAuth.uid, role: 'executive' };
+  const cmdAuth = await verifyFirebaseTokenWithRole(idToken, 'commander');
+  if (cmdAuth) return { uid: cmdAuth.uid, role: 'commander' };
+  return null;
+}
+
+export async function generateQuizFromExtracted(input: GenerateQuizFromExtractedInput): Promise<GenerateQuizFromPDFOutput> {
+  const startTime = Date.now();
+  const fileTypes = input.documents.map((d) => d.kind);
+
+  try {
+    const auth = await authorizeForgeRequest(input.idToken);
+    if (!auth) {
+      console.error('[Forge] Unauthorized (extracted)');
+      return { questions: [], difficulty: input.difficulty, error: 'UNAUTHORIZED' };
+    }
+    const uid = auth.uid;
+    const role = auth.role;
+
+    const rl = await rateLimiter.check(`ai:pdf:${uid}`, { maxRequests: 5, windowMs: 60000, message: 'PDF Forge rate limit exceeded (5/min).' });
+    if (!rl.allowed) {
+      console.error('[Forge] Rate limited (extracted)');
+      return { questions: [], difficulty: input.difficulty, error: 'PDF_FORGE_RATE_LIMITED' };
+    }
+
+    // Structural guards — the browser already caps these, but defend the
+    // server-side budget for non-browser callers too.
+    const texts: string[] = [];
+    const imageDataUris: string[] = [];
+    for (const d of input.documents) {
+      if (d.text) texts.push(d.text);
+      for (const img of d.imageDataUris || []) {
+        imageDataUris.push(img);
+      }
+      if (imageDataUris.length > MAX_EXTRACTED_IMAGES) {
+        return { questions: [], difficulty: input.difficulty, error: 'PDF_TOO_LARGE' };
+      }
+    }
+    const combinedText = texts.join('\n\n---\n\n');
+    if (combinedText.length > MAX_EXTRACTED_TEXT_CHARS) {
+      return { questions: [], difficulty: input.difficulty, error: 'PDF_TOO_LARGE' };
+    }
+
+    const result = await generateContentFromExtracted(combinedText, imageDataUris, input.difficulty, input.questionCount);
+
+    const durationMs = Date.now() - startTime;
+    aiLogService.record({
+      userId: uid,
+      userRole: role,
+      model: result.engine || 'unknown',
+      fileCount: input.documents.length,
+      fileTypes,
+      questionCount: result.questions?.length || 0,
+      difficulty: input.difficulty,
+      success: !result.error && (result.questions?.length || 0) > 0,
+      durationMs,
+      error: result.error || undefined,
+      metadata: result.error ? { rawErrors: result.error } : undefined,
+    });
+
+    if (result.questions && result.questions.length > 0) {
+      const warnings = validateQuestions(result.questions);
+      if (warnings.length > 0 && !result.error) {
+        (result as any).warnings = warnings;
+      }
+    }
+
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Forge] Fatal error (extracted):', msg, '\n', formatError(err));
+    const durationMs = Date.now() - startTime;
+    aiLogService.record({
+      userId: 'unknown',
+      userRole: 'unknown',
+      model: 'unknown',
+      fileCount: input.documents.length,
+      fileTypes,
+      questionCount: 0,
+      difficulty: input.difficulty,
+      success: false,
+      durationMs,
+      error: msg,
+      metadata: { fullError: err instanceof Error ? formatError(err) : String(err) },
+    });
+    return { questions: [], difficulty: input.difficulty, error: msg };
+  }
+}
+
 // ── Multi-format extraction ──────────────────────────────────────────
 
 const SEPARATOR = '||PDF_SEPARATOR||';
@@ -953,6 +1075,98 @@ Content:
 ${text}`;
 }
 
+// Shared generation step used by both the legacy `pdfDataUri` flow and the
+// client-side-extraction server action (generateQuizFromExtracted). Takes
+// already-extracted text + optional image data URIs; no file bytes cross
+// this boundary beyond the small derived payload.
+async function generateContentFromExtracted(
+  combinedText: string,
+  imageDataUris: string[],
+  difficulty: 'easy' | 'moderate' | 'hard',
+  questionCount: number
+): Promise<GenerateQuizFromPDFOutput> {
+  const text = combinedText.replace(/\s+/g, ' ').trim();
+
+  if (text.length < 20 && imageDataUris.length === 0) {
+    throw new Error('PDF_CONTENT_TOO_SHORT');
+  }
+
+  let result: GeminiResult;
+  if (imageDataUris.length > 0) {
+    result = await generatePromptWithImages(text, imageDataUris, difficulty, questionCount);
+  } else {
+    const MAX_CHUNK = 40000;
+    const chunks = chunkText(text, MAX_CHUNK);
+    const chunkCount = chunks.length;
+
+    if (chunkCount > 1) {
+      const perChunk = Math.max(1, Math.ceil(questionCount / chunkCount));
+      const allQuestions: QuizQuestions = [];
+      let lastEngine = '';
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const chunkResult = await callGeminiWithFallback(
+          buildPrompt(chunks[ci], difficulty, ci === chunks.length - 1 ? questionCount - allQuestions.length : perChunk)
+        );
+        if (chunkResult.ok) {
+          allQuestions.push(...chunkResult.output.questions);
+          lastEngine = chunkResult.engine;
+        }
+        if (allQuestions.length >= questionCount) break;
+      }
+      if (allQuestions.length > 0) {
+        result = { ok: true, output: { questions: allQuestions.slice(0, questionCount) }, engine: lastEngine };
+      } else {
+        result = { ok: false, reason: 'all_models_failed', errors: ['All chunks failed'] };
+      }
+    } else {
+      result = await callGeminiWithFallback(buildPrompt(text, difficulty, questionCount));
+    }
+  }
+
+  if (!result.ok) {
+    const rawErrors = result.errors.join(' || ');
+    console.error('[Forge] All models failed. RAW errors:', '\n' + rawErrors);
+    let errorMsg: string;
+    // Extract retryAfter if any error contains it (e.g., "retryAfter 32s")
+    const retryMatch = rawErrors.match(/retryAfter\s*(\d+)s/i);
+    const retryHint = retryMatch ? ` Retry after ~${retryMatch[1]}s.` : '';
+    const quotaPrefix = rawErrors.includes('ALL_GEMINI_KEYS_EXHAUSTED')
+      ? 'ALL_GEMINI_KEYS_EXHAUSTED: All AI capacity exhausted.'
+      : 'quota_exceeded';
+    switch (result.reason) {
+      case 'quota_exceeded':
+        errorMsg = `${quotaPrefix}: AI generation temporarily unavailable due to quota limits.${retryHint} Please wait a few minutes before retrying. RAW: ${rawErrors}`;
+        break;
+      case 'timeout':
+        errorMsg = `AI generation timed out after ${Math.round(GEMINI_TIMEOUT_MS / 1000)}s.${retryHint} Your PDF may be too large or complex. Try with fewer questions or a smaller PDF. RAW: ${rawErrors}`;
+        break;
+      default: {
+        // For all_models_failed, check if underlying was actually quota or timeout but misclassified due to mixed errors
+        if (rawErrors.toLowerCase().includes('quota') || rawErrors.includes('429') || rawErrors.includes('ALL_GEMINI_KEYS_EXHAUSTED')) {
+          errorMsg = `${quotaPrefix}: AI generation quota exhausted.${retryHint} RAW: ${rawErrors}`;
+        } else if (rawErrors.includes('TIMEOUT:')) {
+          errorMsg = `AI generation timed out.${retryHint} RAW: ${rawErrors}`;
+        } else {
+          errorMsg = `AI generation failed. RAW: ${rawErrors}`;
+        }
+        break;
+      }
+    }
+    return {
+      questions: [],
+      difficulty,
+      engine: result.reason,
+      error: errorMsg,
+    };
+  }
+
+  return {
+    questions: result.output.questions,
+    difficulty,
+    engine: result.engine,
+  };
+}
+
 // ── Main flow ────────────────────────────────────────────────────────
 
 const generateQuizFromPDFFlow = ai.defineFlow(
@@ -967,86 +1181,6 @@ const generateQuizFromPDFFlow = ai.defineFlow(
       : [input.pdfDataUri];
 
     const { combinedText, imageDataUris } = await extractTextFromAllDocuments(dataUris);
-
-    const text = combinedText.replace(/\s+/g, ' ').trim();
-
-    if (text.length < 20 && imageDataUris.length === 0) {
-      throw new Error('PDF_CONTENT_TOO_SHORT');
-    }
-
-    let result: GeminiResult;
-    if (imageDataUris.length > 0) {
-      result = await generatePromptWithImages(text, imageDataUris, input.difficulty, input.questionCount);
-    } else {
-      const MAX_CHUNK = 40000;
-      const chunks = chunkText(text, MAX_CHUNK);
-      const chunkCount = chunks.length;
-
-      if (chunkCount > 1) {
-        const perChunk = Math.max(1, Math.ceil(input.questionCount / chunkCount));
-        const allQuestions: QuizQuestions = [];
-        let lastEngine = '';
-        for (let ci = 0; ci < chunks.length; ci++) {
-          const chunkResult = await callGeminiWithFallback(
-            buildPrompt(chunks[ci], input.difficulty, ci === chunks.length - 1 ? input.questionCount - allQuestions.length : perChunk)
-          );
-          if (chunkResult.ok) {
-            allQuestions.push(...chunkResult.output.questions);
-            lastEngine = chunkResult.engine;
-          }
-          if (allQuestions.length >= input.questionCount) break;
-        }
-        if (allQuestions.length > 0) {
-          result = { ok: true, output: { questions: allQuestions.slice(0, input.questionCount) }, engine: lastEngine };
-        } else {
-          result = { ok: false, reason: 'all_models_failed', errors: ['All chunks failed'] };
-        }
-      } else {
-        result = await callGeminiWithFallback(buildPrompt(text, input.difficulty, input.questionCount));
-      }
-    }
-
-    if (!result.ok) {
-      const rawErrors = result.errors.join(' || ');
-      console.error('[Forge] All models failed. RAW errors:', '\n' + rawErrors);
-      let errorMsg: string;
-      // Extract retryAfter if any error contains it (e.g., "retryAfter 32s")
-      const retryMatch = rawErrors.match(/retryAfter\s*(\d+)s/i);
-      const retryHint = retryMatch ? ` Retry after ~${retryMatch[1]}s.` : '';
-      const quotaPrefix = rawErrors.includes('ALL_GEMINI_KEYS_EXHAUSTED')
-        ? 'ALL_GEMINI_KEYS_EXHAUSTED: All AI capacity exhausted.'
-        : 'quota_exceeded';
-      switch (result.reason) {
-        case 'quota_exceeded':
-          errorMsg = `${quotaPrefix}: AI generation temporarily unavailable due to quota limits.${retryHint} Please wait a few minutes before retrying. RAW: ${rawErrors}`;
-          break;
-        case 'timeout':
-          errorMsg = `AI generation timed out after ${Math.round(GEMINI_TIMEOUT_MS / 1000)}s.${retryHint} Your PDF may be too large or complex. Try with fewer questions or a smaller PDF. RAW: ${rawErrors}`;
-          break;
-        default: {
-          // For all_models_failed, check if underlying was actually quota or timeout but misclassified due to mixed errors
-          if (rawErrors.toLowerCase().includes('quota') || rawErrors.includes('429') || rawErrors.includes('ALL_GEMINI_KEYS_EXHAUSTED')) {
-            errorMsg = `${quotaPrefix}: AI generation quota exhausted.${retryHint} RAW: ${rawErrors}`;
-          } else if (rawErrors.includes('TIMEOUT:')) {
-            errorMsg = `AI generation timed out.${retryHint} RAW: ${rawErrors}`;
-          } else {
-            errorMsg = `AI generation failed. RAW: ${rawErrors}`;
-          }
-          break;
-        }
-      }
-      return {
-        questions: [],
-        difficulty: input.difficulty,
-        engine: result.reason,
-        error: errorMsg,
-      };
-    }
-
-    return {
-      questions: result.output.questions,
-      difficulty: input.difficulty,
-      engine: result.engine,
-    };
+    return generateContentFromExtracted(combinedText, imageDataUris, input.difficulty, input.questionCount);
   }
 );
