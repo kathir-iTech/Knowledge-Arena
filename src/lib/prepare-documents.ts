@@ -15,8 +15,13 @@
  * existing Gemini vision path. Only this small derived payload crosses
  * the wire, keeping the request well under the limit.
  */
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { unzipSync } from 'fflate';
+
+// pdfjs-dist worker asset, served statically from /public. The `?url`
+// import form does not work for `.mjs` sources (webpack parses them as
+// modules and exposes no default export), so we pin it to a public URL
+// that the browser fetches to spawn its worker.
+const PDF_WORKER_SRC = '/pdfjs/pdf.worker.min.js';
 
 export type DocumentKind = 'pdf' | 'docx' | 'txt' | 'md' | 'image';
 
@@ -77,7 +82,7 @@ async function getPdfJs(): Promise<PdfJsModule> {
     pdfjsPromise = (async () => {
       const mod = (await import('pdfjs-dist')) as unknown as PdfJsModule;
       if (typeof window !== 'undefined') {
-        mod.GlobalWorkerOptions.workerSrc = workerUrl;
+        mod.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
       }
       return mod;
     })();
