@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key, RefreshCw, Check, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
+import { generateQuizFromExtracted } from '@/ai/flows/generate-quiz-pdf-flow';
+import { prepareDocuments, type PreparedDocument } from '@/lib/prepare-documents';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
 
@@ -20,7 +21,7 @@ interface GeneratedQuestion {
 }
 
 interface PDFQuizGeneratorProps {
-  onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string, dataUri?: string, questionCount?: number, category?: string, documentName?: string) => void;
+  onQuestionsGenerated: (questions: GeneratedQuestion[], difficulty: string, documents?: PreparedDocument[], questionCount?: number, category?: string, documentName?: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   initialCategory?: string;
   showCategorySelector?: boolean;
@@ -64,6 +65,8 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
   const [stepError, setStepError] = useState<number | null>(null);
   const [fileStatuses, setFileStatuses] = useState<Array<{ name: string; status: 'pending' | 'reading' | 'done' | 'error' }>>([]);
   const [failedStepInfo, setFailedStepInfo] = useState<{ step: number; guidance: string } | null>(null);
+  const [extractionDetail, setExtractionDetail] = useState<string | null>(null);
+  const [truncationNote, setTruncationNote] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
@@ -140,19 +143,32 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
     try {
       setStage('reading');
       setActiveStep(0);
-      // Per-file extraction with status updates (same underlying FileReader logic)
-      const dataUris: string[] = [];
+      setExtractionDetail(null);
+      setTruncationNote(null);
+
+      // Step 0: Client-side document preparation. Text extraction and
+      // scanned-page imaging happen in the browser; only the small derived
+      // payload is sent to the server, keeping the request well under
+      // Vercel's 4.5 MB Function body ceiling (the old raw-base64 approach
+      // overflowed it for 3-5 MB files and surfaced as a generic
+      // "unexpected response").
+      const documents: PreparedDocument[] = [];
       for (let idx = 0; idx < files.length; idx++) {
         setFileStatuses(prev => prev.map((s, i) => i === idx ? { ...s, status: 'reading' as const } : s));
         const file = files[idx];
-        const uri = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(new Error('PDF_EXTRACTION_FAILED'));
-          reader.readAsDataURL(file);
+        const prepared = await prepareDocuments([file], (msg) => {
+          if (mountedRef.current) setExtractionDetail(msg);
         });
-        dataUris.push(uri);
+        if (prepared.length > 0) documents.push(prepared[0]);
         setFileStatuses(prev => prev.map((s, i) => i === idx ? { ...s, status: 'done' as const } : s));
+      }
+
+      const hasContent = documents.some(d => d.text.trim().length > 0 || d.imageDataUris.length > 0);
+      if (!hasContent) throw new Error("PDF_CONTENT_TOO_SHORT");
+
+      const truncatedNotes = documents.map(d => d.truncatedNote).filter(Boolean) as string[];
+      if (truncatedNotes.length > 0 && mountedRef.current) {
+        setTruncationNote(truncatedNotes.join(' '));
       }
 
       // Step 1: Sending to AI
@@ -164,9 +180,8 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
       // Step 2: Generating questions (AI call)
       setStage('generating');
       setActiveStep(2);
-      const combinedDataUri = dataUris.join('||PDF_SEPARATOR||');
-      const result = await generateQuizFromPDF({
-        pdfDataUri: combinedDataUri,
+      const result = await generateQuizFromExtracted({
+        documents,
         difficulty,
         questionCount,
         idToken,
@@ -186,8 +201,9 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
         setStage('complete');
         setActiveStep(-1);
         setFileStatuses([]);
-        toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions from ${files.length} document(s).` });
-        onQuestionsGenerated(result.questions, result.difficulty, dataUris[0], questionCount, category, files.length > 1 ? `${files[0].name} +${files.length - 1} more` : files[0]?.name);
+        const truncatedHint = truncationNote ? ` (${truncationNote})` : '';
+        toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions from ${files.length} document(s).${truncatedHint}` });
+        onQuestionsGenerated(result.questions, result.difficulty, documents, questionCount, category, files.length > 1 ? `${files[0].name} +${files.length - 1} more` : files[0]?.name);
       } else {
         throw new Error("AI_FAILED");
       }
@@ -203,6 +219,12 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
       if (raw.includes("AI_FAILED")) {
         msg = "Unable to generate questions. Please retry.";
         failedStep = 2; guidance = 'The AI could not produce usable questions. Retry, or try reducing the question count.';
+      } else if (raw.includes("413") || raw.includes("FUNCTION_PAYLOAD_TOO_LARGE") || raw.includes("payload too large")) {
+        msg = "The extracted content still exceeded the server's 4.5 MB data limit. This usually means a very large scanned document. Try a shorter document or fewer scanned/image pages.";
+        failedStep = 1; guidance = 'Use a shorter document, or reduce the number of scanned/image pages.';
+      } else if (raw.includes("CLIENT_EXTRACT") || raw.includes("Could not unzip") || raw.includes("Could not load the PDF reader")) {
+        msg = raw;
+        failedStep = 0; guidance = 'Try a different file or re-export the document.';
       } else if (raw.includes("PDF_IMAGE_ONLY")) {
         msg = "This PDF appears to be scanned images with no text — try a text-based PDF or a different file.";
         failedStep = 0; guidance = 'This PDF has no selectable text layer (scanned images). Export the document as a text-based PDF or upload a different file.';
@@ -475,6 +497,12 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
                   ))}
                 </div>
               )}
+              {extractionDetail && (
+                <div className="flex items-center gap-1.5 text-[11px] text-primary font-medium">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {extractionDetail}
+                </div>
+              )}
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 This can take 10–30s. Please keep this tab open.
@@ -505,6 +533,13 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
                   <Button variant="ghost" size="sm" onClick={() => { setQuestionCount(v => Math.max(5, v - 5)); }} className="w-fit text-xs">Reduce to {Math.max(5, questionCount - 5)} questions</Button>
                 )}
               </div>
+            </div>
+          )}
+
+          {truncationNote && (
+            <div className="flex items-start gap-2 bg-primary/5 p-3 rounded-lg border border-primary/10 text-xs text-muted-foreground animate-in">
+              <AlertCircle className="w-4 h-4 shrink-0 text-primary" />
+              <span>{truncationNote}</span>
             </div>
           )}
         </div>
