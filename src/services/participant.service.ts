@@ -87,11 +87,19 @@ export const participantService = {
         throw new Error('Your account has been disabled. Please contact an administrator.');
       }
       // Part 5A: per-arena domain — friendly client check before Firestore rule rejects.
-      // Commander/creator and blank domain are allowed through.
+      // Commander/creator and blank domain are allowed through. The email is read
+      // from the signed-in user's ID token (auth.currentUser.email) — the SAME
+      // authority the backend rule uses (request.auth.token.email) — so a stale or
+      // missing Firestore user-doc `email` can never diverge from the authoritative
+      // domain gate. Doc email is still read above for the disabled check.
       const allowedDomainRaw = (quizData as any).allowed_gladiator_domain as string | null | undefined;
       const allowedDomain = typeof allowedDomainRaw === 'string' ? allowedDomainRaw.trim().toLowerCase() : '';
       if (allowedDomain && userId !== quizData.created_by) {
-        const emailRaw = (userSnap.exists() ? (userSnap.data() as any).email : null) as string | null | undefined;
+        const tokenEmail = initializeFirebase().auth.currentUser?.email;
+        const emailRaw =
+          typeof tokenEmail === 'string' && tokenEmail
+            ? tokenEmail
+            : (userSnap.exists() ? (userSnap.data() as any).email : null);
         const emailLower = typeof emailRaw === 'string' ? emailRaw.trim().toLowerCase() : '';
         const parts = emailLower.split('@');
         const emailDomain = parts.length === 2 ? parts[1] : '';
