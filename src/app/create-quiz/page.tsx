@@ -21,7 +21,8 @@ import { useFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
+import { generateQuizFromPDF, generateQuizFromExtracted } from '@/ai/flows/generate-quiz-pdf-flow';
+import type { PreparedDocument } from '@/lib/prepare-documents';
 import { ROLE_HOME } from '@/lib/auth-redirect';
 
 export default function CreateQuizPage() {
@@ -31,7 +32,7 @@ export default function CreateQuizPage() {
   const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestion[] | null>(null);
   const [difficulty, setDifficulty] = useState('');
   const [showForgeWithPreserved, setShowForgeWithPreserved] = useState(false);
-  const forgeParams = useRef<{ pdfDataUri: string; diff: 'easy' | 'moderate' | 'hard'; count: number } | null>(null);
+  const forgeParams = useRef<{ documents?: PreparedDocument[]; pdfDataUri?: string; diff: 'easy' | 'moderate' | 'hard'; count: number } | null>(null);
   const { toast } = useToast();
   const { auth } = useFirebase();
   const [showBackConfirm, setShowBackConfirm] = useState(false);
@@ -131,13 +132,13 @@ export default function CreateQuizPage() {
     router.push(dashboardPath);
   };
 
-  const handleQuestionsGenerated = (questions: GeneratedQuestion[], diff: string, dataUri?: string, questionCount?: number) => {
+  const handleQuestionsGenerated = (questions: GeneratedQuestion[], diff: string, documents?: PreparedDocument[], questionCount?: number) => {
     setGeneratedQuestions(questions);
     setDifficulty(diff);
     setForgeDirty(true);
     setShowForgeWithPreserved(false);
-    if (dataUri && questionCount) {
-      forgeParams.current = { pdfDataUri: dataUri, diff: diff as 'easy' | 'moderate' | 'hard', count: questionCount };
+    if (documents && documents.length > 0 && questionCount) {
+      forgeParams.current = { documents, diff: diff as 'easy' | 'moderate' | 'hard', count: questionCount };
     }
   };
 
@@ -168,13 +169,15 @@ export default function CreateQuizPage() {
     try {
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!idToken) throw new Error('UNAUTHORIZED');
+      const params = forgeParams.current;
+      const generate =
+        params.documents && params.documents.length > 0
+          ? generateQuizFromExtracted({ documents: params.documents, difficulty: params.diff, questionCount: 1, idToken })
+          : params.pdfDataUri
+            ? generateQuizFromPDF({ pdfDataUri: params.pdfDataUri, difficulty: params.diff, questionCount: 1, idToken })
+            : Promise.reject(new Error('No source document available for regeneration.'));
       const result = await Promise.race([
-        generateQuizFromPDF({
-          pdfDataUri: forgeParams.current.pdfDataUri,
-          difficulty: forgeParams.current.diff,
-          questionCount: 1,
-          idToken,
-        }),
+        generate,
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 120000)),
       ]);
       if (result.error) {
