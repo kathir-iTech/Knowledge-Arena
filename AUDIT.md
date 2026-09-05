@@ -7,6 +7,32 @@
 
 ---
 
+## 0. PDF/Document Forge rebuild + remaining-issue sweep (Phase 116)
+
+**Date:** 2026-09-05
+**Commits:** `933b348`, `12bf722`, `01e0026`, `6d08728`, `89c7199`, `e7efbd4` (all pushed to `main`)
+**Verdict:** See the Part 7 report in the session log. Live-site verification (Part 5 battery) still pending on deployed Vercel.
+
+**Root cause (CONFIRMED):** The Forge base64-encoded each uploaded file in the browser and sent it whole via a Next server action. Vercel Functions cap request bodies at ~4.5 MB, and base64 inflates files by ~33% — a 4.44 MB PDF became ~5.92 MB of base64 → `413 FUNCTION_PAYLOAD_TOO_LARGE`. Next's `serverActions.bodySizeLimit: '20mb'` was not the limiter; `vercel.json` `maxDuration` was a secondary factor. The server's 10 MB decoded-size guard could never see a platform-level rejection.
+
+**Fix (Part 2/3):** `src/lib/prepare-documents.ts` extracts PDF/DOCX/TXT/MD text in the browser (pdfjs + fflate), renders scanned pages to bounded JPEGs, and caps the derived payload (`MAX_TEXT_CHARS=40000`, `MAX_TOTAL_IMAGES=24`, `MAX_SCANNED_PAGE_IMAGES=6`). Server-side `generateQuizFromExtracted` (`src/ai/flows/generate-quiz-pdf-flow.ts`) guards `MAX_EXTRACTED_IMAGES=24` / `MAX_EXTRACTED_TEXT_CHARS=500000`, reuses the shared `generateContentFromExtracted` core, and the legacy `generateQuizFromPDF` flow delegates to it. Both wizard regeneration paths now send extracted documents.
+
+**Audit resolutions:**
+
+- **6.1 — rules single source (CONFIRMED).** `firestore.rules` is regenerated verbatim from `firestore.rules.template` by `npm run rules:generate` (`scripts/generate-firestore-rules.js`); the predeploy hook in `firebase.json` runs it. Template is the single source of truth.
+- **6.2 — waiting-room staleness (FIXED).** `GladiatorSidebar.tsx` used the 3-hour `QUIZ_ABANDONED_AFTER_MS` for waiting (lobby) arenas too, trapping logout behind an idle lobby. Added `QUIZ_WAITING_ABANDONED_AFTER_MS` (30 min) in `src/lib/constants.ts`; waiting arenas now release the lock after 30 min, `live` stays at 3 h. Also added the `created_at.toMillis()` fallback the `live` branch already had.
+- **6.3 — token email vs doc email (SYNCED + documented).** The join gate rule uses `request.auth.token.email` (authoritative). The friendly client pre-check in `participant.service.ts:joinQuiz` read the Firestore `users/{uid}` doc `email` — a potential divergence source. Now it reads `auth.currentUser.email` — the same ID-token identity the rule evaluates — and only falls back to the doc email if the token email is absent. Accepted inconsistency (documented): the `users/{uid}.email` field is written once at profile creation, is server-only after that (update rule whitelists only `name`/`avatar`/`onboarding_complete`), and admin-SDK-created accounts may intentionally carry a different address; no client path can mutate it to bypass the domain gate.
+- **6.4 — grounded sweep (3 fixes).**
+  1. `prepare-documents.ts`: direct images were double-counted against `MAX_TOTAL_IMAGES` (incremented in the `image` case AND by the shared per-file accumulator) — effectively halved the image cap. Removed the duplicate increment.
+  2. `prepare-documents.ts`: scanned-PDF JPEGs bypassed `MAX_TOTAL_IMAGES` entirely (they were only per-file capped at 6); a pile of scanned PDFs could exceed the 24-image server budget. `extractPdfFile` now receives the remaining image slots and caps accordingly.
+  3. `prepare-documents.ts`: pdfjs `page.render()` was given a `{width,height}` copy instead of the real viewport; the renderer reads the viewport's transform matrix. Now passes the real viewport.
+  Also removed dead `batchCount` in `arena-creation.service.ts`.
+- **Known/accepted:** the vision path (`generatePromptWithImages`) uses only `chunks[0]` for text alongside images. Harmless today because the browser path caps extracted text at 40 000 chars (a single chunk); noted so a future client cap raise does not silently drop content for text+image requests.
+
+**Blocked while sandboxed:** literal production status/log capture and the Part 5 test battery (6 cases) require Vercel credentials/deployed site — to be run by the project owner on the live environment after deploying `main`.
+
+---
+
 ## 1. What was re-verified (Tier 1 — Phase 112 fixes)
 
 All Tier 1 fixes were re-traced file:line and **still hold** after Sept 1-2 PDF debugging (which only touched `generate-quiz-pdf-flow.ts`):
