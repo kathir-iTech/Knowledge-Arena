@@ -447,6 +447,26 @@ service cloud.firestore {
     allow read, write: if false;
   }
 
+  // --- AI Forge Jobs (Phase 115C) ---
+  // Async generation jobs and their payload subdocs (source text + scanned
+  // page images) are written exclusively by the Admin SDK (runForgeTick /
+  // createForgeJob server actions + the forge-worker cron). Clients observe
+  // progress only through tick responses; direct client reads/writes would let
+  // a user block their own job or skip the runForgeTick auth gates, so these
+  // collections are completely locked.
+  match /ai_jobs/{jobId} {
+    allow read, write: if false;
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+
+  // --- AI Forge Cache (Phase 115C) ---
+  // Content-addressed question cache, read/written only by the Admin SDK.
+  match /forge_cache/{hash} {
+    allow read, write: if false;
+  }
+
   // --- Executive Requests subcollection ---
   match /executive_requests/{requestId}/responses/{responseId} {
     allow read: if isExecutive() || (

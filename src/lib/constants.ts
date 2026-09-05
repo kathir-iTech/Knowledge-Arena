@@ -99,6 +99,11 @@ export const COLLECTIONS = {
   // fields { windowStart, count, expiresAt }. TTL on expiresAt auto-purges
   // stale counters so the collection does not grow unbounded.
   RATE_LIMITS: 'rate_limits',
+  // Async AI-forge job pipeline (Phase 115C). Jobs and their payload subdocs
+  // are written exclusively by the Admin SDK (worker ticks + cron); the rules
+  // lock these collections so clients can never read or write them directly.
+  AI_JOBS: 'ai_jobs',
+  FORGE_CACHE: 'forge_cache',
 } as const;
 
 // Doc id of the single arena-internals document inside the config
@@ -155,3 +160,58 @@ export const MIN_OPTION_LENGTH = 1;
 export const MAX_OPTION_LENGTH = 200;
 
 export const STAFF_EMAIL_DOMAIN = 'knowledgearena.app';
+
+// ── Async AI Forge job pipeline (Phase 115C) ─────────────────────────
+// The production failure (504 FUNCTION_INVOCATION_TIMEOUT) happens because a
+// single Gemini generation for a large/scanned document can take 20–40s+, and
+// Vercel caps a single function invocation at `maxDuration` (30s on the old
+// config; 60s Hobby ceiling now). Instead of one long blocking server action,
+// generation is decomposed into quota-aware "ticks": each tick makes exactly
+// ONE Gemini call and stays well inside the invocation ceiling, and the job
+// state (cursor, progress, accumulated questions) lives in Firestore so work
+// can resume across invocations even if the tab is closed (cron worker).
+// All of this is $0: Vercel Hobby + Firebase Spark + free Gemini keys.
+export const AI_JOB_STATUSES = ['queued', 'running', 'done', 'failed', 'cancelled'] as const;
+export type AiJobStatus = (typeof AI_JOB_STATUSES)[number];
+export const AI_JOB_QUEUED: AiJobStatus = 'queued';
+export const AI_JOB_RUNNING: AiJobStatus = 'running';
+export const AI_JOB_DONE: AiJobStatus = 'done';
+export const AI_JOB_FAILED: AiJobStatus = 'failed';
+export const AI_JOB_CANCELLED: AiJobStatus = 'cancelled';
+
+// Max questions generated in a single vision tick. Vision calls carry every
+// image (scanned pages) so each call is heavier than plain text; keeping the
+// per-tick question budget small bounds per-tick latency. Text-only ticks use
+// the same budget for a predictable, chunked pacing.
+export const FORGE_TICK_QA = 5;
+
+// Text window fed to Gemini per text tick (matches MAX_CHUNK in the flow).
+export const FORGE_TEXT_CHUNK = 40000;
+
+// After this many consecutive failed ticks the job is marked 'failed'.
+export const FORGE_MAX_CONSECUTIVE_FAILURES = 4;
+
+// Backoff when a tick fails (quota or timeout) — the next tick is not
+// attemptable until now + backoff.
+export const FORGE_QUOTA_BACKOFF_MS = 60 * 1000;
+export const FORGE_TIMEOUT_BACKOFF_MS = 20 * 1000;
+export const FORGE_GENERIC_BACKOFF_MS = 10 * 1000;
+
+// Lease for the single-writer guarantee: a job can only be ticked by one
+// caller at a time. Busy callers receive retryAfterMs; after LEASE_STALE_MS
+// a fresh worker may reclaim the lease (crash recovery without a stuck job).
+export const FORGE_LEASE_MS = 55 * 1000;
+export const FORGE_LEASE_STALE_MS = 3 * 60 * 1000;
+
+// Absolute cap on tick count so a model that repeatedly under-delivers cannot
+// spin forever. When reached the job finalizes with whatever was generated.
+export const FORGE_MAX_TICKS = 40;
+
+// Jobs and cache documents are deleted after this long (data-URI images and
+// question blobs are large; results are preserved in ai_logs + forge_cache).
+export const FORGE_JOB_TTL_MS = 6 * 60 * 60 * 1000;
+export const FORGE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Firestore payload docs hold text/image parts (each well under the 1 MiB
+// document ceiling even with heavy UTF-8 content).
+export const FORGE_PAYLOAD_TEXT_PART = 200000;

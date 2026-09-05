@@ -13,7 +13,26 @@ import type { PDFDocumentLoadingTask } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { rateLimiter } from '@/lib/rate-limiter';
 import { COLLECTIONS } from '@/lib/constants';
+import {
+  AI_JOB_DONE,
+  AI_JOB_FAILED,
+  AI_JOB_CANCELLED,
+  FORGE_TICK_QA,
+  FORGE_TEXT_CHUNK,
+  FORGE_MAX_CONSECUTIVE_FAILURES,
+  FORGE_QUOTA_BACKOFF_MS,
+  FORGE_TIMEOUT_BACKOFF_MS,
+  FORGE_GENERIC_BACKOFF_MS,
+  FORGE_MAX_TICKS,
+} from '@/lib/constants';
 import { aiLogService } from '@/services/ai-log.service';
+import {
+  forgeJobService,
+  contentHashOf,
+  safeTokenEqual,
+  type ForgeJobDoc,
+  type PayloadParts,
+} from '@/services/forge-job.service';
 import {
   getGeminiApiKey,
   isQuotaError as isResolverQuotaError,
@@ -923,12 +942,6 @@ async function generatePromptWithImages(
   difficulty: string,
   questionCount: number
 ): Promise<GeminiResult> {
-  const difficultyMap: Record<string, string> = {
-    easy: 'Beginner (Factual Recall)',
-    moderate: 'Intermediate (Concept Application)',
-    hard: 'Advanced (Critical Synthesis)',
-  };
-
   const MAX_CHUNK = 40000;
   const chunks = chunkText(textContent, MAX_CHUNK);
 
@@ -939,28 +952,7 @@ async function generatePromptWithImages(
     for (let attempt = 1; attempt <= MAX_RETRIES_PER_MODEL; attempt++) {
       let apiKeyUsed: string | null = null;
       try {
-        const promptText = `Generate exactly ${questionCount} high-quality multiple-choice questions based on the following content${imageDataUris.length > 0 ? ' and the provided image(s)' : ''}.
-
-Difficulty: ${difficultyMap[difficulty]}
-- Questions must be derived ONLY from the provided content.
-- Provide exactly 4 options for each question.
-- Ensure distractors are plausible but incorrect.
-- Include a clear explanation for the correct answer.
-
-Output format MUST be a JSON object with a "questions" array:
-{
-  "questions": [
-    {
-      "text": "The question string",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswerIndex": 0,
-      "explanation": "Why this is correct"
-    }
-  ]
-}
-
-Content:
-${chunks[0]}`;
+        const promptText = buildVisionPrompt(chunks[0], difficulty, questionCount);
 
         const parts: any[] = [{ text: promptText }];
         for (const imgUri of imageDataUris) {
@@ -1052,6 +1044,36 @@ function buildPrompt(text: string, difficulty: string, questionCount: number): s
     hard: 'Advanced (Critical Synthesis)',
   };
   return `Generate exactly ${questionCount} high-quality multiple-choice questions based on the following content.
+
+Difficulty: ${difficultyMap[difficulty]}
+- Questions must be derived ONLY from the provided content.
+- Provide exactly 4 options for each question.
+- Ensure distractors are plausible but incorrect.
+- Include a clear explanation for the correct answer.
+
+Output format MUST be a JSON object with a "questions" array:
+{
+  "questions": [
+    {
+      "text": "The question string",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswerIndex": 0,
+      "explanation": "Why this is correct"
+    }
+  ]
+}
+
+Content:
+${text}`;
+}
+
+function buildVisionPrompt(text: string, difficulty: string, questionCount: number): string {
+  const difficultyMap: Record<string, string> = {
+    easy: 'Beginner (Factual Recall)',
+    moderate: 'Intermediate (Concept Application)',
+    hard: 'Advanced (Critical Synthesis)',
+  };
+  return `Generate exactly ${questionCount} high-quality multiple-choice questions based on the following content and the provided image(s).
 
 Difficulty: ${difficultyMap[difficulty]}
 - Questions must be derived ONLY from the provided content.
@@ -1184,3 +1206,453 @@ const generateQuizFromPDFFlow = ai.defineFlow(
     return generateContentFromExtracted(combinedText, imageDataUris, input.difficulty, input.questionCount);
   }
 );
+
+// ── Async job pipeline (Phase 115C) ──────────────────────────────────
+// The production failure was a 504 FUNCTION_INVOCATION_TIMEOUT: one synchronous
+// server action tried to complete a full Gemini generation (large/scanned
+// documents, hard mode, up to 25 questions) inside a single Vercel invocation,
+// blowing past maxDuration. The permanent $0 fix decomposes generation into
+// Firestore-backed jobs with quota-aware "ticks":
+//
+//   createForgeJob  → validates auth, dedupes via forge_cache, creates the job
+//                     + payload docs, returns a jobId.
+//   runForgeTick    → ONE Gemini call per invocation (each stays < 60s ceiling).
+//                     Claims the job with an atomic lease (single writer),
+//                     generates up to FORGE_TICK_QA questions, persists progress
+//                     (cursor, generatedCount, accumulated questions), and
+//                     returns the current state. Called in a loop by the client
+//                     and by the /api/cron/forge-worker backstop (tab closed).
+//
+// Clients never read Firestore directly — ai_jobs/forge_cache are locked.
+
+interface ForgeQuestion {
+  text: string;
+  options: string[];
+  correctAnswerIndex: number;
+  explanation: string;
+}
+
+const CreateForgeJobInputSchema = z.object({
+  documents: z.array(ExtractedDocumentSchema).min(1).max(10),
+  difficulty: z.enum(['easy', 'moderate', 'hard']),
+  questionCount: z.number().min(1).max(30),
+  idToken: z.string(),
+});
+type CreateForgeJobInput = z.infer<typeof CreateForgeJobInputSchema>;
+
+const RunForgeTickInputSchema = z.object({
+  jobId: z.string().min(1),
+  idToken: z.string().optional(),
+  workerToken: z.string().optional(),
+});
+type RunForgeTickInput = z.infer<typeof RunForgeTickInputSchema>;
+
+interface ForgeTickOutput {
+  status: 'done' | 'failed' | 'busy' | 'queued' | 'not_found';
+  jobId: string;
+  generatedCount: number;
+  questionCount: number;
+  progressNote: string;
+  questions: ForgeQuestion[];
+  error?: string;
+  retryAfterMs?: number;
+  engine?: string | null;
+  cached?: boolean;
+}
+
+interface ForgeCreateOutput {
+  jobId?: string;
+  status: 'queued' | 'done';
+  cached?: boolean;
+  questions?: ForgeQuestion[];
+  engine?: string | null;
+  generatedCount?: number;
+  questionCount: number;
+  error?: string;
+}
+
+type SingleAttemptResult =
+  | { ok: true; questions: QuizQuestions; engine: string }
+  | { ok: false; category: 'quota' | 'timeout' | 'auth' | 'other'; error: string; retryAfterMs?: number };
+
+function checkForgePayload(documents: GenerateQuizFromExtractedInput['documents']):
+  | { combinedText: string; imageDataUris: string[] }
+  | { error: string } {
+  const texts: string[] = [];
+  const imageDataUris: string[] = [];
+  for (const d of documents) {
+    if (d.text) texts.push(d.text);
+    for (const img of d.imageDataUris || []) {
+      if (imageDataUris.length >= MAX_EXTRACTED_IMAGES) return { error: 'PDF_TOO_LARGE' };
+      imageDataUris.push(img);
+    }
+  }
+  const combinedText = texts.join('\n\n---\n\n');
+  if (combinedText.length > MAX_EXTRACTED_TEXT_CHARS) return { error: 'PDF_TOO_LARGE' };
+  return { combinedText, imageDataUris };
+}
+
+// One and only one Gemini attempt — no in-invocation retry loops. Every retry
+// happens across ticks (next tick picks the next key / model and re-claims the
+// lease), which keeps each function invocation comfortably inside maxDuration.
+async function generateOnceForJob(promptText: string, modelName: string, parts?: any[]): Promise<SingleAttemptResult> {
+  let apiKey: string | null = null;
+  try {
+    apiKey = await getGeminiApiKey();
+    const tmpAi = createGenkitForKey(apiKey);
+    const _response = await withTimeout(
+      tmpAi.generate({
+        model: googleAI.model(modelName),
+        prompt: parts ?? promptText,
+        output: {
+          schema: z.object({
+            questions: z.array(QuizQuestionOutputSchema),
+          }),
+        },
+      }),
+      GEMINI_TIMEOUT_MS,
+      `Gemini:${modelName}`
+    );
+
+    const genResponse = _response as { output?: Record<string, unknown>; text?: string };
+    const raw = genResponse.text;
+    if (raw) {
+      const parsed = tryParseQuestions(repairJson(raw));
+      if (parsed) return { ok: true, questions: parsed.questions, engine: modelName };
+    }
+    const output = genResponse.output as { questions: QuizQuestions } | undefined;
+    if (output?.questions?.length) return { ok: true, questions: output.questions, engine: modelName };
+    return { ok: false, category: 'other', error: `PARSE_FAILED_${modelName}: model returned unparseable output` };
+  } catch (err) {
+    const msg = errorToString(err);
+    const lower = msg.toLowerCase();
+    const resolverQuota = isResolverQuotaError(err);
+
+    if (isAuthError(err) || isResolverAuthError(err) || lower.includes('api_key_invalid')) {
+      if (apiKey) markKeyCooldown(apiKey, 24 * 60 * 60 * 1000);
+      return { ok: false, category: 'auth', error: msg };
+    }
+    if (
+      resolverQuota ||
+      lower.includes('quota') ||
+      lower.includes('429') ||
+      lower.includes('resource_exhausted') ||
+      lower.includes('resource exhausted') ||
+      lower.includes('rate limit') ||
+      lower.includes('rate_limit') ||
+      lower.includes('too many requests') ||
+      lower.includes('all_gemini_keys_exhausted') ||
+      lower.includes('all ai capacity exhausted')
+    ) {
+      const delayMs = parseRetryDelayMs(err);
+      if (apiKey) markKeyCooldown(apiKey, delayMs);
+      return { ok: false, category: 'quota', error: msg, retryAfterMs: delayMs ?? undefined };
+    }
+    if (isTimeoutError(err)) {
+      return { ok: false, category: 'timeout', error: msg };
+    }
+    return { ok: false, category: 'other', error: msg };
+  }
+}
+
+function compileForgeError(attempt: Extract<SingleAttemptResult, { ok: false }>): string {
+  const suffix = attempt.retryAfterMs ? ` Retry after ~${Math.round(attempt.retryAfterMs / 1000)}s.` : '';
+  switch (attempt.category) {
+    case 'quota':
+      return `FORGE_QUOTA: AI generation temporarily unavailable due to quota limits.${suffix}`;
+    case 'timeout':
+      return `FORGE_TIMEOUT: AI generation timed out after ${Math.round(GEMINI_TIMEOUT_MS / 1000)}s.${suffix} Your document may be very large or complex.`;
+    case 'auth':
+      return `FORGE_AUTH: AI is not configured correctly (invalid API key).${suffix} Contact your administrator.`;
+    default:
+      return `FORGE_OTHER: AI generation failed. ${attempt.error}`;
+  }
+}
+
+function buildTerminalOutput(job: ForgeJobDoc): ForgeTickOutput {
+  const questions = (job.questions as ForgeQuestion[] | undefined) ?? [];
+  return {
+    status: job.status === AI_JOB_DONE ? 'done' : 'failed',
+    jobId: job.id,
+    generatedCount: job.generatedCount,
+    questionCount: job.questionCount,
+    progressNote: job.progressNote,
+    questions,
+    error: job.error ?? undefined,
+    engine: job.engine,
+  };
+}
+
+async function finalizeForgeJob(job: ForgeJobDoc): Promise<void> {
+  const questions = (job.questions as ForgeQuestion[] | undefined) ?? [];
+  if (questions.length > 0 && job.contentHash) {
+    try {
+      await forgeJobService.writeCache(job.contentHash, questions, job.engine ?? 'unknown');
+    } catch (err) {
+      console.warn('[Forge] cache write failed:', errorToString(err));
+    }
+  }
+  aiLogService.record({
+    userId: job.userId,
+    userRole: job.userRole,
+    model: job.engine || 'unknown',
+    fileCount: job.fileCount,
+    fileTypes: job.fileTypes,
+    questionCount: questions.length,
+    difficulty: job.difficulty,
+    success: job.status === AI_JOB_DONE,
+    durationMs: Math.max(0, Date.now() - job.createdAt),
+    error: job.error ?? undefined,
+    metadata: { jobId: job.id, progress: job.progressNote },
+  });
+}
+
+async function authorizeForgeJob(job: { userId: string; workerToken: string }, idToken?: string, workerToken?: string): Promise<'owner' | 'worker' | null> {
+  if (workerToken && safeTokenEqual(workerToken, job.workerToken)) return 'worker';
+  if (idToken) {
+    const auth = await authorizeForgeRequest(idToken);
+    if (auth && auth.uid === job.userId) return 'owner';
+  }
+  return null;
+}
+
+export async function createForgeJob(input: CreateForgeJobInput): Promise<ForgeCreateOutput> {
+  try {
+    const auth = await authorizeForgeRequest(input.idToken);
+    if (!auth) {
+      return { status: 'queued', questionCount: input.questionCount, error: 'UNAUTHORIZED' };
+    }
+
+    const rl = await rateLimiter.check(`ai:forge:create:${auth.uid}`, {
+      maxRequests: 10,
+      windowMs: 60000,
+      message: 'AI Forge job limit reached (10/min). Please wait.',
+    });
+    if (!rl.allowed) {
+      return { status: 'queued', questionCount: input.questionCount, error: 'FORGE_RATE_LIMITED' };
+    }
+
+    const payload = checkForgePayload(input.documents);
+    if ('error' in payload) {
+      return { status: 'queued', questionCount: input.questionCount, error: payload.error };
+    }
+    if (payload.combinedText.replace(/\s+/g, ' ').trim().length < 20 && payload.imageDataUris.length === 0) {
+      return { status: 'queued', questionCount: input.questionCount, error: 'PDF_CONTENT_TOO_SHORT' };
+    }
+
+    // Content-addressable cache: identical source material + difficulty +
+    // question count returns instantly. File names are excluded so a rename
+    // still hits; text/data-URIs fully determine the identity.
+    const hashInput = input.documents.map((d) => ({
+      kind: d.kind,
+      text: d.text ?? '',
+      imageDataUris: d.imageDataUris ?? [],
+    }));
+    const contentHash = contentHashOf({
+      documents: hashInput,
+      difficulty: input.difficulty,
+      questionCount: input.questionCount,
+    });
+
+    const cached = await forgeJobService.readCache(contentHash);
+    if (cached && cached.questions.length > 0) {
+      aiLogService.record({
+        userId: auth.uid,
+        userRole: auth.role,
+        model: cached.engine || 'cache',
+        fileCount: input.documents.length,
+        fileTypes: input.documents.map((d) => d.kind),
+        questionCount: cached.questions.length,
+        difficulty: input.difficulty,
+        success: true,
+        durationMs: 0,
+        metadata: { cached: true },
+      });
+      return {
+        status: 'done',
+        cached: true,
+        questions: cached.questions as ForgeQuestion[],
+        engine: cached.engine,
+        generatedCount: cached.questions.length,
+        questionCount: input.questionCount,
+      };
+    }
+
+    const job = await forgeJobService.createJob({
+      userId: auth.uid,
+      userRole: auth.role,
+      difficulty: input.difficulty,
+      questionCount: input.questionCount,
+      documents: input.documents,
+      contentHash,
+    });
+    return { jobId: job.id, status: 'queued', cached: false, questionCount: input.questionCount };
+  } catch (err) {
+    const msg = errorToString(err);
+    console.error('[Forge] createForgeJob failed:', msg, '\n', formatError(err));
+    return { status: 'queued', questionCount: input.questionCount, error: msg };
+  }
+}
+
+export async function runForgeTick(input: RunForgeTickInput): Promise<ForgeTickOutput> {
+  const { jobId, idToken, workerToken } = input;
+  const now = Date.now();
+
+  const job0 = await forgeJobService.getJob(jobId);
+  if (!job0) {
+    return { status: 'not_found', jobId, generatedCount: 0, questionCount: 0, progressNote: 'Job not found', questions: [], error: 'FORGE_JOB_NOT_FOUND' };
+  }
+
+  // Terminal fast path (cron may have completed the job) — still auth-gated so
+  // questions never leak to unauthorized callers.
+  if (job0.status === AI_JOB_DONE || job0.status === AI_JOB_FAILED || job0.status === AI_JOB_CANCELLED) {
+    const authz = await authorizeForgeJob(job0, idToken, workerToken);
+    if (!authz) {
+      return { status: 'failed', jobId, generatedCount: job0.generatedCount, questionCount: job0.questionCount, progressNote: 'Not authorized', questions: [], error: 'UNAUTHORIZED' };
+    }
+    return buildTerminalOutput(job0);
+  }
+
+  const authz = await authorizeForgeJob(job0, idToken, workerToken);
+  if (!authz) {
+    return { status: 'failed', jobId, generatedCount: job0.generatedCount, questionCount: job0.questionCount, progressNote: 'Not authorized', questions: [], error: 'UNAUTHORIZED' };
+  }
+  const workerId = authz === 'worker' ? `worker:${jobId}` : `owner:${job0.userId}`;
+
+  const rl = await rateLimiter.check(`ai:forge:tick:${jobId}`, {
+    maxRequests: 60,
+    windowMs: 60000,
+    message: 'Too many job ticks. Please slow down.',
+  });
+  if (!rl.allowed) {
+    return { status: 'busy', jobId, generatedCount: job0.generatedCount, questionCount: job0.questionCount, progressNote: 'Rate limited', questions: [], retryAfterMs: 30000 };
+  }
+
+  const claim = await forgeJobService.claimNextTick(jobId, workerId, now);
+  if (claim.outcome === 'not_found') {
+    return { status: 'not_found', jobId, generatedCount: 0, questionCount: 0, progressNote: 'Job not found', questions: [], error: 'FORGE_JOB_NOT_FOUND' };
+  }
+  if (claim.outcome === 'terminal') {
+    return buildTerminalOutput(claim.job);
+  }
+  if (claim.outcome === 'busy') {
+    return { status: 'busy', jobId, generatedCount: claim.job.generatedCount, questionCount: claim.job.questionCount, progressNote: claim.job.progressNote || 'Working…', questions: [], retryAfterMs: claim.retryAfterMs };
+  }
+
+  const job = claim.job;
+
+  // If another tick already satisfied the question budget (should be rare with
+  // the lease), finalize instead of generating.
+  if (job.generatedCount >= job.questionCount) {
+    await forgeJobService.appendQuestions(jobId, {
+      questions: [],
+      engine: job.engine ?? 'gemini-3.6-flash',
+      cursor: job.cursor,
+      generatedCount: job.generatedCount,
+      questionCount: job.questionCount,
+      final: true,
+    });
+    const finalized = await forgeJobService.getJob(jobId);
+    if (finalized) await finalizeForgeJob(finalized);
+    const doneDoc = finalized ?? job;
+    return buildTerminalOutput({ ...doneDoc, status: AI_JOB_DONE });
+  }
+
+  let payload: PayloadParts;
+  try {
+    payload = await forgeJobService.loadPayload(jobId);
+  } catch (err) {
+    const msg = `Failed to load source material: ${errorToString(err)}`;
+    await forgeJobService.markTickFailed(jobId, { error: msg, final: true, cursor: job.cursor, progressNote: 'Failed to load source material', nextAttemptAt: 0 });
+    const failedJob = await forgeJobService.getJob(jobId);
+    if (failedJob) await finalizeForgeJob(failedJob);
+    return { status: 'failed', jobId, generatedCount: job.generatedCount, questionCount: job.questionCount, progressNote: 'Failed to load source material', questions: [], error: msg };
+  }
+
+  const normalizedText = payload.text.replace(/\s+/g, ' ').trim();
+  const chain = await modelFallbackChain();
+  const modelIndex = job.cursor.modelIndex % Math.max(1, chain.length);
+  const modelName = chain[modelIndex];
+  const remaining = job.questionCount - job.generatedCount;
+  const requested = Math.min(FORGE_TICK_QA, remaining);
+
+  const chunks = chunkText(normalizedText, FORGE_TEXT_CHUNK);
+  const chunkIndex = job.cursor.chunkIndex % Math.max(1, chunks.length);
+  const hasImages = payload.imageDataUris.length > 0;
+  const chunkContent = chunks[chunkIndex] || '';
+
+  const attempt = hasImages
+    ? (() => {
+        const visionPrompt = buildVisionPrompt(chunkContent, job.difficulty, requested);
+        return generateOnceForJob(
+          visionPrompt,
+          modelName,
+          [{ text: visionPrompt }, ...payload.imageDataUris.map((uri) => ({ media: { url: uri } }))]
+        );
+      })()
+    : await generateOnceForJob(buildPrompt(chunkContent, job.difficulty, requested), modelName);
+  const resolvedAttempt = await attempt;
+
+  const nextChunkIndex = (chunkIndex + 1) % Math.max(1, chunks.length);
+  const nextCursor = {
+    chunkIndex: nextChunkIndex,
+    modelIndex: resolvedAttempt.ok ? modelIndex : (modelIndex + 1) % Math.max(1, chain.length),
+    ticks: job.cursor.ticks + 1,
+  };
+
+  if (!resolvedAttempt.ok) {
+    const error = compileForgeError(resolvedAttempt);
+    const consecutiveFailures = (job.consecutiveFailures ?? 0) + 1;
+    const final = consecutiveFailures >= FORGE_MAX_CONSECUTIVE_FAILURES;
+    const backoff = resolvedAttempt.retryAfterMs
+      ?? (resolvedAttempt.category === 'quota' ? FORGE_QUOTA_BACKOFF_MS : resolvedAttempt.category === 'timeout' ? FORGE_TIMEOUT_BACKOFF_MS : FORGE_GENERIC_BACKOFF_MS);
+    const nextAttemptAt = now + backoff;
+
+    await forgeJobService.markTickFailed(jobId, {
+      error,
+      final,
+      cursor: nextCursor,
+      progressNote: final ? `Failed after ${consecutiveFailures} attempts` : `Retrying in ${Math.round(backoff / 1000)}s`,
+      nextAttemptAt: final ? 0 : nextAttemptAt,
+    });
+
+    if (final) {
+      const failedJob = await forgeJobService.getJob(jobId);
+      if (failedJob) await finalizeForgeJob(failedJob);
+      return { status: 'failed', jobId, generatedCount: job.generatedCount, questionCount: job.questionCount, progressNote: `Failed after ${consecutiveFailures} attempts`, questions: [], error, retryAfterMs: backoff };
+    }
+    return { status: 'queued', jobId, generatedCount: job.generatedCount, questionCount: job.questionCount, progressNote: `Retrying in ${Math.round(backoff / 1000)}s`, questions: [], retryAfterMs: backoff };
+  }
+
+  const toAdd = resolvedAttempt.questions.slice(0, requested);
+  const generatedCount = job.generatedCount + toAdd.length;
+  const final = generatedCount >= job.questionCount || nextCursor.ticks >= FORGE_MAX_TICKS;
+
+  await forgeJobService.appendQuestions(jobId, {
+    questions: toAdd,
+    engine: resolvedAttempt.engine,
+    cursor: nextCursor,
+    generatedCount,
+    questionCount: job.questionCount,
+    final,
+  });
+
+  if (final) {
+    const finalized = await forgeJobService.getJob(jobId);
+    if (finalized) await finalizeForgeJob(finalized);
+    const doneJob = finalized ?? { ...job, status: AI_JOB_DONE, generatedCount, questions: toAdd };
+    doneJob.generatedCount = generatedCount;
+    if (!doneJob.questions) doneJob.questions = [];
+    return buildTerminalOutput(doneJob);
+  }
+
+  return {
+    status: 'queued',
+    jobId,
+    generatedCount,
+    questionCount: job.questionCount,
+    progressNote: `${generatedCount}/${job.questionCount} questions generated`,
+    questions: [],
+    engine: resolvedAttempt.engine,
+  };
+}
