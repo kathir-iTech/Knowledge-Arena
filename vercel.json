@@ -2,13 +2,17 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "app/**/*.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "crons": [
     {
       "path": "/api/cron/sweep-battles",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/forge-worker",
+      "schedule": "0 2 * * *"
     }
   ]
 }

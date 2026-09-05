@@ -1,0 +1,39 @@
+name: forge-worker
+
+# Sub-hourly AI-Forge job resume for Vercel Hobby.
+#
+# Vercel Hobby cron jobs only run once per day, so a 5-minute resume cadence
+# via vercel.json would fail deployment. The client tab drives ticks while open;
+# this hourly GitHub Actions backstop (free tier: 24 runs/day ≈ 720 min/mo,
+# inside the 2000-min private-repo allowance) keeps queued AI-forge jobs
+# progressing even after a user closes the tab. Pair with the daily native
+# Vercel cron (/api/cron/forge-worker) for extra safety.
+#
+# Setup: add the CRON_SECRET used on Vercel as a repository secret named
+# CRON_SECRET. Without it the endpoint returns 401 and the run fails safely.
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  forge-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke AI Forge worker
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET missing — add the Vercel CRON_SECRET as a GitHub repository secret."
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/forge-worker.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://knowledge-arena.vercel.app/api/cron/forge-worker" || echo 000)
+          echo "cron-status=$code"
+          cat /tmp/forge-worker.json 2>/dev/null || true
+          if [ "$code" != "200" ]; then
+            exit 1
+          fi

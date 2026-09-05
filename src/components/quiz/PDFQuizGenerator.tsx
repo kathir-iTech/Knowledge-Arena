@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key, RefreshCw, Check, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateQuizFromExtracted } from '@/ai/flows/generate-quiz-pdf-flow';
+import { generateQuizFromExtracted, createForgeJob, runForgeTick } from '@/ai/flows/generate-quiz-pdf-flow';
 import { prepareDocuments, type PreparedDocument } from '@/lib/prepare-documents';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
@@ -37,7 +37,10 @@ const STAGE_LABELS: Record<GenerationStage, string> = {
   error: 'Generation failed',
 };
 
-const CLIENT_TIMEOUT_MS = 180000;
+// Async job pipeline: the tab can stay open for the full generation (progress
+// is streamed back per tick) but even closing it won't lose the work — the
+// /api/cron/forge-worker backstop keeps ticking queued jobs.
+const CLIENT_TIMEOUT_MS = 15 * 60 * 1000;
 
 const PIPELINE_STEPS = [
   'Extracting text',
@@ -177,21 +180,51 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!idToken) throw new Error("UNAUTHORIZED");
 
-      // Step 2: Generating questions (AI call)
+      // Step 2: Generating questions (async job pipeline). Each tick is a
+      // separate server-action invocation that performs exactly ONE Gemini
+      // call, so no single request can hit Vercel's function timeout the way
+      // the old monolithic call did (504 FUNCTION_INVOCATION_TIMEOUT).
       setStage('generating');
       setActiveStep(2);
-      const result = await generateQuizFromExtracted({
+      const created = await createForgeJob({
         documents,
         difficulty,
         questionCount,
         idToken,
       });
-
-      if (result.error) {
-        throw new Error(result.error);
+      if (created.error) {
+        throw new Error(created.error);
       }
 
-      if (result.questions && result.questions.length > 0) {
+      let generated: GeneratedQuestion[] | null = null;
+
+      if (created.status === 'done' && created.questions && created.questions.length > 0) {
+        // Cache hit — identical source material was generated recently.
+        generated = created.questions;
+        if (mountedRef.current) setExtractionDetail(`Loaded ${created.questionCount} questions from cache`);
+      } else if (created.jobId) {
+        const jobId = created.jobId;
+        let tick = null;
+        while (mountedRef.current) {
+          tick = await runForgeTick({ jobId, idToken });
+          if (tick.status === 'done' || tick.status === 'failed') break;
+          if (!mountedRef.current) break;
+          setExtractionDetail(tick.progressNote && tick.progressNote !== 'Working…'
+            ? `AI Forge: ${tick.progressNote}`
+            : `AI Forge: ${tick.generatedCount}/${tick.questionCount} questions`);
+          const delay = Math.min(Math.max(tick.retryAfterMs ?? 1500, 1000), 5000);
+          await new Promise(r => setTimeout(r, delay));
+        }
+        if (mountedRef.current && tick && tick.status === 'done' && tick.questions && tick.questions.length > 0) {
+          generated = tick.questions;
+        } else {
+          throw new Error(tick?.error || "AI_FAILED");
+        }
+      } else {
+        throw new Error("AI_FAILED");
+      }
+
+      if (generated && generated.length > 0) {
         // Step 3: Reviewing answers (brief)
         if (!mountedRef.current) { clearTimeout(timerId); return; }
         setActiveStep(3);
@@ -202,8 +235,8 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
         setActiveStep(-1);
         setFileStatuses([]);
         const truncatedHint = truncationNote ? ` (${truncationNote})` : '';
-        toast({ title: "Generation Complete", description: `Created ${result.questions.length} questions from ${files.length} document(s).${truncatedHint}` });
-        onQuestionsGenerated(result.questions, result.difficulty, documents, questionCount, category, files.length > 1 ? `${files[0].name} +${files.length - 1} more` : files[0]?.name);
+        toast({ title: "Generation Complete", description: `Created ${generated.length} questions from ${files.length} document(s).${truncatedHint}` });
+        onQuestionsGenerated(generated, difficulty, documents, questionCount, category, files.length > 1 ? `${files[0].name} +${files.length - 1} more` : files[0]?.name);
       } else {
         throw new Error("AI_FAILED");
       }
@@ -252,8 +285,8 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
       } else if (raw.includes("PDF_TOO_LARGE")) {
         msg = "A file exceeds the maximum size limit on the server.";
         failedStep = 0; guidance = 'Use files under 10MB each.';
-      } else if (raw.includes("PDF_FORGE_RATE_LIMITED")) {
-        msg = "Rate limit reached (5 per minute). Please wait before trying again.";
+      } else if (raw.includes("PDF_FORGE_RATE_LIMITED") || raw.includes("FORGE_RATE_LIMITED")) {
+        msg = "Rate limit reached (10 per minute). Please wait before trying again.";
         failedStep = 1; guidance = 'Wait a minute before retrying.';
       } else if (raw.includes("INVALID_PDF_DATA")) {
         msg = "Invalid file data. Please try uploading the file again.";
@@ -274,7 +307,13 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
       } else if (raw.includes("PARSE_FAILED_")) {
         msg = "The AI returned unparseable output. Please retry.";
         failedStep = 3; guidance = 'Retry generation; the AI may succeed on a second attempt.';
-      } else if (raw.includes("TIMEOUT:") || raw.includes("timed out") || raw.includes("timed out after")) {
+      } else if (raw.includes("FORGE_JOB_NOT_FOUND")) {
+        msg = "This generation job is no longer available. Please retry.";
+        failedStep = 1; guidance = 'Start a new generation.';
+      } else if (raw.includes("FORGE_OTHER")) {
+        msg = "The AI could not produce questions this round. It will retry automatically — please keep this tab open.";
+        failedStep = 2; guidance = 'Leave the tab open; if it still fails, retry with fewer questions.';
+      } else if (raw.includes("TIMEOUT:") || raw.includes("timed out") || raw.includes("timed out after") || raw.includes("FORGE_TIMEOUT")) {
         const timeoutMatch = raw.match(/exceeded\s*(\d+)ms/i);
         const secHint = timeoutMatch ? ` after ${Math.round(parseInt(timeoutMatch[1],10)/1000)}s` : '';
         msg = `AI generation timed out${secHint}. Try with fewer questions or smaller files.`;
@@ -505,7 +544,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
               )}
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                This can take 10–30s. Please keep this tab open.
+                Processing in small batches — you can keep this tab open for live progress.
               </div>
             </div>
           )}
