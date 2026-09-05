@@ -70,13 +70,6 @@ function planCreation(questionsCount: number): string[] {
   return questionIds;
 }
 
-function batchCount(questionsCount: number): number {
-  const opsPerQuestion = 2;
-  const overhead = 3; // quiz + participant + config/settings
-  const totalOps = overhead + questionsCount * opsPerQuestion;
-  return Math.ceil(totalOps / MAX_BATCH_OPS);
-}
-
 export const arenaCreationService = {
   async createArenaAtomic(input: ArenaCreationInput): Promise<string> {
     const db = getFirestore();

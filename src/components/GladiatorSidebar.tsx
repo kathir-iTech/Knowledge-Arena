@@ -20,7 +20,7 @@ import { useFirebase } from '@/firebase';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { AvatarEditor } from './AvatarEditor';
 import { cn } from '@/lib/utils';
-import { QUIZ_ABANDONED_AFTER_MS } from '@/lib/constants';
+import { QUIZ_ABANDONED_AFTER_MS, QUIZ_WAITING_ABANDONED_AFTER_MS } from '@/lib/constants';
 import { collectionGroup, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 const GladiatorSidebar = () => {
@@ -92,8 +92,10 @@ const GladiatorSidebar = () => {
               if (lastMs && Date.now() - lastMs >= QUIZ_ABANDONED_AFTER_MS) continue;
             }
             if (status === 'waiting') {
-              const created = typeof data.created_at === 'number' ? data.created_at : 0;
-              if (created && Date.now() - created >= QUIZ_ABANDONED_AFTER_MS) continue;
+              const created = typeof data.created_at === 'number' ? data.created_at : (data.created_at?.toMillis?.() ?? 0);
+              // A waiting (lobby) arena uses a much shorter staleness than a live
+              // battle so an idle lobby releases the logout lock promptly.
+              if (created && Date.now() - created >= QUIZ_WAITING_ABANDONED_AFTER_MS) continue;
             }
             hasActive = true;
             break;

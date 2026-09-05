@@ -48,6 +48,14 @@ export const ALLOWED_QUIZ_TRANSITIONS: Record<string, readonly string[]> = {
 // constant rather than a magic number.
 export const QUIZ_ABANDONED_AFTER_MS = 3 * 60 * 60 * 1000;
 
+// Lobby (not-yet-started 'waiting' arena) staleness for the logout lock.
+// A waiting room sitting idle far shorter than a live battle should release
+// the logout lock: a Commander who created a lobby and walked away has no
+// reason to trap a gladiator in the sidebar for hours. The generous
+// QUIZ_ABANDONED_AFTER_MS above stays for genuinely live battles where a
+// Commander may legitimately step away mid-session.
+export const QUIZ_WAITING_ABANDONED_AFTER_MS = 30 * 60 * 1000;
+
 export const DEFAULT_SCORE_MAX = 1000;
 export const DEFAULT_SCORE_MIN = 100;
 export const DEFAULT_WRONG_PENALTY = 0;

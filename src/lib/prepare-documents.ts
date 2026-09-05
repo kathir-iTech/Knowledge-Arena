@@ -155,7 +155,9 @@ async function renderScannedPage(page: PdfPage, pageNumber: number): Promise<str
     const context = canvas.getContext('2d', { willReadFrequently: true });
     if (!context) return '';
 
-    await page.render({ canvasContext: context, viewport: { width: canvas.width, height: canvas.height } }).promise;
+    // Pass the real pdfjs viewport object (not a width/height copy): the
+    // renderer reads its transform matrix to place the page.
+    await page.render({ canvasContext: context, viewport }).promise;
     return canvas.toDataURL('image/jpeg', 0.8);
   } catch (e) {
     console.warn('[prepare] scanned page render failed', pageNumber, e);
@@ -163,7 +165,7 @@ async function renderScannedPage(page: PdfPage, pageNumber: number): Promise<str
   }
 }
 
-async function extractPdfFile(file: File, onProgress: ProgressCallback): Promise<PreparedDocument> {
+async function extractPdfFile(file: File, onProgress: ProgressCallback, remainingImageSlots: number): Promise<PreparedDocument> {
   let pdfjs: PdfJsModule;
   try {
     pdfjs = await getPdfJs();
@@ -190,6 +192,9 @@ async function extractPdfFile(file: File, onProgress: ProgressCallback): Promise
 
   const pageCount = doc.numPages || 1;
   const totalPages = Math.min(pageCount, MAX_TEXT_PAGES);
+  // Scanned pages are capped per document AND against the shared
+  // MAX_TOTAL_IMAGES budget so many scanned PDFs cannot blow the payload.
+  const scannedPageCap = Math.max(0, Math.min(MAX_SCANNED_PAGE_IMAGES, remainingImageSlots));
   const textByPage: string[] = [];
   const imageDataUris: string[] = [];
   let truncated = false;
@@ -214,7 +219,7 @@ async function extractPdfFile(file: File, onProgress: ProgressCallback): Promise
 
     const isScanned = pageText.length < SCAN_TEXT_THRESHOLD;
     if (isScanned) {
-      if (imageDataUris.length < MAX_SCANNED_PAGE_IMAGES) {
+      if (imageDataUris.length < scannedPageCap) {
         onProgress(`Analyzing scanned page ${pageNumber}...`);
         const dataUri = await renderScannedPage(page, pageNumber);
         if (dataUri) imageDataUris.push(dataUri);
@@ -324,7 +329,7 @@ export async function prepareDocuments(files: File[], onProgress: ProgressCallba
     }
     switch (kind) {
       case 'pdf':
-        prepared.push(await extractPdfFile(file, onProgress));
+        prepared.push(await extractPdfFile(file, onProgress, MAX_TOTAL_IMAGES - totalImageCount));
         break;
       case 'docx':
         onProgress(`Reading ${file.name}...`);
@@ -345,7 +350,6 @@ export async function prepareDocuments(files: File[], onProgress: ProgressCallba
           continue;
         }
         const reencoded = await reencodeImageToJpeg(await readAsDataUri(file));
-        totalImageCount += 1;
         prepared.push({
           name: file.name,
           kind: 'image',
@@ -357,6 +361,9 @@ export async function prepareDocuments(files: File[], onProgress: ProgressCallba
         break;
       }
     }
+    // Running total of derived images that will travel in the request.
+    // Added here — once — so direct images and PDF scanned pages are each
+    // counted exactly once against MAX_TOTAL_IMAGES.
     totalImageCount += prepared.length ? prepared[prepared.length - 1].imageDataUris.length : 0;
   }
   return prepared;
