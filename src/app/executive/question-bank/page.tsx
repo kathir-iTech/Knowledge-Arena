@@ -10,7 +10,8 @@ import { useFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { generateQuizFromPDF } from '@/ai/flows/generate-quiz-pdf-flow';
+import { generateQuizFromPDF, generateQuizFromExtracted } from '@/ai/flows/generate-quiz-pdf-flow';
+import type { PreparedDocument } from '@/lib/prepare-documents';
 
 const PDFQuizGenerator = dynamic(() => import('@/components/quiz/PDFQuizGenerator').then(m => m.PDFQuizGenerator), { ssr: false });
 const ExecutiveQuestionReviewPanel = dynamic(() => import('@/components/quiz/ExecutiveQuestionReviewPanel').then(m => m.ExecutiveQuestionReviewPanel), { ssr: false });
@@ -32,16 +33,16 @@ export default function QuestionBankPage() {
   const [showForgeWithPreserved, setShowForgeWithPreserved] = useState(false);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [documentTitle, setDocumentTitle] = useState<string | null>(null);
-  const forgeParams = useRef<{ pdfDataUri: string; diff: 'easy' | 'moderate' | 'hard'; count: number } | null>(null);
+  const forgeParams = useRef<{ documents?: PreparedDocument[]; pdfDataUri?: string; diff: 'easy' | 'moderate' | 'hard'; count: number } | null>(null);
 
-  const handleQuestionsGenerated = (qList: GeneratedQuestion[], diff: string, dataUri?: string, questionCount?: number, category?: string, docName?: string) => {
+  const handleQuestionsGenerated = (qList: GeneratedQuestion[], diff: string, documents?: PreparedDocument[], questionCount?: number, category?: string, docName?: string) => {
     setGeneratedQuestions(qList);
     setForgeDifficulty(diff);
     if (category) setForgeCategory(category);
     setDocumentTitle(docName || null);
     setShowForgeWithPreserved(false);
-    if (dataUri && questionCount) {
-      forgeParams.current = { pdfDataUri: dataUri, diff: diff as 'easy' | 'moderate' | 'hard', count: questionCount };
+    if (documents && documents.length > 0 && questionCount) {
+      forgeParams.current = { documents, diff: diff as 'easy' | 'moderate' | 'hard', count: questionCount };
     }
   };
 
@@ -89,13 +90,15 @@ export default function QuestionBankPage() {
     try {
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!idToken) throw new Error('UNAUTHORIZED');
+      const params = forgeParams.current;
+      const generate =
+        params.documents && params.documents.length > 0
+          ? generateQuizFromExtracted({ documents: params.documents, difficulty: params.diff, questionCount: 1, idToken })
+          : params.pdfDataUri
+            ? generateQuizFromPDF({ pdfDataUri: params.pdfDataUri, difficulty: params.diff, questionCount: 1, idToken })
+            : Promise.reject(new Error('No source document available for regeneration.'));
       const result = await Promise.race([
-        generateQuizFromPDF({
-          pdfDataUri: forgeParams.current.pdfDataUri,
-          difficulty: forgeParams.current.diff,
-          questionCount: 1,
-          idToken,
-        }),
+        generate,
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 120000)),
       ]);
       if (result.error) throw new Error(result.error);
