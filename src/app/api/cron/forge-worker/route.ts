@@ -14,9 +14,12 @@ export const runtime = 'nodejs';
 // Bounded batch: each tick makes one Gemini call of up to GEMINI_TIMEOUT_MS
 // (35s), so we stop early once the run has been active for 30s to stay well
 // inside Vercel's 60s maxDuration ceiling — remaining jobs wait for the next
-// scheduled run (every 5 minutes).
+// scheduled run (hourly GitHub Actions backstop, daily Vercel cron).
 const MAX_PER_RUN = 6;
 const RUN_WINDOW_MS = 30000;
+// Orphaned-lease threshold: a job stuck in processing/running with a lease
+// older than this is flagged (read-only) and surfaced to executives.
+const ORPHANED_LEASE_MS = 60 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('Authorization') ?? '';
@@ -48,5 +51,52 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, processed, finished, errors });
+  // Orphaned-lease telemetry (read-only, never mutates jobs).
+  let orphaned: string[] = [];
+  try {
+    const { getAdminDb } = await import('@/lib/firebase-admin');
+    const { COLLECTIONS } = await import('@/lib/constants');
+    const snap = await getAdminDb()
+      .collection(COLLECTIONS.AI_JOBS)
+      .where('status', 'in', ['processing', 'running'])
+      .limit(20)
+      .get();
+    const now = Date.now();
+    for (const d of snap.docs) {
+      const data = d.data() as Record<string, unknown>;
+      const lease = typeof data.leaseExpiresAt === 'number' ? (data.leaseExpiresAt as number) : 0;
+      if (lease > 0 && now - lease > ORPHANED_LEASE_MS) orphaned.push(d.id);
+    }
+    if (orphaned.length > 0) {
+      try {
+        const { notificationService } = await import('@/services/notification.service');
+        const execSnap = await getAdminDb()
+          .collection(COLLECTIONS.USERS)
+          .where('role', '==', 'executive')
+          .limit(10)
+          .get();
+        for (const jobId of orphaned.slice(0, 5)) {
+          for (const e of execSnap.docs) {
+            await notificationService
+              .create({
+                type: 'system_warning',
+                title: 'Orphaned Forge job detected',
+                description: `Forge job ${jobId} has held its lease for over 1h and may need attention.`,
+                createdAt: Date.now(),
+                userId: e.id,
+                link: '/executive/ai-logs',
+                metadata: { jobId },
+              } as never)
+              .catch(() => {});
+          }
+        }
+      } catch {
+        // Telemetry must never fail the worker run.
+      }
+    }
+  } catch (err) {
+    errors.push(`orphaned-scan: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  return NextResponse.json({ ok: true, processed, finished, errors, orphaned, orphanedJobIds: orphaned });
 }

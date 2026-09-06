@@ -8,8 +8,10 @@ import { verifyFirebaseToken } from '@/lib/verify-auth';
 
 export const runtime = 'nodejs';
 
-function stableDocId(questionId: string, wrongOptionIndex: number): string {
-  return createHash('sha256').update(questionId + ':' + wrongOptionIndex).digest('hex').slice(0, 40);
+// Phase 6 (additive): stable cache id is exactly
+// Hash=SHA256(quizId+questionId+wrongIdx) — direct concatenation, no separators.
+function stableDocId(quizId: string, questionId: string, wrongOptionIndex: number): string {
+  return createHash('sha256').update(quizId + questionId + String(wrongOptionIndex)).digest('hex').slice(0, 40);
 }
 
 export async function POST(req: NextRequest) {
@@ -34,12 +36,18 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getAdminDb();
-    const docId = stableDocId(questionId, wrongOptionIndex);
+    const docId = stableDocId(quizId, questionId, wrongOptionIndex);
     const cacheRef = db.collection('ai_explanations').doc(docId);
     const cacheSnap = await cacheRef.get();
     if (cacheSnap.exists) {
-      const cached = cacheSnap.data() as { explanation: string };
-      return NextResponse.json({ explanation: cached.explanation, cached: true });
+      const cached = cacheSnap.data() as { explanation: string; sources?: string[]; hash?: string };
+      return NextResponse.json({
+        explanation: cached.explanation,
+        cached: true,
+        // Additive: source-sentence attacher + hash echo (older docs omit them).
+        ...(cached.sources ? { sources: cached.sources } : {}),
+        hash: cached.hash ?? docId,
+      });
     }
 
     const [questionSnap, answerKeySnap] = await Promise.all([
@@ -82,18 +90,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: 500 });
     }
 
+    // Phase 6 (additive): persist the source-sentence attacher + exact hash
+    // alongside the explanation. All new fields are additive — older readers
+    // that only use `explanation` are unaffected.
+    const sources = (result as { sources?: string[] }).sources ?? [];
     try {
       await cacheRef.set({
+        quizId,
         questionId,
         wrongOptionIndex,
         explanation: result.explanation,
+        sources,
+        hash: docId,
         createdAt: Date.now(),
       });
     } catch {
       // Best-effort cache
     }
 
-    return NextResponse.json({ explanation: result.explanation, cached: false });
+    return NextResponse.json({ explanation: result.explanation, cached: false, sources, hash: docId });
   } catch (err: unknown) {
     console.error('[Explanation POST] Error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

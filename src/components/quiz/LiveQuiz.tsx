@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, XCircle, Flag, WifiOff, Pause, Play, SkipForward, Trophy, TrendingUp, TrendingDown, Minus, Sparkles } from 'lucide-react';
+import { Clock, Loader2, ArrowRight, ShieldAlert, User, Users, Ban, CheckCircle2, XCircle, Flag, WifiOff, Pause, Play, SkipForward, Trophy, TrendingUp, TrendingDown, Minus, Sparkles, Flame, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -194,6 +194,10 @@ const LiveLeaderboard = React.memo(({ participants, teacherId, currentUserId, pr
                       const isSelf = p.user_id === currentUserId;
                       const showPodium = idx < 3 && total >= 3;
                       const delta = rankDeltas[p.user_id];
+                      // Phase 6 (additive): server-side streak (current_streak/best_streak)
+                      // is display-only here — never computed client-side.
+                      const streak = (p as unknown as { current_streak?: number }).current_streak ?? 0;
+                      const showStreak = streak >= 2;
                       return (
                         <div key={p.user_id} className={cn(
                           "flex items-center gap-2 md:gap-3 p-2 md:p-2.5 rounded-[12px] border transition-all duration-300",
@@ -215,6 +219,17 @@ const LiveLeaderboard = React.memo(({ participants, teacherId, currentUserId, pr
                             <div className="flex flex-col min-w-0">
                                 <span className="text-xs md:text-sm font-semibold truncate max-w-[60px] md:max-w-[80px]">{isSelf ? 'You' : p.name || p.user_id.slice(0, 6)}</span>
                                 <AnimatedScore value={p.score} className={cn('text-[10px] md:text-xs', p.status === 'blocked' ? 'text-destructive' : 'text-primary')} />
+                                {showStreak && (
+                                  <span
+                                    key={`streak-${p.user_id}-${streak}`}
+                                    className="inline-flex items-center gap-0.5 text-[9px] font-bold text-warning animate-in"
+                                    aria-label={`${streak} question streak`}
+                                    title={`${streak} in a row`}
+                                  >
+                                    <Flame className="w-3 h-3 animate-pulse" aria-hidden="true" />
+                                    <span className="tabular-nums">×{streak}</span>
+                                  </span>
+                                )}
                                 {isSelf && p.status !== 'blocked' && (
                                   <span className="text-[9px] text-muted-foreground">Top {percentile}%</span>
                                 )}
@@ -347,11 +362,45 @@ function BattleInterstitial({
   const isUp = rankChange !== null && rankChange > 0;
   const isDown = rankChange !== null && rankChange < 0;
   const isSame = rankChange === 0 || rankChange === null;
+  // Phase 6 (additive): focus trap + Esc dismiss for the round-complete card.
+  // Visual behavior unchanged — auto-dismiss timer still owns the lifecycle.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const continueRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    continueRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onDismiss();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const card = cardRef.current;
+      if (!card) return;
+      const focusables = card.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [onDismiss]);
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 pointer-events-none" role="status" aria-live="polite" aria-atomic="true">
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 pointer-events-none" role="dialog" aria-modal="true" aria-label="Round complete">
       {/* backdrop */}
       <div className="absolute inset-0 bg-background/60 backdrop-blur-sm pointer-events-none" />
-      <div className="relative pointer-events-auto w-full max-w-sm bg-card border border-border/40 rounded-[20px] shadow-elevation-large p-6 text-center animate-in space-y-4">
+      <div ref={cardRef} role="status" aria-live="polite" aria-atomic="true" className="relative pointer-events-auto w-full max-w-sm bg-card border border-border/40 rounded-[20px] shadow-elevation-large p-6 text-center animate-in space-y-4">
         <div className="flex items-center justify-center w-10 h-10 rounded-[12px] bg-primary/10 mx-auto">
           <Sparkles className="w-5 h-5 text-primary" />
         </div>
@@ -377,10 +426,10 @@ function BattleInterstitial({
             {rankChange !== null && rankChange !== 0 ? ` ${Math.abs(rankChange)}` : ''}
           </span>
         </div>
-        <Button variant="ghost" size="sm" onClick={onDismiss} className="w-full h-9 text-xs">
+        <Button ref={continueRef} variant="ghost" size="sm" onClick={onDismiss} className="w-full h-9 text-xs">
           Continue
         </Button>
-        <p className="text-[10px] text-muted-foreground">Auto-continues in 2.5s — Commander can advance early</p>
+        <p className="text-[10px] text-muted-foreground">Auto-continues in 2.5s — Commander can advance early · Press Esc to dismiss</p>
       </div>
     </div>
   );
@@ -764,6 +813,24 @@ const tryAutoAdvance = useCallback(() => {
       if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
     };
   }, []);
+
+  // Phase 6 (additive): hold accessibility — Esc dismisses the frozen reveal
+  // early so keyboard/screen-reader users are never trapped on a stale
+  // question. The REVEAL_HOLD_MS timer still owns the default lifecycle.
+  useEffect(() => {
+    if (!hold) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (holdTimerRef.current) {
+          clearTimeout(holdTimerRef.current);
+          holdTimerRef.current = null;
+        }
+        setHold(null);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [hold]);
 
   const answerStartAt = useMemo(() => {
     if (independent) {
@@ -1168,6 +1235,30 @@ const tryAutoAdvance = useCallback(() => {
             <p className="text-xs text-muted-foreground">The battle won't stall — once the grace period ends, the next question will advance automatically.</p>
           </div>
         </div>
+      )}
+
+      {governance.revealTiming === 'never_during_battle' && quiz.status !== 'finished' && (
+        <div
+          className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-[12px] bg-muted/40 border border-border/50 w-full max-w-4xl"
+          role="note"
+          aria-live="polite"
+        >
+          <EyeOff className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+          <div className="text-sm">
+            <span className="font-medium">Spectator mode — answers hidden during battle</span>
+            <p className="text-xs text-muted-foreground">
+              {isTeacher
+                ? 'Gladiators will not see correct/incorrect feedback until the final podium (never_during_battle).'
+                : 'Correct answers stay hidden until the final podium. Keep fighting — standings reveal at the end.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {hold && (
+        <p className="sr-only" role="status" aria-live="polite">
+          Answer revealed. Press Escape to continue to the next question.
+        </p>
       )}
 
       {interstitial && !isTeacher && !independent && (

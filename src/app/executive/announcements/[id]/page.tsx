@@ -111,7 +111,7 @@ export default function ExecutiveAnnouncementDetailPage({ params }: { params: Pr
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/executive/announcements')} aria-label="Back to announcements" className="shrink-0">
+          <Button variant="ghost" size="icon" onClick={() => router.push('/executive/messages')} aria-label="Back to messages" className="shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="space-y-1 min-w-0">

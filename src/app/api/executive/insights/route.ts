@@ -22,20 +22,22 @@ export async function GET(req: NextRequest) {
     const cutoff = now - WINDOW_MS;
 
     const [aiSnap, securitySnap] = await Promise.all([
-      getAdminDb().collection(COLLECTIONS.AI_LOGS).orderBy('createdAt', 'desc').select('createdAt', 'success', 'durationMs', 'questionCount', 'model').limit(1000).get(),
+      getAdminDb().collection(COLLECTIONS.AI_LOGS).orderBy('createdAt', 'desc').select('createdAt', 'success', 'durationMs', 'questionCount', 'model', 'metadata').limit(1000).get(),
       getAdminDb().collection(COLLECTIONS.SECURITY_LOGS).orderBy('createdAt', 'desc').select('createdAt', 'event').limit(1000).get(),
     ]);
 
     // --- AI insights (last 30 days) ---
-    const aiLogs: Array<Pick<AiLogEntry, 'success' | 'durationMs' | 'questionCount' | 'model'> & { createdAt: number }> = aiSnap.docs
+    const aiLogs: Array<Pick<AiLogEntry, 'success' | 'durationMs' | 'questionCount' | 'model'> & { createdAt: number; cached: boolean }> = aiSnap.docs
       .map(d => {
         const data = d.data();
+        const meta = (data.metadata ?? {}) as Record<string, unknown>;
         return {
           success: data.success === true,
           durationMs: typeof data.durationMs === 'number' ? data.durationMs : 0,
           questionCount: typeof data.questionCount === 'number' ? data.questionCount : 0,
           model: typeof data.model === 'string' ? data.model : 'unknown',
           createdAt: data.createdAt?.toMillis?.() ?? (typeof data.createdAt === 'number' ? data.createdAt : 0),
+          cached: meta.cached === true || data.model === 'cache',
         };
       })
       .filter(l => l.createdAt >= cutoff);
@@ -92,6 +94,21 @@ export async function GET(req: NextRequest) {
     const suspiciousCount = securityLogs.filter(l => l.event === 'suspicious_reconnect' || l.event === 'duplicate_session' || l.event === 'session_replaced').length;
     const rateLimitedCount = securityLogs.filter(l => l.event === 'rate_limited').length;
 
+    const cacheHits = aiLogs.filter(l => l.cached).length;
+    const cacheHitRatio = aiTotal > 0 ? Math.round((cacheHits / aiTotal) * 100) / 100 : 0;
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+    const last24h = aiLogs.filter(l => l.createdAt >= dayAgo);
+    const keyRequests24h = last24h.length;
+    const keyErrors24h = last24h.filter(l => !l.success).length;
+    const keyHealth24h = keyRequests24h > 0 ? Math.round(((keyRequests24h - keyErrors24h) / keyRequests24h) * 100) / 100 : 1;
+    let keyHealth: Array<{ index: number; preview: string; inCooldown: boolean; cooldownRemainingMs: number }> = [];
+    try {
+      const { getKeyHealth } = await import('@/ai/key-resolver');
+      keyHealth = getKeyHealth();
+    } catch {
+      keyHealth = [];
+    }
+
     return NextResponse.json({
       ai: {
         total: aiTotal,
@@ -104,7 +121,14 @@ export async function GET(req: NextRequest) {
         dailyActivity: Object.entries(dailyActivity)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([date, v]) => ({ date, ...v })),
+        cacheHits,
+        cacheHitRatio,
+        keyHealth24h,
+        keyRequests24h,
+        keyErrors24h,
       },
+      keys: keyHealth,
+      telemetry: { cacheHits, cacheHitRatio, keyHealth24h, keyRequests24h, keyErrors24h },
       security: {
         total: securityLogs.length,
         violations: violationCount,

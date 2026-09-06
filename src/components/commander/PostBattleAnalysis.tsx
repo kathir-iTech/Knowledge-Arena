@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { Download, BarChart3, Clock, Target, TrendingUp, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { BattleReplay } from '@/components/battle/BattleReplay';
 
 interface BreakdownItem {
   questionId: string;
@@ -157,6 +158,47 @@ export function PostBattleAnalysis({ quizId }: { quizId: string }) {
           colors={colors}
         />
       </Suspense>
+
+      {/* Read-only question-step replay: State(t) over question order using the
+          already-fetched breakdown + engagement + detailed rows. No new reads,
+          no writes — synthetic per-question timestamps only order the slider. */}
+      <BattleReplay
+        questions={data.questionBreakdown.map(q => ({
+          id: q.questionId,
+          text: q.text,
+          options: q.options,
+          correctAnswerIndex: q.correctOptionIndex,
+          questionStats: {
+            submittedCount: q.submittedCount,
+            correctCount: q.correctCount,
+            optionCounts: q.optionCounts,
+          },
+        }))}
+        participants={data.engagement.map((g, gi) => ({
+          userId: g.gladiatorId,
+          name: g.name,
+          score: g.total,
+          submissions: data.questionBreakdown.map((q, qi) => {
+            const row = data.detailed.find(
+              d => d.gladiatorName === g.name && d.questionText === q.text
+            );
+            if (!row || row.answerGiven === '—') {
+              return { questionId: q.questionId, selectedOption: null, submittedAt: null };
+            }
+            const optIdx = q.options.indexOf(row.answerGiven);
+            return {
+              questionId: q.questionId,
+              selectedOption: optIdx >= 0 ? optIdx : null,
+              // Synthetic ordering stamp: question order + stable per-gladiator
+              // offset so the time slider steps through answers deterministically.
+              submittedAt: (qi + 1) * 60000 + (gi % 10) * 100,
+            };
+          }),
+        }))}
+        timeline={[]}
+        engagement={data.engagement}
+        title="Battle Replay (question-step)"
+      />
 
       {/* Question-by-question breakdown details */}
       <Card>

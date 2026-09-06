@@ -1043,9 +1043,13 @@ function buildPrompt(text: string, difficulty: string, questionCount: number): s
     moderate: 'Intermediate (Concept Application)',
     hard: 'Advanced (Critical Synthesis)',
   };
+  const exemplars = getForgeFewShotExemplars(difficulty);
   return `Generate exactly ${questionCount} high-quality multiple-choice questions based on the following content.
 
 Difficulty: ${difficultyMap[difficulty]}
+
+Few-shot examples (${difficulty} style — follow this quality and format, do NOT copy content):
+${exemplars}
 - Questions must be derived ONLY from the provided content.
 - Provide exactly 4 options for each question.
 - Ensure distractors are plausible but incorrect.
@@ -1073,9 +1077,13 @@ function buildVisionPrompt(text: string, difficulty: string, questionCount: numb
     moderate: 'Intermediate (Concept Application)',
     hard: 'Advanced (Critical Synthesis)',
   };
+  const exemplars = getForgeFewShotExemplars(difficulty);
   return `Generate exactly ${questionCount} high-quality multiple-choice questions based on the following content and the provided image(s).
 
 Difficulty: ${difficultyMap[difficulty]}
+
+Few-shot examples (${difficulty} style — follow this quality and format, do NOT copy content):
+${exemplars}
 - Questions must be derived ONLY from the provided content.
 - Provide exactly 4 options for each question.
 - Ensure distractors are plausible but incorrect.
@@ -1095,6 +1103,121 @@ Output format MUST be a JSON object with a "questions" array:
 
 Content:
 ${text}`;
+}
+
+// ── Phase 2 prompt/output hardening (prompt/output layer ONLY) ───────
+// Few-shot exemplars per difficulty (3 each). Injected into buildPrompt /
+// buildVisionPrompt text only — QuizQuestionOutputSchema is unchanged and
+// repairJson's 3-tier repair is untouched.
+function getForgeFewShotExemplars(difficulty: string): string {
+  const blocks: Record<string, string> = {
+    easy: [
+      'EX 1 (easy/recall): {"text": "What organelle is known as the powerhouse of the cell?", "options": ["Nucleus", "Mitochondria", "Ribosome", "Golgi apparatus"], "correctAnswerIndex": 1, "explanation": "Mitochondria generate ATP through cellular respiration."}',
+      'EX 2 (easy/recall): {"text": "Which planet is closest to the Sun?", "options": ["Venus", "Earth", "Mercury", "Mars"], "correctAnswerIndex": 2, "explanation": "Mercury orbits closest to the Sun."}',
+      'EX 3 (easy/recall): {"text": "What is H2O commonly known as?", "options": ["Salt", "Water", "Oxygen", "Hydrogen"], "correctAnswerIndex": 1, "explanation": "H2O is the chemical formula for water."}',
+    ].join('\n'),
+    moderate: [
+      'EX 1 (moderate/application): {"text": "A plant kept in the dark for 48 hours is exposed to light with a destarched leaf partially covered. Why is iodine brown on the covered part?", "options": ["No chlorophyll there", "No photosynthesis without light", "Too much water", "Starch moved away"], "correctAnswerIndex": 1, "explanation": "The covered region received no light, so no starch formed and iodine stays brown."}',
+      'EX 2 (moderate/application): {"text": "If a circuit doubles voltage while resistance stays constant, what happens to current?", "options": ["Halves", "Doubles", "Stays the same", "Quadruples"], "correctAnswerIndex": 1, "explanation": "Ohm\\u0027s law I=V/R: doubling V doubles I."}',
+      'EX 3 (moderate/application): {"text": "A historian finds two conflicting accounts of one event. What is the best next step?", "options": ["Pick the longer account", "Corroborate with a third independent source", "Discard both", "Choose the older one"], "correctAnswerIndex": 1, "explanation": "Corroboration across independent sources is the standard method."}',
+    ].join('\n'),
+    hard: [
+      'EX 1 (hard/synthesis): {"text": "Two studies on the same drug reach opposite conclusions with similar sample sizes. Which flaw most undermines a causal claim?", "options": ["Different journal prestige", "Uncontrolled confounding differing between cohorts", "Different font in reports", "Authors from different countries"], "correctAnswerIndex": 1, "explanation": "Uncontrolled confounding breaks causal identification even with equal N."}',
+      'EX 2 (hard/synthesis): {"text": "An economy shows rising GDP with falling median wages and rising debt. Which inference is most defensible?", "options": ["Everyone is better off", "Growth is concentrated and debt-financed", "GDP is mismeasured to zero", "Wages are irrelevant"], "correctAnswerIndex": 1, "explanation": "Aggregates can rise while medians fall when gains concentrate at the top."}',
+      'EX 3 (hard/synthesis): {"text": "A model scores 99% on training but 60% on unseen data from a new hospital. What is the primary diagnosis?", "options": ["Underfitting", "Overfitting / distribution shift", "Perfect generalization", "Label noise only"], "correctAnswerIndex": 1, "explanation": "Large train-test gap plus site shift indicates overfitting to the source distribution."}',
+    ].join('\n'),
+  };
+  return blocks[difficulty] ?? blocks.moderate;
+}
+
+// Cross-tick near-duplicate filter (prompt/output layer only).
+// Normalizes text (lower + trim + collapse whitespace); drops an incoming
+// question when Jaccard token overlap vs any existing question exceeds 0.90.
+function normalizeForgeQuestionText(s: string): string {
+  return s.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function tokenizeForgeQuestionText(s: string): string[] {
+  return normalizeForgeQuestionText(s).split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function jaccardForgeSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  const setA = new Set(tokenizeForgeQuestionText(a));
+  const setB = new Set(tokenizeForgeQuestionText(b));
+  if (setA.size === 0 && setB.size === 0) return 1;
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersection = 0;
+  for (const tok of setA) {
+    if (setB.has(tok)) intersection++;
+  }
+  const union = setA.size + setB.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function isNearDuplicateForgeQuestion(a: string, b: string): boolean {
+  const na = normalizeForgeQuestionText(a);
+  const nb = normalizeForgeQuestionText(b);
+  if (na === nb) return true;
+  return jaccardForgeSimilarity(na, nb) > 0.9;
+}
+
+function dedupeForgeQuestions(
+  existing: ForgeQuestion[],
+  incoming: ForgeQuestion[]
+): { kept: ForgeQuestion[]; dropped: number } {
+  const kept: ForgeQuestion[] = [];
+  const seen: string[] = existing.map((q) => q.text ?? '');
+  let dropped = 0;
+  for (const q of incoming) {
+    const duplicate = seen.some((prev) => isNearDuplicateForgeQuestion(prev, q.text ?? ''));
+    if (duplicate) {
+      dropped++;
+      continue;
+    }
+    kept.push(q);
+    seen.push(q.text ?? '');
+  }
+  return { kept, dropped };
+}
+
+// Grounding score (prompt/output layer only — warnings, never failures):
+// GroundingScore(Q, D) = |Tokens(Q) ∩ Tokens(D)| / |Tokens(Q)|.
+// Tokens are lowercased alphanumeric tokens. Q = question text + options.
+// If score < 0.70, callers attach a warnings entry; the job still succeeds.
+function tokenizeGroundingText(s: string): string[] {
+  return s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function groundingScoreForQuestion(q: ForgeQuestion, docTokenSet: Set<string>): number {
+  const qText = [q.text ?? '', ...(q.options ?? [])].join(' ');
+  const qTokens = tokenizeGroundingText(qText);
+  if (qTokens.length === 0) return 1;
+  let hits = 0;
+  for (const tok of qTokens) {
+    if (docTokenSet.has(tok)) hits++;
+  }
+  return hits / qTokens.length;
+}
+
+function groundingWarningsForQuestions(
+  questions: ForgeQuestion[],
+  docText: string,
+  threshold = 0.7
+): string[] {
+  const warnings: string[] = [];
+  if (questions.length === 0) return warnings;
+  const docTokenSet = new Set(tokenizeGroundingText(docText));
+  if (docTokenSet.size === 0) return warnings;
+  questions.forEach((q, i) => {
+    const score = groundingScoreForQuestion(q, docTokenSet);
+    if (score < threshold) {
+      warnings.push(
+        `Question ${i + 1} may be weakly grounded in the source (score ${score.toFixed(2)} < ${threshold.toFixed(2)}).`
+      );
+    }
+  });
+  return warnings;
 }
 
 // Shared generation step used by both the legacy `pdfDataUri` flow and the
@@ -1258,6 +1381,8 @@ interface ForgeTickOutput {
   retryAfterMs?: number;
   engine?: string | null;
   cached?: boolean;
+  /** Phase 2 grounding warnings — informational only, never fails the job. */
+  warnings?: string[];
 }
 
 interface ForgeCreateOutput {
@@ -1624,7 +1749,14 @@ export async function runForgeTick(input: RunForgeTickInput): Promise<ForgeTickO
     return { status: 'queued', jobId, generatedCount: job.generatedCount, questionCount: job.questionCount, progressNote: `Retrying in ${Math.round(backoff / 1000)}s`, questions: [], retryAfterMs: backoff };
   }
 
-  const toAdd = resolvedAttempt.questions.slice(0, requested);
+  const rawToAdd = (resolvedAttempt.questions as ForgeQuestion[]).slice(0, requested);
+  // Phase 2 cross-tick dedupe (prompt/output layer only): drop incoming
+  // questions whose normalized text has Jaccard/token overlap > 0.90 vs any
+  // already-accumulated job question (or earlier question in this batch).
+  const existingQuestions = ((job.questions as ForgeQuestion[] | undefined) ?? []) as ForgeQuestion[];
+  const { kept: toAdd, dropped: dedupedCount } = dedupeForgeQuestions(existingQuestions, rawToAdd);
+  // Phase 2 grounding score (warnings only — never fails the job).
+  const groundingWarnings = groundingWarningsForQuestions(toAdd, normalizedText, 0.7);
   const generatedCount = job.generatedCount + toAdd.length;
   const final = generatedCount >= job.questionCount || nextCursor.ticks >= FORGE_MAX_TICKS;
 
@@ -1643,7 +1775,13 @@ export async function runForgeTick(input: RunForgeTickInput): Promise<ForgeTickO
     const doneJob = finalized ?? { ...job, status: AI_JOB_DONE, generatedCount, questions: toAdd };
     doneJob.generatedCount = generatedCount;
     if (!doneJob.questions) doneJob.questions = [];
-    return buildTerminalOutput(doneJob);
+    const terminal = buildTerminalOutput(doneJob);
+    if (groundingWarnings.length > 0 || dedupedCount > 0) {
+      const notes: string[] = [...groundingWarnings];
+      if (dedupedCount > 0) notes.push(`${dedupedCount} near-duplicate question(s) dropped across ticks.`);
+      terminal.warnings = notes;
+    }
+    return terminal;
   }
 
   return {
@@ -1651,8 +1789,12 @@ export async function runForgeTick(input: RunForgeTickInput): Promise<ForgeTickO
     jobId,
     generatedCount,
     questionCount: job.questionCount,
-    progressNote: `${generatedCount}/${job.questionCount} questions generated`,
+    progressNote:
+      dedupedCount > 0
+        ? `${generatedCount}/${job.questionCount} questions generated (${dedupedCount} duplicate(s) dropped)`
+        : `${generatedCount}/${job.questionCount} questions generated`,
     questions: [],
     engine: resolvedAttempt.engine,
+    warnings: groundingWarnings.length > 0 ? groundingWarnings : undefined,
   };
 }

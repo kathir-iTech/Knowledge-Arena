@@ -48,6 +48,26 @@ function normalizeQuiz(data: Record<string, unknown>): void {
   }
 }
 
+// Phase 6 (additive, pre-write only): same recommended bands as
+// arena-creation.service assertScoringBounds — score_max [500,2000],
+// wrong_penalty [0,500], skip_penalty [0,200]. Validates before the gated
+// config/settings setDoc merge; never touches normalizeScoringConfig Math.max.
+function assertScoringBoundsForUpdate(sc?: {
+  score_max?: number;
+  wrong_penalty?: number;
+  skip_penalty?: number;
+}): void {
+  if (sc?.score_max !== undefined && (sc.score_max < 500 || sc.score_max > 2000)) {
+    throw new Error(`score_max ${sc.score_max} outside recommended band [500, 2000]`);
+  }
+  if (sc?.wrong_penalty !== undefined && (sc.wrong_penalty < 0 || sc.wrong_penalty > 500)) {
+    throw new Error(`wrong_penalty ${sc.wrong_penalty} outside recommended band [0, 500]`);
+  }
+  if (sc?.skip_penalty !== undefined && (sc.skip_penalty < 0 || sc.skip_penalty > 200)) {
+    throw new Error(`skip_penalty ${sc.skip_penalty} outside recommended band [0, 200]`);
+  }
+}
+
 export const quizService = {
   async getQuizById(id: string): Promise<ValidatedQuiz> {
     const db = getFirestore();
@@ -289,6 +309,9 @@ export const quizService = {
     // must never sit on the parent quiz doc). setDoc with merge creates the
     // doc on first write and patches it on later updates.
     if (data.scoring_config !== undefined) {
+      // Phase 6: additive pre-write check — throws on out-of-band values,
+      // otherwise the merge behavior below is unchanged.
+      assertScoringBoundsForUpdate(data.scoring_config);
       await setDoc(
         doc(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC),
         { scoring_config: data.scoring_config },

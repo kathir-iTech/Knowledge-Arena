@@ -20,6 +20,14 @@ jobs:
 
       - run: npm ci
 
+      - name: Firestore rules hash gate (template must match compiled rules)
+        run: |
+          cp firestore.rules /tmp/firestore.rules.committed
+          npm run rules:generate
+          echo "SHA256 committed:"; sha256sum /tmp/firestore.rules.committed
+          echo "SHA256 generated:"; sha256sum firestore.rules
+          cmp -s /tmp/firestore.rules.committed firestore.rules || (echo "firestore.rules drifted from template — run npm run rules:generate and commit"; exit 1)
+
       - run: npm run typecheck
 
       - run: npm run build
@@ -33,4 +41,4 @@ jobs:
         run: npm install -g firebase-tools
 
       - name: Run Playwright test suite (emulator, gating)
-        run: npx firebase emulators:exec --only firestore,auth --project demo-test "npx playwright test tests/phase114-responsive.spec.ts tests/landing.spec.ts --reporter=list"
+        run: npx firebase emulators:exec --only firestore,auth --project demo-test "npx playwright test tests/phase114-responsive.spec.ts tests/landing.spec.ts tests/phase113-e2e.spec.ts tests/command-center.spec.ts --reporter=list"

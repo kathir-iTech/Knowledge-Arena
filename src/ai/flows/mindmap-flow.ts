@@ -89,19 +89,50 @@ async function callMindmapWithRotation(promptText: string): Promise<unknown> {
   throw lastError;
 }
 
-export const mindmapFlow = ai.defineFlow(
-  {
-    name: 'mindmapFlow',
-    inputSchema: MindMapInputSchema,
-    outputSchema: MindMapOutputSchema,
-  },
-  async (input) => {
-    const promptText = `You are an educational content analyst. Given a set of quiz questions and their correct answers, generate a structured mind map that organizes the concepts into topic clusters.
+function countMindmapSubtopics(data: MindMapData | null | undefined): number {
+  if (!data?.nodes) return 0;
+  return data.nodes.reduce((n, node) => n + (node.subtopics?.length ?? 0), 0);
+}
 
-Quiz Title: ${input.quizTitle}
+function mergeMindmaps(primary: MindMapData, secondary: MindMapData): MindMapData {
+  const seen = new Set(primary.nodes.map((n) => n.topic.toLowerCase()));
+  const nodes = [...primary.nodes];
+  for (const n of secondary.nodes) {
+    if (!seen.has(n.topic.toLowerCase())) {
+      seen.add(n.topic.toLowerCase());
+      nodes.push(n);
+    } else {
+      const existing = nodes.find((x) => x.topic.toLowerCase() === n.topic.toLowerCase());
+      if (existing) {
+        const subSeen = new Set(existing.subtopics.map((s) => s.toLowerCase()));
+        for (const s of n.subtopics) {
+          if (!subSeen.has(s.toLowerCase())) {
+            subSeen.add(s.toLowerCase());
+            existing.subtopics.push(s);
+          }
+        }
+      }
+    }
+  }
+  const connSeen = new Set(primary.connections.map((c) => `${c.from}→${c.to}`));
+  const connections = [...primary.connections];
+  for (const c of secondary.connections) {
+    const k = `${c.from}→${c.to}`;
+    if (!connSeen.has(k)) {
+      connSeen.add(k);
+      connections.push(c);
+    }
+  }
+  return { title: primary.title, nodes, connections };
+}
+
+function buildMindmapPrompt(quizTitle: string, questions: MindMapInput['questions']): string {
+  return `You are an educational content analyst. Given a set of quiz questions and their correct answers, generate a structured mind map that organizes the concepts into topic clusters.
+
+Quiz Title: ${quizTitle}
 
 Questions and Correct Answers:
-${input.questions.map((q, i) => `${i + 1}. Q: ${q.text}\n   A: ${q.correctAnswer}`).join('\n')}
+${questions.map((q, i) => `${i + 1}. Q: ${q.text}\n   A: ${q.correctAnswer}`).join('\n')}
 
 Generate a mind map with:
 1. A central node (the quiz title / main subject area)
@@ -110,22 +141,49 @@ Generate a mind map with:
 4. Connections between related topic clusters
 
 Return JSON matching the schema: { title, nodes: [{topic, subtopics[]}], connections: [{from, to, label?}] }`;
+}
 
-    const response = await callMindmapWithRotation(promptText) as { output?: MindMapData; text?: string };
+async function runMindmapOnce(quizTitle: string, questions: MindMapInput['questions']): Promise<MindMapData | null> {
+  const promptText = buildMindmapPrompt(quizTitle, questions);
+  const response = (await callMindmapWithRotation(promptText)) as { output?: MindMapData; text?: string };
+  const out = response.output;
+  if (out?.nodes && out.nodes.length > 0) return out;
+  const raw = response.text ?? '';
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.nodes && parsed.nodes.length > 0) return parsed as MindMapData;
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
-    const out = (response as { output?: MindMapData; text?: string }).output;
-    if (out?.nodes && out.nodes.length > 0) {
-      return out;
-    }
-    // Fallback: try to parse raw text as JSON
-    const raw = (response as { text?: string }).text ?? '';
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed.nodes && parsed.nodes.length > 0) {
-        return parsed as MindMapData;
+export const mindmapFlow = ai.defineFlow(
+  {
+    name: 'mindmapFlow',
+    inputSchema: MindMapInputSchema,
+    outputSchema: MindMapOutputSchema,
+  },
+  async (input) => {
+    const first = await runMindmapOnce(input.quizTitle, input.questions);
+    if (first) {
+      // Phase 6 (additive): multi-chunk fallback — when visual/text extraction
+      // was partial, the first pass covers only a fraction of the questions.
+      // Retry once with the second half as its own chunk and merge, so a
+      // truncated first chunk does not silently drop half the quiz.
+      const covered = countMindmapSubtopics(first);
+      const partial = covered < Math.ceil(input.questions.length / 2);
+      if (!partial || input.questions.length < 2) return first;
+      try {
+        const mid = Math.ceil(input.questions.length / 2);
+        const secondChunk = input.questions.slice(mid);
+        if (secondChunk.length === 0) return first;
+        const second = await runMindmapOnce(input.quizTitle, secondChunk);
+        if (second && second.nodes.length > 0) return mergeMindmaps(first, second);
+      } catch {
+        // Second-chunk retry is best-effort — keep the first pass.
       }
-    } catch {
-      // ignore
+      return first;
     }
     // Minimal fallback — single node with all topics
     return {

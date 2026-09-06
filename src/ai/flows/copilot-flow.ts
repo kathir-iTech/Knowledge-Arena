@@ -27,6 +27,8 @@ const CopilotInputSchema = z.object({
   userMessage: z.string().min(1).max(2000).describe('Commander request: rephrase, improve, or generate.'),
   questionContext: z.string().optional().describe('Current question text + options if editing.'),
   titleContext: z.string().optional().describe('Arena title for theme context.'),
+  domain: z.string().max(80).optional().describe('Subject domain for few-shot templating (e.g. Biology, History).'),
+  difficulty: z.enum(['easy', 'moderate', 'hard']).optional().describe('Target difficulty for few-shot templating.'),
   idToken: z.string().describe('Firebase ID token for auth.'),
 });
 export type CopilotInput = z.infer<typeof CopilotInputSchema>;
@@ -37,6 +39,68 @@ const CopilotOutputSchema = z.object({
   rawSuggestion: z.string().optional(),
 });
 export type CopilotOutput = z.infer<typeof CopilotOutputSchema>;
+
+// ── Phase 2 Copilot prompt templating (prompt/output layer ONLY) ─────
+// Prompt_final = SystemRole + 3 exemplars (domain+difficulty) +
+// Context_quiz + UserQuery. Rate limit (10/min dual-layer) and
+// per-request createGenkitForKey (never singleton ai) are unchanged.
+const COPILOT_SYSTEM_ROLE =
+  'You are an expert quiz question writer. Help the Commander improve, rephrase, or generate new questions for their arena.';
+
+function getCopilotFewShotExemplars(difficulty?: string, domain?: string): string {
+  const scope = domain?.trim() ? ` (domain: ${domain.trim().slice(0, 80)})` : '';
+  const blocks: Record<string, string> = {
+    easy: [
+      `EX 1 (easy${scope}): Suggestion: "Kept one fact per question with short options." Question: {"text": "What gas do plants absorb for photosynthesis?", "options": ["Oxygen", "Carbon dioxide", "Nitrogen", "Helium"], "correctAnswerIndex": 1, "explanation": "Plants absorb carbon dioxide and release oxygen."}`,
+      `EX 2 (easy${scope}): Suggestion: "Used plain wording and one clearly correct option." Question: {"text": "Which instrument measures temperature?", "options": ["Barometer", "Thermometer", "Ammeter", "Voltmeter"], "correctAnswerIndex": 1, "explanation": "A thermometer measures temperature."}`,
+      `EX 3 (easy${scope}): Suggestion: "Tested recall of a single definition." Question: {"text": "What does CPU stand for?", "options": ["Central Processing Unit", "Computer Personal Unit", "Central Program Utility", "Control Processing Unit"], "correctAnswerIndex": 0, "explanation": "CPU stands for Central Processing Unit."}`,
+    ].join('\n'),
+    moderate: [
+      `EX 1 (moderate${scope}): Suggestion: "Asked the Commander to apply the concept to a new case." Question: {"text": "A sealed syringe is compressed at constant temperature. What happens to the gas pressure?", "options": ["Decreases", "Stays the same", "Increases", "Drops to zero"], "correctAnswerIndex": 2, "explanation": "Boyle's law: smaller volume at constant temperature means higher pressure."}`,
+      `EX 2 (moderate${scope}): Suggestion: "Required inference from two facts rather than recall." Question: {"text": "A night-shift nurse notices a patient is most alert at 2 AM. Which rhythm best explains this?", "options": ["Ultradian hunger cycle", "Shifted circadian rhythm", "Menstrual cycle", "Cardiac cycle"], "correctAnswerIndex": 1, "explanation": "Circadian rhythms shift with sustained night activity."}`,
+      `EX 3 (moderate${scope}): Suggestion: "Made distractors share the same category as the answer." Question: {"text": "Which source is strongest for verifying a breaking news claim?", "options": ["A viral screenshot", "Two independent reputable outlets", "An anonymous comment", "A year-old article"], "correctAnswerIndex": 1, "explanation": "Independent corroboration by reputable outlets is strongest."}`,
+    ].join('\n'),
+    hard: [
+      `EX 1 (hard${scope}): Suggestion: "Forced synthesis across conflicting evidence." Question: {"text": "Two equal-size trials of a fertilizer disagree. Trial A irrigated, Trial B did not. What most undermines a blanket causal claim?", "options": ["Journal prestige differs", "Uncontrolled irrigation confound", "Different harvest months only", "Author nationality"], "correctAnswerIndex": 1, "explanation": "Irrigation confounds the fertilizer effect, blocking a general causal claim."}`,
+      `EX 2 (hard${scope}): Suggestion: "Tested evaluation of a flawed argument." Question: {"text": "A policy memo argues crime fell after cameras were installed, so cameras caused the fall. What is the key weakness?", "options": ["Cameras are expensive", "No control for concurrent patrol increases", "Crime data is boring", "Memos are short"], "correctAnswerIndex": 1, "explanation": "Without controlling for concurrent changes, causation is not identified."}`,
+      `EX 3 (hard${scope}): Suggestion: "Required diagnosing distribution shift, not just accuracy." Question: {"text": "A quiz generator scores well on training topics but poorly on unseen domains. What is the primary diagnosis?", "options": ["Perfect generalization", "Overfitting to training distribution", "Too much data", "No possible fix"], "correctAnswerIndex": 1, "explanation": "The gap indicates overfitting to the training topic distribution."}`,
+    ].join('\n'),
+  };
+  if (difficulty && blocks[difficulty]) return blocks[difficulty];
+  return blocks.moderate;
+}
+
+function buildCopilotPrompt(input: CopilotInput): string {
+  const systemRole = COPILOT_SYSTEM_ROLE;
+  const exemplars = getCopilotFewShotExemplars(input.difficulty, input.domain);
+  const contextQuiz = [
+    input.titleContext ? `Arena title: ${input.titleContext}` : '',
+    input.domain ? `Domain: ${input.domain}` : '',
+    input.difficulty ? `Target difficulty: ${input.difficulty}` : '',
+    input.questionContext
+      ? `Current question context:\n${input.questionContext}`
+      : 'No current question — the commander wants a brand new question.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const userQuery = `Commander request: ${input.userMessage}`;
+  // Prompt_final = SystemRole + 3 exemplars + Context_quiz + UserQuery
+  return `${systemRole}
+
+Few-shot examples (follow this quality and format, do NOT copy content):
+${exemplars}
+
+Quiz context:
+${contextQuiz}
+
+${userQuery}
+
+Respond with:
+1. A concise suggestion (1-2 sentences) describing what you did.
+2. A complete multiple-choice question with exactly 4 options, a correct answer index (0-3), and a short explanation. If the commander only asked for advice (not a new question), you may still provide a best-effort example question.
+
+Output JSON must match the schema: { suggestion, generatedQuestion: { text, options[4], correctAnswerIndex, explanation } }`;
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -98,17 +162,8 @@ export const copilotFlow = ai.defineFlow(
     outputSchema: CopilotOutputSchema,
   },
   async (input) => {
-    const promptText = `You are an expert quiz question writer. Help the Commander improve, rephrase, or generate new questions for their arena.
-
-Commander request: ${input.userMessage}
-${input.titleContext ? `Arena title: ${input.titleContext}` : ''}
-${input.questionContext ? `Current question context:\n${input.questionContext}` : 'No current question — the commander wants a brand new question.'}
-
-Respond with:
-1. A concise suggestion (1-2 sentences) describing what you did.
-2. A complete multiple-choice question with exactly 4 options, a correct answer index (0-3), and a short explanation. If the commander only asked for advice (not a new question), you may still provide a best-effort example question.
-
-Output JSON must match the schema: { suggestion, generatedQuestion: { text, options[4], correctAnswerIndex, explanation } }`;
+    // Phase 2: Prompt_final = SystemRole + 3 exemplars + Context_quiz + UserQuery
+    const promptText = buildCopilotPrompt(input);
 
     const { response } = await callCopilotWithRotation(promptText);
 

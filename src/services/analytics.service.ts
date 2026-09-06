@@ -78,6 +78,31 @@ export interface QuestionAnalytics {
   optionDistribution: { label: string; count: number; isCorrect: boolean }[];
   commonWrongAnswer: { option: string; count: number } | null;
   totalSubmissions: number;
+  // --- Phase 3 item calibration (pure, no schema change) ---
+  /** Classical difficulty: correctCount / submittedCount in [0,1]. 0 when no submissions. */
+  pValue: number;
+  /**
+   * Point-biserial discrimination: Pearson corr(correct 0/1, total score).
+   * Null when per-student correctness is unavailable (writeQuestionStats
+   * intentionally stores only aggregates for privacy) or when
+   * submittedCount < 30 (too noisy — callers should use p-value only).
+   */
+  discrimination: number | null;
+  /** Stored difficulty label on the question doc, normalized (easy/medium/hard) or null. */
+  difficultyLabel: string | null;
+  /** Re-label suggestion ('easy'|'medium'|'hard') or null when no evidence. */
+  suggestedDifficulty: string | null;
+  /** True when p-value strongly contradicts the stored label. */
+  miscalibrated: boolean;
+  miscalibrationReason: string | null;
+  /** True only when submittedCount >= 30 (2PL gate). */
+  irtAvailable: boolean;
+  /** 2PL difficulty b ≈ logit(1-p). Null when !irtAvailable. */
+  irtDifficulty: number | null;
+  /** 2PL discrimination a mapped from corr (default 1.0). Null when !irtAvailable. */
+  irtDiscrimination: number | null;
+  /** P(θ=0) under the fitted 2PL. Null when !irtAvailable. */
+  irtProbabilityAtAverage: number | null;
 }
 
 export interface OverviewStats {
@@ -149,6 +174,114 @@ function scoreHistogram(scores: number[]): { range: string; count: number }[] {
     else buckets[4]++;
   }
   return ranges.map((range, i) => ({ range, count: buckets[i] }));
+}
+
+// --- Phase 3 item calibration helpers (pure, no schema change) ---
+
+/** Minimum submissions for a stable 2PL fit; below this use p-value only. */
+export const IRT_MIN_N = 30;
+
+function round3(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.round(v * 1000) / 1000;
+}
+
+/** Pearson corr(x, y). Null when degenerate (<2 points or zero variance). */
+export function pearsonCorr(x: number[], y: number[]): number | null {
+  if (x.length !== y.length || x.length < 2) return null;
+  const n = x.length;
+  const mx = x.reduce((a, b) => a + b, 0) / n;
+  const my = y.reduce((a, b) => a + b, 0) / n;
+  let num = 0;
+  let dx = 0;
+  let dy = 0;
+  for (let i = 0; i < n; i++) {
+    const ax = x[i] - mx;
+    const ay = y[i] - my;
+    num += ax * ay;
+    dx += ax * ax;
+    dy += ay * ay;
+  }
+  if (dx <= 0 || dy <= 0) return null;
+  const r = num / Math.sqrt(dx * dy);
+  if (!Number.isFinite(r)) return null;
+  return Math.max(-1, Math.min(1, Math.round(r * 1000) / 1000));
+}
+
+/** 2PL item response function: P_i(θ) = 1 / (1 + e^{-a(θ-b)}). */
+export function twoPL(theta: number, a: number, b: number): number {
+  if (!Number.isFinite(theta) || !Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  const clampedA = Math.max(0.2, Math.min(2.5, a));
+  const z = clampedA * (theta - b);
+  if (z > 30) return 1;
+  if (z < -30) return 0;
+  return 1 / (1 + Math.exp(-z));
+}
+
+/** Difficulty b from p-value via logit: b = ln((1-p)/p). Easy → negative. */
+export function estimateIrtDifficulty(pValue: number): number {
+  const p = Math.max(0.05, Math.min(0.95, pValue));
+  return round3(Math.log((1 - p) / p));
+}
+
+/** Map point-biserial corr (-1..1) to 2PL slope a (0.2..2.5). Default 1.0. */
+export function estimateIrtDiscrimination(corr: number | null): number {
+  if (corr == null || !Number.isFinite(corr)) return 1.0;
+  return round3(Math.max(0.2, Math.min(2.5, 1.0 + corr)));
+}
+
+function normalizeDifficultyLabel(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const s = v.toLowerCase().trim();
+  if (s === 'easy') return 'easy';
+  if (s === 'medium' || s === 'moderate') return 'medium';
+  if (s === 'hard') return 'hard';
+  return null;
+}
+
+function suggestedFromP(p: number): 'easy' | 'medium' | 'hard' {
+  if (p >= 0.8) return 'easy';
+  if (p < 0.3) return 'hard';
+  return 'medium';
+}
+
+export function suggestDifficultyRelabel(
+  pValue: number,
+  difficultyLabel: string | null,
+  submittedCount: number,
+  quizAvgScore?: number,
+): { suggestedDifficulty: string | null; miscalibrated: boolean; reason: string | null } {
+  if (submittedCount <= 0) {
+    return { suggestedDifficulty: null, miscalibrated: false, reason: null };
+  }
+  const suggested = suggestedFromP(pValue);
+  if (!difficultyLabel) {
+    return { suggestedDifficulty: suggested, miscalibrated: false, reason: null };
+  }
+  if (difficultyLabel === suggested) {
+    return { suggestedDifficulty: null, miscalibrated: false, reason: null };
+  }
+  const pct = Math.round(pValue * 100);
+  const lowAbility = typeof quizAvgScore === 'number' && Number.isFinite(quizAvgScore) && quizAvgScore < 500;
+  const strong =
+    pValue >= 0.8 ||
+    pValue < 0.3 ||
+    (difficultyLabel === 'hard' && pValue > 0.65) ||
+    (difficultyLabel === 'easy' && pValue < 0.45);
+  if (!strong) {
+    return { suggestedDifficulty: null, miscalibrated: false, reason: null };
+  }
+  let reason: string;
+  if (difficultyLabel === 'hard' && pValue > 0.8) {
+    reason = lowAbility
+      ? `Hard question answered correctly by ${pct}% despite low average ability — consider easing to ${suggested}.`
+      : `Hard question answered correctly by ${pct}% — consider easing to ${suggested}.`;
+  } else if (difficultyLabel === 'easy' && pValue < 0.3) {
+    reason = `Easy question answered correctly by only ${pct}% — consider hardening to ${suggested}.`;
+  } else {
+    reason = `Labelled ${difficultyLabel} but p-value ${pct}% suggests ${suggested}.`;
+  }
+  return { suggestedDifficulty: suggested, miscalibrated: true, reason };
 }
 
 export function computeAnalytics(
@@ -352,7 +485,16 @@ export function computeAnalytics(
     const akMap = new Map(aks.map(ak => [ak.id, ak.correct_option_index]));
     const qStats = statsMap[q.id] || {};
 
-    const totalParts = (participantsMap[q.id] || []).filter(p => p.user_id !== (q as ValidatedQuiz).created_by).length;
+    const quizParts = (participantsMap[q.id] || []).filter(p => p.user_id !== (q as ValidatedQuiz).created_by);
+    const totalParts = quizParts.length;
+    const quizAvgScore = quizParts.length
+      ? quizParts.reduce((s, p) => s + (p.score || 0), 0) / quizParts.length
+      : NaN;
+    // Ability proxy (theta) per participant: z-scored total. Used only to join
+    // with per-student correctness when a future stats payload carries it —
+    // current writeQuestionStats stores aggregates only (privacy), so
+    // discrimination stays null until such data exists. No schema change here.
+    const scoreByUser = new Map(quizParts.map(p => [p.user_id, p.score || 0]));
 
     for (const question of questions) {
       const stats = qStats[question.id];
@@ -393,6 +535,54 @@ export function computeAnalytics(
         }
       }
 
+      // --- Phase 3 calibration: p-value always; discrimination + 2PL gated ---
+      const pValue = submitted > 0 ? round3(correct / submitted) : 0;
+      const difficultyLabel = normalizeDifficultyLabel((question as unknown as Record<string, unknown>).difficulty);
+      const relabel = suggestDifficultyRelabel(pValue, difficultyLabel, submitted, quizAvgScore);
+
+      let discrimination: number | null = null;
+      if (submitted >= IRT_MIN_N && stats) {
+        // corr(correct 0/1, total score). Current aggregates carry no
+        // per-student correctness (privacy by design), so look only for an
+        // optional future payload without changing the stored schema.
+        const raw = stats as unknown as Record<string, unknown>;
+        const perUser =
+          (raw.userCorrect as Record<string, number | boolean> | undefined) ??
+          (raw.perUserCorrect as Record<string, number | boolean> | undefined) ??
+          (raw.userCorrectMap as Record<string, number | boolean> | undefined);
+        if (perUser && typeof perUser === 'object') {
+          const xs: number[] = [];
+          const ys: number[] = [];
+          for (const [uid, v] of Object.entries(perUser)) {
+            const y = scoreByUser.get(uid);
+            if (y == null) continue;
+            xs.push(v === true || v === 1 ? 1 : 0);
+            ys.push(y);
+          }
+          discrimination = pearsonCorr(xs, ys);
+        }
+      }
+
+      const irtAvailable = submitted >= IRT_MIN_N;
+      const irtDifficulty = irtAvailable ? estimateIrtDifficulty(pValue) : null;
+      const irtDiscrimination = irtAvailable ? estimateIrtDiscrimination(discrimination) : null;
+      const irtProbabilityAtAverage = irtAvailable && irtDifficulty !== null && irtDiscrimination !== null
+        ? round3(twoPL(0, irtDiscrimination, irtDifficulty))
+        : null;
+
+      const calibration = {
+        pValue,
+        discrimination,
+        difficultyLabel,
+        suggestedDifficulty: relabel.suggestedDifficulty,
+        miscalibrated: relabel.miscalibrated,
+        miscalibrationReason: relabel.reason,
+        irtAvailable,
+        irtDifficulty,
+        irtDiscrimination,
+        irtProbabilityAtAverage,
+      };
+
       questionAnalytics.push({
         questionId: question.id,
         text: question.text,
@@ -409,6 +599,7 @@ export function computeAnalytics(
         })),
         commonWrongAnswer: commonWrong,
         totalSubmissions: submitted,
+        ...calibration,
       });
     }
   }

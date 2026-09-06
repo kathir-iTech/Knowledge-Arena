@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2, RefreshCw, ArrowUp, ArrowDown, GripVertical, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
@@ -45,6 +45,67 @@ interface QuestionReviewPanelProps {
   onEditSettings: () => void;
   onRegenerateQuestion?: (index: number) => void;
   onArenaCreated?: () => void;
+}
+
+// ── Phase 2 Review Panel hardening (prompt/output layer ONLY) ───────
+// Lightweight LaTeX rendering: katex is NOT installed (checked package.json)
+// so we do NOT add a heavy dep — $$...$$ segments render as styled serif
+// spans via regex. Pure pass-through for non-math text.
+function renderLatexSegments(text: string): React.ReactNode[] {
+  const parts = text.split(/(\$\$[^$]+\$\$)/g);
+  return parts.map((part, i) => {
+    const m = part.match(/^\$\$([^$]+)\$\$$/);
+    if (m) {
+      return (
+        <span key={i} className="font-serif italic bg-primary/10 px-1.5 py-0.5 rounded" aria-label={`math: ${m[1]}`}>
+          {m[1]}
+        </span>
+      );
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
+
+function LatexText({ text }: { text: string }) {
+  return <>{renderLatexSegments(text)}</>;
+}
+
+// Batch actions as pure text transforms (no AI calls, no schema change).
+function simplifyOptionText(opt: string): string {
+  return opt
+    .replace(/\s+/g, ' ')
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/\s*\[[^\]]*\]/g, '')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .trim();
+}
+
+function tuneDistractorText(opt: string, correct: string): string {
+  let s = opt.replace(/\s+/g, ' ').trim();
+  if (!s) return s;
+  // Match trailing punctuation style of the correct answer.
+  const correctEndsPunct = /[.;:!?]$/.test(correct.trim());
+  if (!correctEndsPunct) s = s.replace(/[.;:!?]+$/g, '');
+  // Match capitalization style of the correct answer's first letter.
+  const cFirst = (correct.trim().match(/[A-Za-z]/) || [])[0];
+  if (cFirst && cFirst === cFirst.toUpperCase() && /^[a-z]/.test(s)) {
+    s = s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  return s;
+}
+
+function simplifyQuestionOptions(q: Question): Question {
+  return { ...q, options: q.options.map(simplifyOptionText) };
+}
+
+function tuneQuestionDistractors(q: Question): Question {
+  const correct = q.options[q.correctAnswerIndex] ?? '';
+  return {
+    ...q,
+    options: q.options.map((o, i) =>
+      i === q.correctAnswerIndex ? o.replace(/\s+/g, ' ').trim() : tuneDistractorText(o, correct)
+    ),
+  };
 }
 
 export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate, onEditSettings, onRegenerateQuestion, onArenaCreated }: QuestionReviewPanelProps) {
@@ -128,6 +189,32 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
       const newCorrectIndex = items.findIndex(item => item.isCorrect);
       return { ...q, options: items.map(item => item.text), correctAnswerIndex: newCorrectIndex };
     }));
+  };
+
+  // Phase 2 batch actions (pure text transforms) + drag reorder.
+  // Persistence maps array order to sort_index = i (see arena-creation
+  // service), so reordering the array updates sort_index for all q_i.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  const moveQuestion = (from: number, to: number) => {
+    if (from === to) return;
+    setQuestions(prevQ => {
+      if (from < 0 || from >= prevQ.length || to < 0 || to >= prevQ.length) return prevQ;
+      const next = [...prevQ];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
+
+  const handleBatchSimplify = () => {
+    setQuestions(prevQ => prevQ.map(simplifyQuestionOptions));
+    toast({ title: 'Options simplified', description: 'Parentheticals removed and whitespace normalized.' });
+  };
+
+  const handleBatchTuneDistractors = () => {
+    setQuestions(prevQ => prevQ.map(tuneQuestionDistractors));
+    toast({ title: 'Distractors tuned', description: 'Distractor casing and punctuation matched to the correct answer.' });
   };
 
   const handleRegenQuestion = async (index: number) => {
@@ -282,9 +369,38 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
         </div>
       </div>
 
+      {/* Phase 2 batch actions — pure text transforms, no AI calls */}
+      <div className="flex flex-wrap items-center gap-2 p-3 bg-background border border-border/40 rounded-lg">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <Wand2 className="w-3.5 h-3.5" /> Batch actions
+        </span>
+        <Button variant="outline" size="sm" onClick={handleBatchSimplify} className="text-xs">
+          Simplify options
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleBatchTuneDistractors} className="text-xs">
+          Tune distractor difficulty
+        </Button>
+        <span className="text-[11px] text-muted-foreground ml-auto">Drag cards or use ↑↓ to reorder (sort_index = position)</span>
+      </div>
+
       <div className="space-y-4">
         {questions.map((q, index) => (
-          <Card key={q.id} className="relative overflow-hidden group">
+          <Card
+            key={q.id}
+            className="relative overflow-hidden group"
+            draggable={editingId !== q.id}
+            onDragStart={(e) => {
+              setDragIndex(index);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragIndex !== null && dragIndex !== index) moveQuestion(dragIndex, index);
+              setDragIndex(null);
+            }}
+            onDragEnd={() => setDragIndex(null)}
+          >
             <div className="absolute top-0 left-0 w-1 h-full bg-primary/10 group-hover:bg-primary/30 transition-colors" />
             
             {editingId === q.id && editForm ? (
@@ -337,10 +453,19 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
               <>
                 <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <span
+                      className="cursor-grab text-muted-foreground hover:text-primary shrink-0"
+                      title="Drag to reorder"
+                      aria-label={`Drag to reorder question ${index + 1}`}
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </span>
                     <span className="font-mono text-primary font-bold shrink-0">Q{index + 1}</span>
-                    <CardTitle className="text-lg font-medium leading-snug">{q.text}</CardTitle>
+                    <CardTitle className="text-lg font-medium leading-snug"><LatexText text={q.text} /></CardTitle>
                   </div>
                   <div className="flex gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" onClick={() => moveQuestion(index, index - 1)} disabled={index === 0} aria-label={`Move question ${index + 1} up`}><ArrowUp className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => moveQuestion(index, index + 1)} disabled={index === questions.length - 1} aria-label={`Move question ${index + 1} down`}><ArrowDown className="w-4 h-4" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => startEditing(q)} aria-label={`Edit question ${index + 1}`}><Edit3 className="w-4 h-4" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => handleShuffleOptions(q.id)} className="text-muted-foreground" title="Shuffle answer options" aria-label="Shuffle options"><RefreshCw className="w-4 h-4 rotate-90" /></Button>
                     {regeneratingIndex === index ? (
@@ -359,8 +484,8 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                         q.correctAnswerIndex === i ? "bg-primary/5 border-primary/20 text-primary font-semibold" : "bg-secondary/20 border-border/30"
                       )}>
                         <span className="text-muted-foreground font-mono">{String.fromCharCode(65 + i)}</span>
-                        {opt}
-                        {q.correctAnswerIndex === i && <CheckCircle2 className="ml-auto w-4 h-4 text-primary" />}
+                        <span className="flex-1"><LatexText text={opt} /></span>
+                        {q.correctAnswerIndex === i && <CheckCircle2 className="ml-auto w-4 h-4 text-primary shrink-0" />}
                       </div>
                     ))}
                   </div>
@@ -390,7 +515,7 @@ export function QuestionReviewPanel({ initialQuestions, difficulty, onRegenerate
                   </button>
                   {expandedId === q.id && (
                     <div className="p-3 bg-primary/5 rounded-lg border border-primary/10 text-xs text-muted-foreground italic leading-relaxed">
-                      {q.explanation}
+                      <LatexText text={q.explanation} />
                     </div>
                   )}
                 </CardContent>

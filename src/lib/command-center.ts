@@ -28,12 +28,24 @@ export interface CommandParticipant {
   timedOutIds: string[];
   skippedIds: string[];
   violations?: number;
+  // Per-question option shuffle permutation P for independent-mode arenas
+  // (participant.option_shuffle[questionId]). Read-only spectator use only.
+  optionShuffle?: Record<string, number[]>;
 }
 
 export interface CommandQuestion {
   id: string;
   index: number;
   timer: number;
+  // Canonical question content for the read-only spectator drawer. Populated
+  // from the same questions onSnapshot (no extra stream).
+  options?: string[];
+  questionStats?: {
+    submittedCount?: number;
+    correctCount?: number;
+    optionCounts?: number[];
+    correctOptionIndex?: number | null;
+  } | null;
 }
 
 export interface CommandBattle {

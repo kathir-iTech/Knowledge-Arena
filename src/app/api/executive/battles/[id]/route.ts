@@ -96,6 +96,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         sortIndex: data.sort_index ?? null,
         scored: data.scored ?? null,
         correctAnswerIndex: correctIndex ?? null,
+        // Read-only denormalized aggregates for replay density (written at
+        // evaluation/finish time by writeQuestionStats). Same questions fetch,
+        // no new reads, no submissions-loop change.
+        questionStats: (data.questionStats as {
+          submittedCount?: number;
+          correctCount?: number;
+          optionCounts?: number[];
+          correctOptionIndex?: number | null;
+        } | undefined) ?? null,
       };
     });
 

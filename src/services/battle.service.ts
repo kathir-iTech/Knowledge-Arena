@@ -73,6 +73,28 @@ export const battleService = {
   recordReconnect(quizId: string, sessionToken?: string) {
     return post('/api/battle/reconnect', { quizId, ...(sessionToken ? { sessionToken } : {}) });
   },
+  // Phase 5 join preflight (read-only): mirrors the server domain/blocked
+  // gate without writing. Returns {allowed, reason}; 404 (unknown arena) is
+  // surfaced as allowed:false rather than throwing so callers can render the
+  // reason inline. Session tokens are never sent here (whitelist preserved).
+  async canJoin(quizId: string): Promise<{ allowed: boolean; reason: string | null }> {
+    const { auth } = initializeFirebase();
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error('Not authenticated');
+    const res = await fetch('/api/battle/can-join', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ quizId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok || res.status === 404) {
+      return { allowed: data?.allowed === true, reason: typeof data?.reason === 'string' ? data.reason : null };
+    }
+    throw new Error(data?.error || data?.reason || 'Join preflight failed');
+  },
   archiveBattle(quizId: string) {
     return post('/api/battle/archive', { quizId });
   },

@@ -70,6 +70,26 @@ function planCreation(questionsCount: number): string[] {
   return questionIds;
 }
 
+// Phase 6 (additive, pre-write only): recommended scoring bands —
+// score_max [500,2000], wrong_penalty [0,500], skip_penalty [0,200].
+// This is a creation-time guard only; it never changes normalizeScoringConfig
+// (Math.max) or computeCorrectScore rounding in battle-machine.ts.
+export function assertScoringBounds(sc?: {
+  score_max?: number;
+  wrong_penalty?: number;
+  skip_penalty?: number;
+}): void {
+  if (sc?.score_max !== undefined && (sc.score_max < 500 || sc.score_max > 2000)) {
+    throw new Error(`score_max ${sc.score_max} outside recommended band [500, 2000]`);
+  }
+  if (sc?.wrong_penalty !== undefined && (sc.wrong_penalty < 0 || sc.wrong_penalty > 500)) {
+    throw new Error(`wrong_penalty ${sc.wrong_penalty} outside recommended band [0, 500]`);
+  }
+  if (sc?.skip_penalty !== undefined && (sc.skip_penalty < 0 || sc.skip_penalty > 200)) {
+    throw new Error(`skip_penalty ${sc.skip_penalty} outside recommended band [0, 200]`);
+  }
+}
+
 export const arenaCreationService = {
   async createArenaAtomic(input: ArenaCreationInput): Promise<string> {
     const db = getFirestore();
@@ -146,6 +166,12 @@ export const arenaCreationService = {
     // vs existsAfter/getAfter timing). The rule allows if request.resource.data.created_by == uid.
     const sc = input.scoringConfig;
     const gc = input.governanceConfig;
+    // Phase 6: additive pre-write bounds check (throws on out-of-band values).
+    assertScoringBounds({
+      score_max: sc?.score_max,
+      wrong_penalty: sc?.wrong_penalty,
+      skip_penalty: sc?.skip_penalty,
+    });
     // Negative marking toggle maps to wrong_penalty for friendlier UX:
     // when governance says negative_marking=true, ensure wrong_penalty >0.
     let effectiveWrongPenalty = sc?.wrong_penalty ?? DEFAULT_WRONG_PENALTY;

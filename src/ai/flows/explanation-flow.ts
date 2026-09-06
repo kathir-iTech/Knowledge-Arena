@@ -16,8 +16,37 @@ const EXPLANATION_TIMEOUT_MS = 30000;
 
 const ExplanationOutputSchema = z.object({
   explanation: z.string().describe('Clear, educational explanation of why the correct answer is right and why the wrong answer is a common misconception'),
+  // Phase 6 (additive, optional): source-sentence attacher — the verbatim
+  // source sentences the explanation grounds to. Optional so older cached
+  // docs and callers that only read `explanation` keep working.
+  sources: z.array(z.string()).optional().describe('Verbatim source sentences (question + answers) the explanation refers to'),
 });
 export type ExplanationData = z.infer<typeof ExplanationOutputSchema>;
+
+// Phase 6 (additive): source-sentence attacher — builds the verbatim source
+// sentences for a wrong-answer explanation without any model call.
+function buildExplanationSources(args: {
+  questionText: string;
+  options: string[];
+  correctAnswer: string;
+  wrongAnswer: string;
+}): string[] {
+  const out: string[] = [];
+  const q = args.questionText?.trim();
+  if (q) out.push(q.slice(0, 500));
+  if (args.correctAnswer?.trim()) out.push(`Correct: ${args.correctAnswer.slice(0, 300)}`);
+  if (args.wrongAnswer?.trim() && args.wrongAnswer !== args.correctAnswer) {
+    out.push(`Chosen: ${args.wrongAnswer.slice(0, 300)}`);
+  }
+  return out.slice(0, 4);
+}
+
+function attachExplanationSources<T extends { explanation: string }>(
+  result: T,
+  args: { questionText: string; options: string[]; correctAnswer: string; wrongAnswer: string },
+): T & { sources: string[] } {
+  return { ...result, sources: buildExplanationSources(args) };
+}
 
 const ExplanationInputSchema = z.object({
   questionText: z.string().describe('The question text'),
@@ -104,11 +133,18 @@ Keep the explanation concise (2-4 paragraphs) and educational. Do not just resta
     const response = await callExplanationWithRotation(promptText) as { output?: ExplanationData; text?: string };
 
     const out = (response as { output?: ExplanationData; text?: string }).output;
+    const sources = buildExplanationSources({
+      questionText: input.questionText,
+      options: input.options,
+      correctAnswer: input.correctAnswer,
+      wrongAnswer: input.wrongAnswer,
+    });
     if (out?.explanation) {
-      return out;
+      // Additive: attach verbatim sources alongside the model text.
+      return { ...out, sources: out.sources ?? sources };
     }
     const raw = (response as { text?: string }).text ?? '';
-    return { explanation: raw.slice(0, 1000) || 'Explanation unavailable.' };
+    return { explanation: raw.slice(0, 1000) || 'Explanation unavailable.', sources };
   }
 );
 

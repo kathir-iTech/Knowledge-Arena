@@ -15,6 +15,7 @@ import {
   BarChart3, Award, Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BattleReplay } from '@/components/battle/BattleReplay';
 
 interface BattleParticipant {
   userId: string;
@@ -55,6 +56,11 @@ interface BattleData {
     sortIndex?: number | null;
     scored?: boolean | null;
     correctAnswerIndex?: number | null;
+    questionStats?: {
+      submittedCount?: number;
+      correctCount?: number;
+      optionCounts?: number[] | Record<string, number> | null;
+    } | null;
   }>;
   participants?: BattleParticipant[];
   leaderboard?: BattleParticipant[];
@@ -257,6 +263,33 @@ export default function ExecutiveBattleDetailPage({ params }: { params: Promise<
           )}
         </CardContent>
       </Card>
+
+      {/* Replay: read-only State(t) scrubber over existing timeline + submissions */}
+      <BattleReplay
+        questions={(questions || []).map(q => ({
+          id: q.id,
+          text: q.text,
+          options: q.options,
+          correctAnswerIndex: q.correctAnswerIndex,
+          questionStats: q.questionStats,
+        }))}
+        participants={participants.map(p => ({
+          userId: p.userId,
+          name: p.name,
+          score: p.score,
+          submissions: p.submissions,
+        }))}
+        timeline={(battle.timeline || []).map(e => ({
+          id: e.id,
+          event: e.event,
+          actor: e.actor,
+          timestamp: e.timestamp,
+          metadata: e.metadata,
+        }))}
+        startedAt={battle.startedAt}
+        endedAt={battle.endedAt}
+        title="Battle Replay"
+      />
 
       {/* Leaderboard */}
       <Card className="card-hover">

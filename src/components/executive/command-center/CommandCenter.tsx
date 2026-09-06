@@ -19,9 +19,11 @@ import type { QuizStatus } from '@/lib/constants';
 import { CommandCenterStats } from '@/components/executive/command-center/CommandCenterStats';
 import { BattleSummaryCard } from '@/components/executive/command-center/BattleSummaryCard';
 import { BattleDetailPanel } from '@/components/executive/command-center/BattleDetailPanel';
+import { SpectatorDrawer } from '@/components/executive/command-center/SpectatorDrawer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Radar } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Radar, Eye } from 'lucide-react';
 
 function toMillis(value: unknown): number | null {
   if (typeof value === 'number') return value;
@@ -67,6 +69,7 @@ export function CommandCenter() {
   const [selected, setSelected] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [ready, setReady] = useState(false);
+  const [spectatorOpen, setSpectatorOpen] = useState(false);
 
   const profilesRef = useRef<Record<string, Profile>>({});
   const prevPartsRef = useRef<Record<string, CommandParticipant[]>>({});
@@ -140,6 +143,9 @@ export function CommandCenter() {
             ? participant.skipped_question_ids.map(String)
             : [],
           violations: Number(participant.violations_count ?? 0),
+          // Read-only spectator: per-question shuffle permutation P for
+          // i_orig = P^{-1}(i_shuffled) inversion. Same snapshot, no new stream.
+          optionShuffle: (participant as { option_shuffle?: Record<string, number[]> }).option_shuffle ?? undefined,
         }));
 
         setParticipantsByBattle(prev => ({ ...prev, [id]: parts }));
@@ -198,11 +204,19 @@ export function CommandCenter() {
       }, () => {});
 
       const unsubQ = questionService.subscribeToQuestions(id, list => {
-        const mapped: CommandQuestion[] = list.map(q => ({
-          id: q.id,
-          index: Number(q.sort_index ?? 0),
-          timer: Number(q.timer ?? 30),
-        }));
+        const mapped: CommandQuestion[] = list.map(q => {
+          const raw = q as unknown as Record<string, unknown>;
+          const stats = raw.questionStats as CommandQuestion['questionStats'];
+          return {
+            id: q.id,
+            index: Number(q.sort_index ?? 0),
+            timer: Number(q.timer ?? 30),
+            // Read-only spectator: canonical options + denormalized density
+            // aggregates from the same questions snapshot (no extra stream).
+            options: Array.isArray(raw.options) ? (raw.options as string[]) : undefined,
+            questionStats: stats ?? null,
+          };
+        });
         setQuestionsByBattle(prev => ({ ...prev, [id]: mapped }));
       }, () => {});
 
@@ -300,6 +314,8 @@ export function CommandCenter() {
         </div>
       </div>
 
+      <SpectatorDrawer battle={activeBattle} now={now} open={spectatorOpen} onClose={() => setSpectatorOpen(false)} />
+
       <CommandCenterStats battles={sortedBattles} now={now} />
 
       {sortedBattles.length === 0 ? (
@@ -325,7 +341,14 @@ export function CommandCenter() {
           </div>
           <div className="min-w-0">
             {activeBattle ? (
-              <BattleDetailPanel battle={activeBattle} now={now} events={selectedEvents} />
+              <>
+                <div className="flex justify-end mb-2">
+                  <Button variant="outline" size="sm" onClick={() => setSpectatorOpen(true)}>
+                    <Eye className="w-3.5 h-3.5 mr-1.5" /> Spectate live
+                  </Button>
+                </div>
+                <BattleDetailPanel battle={activeBattle} now={now} events={selectedEvents} />
+              </>
             ) : (
               <EmptyState icon={Radar} title="Select a Battle" description="Pick an active arena from the list." />
             )}

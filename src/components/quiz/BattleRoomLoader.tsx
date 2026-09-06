@@ -358,14 +358,11 @@ export default function BattleRoomLoader() {
     );
   }
 
-  if (quiz.status === QUIZ_LIVE || quiz.status === QUIZ_PAUSED) {
-    const isTeacher = (user?.role === 'commander' || user?.role === 'executive') && quiz.created_by === user.id;
-    if (!participant && !isTeacher && firstPartSnapRef.current && !allowLateJoin) {
   if (quiz.status === QUIZ_ABANDONED) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in safe-top safe-bottom">
         <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
-          <ShieldX className="w-8 h-8 text-destructive" />
+          <ShieldX className="w-8 h-8 text-destructive" aria-hidden="true" />
         </div>
         <div className="space-y-2 max-w-sm">
           <h1 className="text-page-title font-headline tracking-tight text-destructive">Battle Abandoned</h1>
@@ -376,8 +373,11 @@ export default function BattleRoomLoader() {
     );
   }
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in safe-top safe-bottom">
+  if (quiz.status === QUIZ_LIVE || quiz.status === QUIZ_PAUSED) {
+    const isTeacher = (user?.role === 'commander' || user?.role === 'executive') && quiz.created_by === user.id;
+    if (!participant && !isTeacher && firstPartSnapRef.current && !allowLateJoin) {
+      return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center p-4 animate-in safe-top safe-bottom">
           <div className="flex items-center justify-center w-16 h-16 rounded-[18px] bg-destructive/10">
             <ShieldX className="w-8 h-8 text-destructive" />
           </div>

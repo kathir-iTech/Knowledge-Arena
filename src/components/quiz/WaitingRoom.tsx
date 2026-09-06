@@ -7,7 +7,7 @@ import QRCode from 'react-qr-code';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, Copy, Users, Clock, Loader2, CheckCircle2, Hand } from 'lucide-react';
+import { ShieldCheck, Copy, Users, Clock, Loader2, CheckCircle2, Hand, DoorOpen, DoorClosed, Radio } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
 import { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
@@ -19,6 +19,10 @@ import { presenceService, type PresenceMap } from '@/services/presence.service';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useFirebase } from '@/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { COLLECTIONS, QUIZ_CONFIG_SETTINGS_DOC, PRESENCE_WINDOW_MS } from '@/lib/constants';
+import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -48,6 +52,30 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
   const [independentMode, setIndependentMode] = useState(quiz.battle_mode === 'independent');
   const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
   const joinedLoggedRef = useRef(false);
+  const { firestore } = useFirebase();
+  // Phase 6 (additive): late-join governance badge + RTDB freshness chips.
+  // Defaults preserve current behavior (open) until the config snapshot arrives.
+  const [allowLateJoin, setAllowLateJoin] = useState(true);
+  const [lastPresenceAt, setLastPresenceAt] = useState<number | null>(null);
+  const [presenceTick, setPresenceTick] = useState(0);
+
+  useEffect(() => {
+    if (!firestore || !quiz.id) return;
+    const cfgRef = doc(firestore, COLLECTIONS.QUIZZES, quiz.id, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC);
+    const unsub = onSnapshot(cfgRef, (snap) => {
+      const gc = (snap.data() as { governance_config?: { allow_late_join?: boolean } } | undefined)?.governance_config;
+      if (gc && typeof gc.allow_late_join === 'boolean') setAllowLateJoin(gc.allow_late_join);
+      else setAllowLateJoin(true);
+    }, () => {});
+    return () => unsub();
+  }, [firestore, quiz.id]);
+
+  // Re-render the freshness chip every 5s without touching any subscription.
+  useEffect(() => {
+    if (lastPresenceAt == null) return;
+    const t = setInterval(() => setPresenceTick((v) => v + 1), 5000);
+    return () => clearInterval(t);
+  }, [lastPresenceAt]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -59,7 +87,10 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
   useEffect(() => {
     let mounted = true;
     const unsub = presenceService.subscribeToPresence(quiz.id, (p) => {
-      if (mounted) setPresence(p);
+      if (mounted) {
+        setPresence(p);
+        setLastPresenceAt(Date.now());
+      }
     });
     return () => { mounted = false; unsub(); };
   }, [quiz.id]);
@@ -323,6 +354,11 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
   const areParticipantsLoading = isLoading;
   const readyCount = studentParticipants.filter(p => p.ready === true).length;
   const readyGate = requireAllReady && readyCount < studentCount;
+  // Phase 6 (additive, display-only): RTDB freshness chip. presenceTick
+  // re-renders this line every 5s; no subscription or gating logic changes.
+  void presenceTick;
+  const presenceAgeSec = lastPresenceAt == null ? null : Math.max(0, Math.round((Date.now() - lastPresenceAt) / 1000));
+  const presenceWindowSec = Math.round(PRESENCE_WINDOW_MS / 1000);
 
   return (
     <div className="flex flex-col items-center min-h-screen p-4 md:p-8 animate-in safe-top safe-bottom">
@@ -379,6 +415,31 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
                 <><span className="w-2 h-2 rounded-full bg-muted-foreground/30" /><span className="text-muted-foreground">Waiting for Commander</span></>
               )}
           </div>
+        </div>
+
+        {/* Phase 6 (additive): late-join governance badge + RTDB presence-window chips. Read-only. */}
+        <div className="flex flex-wrap items-center justify-center gap-2" aria-live="polite">
+          <Badge
+            variant="outline"
+            className={cn(
+              'text-[10px] gap-1',
+              allowLateJoin ? 'border-success/30 text-success' : 'border-warning/30 text-warning'
+            )}
+            title={allowLateJoin ? 'Gladiators can join after the battle starts' : 'Late joining is disabled for this arena'}
+          >
+            {allowLateJoin ? <DoorOpen className="w-3 h-3" aria-hidden="true" /> : <DoorClosed className="w-3 h-3" aria-hidden="true" />}
+            {allowLateJoin ? 'Late join open' : 'Late join closed'}
+          </Badge>
+          <Badge variant="outline" className="text-[10px] gap-1" title={`RTDB presence window is ${presenceWindowSec}s`}>
+            <Radio className="w-3 h-3" aria-hidden="true" />
+            RTDB · {presenceWindowSec}s window
+          </Badge>
+          <Badge variant="outline" className="text-[10px] tabular-nums" title="Age of the last RTDB presence snapshot">
+            {presence == null ? 'presence syncing…' : presenceAgeSec == null ? 'presence live' : `presence ${presenceAgeSec}s ago`}
+          </Badge>
+          {!allowLateJoin && !isTeacher && (
+            <p className="w-full text-center text-[11px] text-muted-foreground">This arena locks at start — stay connected or you may miss the battle.</p>
+          )}
         </div>
 
         <Card className="shadow-elevation-small">

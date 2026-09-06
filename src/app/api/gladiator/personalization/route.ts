@@ -6,6 +6,13 @@ import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 
 export const runtime = 'nodejs';
 
+// Phase 5: time-decayed mastery per area.
+// M_c(t) = sum(Correct * e^{-lambda*dt}) / sum(Total * e^{-lambda*dt}),
+// lambda = 0.05 (dt in days, half-life ~13.9d) so recent battles weigh more.
+// Correct/Total come from the same submission vs answerKey comparison used
+// for weakAreas; weight uses the quiz created_at snapshot already in quizMap.
+const MASTERY_LAMBDA = 0.05;
+
 export async function GET(req: NextRequest) {
   const auth = await verifyFirebaseTokenWithRole(req, 'gladiator');
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -50,9 +57,15 @@ export async function GET(req: NextRequest) {
 
     type WeakItem = { label: string; total: number; wrong: number; wrongRate: number };
     const weakAreas: WeakItem[] = [];
+    // Decay-weighted accumulators per difficulty/category label.
+    const masteryAcc = new Map<string, { wCorrect: number; wTotal: number; rawTotal: number; rawCorrect: number }>();
 
     // For each finished quiz, fetch questions + answerKeys + user's submissions per question (batch per question, not per gladiator-question pair globally is okay)
     for (const qid of limited) {
+      // Time-decay weight for this battle from its created_at snapshot.
+      const quizCreatedAt = Number(quizMap.get(qid)?.created_at || 0);
+      const dtDays = quizCreatedAt > 0 ? Math.max(0, (Date.now() - quizCreatedAt) / 86400000) : 0;
+      const decayWeight = Math.exp(-MASTERY_LAMBDA * dtDays);
       const [qSnap, akSnap] = await Promise.all([
         db.collection(COLLECTIONS.QUIZZES).doc(qid).collection(COLLECTIONS.QUESTIONS).get(),
         db.collection(COLLECTIONS.QUIZZES).doc(qid).collection(COLLECTIONS.ANSWER_KEYS).get(),
@@ -85,6 +98,17 @@ export async function GET(req: NextRequest) {
         if (!diffCounts.has(diff)) diffCounts.set(diff, { total: 0, wrong: 0 });
         diffCounts.get(diff)!.total++;
         if (isWrong) diffCounts.get(diff)!.wrong++;
+        // Mastery decay: only scoreable submissions (answer key known) feed
+        // M_c(t); unscorable ones still count for weakAreas above.
+        if (typeof correct === 'number') {
+          const isCorrect = sel === correct ? 1 : 0;
+          if (!masteryAcc.has(diff)) masteryAcc.set(diff, { wCorrect: 0, wTotal: 0, rawTotal: 0, rawCorrect: 0 });
+          const acc = masteryAcc.get(diff)!;
+          acc.wCorrect += isCorrect * decayWeight;
+          acc.wTotal += decayWeight;
+          acc.rawTotal += 1;
+          acc.rawCorrect += isCorrect;
+        }
       }
       if (total > 0) {
         const title = String(quizMap.get(qid)?.title || qid);
@@ -102,6 +126,24 @@ export async function GET(req: NextRequest) {
     }
     weakAreas.sort((a, b) => b.wrongRate - a.wrongRate);
     const topWeak = weakAreas.slice(0, 5);
+
+    // Collapse decay-weighted accumulators into mastery percentages (0-100,
+    // weakest first). Overall mastery is the same ratio over all labels.
+    type MasteryItem = { label: string; mastery: number; total: number; correct: number };
+    const mastery: MasteryItem[] = Array.from(masteryAcc.entries()).map(([label, v]) => ({
+      label,
+      mastery: v.wTotal > 0 ? Math.round((v.wCorrect / v.wTotal) * 100) : 0,
+      total: v.rawTotal,
+      correct: v.rawCorrect,
+    }));
+    mastery.sort((a, b) => a.mastery - b.mastery);
+    let overallWCorrect = 0;
+    let overallWTotal = 0;
+    for (const v of masteryAcc.values()) {
+      overallWCorrect += v.wCorrect;
+      overallWTotal += v.wTotal;
+    }
+    const overallMastery = overallWTotal > 0 ? Math.round((overallWCorrect / overallWTotal) * 100) : 0;
 
     // --- Upcoming arenas: waiting/ready that gladiator hasn't joined ---
     // Use status index — do NOT scan entire quizzes collection
@@ -130,6 +172,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       weakAreas: topWeak,
       upcomingArenas: upcoming,
+      mastery,
+      overallMastery,
+      masteryLambda: MASTERY_LAMBDA,
     }, { headers: { 'Cache-Control': 'private, max-age=30' } });
   } catch (err) {
     console.error('[Personalization] Error', err);

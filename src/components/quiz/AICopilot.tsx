@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
-import { Sparkles, Send, Loader2, Lightbulb, Copy, Check, Wand2, MessageSquare } from 'lucide-react';
+import { Sparkles, Send, Loader2, Lightbulb, Copy, Check, Wand2, MessageSquare, Undo2, Redo2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -22,19 +22,37 @@ export interface CopilotQuestion {
 interface AICopilotProps {
   titleContext?: string;
   questionContext?: string;
+  domain?: string;
+  difficulty?: 'easy' | 'moderate' | 'hard';
   onApplyQuestion?: (q: CopilotQuestion) => void;
   className?: string;
   compact?: boolean;
 }
 
-export function AICopilot({ titleContext, questionContext, onApplyQuestion, className, compact }: AICopilotProps) {
+interface CopilotHistoryEntry {
+  userMessage: string;
+  suggestion: string;
+  generatedQuestion: CopilotQuestion | null;
+}
+
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
+export function AICopilot({ titleContext, questionContext, domain: domainProp, difficulty: difficultyProp, onApplyQuestion, className, compact }: AICopilotProps) {
   const { auth } = useFirebase();
   const { toast } = useToast();
   const [message, setMessage] = useState('');
+  const [domain, setDomain] = useState(domainProp || '');
+  const [difficulty, setDifficulty] = useState<'easy' | 'moderate' | 'hard' | ''>(difficultyProp || '');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ suggestion: string; generatedQuestion: CopilotQuestion | null } | null>(null);
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(!compact);
+  // Phase 2: local generation stack (undo/redo) — pure client state, no server change.
+  const [generationStack, setGenerationStack] = useState<CopilotHistoryEntry[]>([]);
+  const [stackIndex, setStackIndex] = useState(-1);
 
   const handleAsk = async () => {
     const trimmed = message.trim();
@@ -57,10 +75,26 @@ export function AICopilot({ titleContext, questionContext, onApplyQuestion, clas
           userMessage: trimmed,
           questionContext: questionContext || undefined,
           titleContext: titleContext || undefined,
+          domain: domain.trim() || undefined,
+          difficulty: difficulty || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Copilot failed');
+      const entry: CopilotHistoryEntry = {
+        userMessage: trimmed,
+        suggestion: data.suggestion,
+        generatedQuestion: data.generatedQuestion,
+      };
+      // Push onto local generation stack and point at the newest entry.
+      // (Ask is disabled while loading, so render-captured stack state is fresh here.)
+      const baseStack =
+        stackIndex >= 0 && stackIndex < generationStack.length - 1
+          ? generationStack.slice(0, stackIndex + 1)
+          : generationStack;
+      const nextStack = [...baseStack, entry];
+      setGenerationStack(nextStack);
+      setStackIndex(nextStack.length - 1);
       setResult({ suggestion: data.suggestion, generatedQuestion: data.generatedQuestion });
       toast({ title: 'Copilot responded', description: data.suggestion?.slice(0, 80) || 'Suggestion ready.' });
     } catch (e) {
@@ -69,6 +103,29 @@ export function AICopilot({ titleContext, questionContext, onApplyQuestion, clas
       setLoading(false);
     }
   };
+
+  const handleUndo = () => {
+    if (stackIndex <= 0) return;
+    const next = stackIndex - 1;
+    setStackIndex(next);
+    const entry = generationStack[next];
+    if (entry) setResult({ suggestion: entry.suggestion, generatedQuestion: entry.generatedQuestion });
+  };
+
+  const handleRedo = () => {
+    if (stackIndex < 0 || stackIndex >= generationStack.length - 1) return;
+    const next = stackIndex + 1;
+    setStackIndex(next);
+    const entry = generationStack[next];
+    if (entry) setResult({ suggestion: entry.suggestion, generatedQuestion: entry.generatedQuestion });
+  };
+
+  // Token estimate (client-side heuristic: ~1 token per 4 chars).
+  const tokenEstimate =
+    estimateTokens(message) +
+    estimateTokens(result?.suggestion || '') +
+    estimateTokens(result?.generatedQuestion ? JSON.stringify(result.generatedQuestion) : '') +
+    estimateTokens(questionContext || '');
 
   const handleCopy = async (text: string) => {
     try {
@@ -130,6 +187,30 @@ export function AICopilot({ titleContext, questionContext, onApplyQuestion, clas
             className="min-h-[72px] text-sm"
             disabled={loading}
           />
+          {/* Phase 2: domain + difficulty few-shot templating controls */}
+          <div className="flex gap-2">
+            <Input
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              placeholder="Domain (e.g. Biology)"
+              maxLength={80}
+              className="h-8 text-xs flex-1"
+              disabled={loading}
+              aria-label="Copilot domain"
+            />
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value as 'easy' | 'moderate' | 'hard' | '')}
+              className="h-8 text-xs rounded-md border border-input bg-background px-2"
+              disabled={loading}
+              aria-label="Copilot difficulty"
+            >
+              <option value="">Auto difficulty</option>
+              <option value="easy">Easy</option>
+              <option value="moderate">Moderate</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
           <div className="flex gap-2">
             <Button onClick={handleAsk} disabled={loading || !message.trim()} size="sm" className="flex-1">
               {loading ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <Send className="w-3.5 h-3.5 mr-2" />}
@@ -150,6 +231,9 @@ export function AICopilot({ titleContext, questionContext, onApplyQuestion, clas
               </button>
             ))}
           </div>
+          <p className="text-[11px] text-muted-foreground" aria-live="polite">
+            ~{estimateTokens(message) + estimateTokens(questionContext || '')} tokens · rate limit 10/min
+          </p>
         </div>
 
         {loading && (
@@ -167,6 +251,32 @@ export function AICopilot({ titleContext, questionContext, onApplyQuestion, clas
 
         {result && (
           <div className="space-y-3 pt-2 border-t border-border/40">
+            {/* Phase 2: local generation stack undo/redo + token estimate */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={handleUndo}
+                disabled={stackIndex <= 0 || loading}
+                aria-label="Undo Copilot suggestion"
+              >
+                <Undo2 className="w-3 h-3 mr-1" /> Undo
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={handleRedo}
+                disabled={stackIndex < 0 || stackIndex >= generationStack.length - 1 || loading}
+                aria-label="Redo Copilot suggestion"
+              >
+                <Redo2 className="w-3 h-3 mr-1" /> Redo
+              </Button>
+              <span className="text-[11px] text-muted-foreground ml-auto">
+                {generationStack.length > 0 ? `${stackIndex + 1}/${generationStack.length}` : 'No history'} · ~{tokenEstimate} tokens
+              </span>
+            </div>
             <div className="flex items-start gap-2 p-3 rounded-[10px] bg-primary/5 border border-primary/15">
               <Lightbulb className="w-4 h-4 text-primary mt-0.5 shrink-0" />
               <p className="text-sm leading-relaxed">{result.suggestion}</p>

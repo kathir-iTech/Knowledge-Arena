@@ -26,10 +26,17 @@ export async function POST(req: NextRequest) {
     const uidRl = await enforceRateLimit(`ai:copilot:${auth.uid}`, Limits.AI_COPILOT_PER_USER);
     if (uidRl) return uidRl;
 
+    const difficulty =
+      body.difficulty === 'easy' || body.difficulty === 'moderate' || body.difficulty === 'hard'
+        ? body.difficulty
+        : undefined;
+    const domain = typeof body.domain === 'string' && body.domain.trim() ? body.domain.slice(0, 80) : undefined;
     const result = await copilotAssist({
       userMessage: body.userMessage,
       questionContext: typeof body.questionContext === 'string' ? body.questionContext : undefined,
       titleContext: typeof body.titleContext === 'string' ? body.titleContext : undefined,
+      domain,
+      difficulty,
       idToken: token,
     });
 

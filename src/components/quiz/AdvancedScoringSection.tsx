@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ChevronDown, Trophy, Clock3 } from 'lucide-react';
+import { ChevronDown, Trophy, Clock3, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface AdvancedScoringState {
@@ -38,6 +38,13 @@ interface AdvancedScoringSectionProps {
   value: AdvancedScoringState;
   onChange: (next: AdvancedScoringState) => void;
   className?: string;
+  /**
+   * Phase 6 (additive, hints-only): current penalty values live in the gated
+   * config doc and are not edited here. Passing them enables live calibration
+   * hints without changing any scoring math or persisted shape.
+   */
+  skipPenalty?: number;
+  wrongPenalty?: number;
 }
 
 /**
@@ -48,8 +55,32 @@ interface AdvancedScoringSectionProps {
  * (controlled value/onChange) so it can sit inside either a react-hook-form
  * tree or plain component state without duplication.
  */
-export function AdvancedScoringSection({ value, onChange, className }: AdvancedScoringSectionProps) {
+export function AdvancedScoringSection({ value, onChange, className, skipPenalty = 0, wrongPenalty = 0 }: AdvancedScoringSectionProps) {
   const [open, setOpen] = useState(false);
+
+  // Phase 6 (additive): live calibration hints — display-only, never alters
+  // the persisted scoring_config or normalizeScoringConfig math.
+  const hints = useMemo(() => {
+    const out: string[] = [];
+    if (skipPenalty === 0) {
+      out.push('Current skip_penalty 0 — consider 100 for this cohort so skipping has a mild cost.');
+    } else if (skipPenalty > 200) {
+      out.push(`Current skip_penalty ${skipPenalty} is above the recommended [0, 200] band — harsh skips can stall gladiators.`);
+    }
+    if (value.scoreMax < 500 || value.scoreMax > 2000) {
+      out.push(`score_max ${value.scoreMax} is outside the recommended [500, 2000] band.`);
+    }
+    if (wrongPenalty > 500) {
+      out.push(`wrong_penalty ${wrongPenalty} is above the recommended [0, 500] band.`);
+    }
+    if (!value.timeBonus && value.streakMultiplier > 0) {
+      out.push('Streak multiplier is on while Time Bonus is off — streaks still reward consistency, but speed no longer matters.');
+    }
+    if (value.scoreMin >= value.scoreMax) {
+      out.push('Min score should stay below max score, otherwise time bonus has no range.');
+    }
+    return out;
+  }, [skipPenalty, wrongPenalty, value.scoreMax, value.scoreMin, value.timeBonus, value.streakMultiplier]);
 
   return (
     <Card className={cn('border-warning/20', className)}>
@@ -106,6 +137,22 @@ export function AdvancedScoringSection({ value, onChange, className }: AdvancedS
               />
             </div>
           </div>
+          {hints.length > 0 && (
+            <div
+              className="rounded-[10px] border border-warning/20 bg-warning/5 p-3 space-y-1.5"
+              role="note"
+              aria-live="polite"
+              aria-label="Scoring calibration hints"
+            >
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-warning">
+                <Info className="w-3.5 h-3.5" aria-hidden="true" /> Live calibration
+              </p>
+              {hints.map((h) => (
+                <p key={h} className="text-xs text-muted-foreground">{h}</p>
+              ))}
+              <p className="text-[10px] text-muted-foreground/70">Hints only — scoring math unchanged (bands [500,2000] / [0,500] / [0,200]).</p>
+            </div>
+          )}
         </CardContent>
       )}
     </Card>

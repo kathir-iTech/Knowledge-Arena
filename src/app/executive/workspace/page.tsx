@@ -689,7 +689,7 @@ export default function ExecutiveWorkspacePage() {
               ) : (
                 <EmptyState icon={ShieldAlert} title="No Security Events" description="No recent security events recorded." />
               )}
-              <Button variant="outline" size="sm" className="w-full" onClick={() => router.push('/executive/security-logs')}>
+              <Button variant="outline" size="sm" className="w-full" onClick={() => router.push('/executive/security')}>
                 View Security Logs <ChevronRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </CardContent>

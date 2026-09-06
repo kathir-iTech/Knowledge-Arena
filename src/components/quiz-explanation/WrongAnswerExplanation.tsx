@@ -14,6 +14,7 @@ interface ExplanationProps {
 
 export function WrongAnswerExplanation({ quizId, questionId, wrongOptionIndex }: ExplanationProps) {
   const [explanation, setExplanation] = useState<string | null>(null);
+  const [sources, setSources] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +45,7 @@ export function WrongAnswerExplanation({ quizId, questionId, wrongOptionIndex }:
         return;
       }
       setExplanation(data.explanation);
+      setSources(Array.isArray(data.sources) ? data.sources : null);
       setExpanded(true);
     } catch {
       setError('Failed to load explanation');
@@ -91,6 +93,16 @@ export function WrongAnswerExplanation({ quizId, questionId, wrongOptionIndex }:
             Powered by AI
           </div>
           <p className="whitespace-pre-line">{explanation}</p>
+          {sources && sources.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-primary/10" aria-label="Explanation sources">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Sources</p>
+              <ul className="space-y-0.5">
+                {sources.map((s) => (
+                  <li key={s.slice(0, 48)} className="text-xs text-muted-foreground italic">“{s}”</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
