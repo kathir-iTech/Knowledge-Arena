@@ -60,6 +60,27 @@ export function logAuthFailure(key: string, detail: string): void {
 const violationThrottle = new Map<string, number>();
 const VIOLATION_WINDOW_MS = 60_000;
 
+export function dispatchSIEM(event: {
+  type: string;
+  actor?: string | null;
+  detail?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): void {
+  // R2-39 fire-and-forget import (never awaited in request path by convention).
+  // Dynamic import avoids a hard dep cycle with lib/siem in hot paths.
+  void import('@/lib/siem')
+    .then((m) =>
+      m.dispatchSIEM({
+        type: event.type,
+        actor: event.actor ?? 'anonymous',
+        detail: event.detail ?? null,
+        metadata: event.metadata ?? null,
+        createdAt: Date.now(),
+      }),
+    )
+    .catch(() => {});
+}
+
 export function logSecurityViolation(
   actor: string,
   kind: string,

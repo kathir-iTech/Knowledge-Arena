@@ -78,6 +78,19 @@ service cloud.firestore {
       return isSignedIn() && existsAfter(quizPath) && getAfter(quizPath).data.created_by == request.auth.uid;
     }
 
+    // R2-37 co-commander editing (LWW+presence, NOT CRDT in Set 2).
+    // `co_commanders` is an additive array on quizzes/{id} (old arenas []).
+    // config/settings stays creator+executive-only; live arenas stay guarded
+    // by the waiting-only check in replaceQuizContent (server/client).
+    function canEditQuiz(quizId) {
+      let quizPath = /databases/$(database)/documents/quizzes/$(quizId);
+      return isSignedIn() && exists(quizPath) && (
+        get(quizPath).data.created_by == request.auth.uid ||
+        (get(quizPath).data.keys().hasAll(['co_commanders']) &&
+          get(quizPath).data.co_commanders.hasAny([request.auth.uid]))
+      );
+    }
+
     function isNotBlocked(quizId, userId) {
       let partPath = /databases/$(database)/documents/quizzes/$(quizId)/participants/$(userId);
       return !exists(partPath) || get(partPath).data.status != 'blocked';
@@ -224,7 +237,7 @@ service cloud.firestore {
         // document itself, avoiding a parent get() per question.
         allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId)
           || (request.resource.data.keys().hasAll(['created_by']) && request.resource.data.created_by == request.auth.uid);
-        allow update, delete: if isQuizCreator(quizId);
+        allow update, delete: if canEditQuiz(quizId);
 
         match /submissions/{userId} {
           allow read: if isExecutive() || isQuizCreator(quizId) || isOwner(userId);
@@ -257,7 +270,7 @@ service cloud.firestore {
         // per-document parent gets for large batches.
         allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId)
           || (request.resource.data.keys().hasAll(['created_by']) && request.resource.data.created_by == request.auth.uid);
-        allow update, delete: if isQuizCreator(quizId);
+        allow update, delete: if canEditQuiz(quizId);
       }
 
       match /participants/{userId} {
@@ -464,6 +477,15 @@ service cloud.firestore {
   // --- AI Forge Cache (Phase 115C) ---
   // Content-addressed question cache, read/written only by the Admin SDK.
   match /forge_cache/{hash} {
+    allow read, write: if false;
+  }
+
+  // --- Search DF table (R2-1) + translation cache (R2-35) ---
+  // Admin-only DF/translation caches; clients observe via route responses.
+  match /search_df/{term} {
+    allow read, write: if false;
+  }
+  match /ai_translations/{hash} {
     allow read, write: if false;
   }
 

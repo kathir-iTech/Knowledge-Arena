@@ -958,6 +958,10 @@ const tryAutoAdvance = useCallback(() => {
     setHasAnswered(true);
     setSelectedAnswer(idx);
     setAnswerSynced(false);
+    // R2-24 telemetry-only: key-cadence/focus vector logged async post-submit.
+    // Never blocks submit; warn_only unless governance escalates (existing
+    // onMalpractice path stays authoritative).
+    const telemetryStart = Date.now();
     try {
       await submissionService.submitAnswer({
         quiz_id: quiz.id,
@@ -965,6 +969,22 @@ const tryAutoAdvance = useCallback(() => {
         user_id: user.id,
         selected_option: idx
       });
+      try {
+        const { scoreAnomaly } = await import('@/lib/anomaly');
+        const elapsed = Date.now() - telemetryStart;
+        const s = scoreAnomaly({
+          keystrokeDeltasMs: [],
+          focusLostCount: 0,
+          elapsedMs: Math.max(0, elapsed),
+          readingMinMs: (currentQuestion?.timer ?? 30) * 1000,
+        });
+        if (s > 1.5 && user) {
+          const { logSecurityViolation } = await import('@/lib/security-log');
+          logSecurityViolation(user.id, 'answer_cadence', `question=${qId} score=${s.toFixed(2)}`, { quizId: quiz.id });
+        }
+      } catch {
+        // Telemetry must never fail the submit path.
+      }
       setAnswerSynced(true);
       confirmedQuestionIds.current.add(qId);
       if (independent) {

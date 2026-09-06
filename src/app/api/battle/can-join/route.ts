@@ -54,6 +54,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // R2-16 cap preflight (read-only mirror of joinQuiz cap; fail-open when
+    // counter absent so legacy arenas are unaffected).
+    const maxPartsRaw = (quizData as Record<string, unknown>).max_participants;
+    const maxParts =
+      typeof maxPartsRaw === 'number' && Number.isFinite(maxPartsRaw) && maxPartsRaw > 0
+        ? Math.floor(maxPartsRaw)
+        : null;
+    if (maxParts !== null && !partSnap.exists) {
+      const countRaw = (quizData as Record<string, unknown>).participantCount;
+      const count = typeof countRaw === 'number' && Number.isFinite(countRaw) ? countRaw : null;
+      if (count !== null && count >= maxParts) {
+        return NextResponse.json({ allowed: false, reason: 'This arena is full. Please contact your Commander.' });
+      }
+    }
+
     // ExtractDomain(E_user) == D_arena (exact match, same as rules
     // `parts.size() == 2 && parts[1] == lowerDomain` — never includes/endsWith,
     // so notpsgitech.ac.in cannot bypass psgitech.ac.in).

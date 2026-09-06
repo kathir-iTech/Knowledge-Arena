@@ -1220,6 +1220,48 @@ function groundingWarningsForQuestions(
   return warnings;
 }
 
+// R2-25 / Feature 25: Dual-agent critique pass (flagged, quota-gated).
+// Solver = generation above; Critique = discriminability/ambiguity check.
+// Default OFF (`platform_settings.ai.critiqueEnabled !== true`); when ON it
+// runs a heuristic pass only (no extra Gemini tokens in Set 2). A Gemini
+// second pass stays deferred until `getKeyHealth` headroom + explicit flag
+// value 'gemini'. Returns kept questions + warnings (never fails the job).
+async function isCritiqueEnabled(): Promise<boolean> {
+  try {
+    const { getAdminDb } = await import('@/lib/firebase-admin');
+    const snap = await getAdminDb().collection(COLLECTIONS.PLATFORM_SETTINGS).doc('global').get();
+    return (snap.data() as Record<string, unknown> | undefined) !== undefined &&
+      ((snap.data() as { ai?: { critiqueEnabled?: unknown } }).ai?.critiqueEnabled === true);
+  } catch {
+    return false;
+  }
+}
+
+function critiqueQuestions(
+  questions: QuizQuestions,
+): { kept: QuizQuestions; warnings: string[] } {
+  const kept: QuizQuestions = [];
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+  questions.forEach((q, i) => {
+    const opts = (q.options ?? []).map((o) => (o ?? '').trim().toLowerCase());
+    const uniq = new Set(opts);
+    // D(Q) proxy: ambiguous when options collapse or correct duplicates another.
+    if (opts.length < 2 || uniq.size !== opts.length) {
+      warnings.push(`Question ${i + 1} flagged by critique: duplicate or missing options.`);
+      return;
+    }
+    const key = `${(q.text ?? '').trim().toLowerCase()}||${opts.join('||')}`;
+    if (seen.has(key)) {
+      warnings.push(`Question ${i + 1} flagged by critique: exact duplicate of an earlier question.`);
+      return;
+    }
+    seen.add(key);
+    kept.push(q);
+  });
+  return { kept, warnings };
+}
+
 // Shared generation step used by both the legacy `pdfDataUri` flow and the
 // client-side-extraction server action (generateQuizFromExtracted). Takes
 // already-extracted text + optional image data URIs; no file bytes cross
@@ -1302,6 +1344,27 @@ async function generateContentFromExtracted(
       difficulty,
       engine: result.reason,
       error: errorMsg,
+    };
+  }
+
+  // Flagged critique (Set 2): heuristic only, warnings additive, never fails.
+  // The `await` is inside the flagged branch so the default OFF path adds
+  // zero latency/quota cost.
+  if (await isCritiqueEnabled()) {
+    const { kept, warnings } = critiqueQuestions(result.output.questions);
+    if (kept.length > 0) {
+      return {
+        questions: kept,
+        difficulty,
+        engine: result.engine,
+        warnings: warnings.length > 0 ? warnings : undefined,
+      };
+    }
+    return {
+      questions: result.output.questions,
+      difficulty,
+      engine: result.engine,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
 

@@ -108,6 +108,28 @@ export const participantService = {
         }
       }
 
+      // R2-16 participant caps (additive, fail-open): optional
+      // `max_participants` on the quiz doc. Old arenas (null/undefined) stay
+      // uncapped. Uses the denormalized `participantCount` counter when present
+      // to avoid an N-read scan inside the tx; otherwise fail-open.
+      const maxPartsRaw = (quizData as Record<string, unknown>).max_participants;
+      const maxParts =
+        typeof maxPartsRaw === 'number' && Number.isFinite(maxPartsRaw) && maxPartsRaw > 0
+          ? Math.floor(maxPartsRaw)
+          : null;
+      if (maxParts !== null) {
+        const countRaw = (quizData as Record<string, unknown>).participantCount;
+        const count = typeof countRaw === 'number' && Number.isFinite(countRaw) ? countRaw : null;
+        if (count !== null && count >= maxParts) {
+          // Re-check: existing participant re-joining must not be blocked by cap.
+          const preCheckRef = doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS, userId);
+          const preCheckSnap = await transaction.get(preCheckRef);
+          if (!preCheckSnap.exists()) {
+            throw new Error('This arena is full. Please contact your Commander.');
+          }
+        }
+      }
+
       const participantRef = doc(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS, userId);
       const existingPartSnap = await transaction.get(participantRef);
       if (existingPartSnap.exists() && existingPartSnap.data()?.status === PS_BLOCKED) {

@@ -1,5 +1,43 @@
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { logAuthFailure } from '@/lib/security-log';
+import { hasPermission as hasCapPermission, type CapabilityName } from '@/lib/permissions';
+
+// R2-33 additive capability gate (second gate after role checks; never replaces them).
+export function hasPermission(
+  roleOrMask: string | number | null | undefined,
+  cap: CapabilityName,
+): boolean {
+  return hasCapPermission(roleOrMask, cap);
+}
+
+// R2-38 read-only revocation checker (alongside Bearer, never replacing it).
+// Reads revoked_tokens/{uid} {revokedAt} via Admin SDK with in-memory TTL;
+// missing doc or read failure => not revoked (fail-open for availability,
+// revocation enforcement happens on next cache refresh + signOut write path).
+const revokedCache = new Map<string, { revokedAt: number; at: number }>();
+const REVOKED_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export async function isRevoked(uid: string, issuedAtMs?: number): Promise<boolean> {
+  if (!uid) return false;
+  const now = Date.now();
+  const cached = revokedCache.get(uid);
+  let revokedAt = 0;
+  if (cached && now - cached.at < REVOKED_CACHE_TTL_MS) {
+    revokedAt = cached.revokedAt;
+  } else {
+    try {
+      const snap = await getAdminDb().collection('revoked_tokens').doc(uid).get();
+      revokedAt = snap.exists ? Number((snap.data() as Record<string, unknown>)?.revokedAt ?? 0) : 0;
+      if (!Number.isFinite(revokedAt)) revokedAt = 0;
+      revokedCache.set(uid, { revokedAt, at: now });
+    } catch {
+      return false;
+    }
+  }
+  if (!revokedAt) return false;
+  if (typeof issuedAtMs === 'number' && Number.isFinite(issuedAtMs)) return revokedAt > issuedAtMs;
+  return true;
+}
 
 interface AuthResult {
   uid: string;

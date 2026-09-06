@@ -104,6 +104,12 @@ export const COLLECTIONS = {
   // lock these collections so clients can never read or write them directly.
   AI_JOBS: 'ai_jobs',
   FORGE_CACHE: 'forge_cache',
+  // R2-1 search DF table (Admin-only; routes join server-side). No client reads.
+  SEARCH_DF: 'search_df',
+  // R2-40 squads (derived aggregation; solo arenas read squads=[]).
+  SQUADS: 'squads',
+  // R2-35 translation cache (Admin-only like mindmap/explanation caches).
+  AI_TRANSLATIONS: 'ai_translations',
 } as const;
 
 // Doc id of the single arena-internals document inside the config
