@@ -140,7 +140,7 @@ export function PDFQuizGenerator({ onQuestionsGenerated, onDirtyChange, initialC
       setStage('error');
       setStepError(2);
       setFailedStepInfo({ step: 2, guidance: 'The request timed out. Try reducing the question count or using smaller files.' });
-      setError("Generation timed out after 3 minutes. Try with fewer questions or smaller files.");
+      setError("Generation timed out after 15 minutes. Try with fewer questions or smaller files.");
     }, CLIENT_TIMEOUT_MS);
 
     try {
