@@ -7,7 +7,7 @@
  * and 375px no-overflow still passes (overflow-x:auto).
  */
 
-import React, { useMemo } from 'react';
+import React from 'react';
 
 function stripDelimiters(raw: string): string {
   const t = raw.trim();
@@ -19,30 +19,12 @@ function stripDelimiters(raw: string): string {
 }
 
 export function MathFormula({ tex, block = false }: { tex: string; block?: boolean }) {
-  const html = useMemo(() => {
-    const inner = stripDelimiters(tex);
-    try {
-      // Optional KaTeX when installed; never a hard dep in Set 2.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const katex = require('katex') as {
-        renderToString: (s: string, o?: Record<string, unknown>) => string;
-      };
-      return katex.renderToString(inner, { throwOnError: false, displayMode: block });
-    } catch {
-      return null;
-    }
-  }, [tex, block]);
-
-  if (html) {
-    const Tag = block ? 'div' : 'span';
-    return (
-      <Tag
-        className="overflow-x-auto text-[0.95em] leading-relaxed"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    );
-  }
-  // Fallback: styled span preserves backslashes (repairJson guard keeps them).
+  // NOTE (R2-28): KaTeX is not installed in Set 2 (bundle + team constraint),
+  // and a static `require('katex')`/`import('katex')` makes webpack demand the
+  // module at build time even inside try/catch. So this renders a styled
+  // fallback that preserves backslashes (repairJson guard keeps them) until
+  // `katex` is added to package.json — at which point this becomes a
+  // `renderToString` call with the same props. No store changes either way.
   const Tag = block ? 'div' : 'span';
   return (
     <Tag className="overflow-x-auto rounded bg-muted/40 px-1.5 py-0.5 font-mono text-[0.9em]">

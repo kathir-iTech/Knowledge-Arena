@@ -89,7 +89,7 @@ Additive only; `battle-server` tx blocks, `verify-auth` parsers, `firestore.rule
 - `src/lib/security-log.ts` — `dispatchSIEM` dynamic-import wrapper (never awaited in path by convention).
 - `src/ai/flows/generate-quiz-pdf-flow.ts` — `isCritiqueEnabled` (`platform_settings.ai.critiqueEnabled===true`, default OFF, try/catch) + heuristic `critiqueQuestions` (duplicate/collapsed options, exact-dup Jaccard) applied post-`result.ok` with warnings additive (job never fails on critique).
 - `src/services/participant.service.ts` + `src/app/api/battle/can-join/route.ts` — nullable `max_participants` + denormalized `participantCount` check, existing-member rejoin exempt, legacy `null` fail-open.
-- `src/components/quiz/LiveQuiz.tsx` — post-submit telemetry block only: async `scoreAnomaly` import, `>1.5` → `logSecurityViolation(answer_cadence)` in try/catch; submit/timer/shuffle/auto-advance paths byte-identical.
+- `src/components/quiz/LiveQuiz.tsx` — REVERTED 2026-09-06 post-Vercel failure (`Can't resolve net/fs/http2` via `security-log.ts` → `firebase-admin` client-bundle edge): submit/timer/shuffle/auto-advance paths byte-identical to pre-Round-2; `scoreAnomaly` stays as pure shipped scorer + spec coverage, client wiring deferred until a gladiator-callable log endpoint exists (server `evaluate*` clock-skew/timeout violations remain the authoritative path).
 - `firestore.rules.template` — `canEditQuiz` helper (creator OR `co_commanders.hasAny`) + `questions/answerKeys allow update,delete: if canEditQuiz` (single deliberate widening; `config/settings` stays creator+executive) + `search_df`/`ai_translations if false`; regenerated `firestore.rules` via `npm run rules:generate` (per-arena domain path).
 
 **New routes/jobs/tests:**
