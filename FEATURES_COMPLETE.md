@@ -1,7 +1,7 @@
 # Quorena — Features Complete (Single Entry Point: Rounds 1 + 2, 40 Features)
 
 **Date:** 2026-09-06
-**Commits:** Round 1 `dce895e` + `c43cc31` (20/20, `tsc` clean, `97/97` pages) → Round 2 Set 2 implementation (this session, `tsc` clean, see §6).
+**Commits:** Round 1 `dce895e` + `c43cc31` (20/20, `tsc` clean, `97/97` pages) → Round 2 Set 2 implementation (this session, `tsc` clean, see §3).
 **Status:** 100% COMPLETE — Round 1 (1-20) shipped (`dce895e` + `c43cc31`) and Round 2 LOCK scope shipped (this batch, `tsc` clean, rules hash green). Single combined reference. Originals retained for history: `FEATURE_INVENTORY.md` (47 pages / 71 routes surface), `features_audit_1.md` (ADVANCE/LEAVE ALONE audit), `FEATURE_GOLDEN_RULES.md` (Round-1 20×5 golden rules), `FEATURE_GOLDEN_RULES_ROUND2.md` (Round-2 20×5 final locking research + implementation spec).
 **How to use:** Read §1 → §2 lock table → §3 implementation record → §4 preservation/roadmap → §5 contradictions → Appendix for governance. Implementation prompts copy §3 file lists + §4 boundary sentences verbatim.
 
@@ -93,7 +93,7 @@ Additive only; `battle-server` tx blocks, `verify-auth` parsers, `firestore.rule
 - `firestore.rules.template` — `canEditQuiz` helper (creator OR `co_commanders.hasAny`) + `questions/answerKeys allow update,delete: if canEditQuiz` (single deliberate widening; `config/settings` stays creator+executive) + `search_df`/`ai_translations if false`; regenerated `firestore.rules` via `npm run rules:generate` (per-arena domain path).
 
 **New routes/jobs/tests:**
-- `src/app/api/cron/search-df/route.ts` — `Bearer CRON_SECRET`, `question_bank` paginated scan (`1000`, `5000` cap, `RUN_WINDOW 30s`), `500/batch` DF writes, in-memory fallback preserved in callers.
+- `src/app/api/cron/search-df/route.ts` — `Bearer CRON_SECRET`, `question_bank` paginated scan (`1000`, `5000` cap, `RUN_WINDOW 30s`), `500/batch` DF writes; `src/lib/search.ts resolveDf` joins the table in exec/commander routes with per-collection in-memory fallback when terms are missing.
 - `src/app/api/cron/spaced-repetition/route.ts` — `Bearer CRON_SECRET`, `getKeyHealth` all-cooling skip, `MAX_PER_NIGHT 2`, `RUN_WINDOW 30s`, schedule-decision response (no quota burn by default).
 - `src/app/api/quiz/translate/route.ts` — `commander|executive`, per-uid limit, `stableId SHA256(questionId+text+lang)`, cache hit fast-path; model call deferred (410 parked signal) until glossary owner exists.
 - `tests/battle-idempotency.spec.ts` — pure-logic suite (scoring determinism, CAT determinism, squad determinism, anomaly finiteness, RBAC + CEF) — no emulator needed, CI-safe.

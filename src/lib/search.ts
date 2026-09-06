@@ -92,6 +92,42 @@ export function recencyFactor(createdMs: number | null, nowMs?: number, lambda =
   return Math.exp(-lambda * dtDays);
 }
 
+/** Per-term DF getter backed by the search_df table (Admin SDK in routes). */
+export type DfGetter = (term: string) => Promise<{ df: number; n: number } | null>;
+
+/**
+ * Resolve DF from the search_df table with in-memory fallback.
+ * Table hit requires every query term to resolve to a finite df>0/n>0 doc;
+ * otherwise falls back to computeDf over the fetched docs so recall and
+ * ranking never degrade when the nightly job hasn't run yet.
+ */
+export async function resolveDf(
+  getter: DfGetter,
+  queryTokens: string[],
+  fallbackDocsTokens: string[][],
+): Promise<{ df: Map<string, number>; n: number }> {
+  const fallback = () => ({ df: computeDf(fallbackDocsTokens, queryTokens), n: fallbackDocsTokens.length });
+  if (queryTokens.length === 0) return fallback();
+  try {
+    const entries = await Promise.all(
+      queryTokens.map(async (t) => [t, await getter(t).catch(() => null)] as const),
+    );
+    let corpusN = 0;
+    const df = new Map<string, number>();
+    for (const [t, v] of entries) {
+      if (!v || !Number.isFinite(v.df) || v.df <= 0 || !Number.isFinite(v.n) || v.n <= 0) {
+        return fallback();
+      }
+      df.set(t, Math.floor(v.df));
+      corpusN = Math.max(corpusN, Math.floor(v.n));
+    }
+    if (corpusN <= 0) return fallback();
+    return { df, n: corpusN };
+  } catch {
+    return fallback();
+  }
+}
+
 /** DF table computed in-memory from fetched docs' token arrays. */
 export function computeDf(docsTokens: string[][], queryTokens: string[]): Map<string, number> {
   const df = new Map<string, number>();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { COLLECTIONS } from '@/lib/constants';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import {
   SEARCH_RECENCY_LAMBDA,
@@ -9,6 +10,7 @@ import {
   baseRelevance,
   docCreatedAtMs,
   computeDf,
+  resolveDf,
   tfidfRecencyScore,
   passesResidualFilter,
 } from '@/lib/search';
@@ -78,6 +80,22 @@ export async function GET(req: NextRequest) {
     const firstTerm = queryTokens[0];
     const nowMs = Date.now();
     const db = getAdminDb();
+    // R2-1 table DF join: stable corpus DF from the nightly search-df job.
+    // Incomplete table (job never ran / term missing) falls back per-collection
+    // to in-memory DF, so ranking never degrades.
+    const tableDf = await resolveDf(
+      async (term) => {
+        const snap = await db.collection(COLLECTIONS.SEARCH_DF).doc(term).get();
+        if (!snap.exists) return null;
+        const data = snap.data() as Record<string, unknown>;
+        const df = Number(data.df);
+        const n = Number(data.n);
+        return { df, n };
+      },
+      queryTokens,
+      [],
+    );
+    const useTableDf = tableDf.n > 0;
     const results: SearchHit[] = [];
     const seen = new Set<string>();
 
@@ -142,7 +160,8 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Generic per-collection TF-IDF + recency scorer.
-    // DF is computed in-memory from the fetched docs (no new collection).
+    // DF prefers the search_df table (stable corpus); per-collection in-memory
+    // DF is the fallback when the table is incomplete.
     // Final Score(d,q) = base(4/3/2) + sum TF*log(N/DF) * e^{-lambda*dt}.
     const scoreCollection = (
       docs: FirebaseFirestore.QueryDocumentSnapshot[],
@@ -154,8 +173,11 @@ export async function GET(req: NextRequest) {
         const lower = s.text.toLowerCase();
         return { id: d.id, data, lower, tokens: tokenizeDocText(lower), createdMs: s.createdMs, fields: s.fields };
       });
-      const df = computeDf(searchables.map(s => s.tokens), queryTokens);
-      const n = searchables.length;
+      const local = useTableDf
+        ? tableDf
+        : { df: computeDf(searchables.map(s => s.tokens), queryTokens), n: searchables.length };
+      const df = local.df;
+      const n = local.n;
       const out = new Map<string, { base: number; combined: number }>();
       for (const s of searchables) {
         const base = baseWithResidual(query, queryTokens, s.lower, s.fields);
@@ -359,8 +381,11 @@ export async function GET(req: NextRequest) {
         const lower = lastMessage.toLowerCase();
         return { id: d.id, data, lower, tokens: tokenizeDocText(lower), createdMs: docCreatedAtMs(data as Record<string, unknown>) };
       });
-      const df = computeDf(searchables.map(s => s.tokens), queryTokens);
-      const n = searchables.length;
+      const localConv = useTableDf
+        ? tableDf
+        : { df: computeDf(searchables.map(s => s.tokens), queryTokens), n: searchables.length };
+      const df = localConv.df;
+      const n = localConv.n;
       for (const s of searchables) {
         const data = s.data;
         const participants = (data.participants || []) as string[];

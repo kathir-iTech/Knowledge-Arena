@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { COLLECTIONS } from '@/lib/constants';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import {
   SEARCH_RECENCY_LAMBDA,
@@ -9,6 +10,7 @@ import {
   baseRelevance,
   docCreatedAtMs,
   computeDf,
+  resolveDf,
   tfidfRecencyScore,
   passesResidualFilter,
 } from '@/lib/search';
@@ -76,9 +78,23 @@ export async function GET(req: NextRequest) {
       const lower = text.toLowerCase();
       return { id: d.id, data, title, lower, tokens: tokenizeDocText(lower), createdMs: docCreatedAtMs(data) };
     });
-    // DF in-memory from the fetched docs — no new collection.
-    const df = computeDf(searchables.map(s => s.tokens), queryTokens);
-    const n = searchables.length;
+    // DF prefers the search_df table (stable corpus); in-memory fallback
+    // when the nightly job hasn't populated the queried terms.
+    const tableDf = await resolveDf(
+      async (term) => {
+        const snap = await db.collection(COLLECTIONS.SEARCH_DF).doc(term).get();
+        if (!snap.exists) return null;
+        const data = snap.data() as Record<string, unknown>;
+        return { df: Number(data.df), n: Number(data.n) };
+      },
+      queryTokens,
+      [],
+    );
+    const local = tableDf.n > 0
+      ? tableDf
+      : { df: computeDf(searchables.map(s => s.tokens), queryTokens), n: searchables.length };
+    const df = local.df;
+    const n = local.n;
     void RECENCY_LAMBDA;
 
     const results = snap.docs
