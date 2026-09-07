@@ -4,12 +4,9 @@ import { Button } from '@/components/ui/button';
 
 const NAV_LINKS = [
   { href: '#product', label: 'Product' },
-  { href: '#demo', label: 'Demo' },
   { href: '#ai-forge', label: 'AI Forge' },
   { href: '#live-battle', label: 'Live Battles' },
   { href: '#analytics', label: 'Analytics' },
-  { href: '#architecture', label: 'Architecture' },
-  { href: '#team', label: 'Team' },
 ];
 
 export function LandingNav() {

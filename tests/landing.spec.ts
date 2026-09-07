@@ -9,18 +9,23 @@ test.describe('Public Landing Page', () => {
 
     await expect(page.locator('h1:has-text("Learn. Battle.")')).toBeVisible({ timeout: 20000 });
 
-    // Nav
+    // Plain-language intro for first-time teachers/students
+    await expect(page.locator('text=Teachers turn lesson material into quizzes').first()).toBeVisible();
+
+    // Nav (product sections only — no demo/team/architecture links)
     const nav = page.locator('nav[aria-label="Primary"]');
     await expect(nav.locator('a:has-text("Product")')).toBeVisible();
-    await expect(nav.locator('a:has-text("Demo")')).toBeVisible();
-    await expect(nav.locator('a:has-text("Team")')).toBeVisible();
+    await expect(nav.locator('a:has-text("AI Forge")')).toBeVisible();
+    await expect(nav.locator('a:has-text("Live Battles")')).toBeVisible();
+    await expect(nav.locator('a:has-text("Analytics")')).toBeVisible();
+    await expect(nav.locator('a:has-text("Demo")')).toHaveCount(0);
+    await expect(nav.locator('a:has-text("Team")')).toHaveCount(0);
     await expect(page.locator('a:has-text("Enter the Arena")').first()).toBeVisible();
+    await expect(page.locator('a:has-text("See how it works")').first()).toBeVisible();
 
-    // Demo section with one-click role cards
-    await expect(page.locator('h2:has-text("Try the live product in one click")')).toBeVisible();
-    await expect(page.locator('button:has-text("Executive")')).toBeVisible();
-    await expect(page.locator('button:has-text("Commander")')).toBeVisible();
-    await expect(page.locator('button:has-text("Gladiator")')).toBeVisible();
+    // No demo-mode section or one-click role sign-in on the public page
+    await expect(page.locator('text=DEMO MODE')).toHaveCount(0);
+    await expect(page.locator('text=Try the live product in one click')).toHaveCount(0);
 
     // Showcases
     await expect(page.locator('h2:has-text("One arena. Three battle stations.")')).toBeVisible();
@@ -28,12 +33,11 @@ test.describe('Public Landing Page', () => {
     await expect(page.locator('h2:has-text("Watch every arena breathe")')).toBeVisible();
     await expect(page.locator('h2:has-text("Executive intelligence, not just dashboards")')).toBeVisible();
 
-    // Features / Architecture / Team / CTA / Footer
-    await expect(page.locator('h2:has-text("Everything a quiz platform should be")')).toBeVisible();
-    await expect(page.locator('h2:has-text("Serverless, real-time, audited")')).toBeVisible();
-    await expect(page.locator('h2:has-text("Built by people who love classrooms")')).toBeVisible();
+    // Features / CTA / Footer
+    await expect(page.locator('h2:has-text("Everything a battle-ready arena needs")')).toBeVisible();
     await expect(page.locator('h2:has-text("The bell rings in 5 minutes")')).toBeVisible();
-    await expect(page.locator('footer:has-text("HackVerse")')).toBeVisible();
+    await expect(page.locator('footer:has-text("HackVerse")')).toHaveCount(0);
+    await expect(page.locator('footer:has-text("© 2026 Quorena")')).toBeVisible();
 
     // No console errors
     const errors: string[] = [];
@@ -51,41 +55,6 @@ test.describe('Public Landing Page', () => {
     await expect(page.locator('h1:has-text("Learn. Battle.")')).toBeVisible({ timeout: 20000 });
     const overflows = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflows).toBeLessThanOrEqual(1);
-  });
-
-  test('one-click demo signs in as Executive', async ({ page }) => {
-    await page.goto(BASE_URL + '/');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(3000);
-
-    const execButton = page.locator('button:has-text("Executive")').first();
-    await execButton.scrollIntoViewIfNeeded();
-    await execButton.click();
-    // The click can race React hydration — retry once if still on the landing page.
-    await page.waitForTimeout(2500);
-    if (page.url().includes('/executive')) return;
-    if (!page.url().includes('/login')) {
-      await execButton.click();
-    }
-    await page.waitForURL(/\/(executive|login)/, { timeout: 45000 });
-    expect(page.url()).toContain('/executive');
-  });
-
-  test('one-click demo signs in as Gladiator', async ({ page }) => {
-    await page.goto(BASE_URL + '/');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(3000);
-
-    const gladButton = page.locator('button:has-text("Gladiator")').first();
-    await gladButton.scrollIntoViewIfNeeded();
-    await gladButton.click();
-    await page.waitForTimeout(2500);
-    if (page.url().includes('/gladiator')) return;
-    if (!page.url().includes('/login')) {
-      await gladButton.click();
-    }
-    await page.waitForURL(/\/(gladiator|login)/, { timeout: 45000 });
-    expect(page.url()).toContain('/gladiator');
   });
 });
 

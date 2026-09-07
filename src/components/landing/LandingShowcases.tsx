@@ -6,15 +6,10 @@ import {
   FileUp,
   Flame,
   Layers,
-  LineChart,
-  MessageSquare,
-  MonitorPlay,
   Radar,
   ShieldAlert,
   Swords,
-  Timer,
   Trophy,
-  Users,
   Zap,
 } from 'lucide-react';
 
@@ -129,7 +124,7 @@ export function LandingShowcases() {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold">AI Quiz Forge</p>
-                <p className="text-xs text-muted-foreground">genkit · gemini</p>
+                <p className="text-xs text-muted-foreground">Sample forged questions</p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
                 <Zap className="h-3 w-3" /> FORGING
@@ -177,20 +172,9 @@ export function LandingShowcases() {
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" /> LIVE
               </span>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-xl border bg-background/60 p-3">
-                <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <MonitorPlay className="h-3 w-3" /> Live arenas
-                </p>
-                <p className="mt-1 font-headline text-2xl font-bold">12</p>
-              </div>
-              <div className="rounded-xl border bg-background/60 p-3">
-                <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <Users className="h-3 w-3" /> Active gladiators
-                </p>
-                <p className="mt-1 font-headline text-2xl font-bold">84</p>
-              </div>
-            </div>
+            <p className="mt-4 rounded-xl border bg-background/60 p-3 text-[11px] leading-relaxed text-muted-foreground">
+              Sample battle view — live arena counts and standings appear here during a real battle.
+            </p>
             {/* Arena rankings in the command center — same neo-roman style */}
             <div className="mt-3">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Top Gladiators</p>
@@ -244,19 +228,9 @@ export function LandingShowcases() {
                 </div>
               ))}
             </div>
-            <div className="mt-5 grid grid-cols-3 gap-3 border-t pt-4">
-              {[
-                { icon: LineChart, label: 'Trend', value: '+24%' },
-                { icon: Timer, label: 'Avg. session', value: '18m' },
-                { icon: MessageSquare, label: 'Messages', value: '1.2k' },
-              ].map(stat => (
-                <div key={stat.label} className="text-center">
-                  <stat.icon className="mx-auto h-4 w-4 text-muted-foreground" />
-                  <p className="mt-1 font-headline text-lg font-bold">{stat.value}</p>
-                  <p className="text-[10px] text-muted-foreground">{stat.label}</p>
-                </div>
-              ))}
-            </div>
+            <p className="mt-5 border-t pt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
+              Sample analytics — your real engagement numbers appear here.
+            </p>
           </div>
         </div>
       </ShowcaseRow>

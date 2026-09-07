@@ -34,9 +34,9 @@ export function LandingHero() {
           </h1>
 
           <p className="mt-6 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Quorena turns classrooms into live quiz arenas — with AI-forged
-            questions, real-time battles, anti-cheat presence tracking, and executive-grade
-            intelligence. Built for Gladiators, Commanders, and Executives.
+            Quorena is a live classroom quiz game. Teachers turn lesson material
+            into quizzes — with AI help or by hand — and students join with a
+            room code to compete in real time.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -57,18 +57,18 @@ export function LandingHero() {
               variant="outline"
               className="h-12 px-7 text-base focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
-              <Link href="#demo">
+              <Link href="#product">
                 <Zap className="mr-2 h-4 w-4 text-warning" />
-                Try the live demo
+                See how it works
               </Link>
             </Button>
           </div>
 
           <dl className="mt-10 grid max-w-md grid-cols-3 gap-6 border-t pt-8">
             {[
-              { value: '3', label: 'Battle stations' },
-              { value: 'Live', label: 'Arena presence' },
-              { value: 'AI', label: 'Question forge' },
+              { value: 'Code', label: 'Join with a room code' },
+              { value: 'Live', label: 'Real-time leaderboard' },
+              { value: 'AI', label: 'AI-made questions' },
             ].map(stat => (
               <div key={stat.label}>
                 <dt className="font-headline text-2xl font-bold text-foreground">{stat.value}</dt>
