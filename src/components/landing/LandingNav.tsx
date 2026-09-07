@@ -3,10 +3,10 @@ import { BrainCircuit, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const NAV_LINKS = [
-  { href: '#product', label: 'Product' },
-  { href: '#ai-forge', label: 'AI Forge' },
-  { href: '#live-battle', label: 'Live Battles' },
-  { href: '#analytics', label: 'Analytics' },
+  { href: '#product', label: 'How it works' },
+  { href: '#ai-forge', label: 'Quiz Creator' },
+  { href: '#live-battle', label: 'Live Quizzes' },
+  { href: '#analytics', label: 'Insights' },
 ];
 
 export function LandingNav() {
@@ -43,7 +43,7 @@ export function LandingNav() {
         >
           <Link href="/login">
             <LogIn className="mr-1.5 h-4 w-4" />
-            Enter the Arena
+            Sign in
           </Link>
         </Button>
       </div>

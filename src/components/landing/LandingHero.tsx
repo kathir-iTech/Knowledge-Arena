@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ArrowRight, Radio, Sparkles, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-// Neo-roman arena ranking preview — top gladiators by score
+// Live quiz leaderboard mockup — top scores
 const LEADERBOARD = [
   { initials: 'R', name: 'Ruby', score: 1240, gradient: 'from-primary to-accent' },
   { initials: 'A', name: 'Atlas', score: 980, gradient: 'from-accent to-warning' },
@@ -24,30 +24,27 @@ export function LandingHero() {
         <div className="max-w-xl">
           <div className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-elevation-small">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Real-time quiz battleground for the modern arena
+            AI-powered quizzes from any PDF
           </div>
 
-          {/* Hero headline — Playfair Display, deliberate letter-spacing, carved weight */}
           <h1 className="mt-6 font-headline text-5xl font-bold leading-[1.05] tracking-[-0.02em] text-balance sm:text-6xl lg:text-7xl">
-            Learn. Battle.{' '}
-            <span className="gradient-text">Own the arena.</span>
+            Turn any lesson into a{' '}
+            <span className="gradient-text">live quiz.</span>
           </h1>
 
           <p className="mt-6 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Quorena is a live classroom quiz game. Teachers turn lesson material
-            into quizzes — with AI help or by hand — and students join with a
-            room code to compete in real time.
+            Upload a PDF and Quorena turns it into a quiz in minutes. Students
+            join with a room code and compete in real time on any device.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            {/* Primary CTA — crimson, highest-stakes click on the page */}
             <Button
               asChild
               size="lg"
               className="h-12 px-7 text-base font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               <Link href="/login">
-                Enter the Arena
+                Sign in
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
@@ -78,13 +75,13 @@ export function LandingHero() {
           </dl>
         </div>
 
-        {/* Arena preview card — leaderboard mockup */}
+        {/* Quiz preview card — leaderboard mockup */}
         <div className="relative mx-auto w-full max-w-md lg:max-w-none">
           <div className="absolute -inset-6 rounded-[32px] bg-gradient-to-br from-primary/20 via-accent/10 to-transparent blur-2xl animate-glow-pulse" aria-hidden="true" style={{ willChange: 'transform, opacity' }} />
           <div className="relative rounded-3xl border bg-card/90 p-5 shadow-elevation-large backdrop-blur animate-float" style={{ willChange: 'transform' }}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="font-headline text-lg font-bold tracking-tight">Midnight Clash</p>
+                <p className="font-headline text-lg font-bold tracking-tight">Midterm Review Quiz</p>
                 <p className="text-xs text-muted-foreground">Room CCAB8A · Computer Science</p>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">
@@ -108,9 +105,9 @@ export function LandingHero() {
               </div>
             </div>
 
-            {/* Arena rankings — roman numerals, trophy-weight */}
+            {/* Leaderboard mockup — score ranking */}
             <div className="mt-5 space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Arena Rankings</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Live Leaderboard</p>
               {LEADERBOARD.map((row, i) => (
                 <div
                   key={row.name}

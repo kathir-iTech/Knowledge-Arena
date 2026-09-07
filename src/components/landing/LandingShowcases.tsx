@@ -13,22 +13,22 @@ import {
   Zap,
 } from 'lucide-react';
 
-// Product overview — arena / battle language throughout
+// Product overview — plain language for teachers and students
 const OVERVIEW_PILLARS = [
   {
     icon: Swords,
-    title: 'Gladiators — Battle & Learn',
-    text: 'Enter live arenas with a room code, answer on a timer, and watch your rank move in real time as you fight for the top.',
+    title: 'For teachers — build quizzes fast',
+    text: 'Upload a PDF, choose a difficulty, and the AI writes your questions. You review, edit, and publish a quiz with one room code.',
   },
   {
     icon: Flame,
-    title: 'Commanders — Forge & Command',
-    text: 'Forge AI-powered questions from PDFs, launch synchronized battles, control the arena clock, and own the room.',
+    title: 'For students — join and play',
+    text: 'Open Quorena, enter the room code your teacher shares, and answer on a live timer. Your score updates in real time.',
   },
   {
     icon: Radar,
-    title: 'Executives — Govern & Observe',
-    text: 'Monitor every active arena from a live command center with winner predictions, answer heatmaps, and activity streams.',
+    title: 'For admins — see how it\u2019s going',
+    text: 'Track who\u2019s playing, how each student performed, and which questions were hardest — in one dashboard.',
   },
 ];
 
@@ -83,13 +83,14 @@ export function LandingShowcases() {
       <section id="product" className="border-y bg-secondary/40">
         <div className="page-container py-16 md:py-20">
           <Reveal className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-bold uppercase tracking-widest text-primary">The Arena</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary">How it works</p>
             <h2 className="mt-2 font-headline text-3xl font-bold tracking-tight text-balance sm:text-4xl">
-              One arena. Three battle stations.
+              A quiz for every role.
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Quorena unifies the classroom experience across dedicated stations —
-              each tuned to its role, all sharing one real-time arena.
+              Quorena gives teachers the tools to build great quizzes, students
+              a way to take them that feels like a game, and admins the data to
+              see how everyone is doing.
             </p>
           </Reveal>
           <div className="mt-10 grid gap-5 md:grid-cols-3">
@@ -110,9 +111,9 @@ export function LandingShowcases() {
 
       <ShowcaseRow
         id="ai-forge"
-        eyebrow="AI Forge"
-        title="From lecture PDF to battle arena in minutes"
-        text="Commanders drop in a syllabus, textbook chapter, or study guide — the AI Forge extracts questions, filters them in a review panel, and publishes an arena with a room code. Every question is human-verified before it ever reaches a Gladiator."
+        eyebrow="AI Quiz Creator"
+        title="From PDF to quiz in minutes"
+        text="Upload a syllabus, textbook chapter, or study guide. Quorena generates multiple-choice questions, you review and edit them, and publish with one room code. Every question is verified before students see it."
       >
         <div className="relative mx-auto w-full max-w-lg">
           {/* Glow uses warning/primary tokens — no amber */}
@@ -123,11 +124,11 @@ export function LandingShowcases() {
                 <BrainCircuit className="h-5 w-5" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold">AI Quiz Forge</p>
-                <p className="text-xs text-muted-foreground">Sample forged questions</p>
+                <p className="text-sm font-semibold">AI Quiz Creator</p>
+                <p className="text-xs text-muted-foreground">Sample generated questions</p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
-                <Zap className="h-3 w-3" /> FORGING
+                <Zap className="h-3 w-3" /> GENERATING
               </span>
             </div>
             <div className="mt-4 space-y-3">
@@ -156,9 +157,9 @@ export function LandingShowcases() {
 
       <ShowcaseRow
         id="live-battle"
-        eyebrow="Live Battle Command Center"
-        title="Watch every arena breathe — live"
-        text="Executives see the entire arena in real time: who is online, the exact question being answered, remaining timers, rankings that re-sort live, probabilistic winner shortlists, and a per-question answer heatmap. Zero page refreshes."
+        eyebrow="Real-time Battles"
+        title="Everyone plays at the same time"
+        text="When the quiz goes live, every student sees the same question on the same timer. Answers submit instantly, and the leaderboard re-sorts in front of the whole class."
         reverse
       >
         <div className="relative mx-auto w-full max-w-lg">
@@ -166,18 +167,19 @@ export function LandingShowcases() {
           <div className="relative rounded-3xl border bg-card p-5 shadow-elevation-large">
             <div className="flex items-center justify-between">
               <p className="flex items-center gap-2 font-headline text-sm font-bold">
-                <Activity className="h-4 w-4 text-primary" /> Battle Command Center
+                <Activity className="h-4 w-4 text-primary" /> Quiz in progress
               </p>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold text-success">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" /> LIVE
               </span>
             </div>
             <p className="mt-4 rounded-xl border bg-background/60 p-3 text-[11px] leading-relaxed text-muted-foreground">
-              Sample battle view — live arena counts and standings appear here during a real battle.
+              A preview of the leaderboard — during a real quiz, students'
+              names and live scores appear here.
             </p>
-            {/* Arena rankings in the command center — same neo-roman style */}
+            {/* Leaderboard mockup — same neo-roman style */}
             <div className="mt-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Top Gladiators</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Leaderboard</p>
               <div className="space-y-2">
                 {LEADERBOARD_HINT.map((row, i) => (
                   <div key={row.name} className="flex items-center gap-2.5 rounded-xl border bg-background/60 p-2 animate-in" style={{ animationDelay: `${i * 120}ms` }}>
@@ -201,9 +203,9 @@ export function LandingShowcases() {
 
       <ShowcaseRow
         id="analytics"
-        eyebrow="Analytics"
-        title="Executive intelligence, not just dashboards"
-        text="30-day engagement trends, arena usage, AI adoption, messaging activity, and per-Commander performance — computed on demand from live arena data, no ETL pipeline required."
+        eyebrow="Insights"
+        title="See how your class is doing"
+        text="Track insights over time — how many students played, how participants performed, and which questions tripped people up. See progress from one week to the next."
       >
         <div className="relative mx-auto w-full max-w-lg">
           <div className="absolute -inset-4 rounded-[28px] bg-gradient-to-br from-accent/20 to-primary/10 blur-2xl animate-glow-pulse" aria-hidden="true" />
@@ -229,7 +231,8 @@ export function LandingShowcases() {
               ))}
             </div>
             <p className="mt-5 border-t pt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
-              Sample analytics — your real engagement numbers appear here.
+              A preview — during a real quiz, these charts show your class's
+              week-to-week engagement.
             </p>
           </div>
         </div>
@@ -255,12 +258,12 @@ function Sparkles({ className }: { className?: string }) {
 
 export function LandingFeatures() {
   const features = [
-    { icon: Zap, title: 'Real-time arenas', text: 'Firestore-synced battles with presence tracking, live timers, and instant ranking movement.' },
-    { icon: BrainCircuit, title: 'AI question forge', text: 'Generate reviewable questions from any document via Genkit and Gemini — with full audit trails.' },
-    { icon: ShieldAlert, title: 'Anti-cheat presence', text: 'Gladiator heartbeat tracking, skip/timeout detection, and reconnect suspicion flags.' },
-    { icon: Radar, title: 'Command center', text: 'Live arena telemetry for Executives: predictions, answer heatmaps, and activity streams.' },
-    { icon: BarChart3, title: 'Deep analytics', text: '30-day engagement, arena usage, AI adoption, and messaging activity in one command view.' },
-    { icon: Layers, title: 'Role-first UX', text: 'Dedicated Gladiator, Commander, and Executive stations with tailored battle workflows.' },
+    { icon: Zap, title: 'Live quizzes', text: 'Questions appear on every screen at once, with a visible timer and a leaderboard that updates as answers come in.' },
+    { icon: BrainCircuit, title: 'AI question generation', text: 'Upload a PDF and get a first draft of multiple-choice questions in seconds. You stay in control of the final version.' },
+    { icon: ShieldAlert, title: 'Fair play', text: 'Tab-switch detection and session checks flag students who leave the quiz to look up answers.' },
+    { icon: Radar, title: 'Room codes', text: 'Each quiz gets a short code. Students join from any device — phone, tablet, or laptop — without an account.' },
+    { icon: BarChart3, title: 'Results, ready to use', text: 'Export scores as CSV or HTML for your gradebook, and see per-question breakdowns after each quiz.' },
+    { icon: Layers, title: 'Simple roles', text: 'Students join with a code, teachers create and run quizzes, and admins see the overall picture.' },
   ];
   return (
     <section id="features" className="border-y bg-secondary/40">
@@ -268,7 +271,7 @@ export function LandingFeatures() {
         <Reveal className="mx-auto max-w-2xl text-center">
           <p className="text-xs font-bold uppercase tracking-widest text-primary">Features</p>
           <h2 className="mt-2 font-headline text-3xl font-bold tracking-tight text-balance sm:text-4xl">
-            Everything a battle-ready arena needs
+            Everything a great quiz needs
           </h2>
         </Reveal>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

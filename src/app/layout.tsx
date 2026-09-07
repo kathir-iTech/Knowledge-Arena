@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'Quorena',
-  description: 'The ultimate quiz battleground for students and teachers.',
+  description: 'Turn any lesson into a live quiz. Teachers upload a PDF, students join with a room code, and everyone sees the leaderboard update in real time.',
   applicationName: 'Quorena',
   manifest: '/manifest.webmanifest',
   icons: {

@@ -14,11 +14,11 @@ export function LandingCTA() {
           />
           <div className="relative">
             <h2 className="mx-auto max-w-2xl font-headline text-3xl font-bold tracking-tight text-primary-foreground text-balance sm:text-4xl">
-              The bell rings in 5 minutes. Are your Gladiators ready?
+              Ready to run your first quiz?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-primary-foreground/85 sm:text-base">
-              Teachers create the quiz. Students join with a room code. Everyone
-              sees the leaderboard move in real time.
+              Students join with a room code. No accounts, no downloads — just
+              open the link and play.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <a
@@ -31,7 +31,7 @@ export function LandingCTA() {
                 href="/login"
                 className="inline-flex h-12 items-center rounded-[12px] border border-primary-foreground/40 px-6 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground focus-visible:ring-offset-2"
               >
-                Sign in to the arena
+                Sign in
               </Link>
             </div>
           </div>
@@ -51,7 +51,7 @@ export function LandingFooter() {
           </div>
           <div>
             <p className="font-headline text-sm font-bold">Quorena</p>
-            <p className="text-[11px] text-muted-foreground">Learn. Battle. Own the arena.</p>
+            <p className="text-[11px] text-muted-foreground">Turn any lesson into a live quiz.</p>
           </div>
         </div>
         <p className="text-[11px] text-muted-foreground">
