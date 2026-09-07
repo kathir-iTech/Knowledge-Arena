@@ -1,8 +1,8 @@
-# Knowledge Arena — Architecture
+# Quorena — Architecture
 
 ## 1. System Architecture
 
-Knowledge Arena uses a **monolithic Next.js deployment** with the App Router serving both the client UI (React Server/Client Components) and API Routes. Client components interact with Firebase Web SDK (Firestore, Auth) directly for real-time data. Admin-only operations go through API Routes that use the Firebase Admin SDK. Gemini AI is accessed via Genkit through server actions.
+Quorena uses a **monolithic Next.js deployment** with the App Router serving both the client UI (React Server/Client Components) and API Routes. Client components interact with Firebase Web SDK (Firestore, Auth) directly for real-time data. Admin-only operations go through API Routes that use the Firebase Admin SDK. Gemini AI is accessed via Genkit through server actions.
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -34,13 +34,16 @@ Knowledge Arena uses a **monolithic Next.js deployment** with the App Router ser
 └────────────────────────────────────────────────┘
                     │
 ┌───────────────────┴───────────────────────────┐
-│  Genkit + Gemini 2.0 Flash                    │
-│  (AI PDF Forge, Summaries, Predictions)       │
+│  Genkit + Gemini (Forge chain                │
+│  gemini-3.6-flash → gemini-3.5-flash;        │
+│  catalog default gemini-2.5-flash-lite)      │
+│  (AI PDF Forge; summaries/predictions        │
+│  shelved behind 410)                         │
 └───────────────────────────────────────────────┘
 ```
 
 **Key design choices:**
-- **Server Actions for AI** — The PDF-to-quiz generation runs in a server action to avoid exposing API keys to the client and to handle long-running AI calls without timeout limits.
+- **Server Actions for AI** — The PDF-to-quiz generation runs in server actions to avoid exposing API keys to the client. Long calls are bounded, not unlimited: each Gemini call times out after 35s (`GEMINI_TIMEOUT_MS` in `src/ai/flows/generate-quiz-pdf-flow.ts:47`) and generation is split into one-call-per-tick jobs (`createForgeJob`/`runForgeTick`) to stay inside Vercel's 60s `maxDuration` (`vercel.json:4`).
 - **Firebase Admin SDK on server** — All admin API routes use the Admin SDK for privileged access bypassing security rules.
 - **Firebase Web SDK on client** — Real-time subscriptions use the client SDK directly for low-latency updates during battles.
 - **Standalone output** — `next.config.ts` sets `output: 'standalone'` for flexible deployment (Vercel, Docker, custom Node).
@@ -112,15 +115,16 @@ Three roles — **Executive**, **Commander**, and **Gladiator** — determine wh
 2. **API Route Verification** — Each API route calls `verifyFirebaseTokenWithRole(req, requiredRole)` before processing requests. Returns `401 Unauthorized` on failure.
 3. **Firestore Security Rules** — Rules enforce collection-level access based on the authenticated user's role and document ownership.
 
-**Route-to-portal mapping** (from `src/middleware.ts`):
+**Route-to-portal mapping** (`PORTAL_ROUTES` in `src/middleware.ts:8`):
 ```
-/executive        → executive role required
-/commander        → commander role required
-/create-quiz      → commander role required
-/gladiator        → gladiator role required
-/battle/{id}      → public (battle page)
-/api/*            → public (auth enforced per-route)
+ /executive        → executive role required
+ /commander        → commander role required
+ /create-quiz      → commander role required
+ /gladiator        → gladiator role required
+ /battle/{id}      → public (battle page)
+ /api/*            → public (auth enforced per-route)
 ```
+Note: the middleware itself passes portal requests through (`src/middleware.ts:45-47` — "client-side AuthContext handles enforcement"). Real enforcement is `ClientLayout` role redirects plus per-route `verifyFirebaseTokenWithRole` plus Firestore rules.
 
 ---
 
@@ -173,6 +177,8 @@ Three roles — **Executive**, **Commander**, and **Gladiator** — determine wh
 
 ### Quiz State Machine
 
+Nine statuses (`QUIZ_STATUSES` in `src/lib/constants.ts:8`). Simplified flow:
+
 ```
     ┌──────────┐
     │  Draft*  │
@@ -190,23 +196,32 @@ Three roles — **Executive**, **Commander**, and **Gladiator** — determine wh
 ```
 *Draft status is used client-side before the quiz is persisted to Firestore.
 
-### Quiz Status Transitions (enforced in `quizService.updateQuizStatus`)
+### Quiz Status Transitions (`ALLOWED_QUIZ_TRANSITIONS` in `src/lib/constants.ts:32`, mirrored by `isLegalStatusTransition` in Firestore rules)
 ```
-draft   → waiting
-waiting → live
-live    → finished
-finished → waiting (via reset)
+draft     → waiting
+waiting   → ready, starting
+ready     → waiting, starting
+starting  → live, waiting
+live      → paused, finished, abandoned
+paused    → live, finished, abandoned
+finished  → archived
+abandoned → (terminal)
+archived  → (terminal)
 ```
 
 ### Scoring Formula
 
-For each correct answer:
+Per-arena scoring config lives in the gated `quizzes/{quizId}/config/settings` document (defaults: max 1000, min 100, no wrong/skip penalty, time decay on, no streak multiplier — see `normalizeScoringConfig` in `src/lib/battle-machine.ts:58`).
+
+For each correct answer (`computeCorrectScore` in `src/lib/battle-machine.ts:77`):
 ```
-score = 500 + 500 × max(0, 1 − elapsed / timeLimit)
+fraction = max(0, 1 − elapsed / timeLimit)
+score    = round(score_max − (1 − fraction) × (score_max − score_min))   [if time_decay, else score_max]
+total   += score + streakBonus − penalties
 ```
-- Base score: **500 points**
-- Time bonus: up to **500 points** (decreases linearly with response time)
-- Maximum per question: **1000 points**
+- Correct-answer range: **score_min–score_max** (defaults 100–1000), decreasing linearly with response time when time decay is on.
+- Streak bonus: `round(streak × streak_multiplier)` (`computeStreakBonus`).
+- Wrong/skip answers subtract `wrong_penalty`/`skip_penalty` when configured (wrong penalty applies only when the arena enables negative marking).
 
 ---
 
@@ -243,16 +258,15 @@ User uploads PDF → Server action triggered
      │
      ├── 1. Auth verification (executive or commander)
      ├── 2. Rate limit check (5 requests/minute)
-     ├── 3. PDF parsing via pdfreader (30s timeout)
+     ├── 3. PDF parsing via pdfjs-dist (30s timeout; browser-side extraction in `src/lib/prepare-documents.ts` for uploads)
      ├── 4. Text extraction & validation
      │      ├── Checks: header, encryption, corruption, content length
      │      └── Max input: 40,000 characters (truncated intelligently)
      ├── 5. Build prompt with difficulty & question count
      ├── 6. Gemini call with model fallback chain
-     │      ├── Default model: gemini-2.5-flash-lite (configurable via settings)
-     │      ├── Fallback: gemini-2.0-flash
+     │      ├── Default chain: gemini-3.6-flash → gemini-3.5-flash (platform settings may prepend a configured model; `gemini-2.0`/`1.5` prefixes are blocked as shut down)
      │      ├── Retry: up to 3 attempts per model
-     │      └── Timeout: 30s per call
+     │      └── Timeout: 35s per call (`GEMINI_TIMEOUT_MS`)
      ├── 7. JSON repair (fix markdown fences, single quotes, trailing commas)
      ├── 8. Parse structured output
      └── 9. Return questions array to client
@@ -302,13 +316,15 @@ Commander                    Firestore                     Gladiator(s)
 ```
 
 ### Evaluation Process
-When the Commander advances a question or ends the arena, `evaluateQuestion` runs a Firestore transaction:
+When the Commander advances a question or ends the arena, the server evaluates via `evaluateQuestionForAll` / `evaluateQuestionForUser` in `src/lib/battle-server.ts:577-907` (called from `/api/battle/evaluate`, `/api/battle/skip`, `/api/battle/end`, `/api/battle/auto-advance`):
 1. Reads the answer key for the question.
 2. Fetches all participants.
 3. For each non-blocked participant, checks their submission.
-4. If correct, calculates score with time bonus.
+4. If correct, calculates score with `computeCorrectScore` plus streak bonus (wrong/skip penalties applied per arena config).
 5. Updates participant score using `increment()`.
 6. Marks the question as `scored: true` to prevent double-evaluation.
+
+(Note: the client-side `questionService.evaluateQuestion` in `src/services/game.service.ts:111` is dead legacy code with zero callers and a divergent `500 + time bonus` formula — it is not part of live scoring.)
 
 ---
 
@@ -349,8 +365,8 @@ Genkit provides:
 - **Flow definitions** — Traceable, observable AI pipelines.
 - **Plugin system** — Seamless integration with Google AI (Gemini).
 
-### Why a sliding-window rate limiter?
-An in-memory sliding-window rate limiter (rather than Firestore-based) avoids additional read/write costs and maintains low latency for auth and AI endpoints. The window is reset if idle for 120 seconds to prevent memory leaks.
+### Why a Firestore-backed fixed-window rate limiter?
+A Firestore-backed fixed-window rate limiter (`FirestoreRateLimiter` in `src/lib/rate-limiter.ts:43`, one document per key in `rate_limits/{key}` updated via transaction, auto-pruned by `expiresAt` TTL) rather than in-memory avoids limits multiplying across serverless instances and cold starts. It fails open (allows the request) if Firestore is unreachable. Per-route budgets live in `Limits` (`src/lib/rate-limiter.ts:113-130`): login 5/min per IP/email, signup 5/min per IP, AI 10/min per user, battle actions 30/min, search 20/min, copilot 10/min, mind map 5/min, explanations 30/min, exports 5/min.
 
 ### Why tab-visibility enforcement?
 Browser `visibilitychange` events are captured and sent to Firestore as violation counts. The Commander can block gladiators with excessive violations, ensuring fair play during live battles.
@@ -359,7 +375,7 @@ Browser `visibilitychange` events are captured and sent to Firestore as violatio
 
 ## 10. Firestore Indexes
 
-Composite indexes are defined in `firestore.indexes.json`:
+Composite indexes are defined in `firestore.indexes.json` (19 composite indexes plus one field override):
 
 | Collection | Fields | Purpose |
 |---|---|---|
@@ -368,11 +384,22 @@ Composite indexes are defined in `firestore.indexes.json`:
 | `executive_requests` | `commanderId ASC, createdAt DESC` | Commander's request list |
 | `executive_requests` | `status ASC, createdAt DESC` | Executive request filtering |
 | `question_bank` | `category ASC, createdAt DESC` | Question bank browsing |
+| `question_bank` | `difficulty ASC, createdAt DESC` | Difficulty filtering |
+| `question_bank` | `category ASC, difficulty ASC, createdAt DESC` | Combined browsing |
 | `auditLogs` | `actor ASC, timestamp DESC` | User audit trail |
 | `auditLogs` | `action ASC, timestamp DESC` | Action-based filtering |
 | `auditLogs` | `action ASC, actorRole ASC, timestamp DESC` | Combined filtering |
+| `auditLogs` | `actorRole ASC, timestamp DESC` | Role-based filtering |
+| `security_logs` | `actor ASC, createdAt DESC` | Security actor lookup |
+| `security_logs` | `event ASC, createdAt DESC` | Security event filtering |
+| `notifications` | `userId ASC, createdAt DESC, __name__ DESC` | Per-user inbox pagination |
+| `ai_logs` | `userId ASC, createdAt DESC` | Per-user AI log lookup |
+| `battle_logs` | `actor ASC, timestamp DESC` | Actor battle history |
+| `battle_logs` | `quizId ASC, timestamp DESC` | Per-arena timeline |
+| `participants` (collection group) | `user_id ASC` | Gladiator history lookup |
+| `participants` (collection group) | `user_id ASC, finished_at DESC` | Finished-history ordering |
 
-Field overrides enable collection-group queries on `participants.user_id` for gladiator history.
+A field override enables collection-group queries on `participants.user_id` for gladiator history.
 
 ---
 

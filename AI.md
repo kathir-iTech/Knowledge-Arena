@@ -4,18 +4,18 @@ Powered by [Genkit](https://firebase.google.com/docs/genkit) with Google Gemini.
 
 ## Setup
 
-1. Get an API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Set `GOOGLE_GENERATIVE_AI_API_KEY` in `.env`
+1. Get API keys from [Google AI Studio](https://aistudio.google.com/app/apikey) (one per Google account for multi-key rotation)
+2. Set `GEMINI_API_KEYS` (comma-separated, recommended) or `GOOGLE_GENERATIVE_AI_API_KEY` (single-key fallback) in `.env`. All key reads go through `src/ai/key-resolver.ts` (round-robin rotation with quota cooldowns).
 
 ## Flows
 
-### `generateQuizFromPDF` (`src/ai/flows/generate-quiz-pdf-flow.ts`)
+### `generateQuizFromPDF` / `generateQuizFromExtracted` (`src/ai/flows/generate-quiz-pdf-flow.ts`)
 
-Server action that:
-1. Accepts a PDF (or DOCX/TXT/MD/image) uploaded as a **data URI**
-2. Extracts text using `pdfreader` (images are passed through to the model)
-3. Calls Gemini (via Genkit) to generate quiz questions with multi-model fallback and retry logic
-4. Validates the structured output against Zod schemas (`repairJson` / `tryParseQuestions` for malformed responses)
+Server actions that:
+1. Accept documents via the browser-side extraction payload from `src/lib/prepare-documents.ts` (text + bounded JPEGs for scanned pages; legacy path accepts a PDF as a **data URI**)
+2. Extract text using `pdfjs-dist` (images are passed through to the model)
+3. Call Gemini (via Genkit) to generate quiz questions with multi-model fallback chain (`gemini-3.6-flash` → `gemini-3.5-flash`) and retry logic
+4. Validate the structured output against Zod schemas (`repairJson` / `tryParseQuestions` for malformed responses)
 
 **Input**: PDF file (max 10MB)
 **Output**: `GenerateQuizFromPDFOutput` (questions, difficulty, answer keys)
@@ -24,34 +24,19 @@ Server action that:
 
 ### Prediction Engine (`src/ai/engines/prediction-engine.ts`)
 
-Reads the 5 most recent quizzes and generates predictions about:
-- Performance patterns
-- Difficulty trends
-- Student engagement forecasts
-
-Called via: `GET /api/predictions/summary`
+> **Note:** `getPredictionSummary` / `getRecommendationPrompt` are shelved — `GET /api/predictions/summary` returns `410`. Only `getQuizRecommendations` in this file is live, via `GET /api/gladiator/recommendations`.
 
 ### Knowledge Engine (`src/ai/engines/knowledge-engine.ts`)
 
-Reads all quizzes and generates a summary of:
-- Subject coverage
-- Topic distribution
-- Knowledge gaps
-
-Called via: `GET /api/knowledge/summary`
+> **Note:** Shelved — `GET /api/knowledge/summary` returns `410`. Source kept for future wiring.
 
 ### Decision Support Engine (`src/ai/engines/decision-support-engine.ts`)
 
-Generates strategic teaching advice without reading database:
-- Assessment strategies
-- Classroom management tips
-- Curriculum recommendations
+> **Note:** Shelved — `GET /api/decision-support/summary` returns `410`. Source kept for future wiring.
 
-Called via: `GET /api/decision-support/summary`
+### Copilot (`src/ai/flows/copilot-flow.ts`)
 
-### Copilot Engine
-
-> **Note:** The copilot engine was removed. Executive question generation uses `generateQuizFromPDF` above (or `src/ai/dev.ts` for local development).
+Live question-writing assistant for Commanders/Executives, called via `POST /api/copilot` (10/min per user). Not removed.
 
 ## Architecture
 
@@ -67,4 +52,4 @@ src/ai/
     prediction-engine.ts        Performance predictions
 ```
 
-All engine flows use the Gemini Flash model via `@genkit-ai/googleai` plugin.
+Model selection: the catalog in `src/config/gemini-models.ts` defaults to `gemini-2.5-flash-lite` (overridable via platform settings). The **Forge** flow calls `gemini-3.6-flash` with a model fallback chain to `gemini-3.5-flash`; the copilot/mindmap/explanation flows use a single fixed model (`gemini-3.6-flash`) with per-key rotation and retry across the configured API keys — no model-level fallback. All flows use the `@genkit-ai/googleai` plugin.

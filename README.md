@@ -12,7 +12,7 @@ Quorena is a real-time multiplayer quiz platform where educators generate AI-pow
 - **Real-Time Battles** — Compete live with opponents. Questions appear simultaneously on all screens; scores update in real-time via Firestore listeners.
 - **Role-Based Access** — Three tiers: **Executive** (admin/analytics), **Commander** (quiz creator/host), **Gladiator** (participant). Tailored dashboards and permissions for each role.
 - **Battle Room System** — Each quiz generates a unique 6-character room code with a shareable QR code. Gladiators join by entering the code.
-- **Live Scoring & Time Bonus** — Correct answers score `500 + up to 500` time bonus based on speed. Leaderboard updates live.
+- **Live Scoring** — Correct answers score between a per-arena max and min (defaults 1000/100) with linear time decay for speed, plus streak bonuses and wrong/skip penalties. Scoring rules live in each arena's gated `quizzes/{id}/config/settings` document; see `computeCorrectScore` in `src/lib/battle-machine.ts`. Leaderboard updates live.
 - **Tab-Visibility Enforcement** — Gladiators who switch browser tabs during a battle are detected and can be blocked (anti-cheating).
 - **Smart Analytics** — Track performance with detailed per-quiz, per-student, and per-question insights. Export to CSV or HTML.
 - **Executive Workspace** — Central dashboard with system health monitoring, user management, audit logs, backup/restore, and platform settings.
@@ -24,11 +24,11 @@ Quorena is a real-time multiplayer quiz platform where educators generate AI-pow
 - **Audit Logging** — Every action is logged with actor, role, action type, target, and metadata. Filterable and paginated.
 - **Backup & Restore** — Full platform backup (users, quizzes, conversations, settings) with import/restore capability.
 - **Data Export** — Export users, questions, battles, and audit logs in CSV or JSON format.
-- **Rate Limiting** — Sliding-window rate limiter for login, signup, and AI API endpoints.
+- **Rate Limiting** — Firestore-backed fixed-window rate limiter for login, signup, and AI API endpoints.
 - **File Attachments** — Secure file upload validation with MIME type, extension, and size checks.
 - **Password Management** — Force password change on first login; Executive can reset passwords.
 - **Cheating Detection** — Tab-switch violations tracked per participant; automated or manual blocking.
-- **Dark-Themed UI** — Cyberpunk-inspired design with electric blue and neon purple accents, smooth animations, and responsive layout.
+- **Dark-Themed UI** — Deep-maroon theme (`theme-color: #8B1E2A`, `--primary: 15 68%`), smooth animations, and responsive layout.
 
 ---
 
@@ -43,8 +43,8 @@ Quorena is a real-time multiplayer quiz platform where educators generate AI-pow
 | Forms | [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/) validation |
 | Backend / Auth | [Firebase](https://firebase.google.com/) (Auth, Firestore, Storage) |
 | Admin SDK | [firebase-admin](https://firebase.google.com/docs/admin/setup) (server-side) |
-| AI / Genkit | [Genkit](https://firebase.google.com/docs/genkit) + [Gemini 2.0 Flash](https://ai.google.dev/) via `@genkit-ai/googleai` |
-| PDF Parsing | [pdfreader](https://www.npmjs.com/package/pdfreader) (pure Node.js) |
+| AI / Genkit | [Genkit](https://firebase.google.com/docs/genkit) + Gemini via `@genkit-ai/googleai` (model catalog in `src/config/gemini-models.ts`, default `gemini-2.5-flash-lite`; Forge generation chain `gemini-3.6-flash` → `gemini-3.5-flash`, overridable via platform settings) |
+| PDF Parsing | [pdfjs-dist](https://www.npmjs.com/package/pdfjs-dist) (browser-side text extraction in `src/lib/prepare-documents.ts`, with server-side fallback in `generate-quiz-pdf-flow.ts`) |
 | Testing | [Playwright](https://playwright.dev/) (E2E) |
 | Deployment | [Vercel](https://vercel.com/) (standalone output) |
 
@@ -73,8 +73,8 @@ All quiz-scoped data is organized under `quizzes/{quizId}` subcollections (quest
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/knowledge-arena.git
-cd knowledge-arena
+git clone https://github.com/kathir-iTech/Knowledge-Arena.git
+cd Knowledge-Arena
 
 # Install dependencies
 npm install
@@ -122,12 +122,12 @@ knowledge-arena/
 │   │   │   ├── audit/          # Audit logging
 │   │   │   ├── battle/         # Battle engine (start, activate, advance, end, ...)
 │   │   │   ├── commander/      # Commander dashboard & requests
-│   │   │   ├── decision-support/ # AI decision support
+│   │   │   │   ├── decision-support/ # Shelved (410) — kept for future wiring
 │   │   │   ├── executive/      # Executive workspace, analytics, export, backup
 │   │   │   ├── gladiator/      # Gladiator dashboard
-│   │   │   ├── knowledge/      # AI knowledge summary
+│   │   │   ├── knowledge/      # Shelved (410) — kept for future wiring
 │   │   │   ├── messaging/      # Conversations, announcements
-│   │   │   ├── predictions/    # AI prediction summary
+│   │   │   ├── predictions/    # Shelved (410) — kept for future wiring
 │   │   │   └── rate-limit/     # Rate limit checking
 │   │   ├── battle/             # Battle room page
 │   │   ├── commander/          # Commander portal
@@ -179,8 +179,11 @@ See [ENVIRONMENT.md](./ENVIRONMENT.md) for the complete reference.
 
 | Variable | Required | Description |
 |---|---|---|
-| `GOOGLE_GENERATIVE_AI_API_KEY` | ✅ | Google Gemini API key |
+| `GEMINI_API_KEYS` | ✅ (recommended) | Comma-separated Gemini API keys (one per Google account) — multi-key rotation |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | ✅ (fallback) | Single Gemini API key (used when `GEMINI_API_KEYS` is unset) |
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | ✅ (prod) | Firebase Admin SDK private key (minified JSON) |
+| `CRON_SECRET` | ✅ (prod) | Bearer secret guarding `/api/cron/*` endpoints |
+| `SIEM_WEBHOOK_URL` | ❌ | Optional SIEM webhook for security telemetry export |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | ❌ | Custom auth domain for OAuth |
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | ❌ | Firebase Storage bucket URL |
 

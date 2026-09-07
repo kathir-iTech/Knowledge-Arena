@@ -1,8 +1,8 @@
-# Knowledge Arena — Production Deployment Guide
+# Quorena — Production Deployment Guide
 
 **Applies to:** commit `ff1aec7`+ · Next.js 15 (App Router) · Firebase (Auth, Firestore, Storage) · Genkit/Gemini
 
-This guide covers everything needed to run Knowledge Arena in production: environment configuration, Firebase setup, hosting, and the operational checklists (production, security, monitoring, backup, disaster recovery, rollback).
+This guide covers everything needed to run Quorena in production: environment configuration, Firebase setup, hosting, and the operational checklists (production, security, monitoring, backup, disaster recovery, rollback).
 
 ---
 
@@ -17,7 +17,9 @@ Copy `.env.example` → `.env` (deployment platform) or `.env.local` (local dev)
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | server | One of 3 | Service account JSON as a single-line string |
 | `SERVICE_ACCOUNT_PATH` | server | One of 3 | Filesystem path to a service account JSON |
 | *(none — fallback)* | server | — | `service-account.json` in the project root, or Application Default Credentials |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | server | Yes | Gemini API key — used by AI Forge (PDF/quiz generation) and read directly by the workspace health check |
+| `GEMINI_API_KEYS` | server | Yes (recommended) | Comma-separated Gemini API keys — read centrally by `src/ai/key-resolver.ts` (rotation + quota cooldowns); the workspace health check reads them via `getKeyHealth()`, never directly |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | server | Yes (fallback) | Single Gemini API key, used when `GEMINI_API_KEYS` is unset |
+| `CRON_SECRET` | server | Yes | Bearer secret for `/api/cron/*`; must match the GitHub `CRON_SECRET` secret |
 
 The Firebase **client config** (project id, API key, app id, sender id) is embedded in `src/firebase/config.ts`; the API key is public by design (Firebase client keys are not secrets).
 
@@ -34,7 +36,7 @@ The Firebase **client config** (project id, API key, app id, sender id) is embed
    firebase deploy --only firestore:rules
    firebase deploy --only firestore:indexes
    ```
-   Rules live in `firestore.rules` (validated transition map, role-based access, server-only writes for all log collections). Indexes live in `firestore.indexes.json` (11 composite indexes + participants `user_id` collection-group override). Check index status in the console and wait for "Enabled" before release — queries fail until indexes build.
+   Rules are generated from `firestore.rules.template` via `npm run rules:generate` (predeploy hook — never hand-edit `firestore.rules`). They enforce the validated transition map, role-based access, and server-only writes for all log collections. Indexes live in `firestore.indexes.json` (19 composite indexes + participants `user_id` collection-group override). Check index status in the console and wait for "Enabled" before release — queries fail until indexes build.
 4. **Storage**: deploy `storage.rules` (`firebase deploy --only storage`).
 5. **Service account**: create one in *Project Settings → Service Accounts* (Firebase Admin SDK), download the JSON, and provide it via one of the three mechanisms above. Grant it the minimum roles (Firestore, Auth Admin, Storage as needed).
 
@@ -55,7 +57,7 @@ There is **no self-signup for staff**:
 
 The app is a **Node.js server** (API routes + server actions + Genkit flows). `next.config.ts` emits `output: 'standalone'`, so it runs as a plain Node process.
 
-> ⚠️ **Do not use Firebase Hosting static hosting.** The `hosting` block in `firebase.json` (`public: ".next"`, SPA rewrites) is a Firebase Studio export artifact and does not fit this app — there is no static export, and API routes require a server. Use it only as a CDN edge in front of Cloud Run if desired.
+> ⚠️ **Do not use Firebase Hosting static hosting.** There is no static export, and API routes require a server. Note: `firebase.json` currently contains no `hosting` block at all (only `firestore`, `database`, `emulators`, `storage`) — if one reappears as a Studio export artifact, do not use it as the hosting path. Use a CDN edge in front of Cloud Run if desired.
 
 ### Option A — Google Cloud Run (recommended)
 
@@ -99,7 +101,7 @@ Standalone build + a process manager (systemd/pm2) + a reverse proxy (nginx/Cadd
 
 ## 4. Production Checklist
 
-- [ ] All 5 env vars set; `GOOGLE_GENERATIVE_AI_API_KEY` verified with a test generation
+- [ ] All env vars set (`GEMINI_API_KEYS` or fallback key verified with a test generation; `CRON_SECRET` set in both Vercel and GitHub secrets)
 - [ ] `firebase deploy --only firestore:rules,firestore:indexes,storage` succeeded and indexes show **Enabled**
 - [ ] At least one executive bootstrapped (`scripts/bootstrap-executive.ts`) and one commander created
 - [ ] `npm ci && npm run build` passes on a clean machine with network access
@@ -116,7 +118,7 @@ Standalone build + a process manager (systemd/pm2) + a reverse proxy (nginx/Cadd
 
 - [ ] **Secrets**: service account + API key never committed; rotate quarterly; restrict IAM on the service account
 - [ ] **Rules audit**: `firestore.rules` deployed and reviewed — client writes only where allowed (participants, submissions, messages, battle logs self-authored); all log collections are server-write-only
-- [ ] **Rate limits active**: 34 call sites across 29 routes (battle 30/min, messages 20/min, writes 15/min, admin 10/IP, exports 5/min, AI 10/min). Note: the limiter is in-memory — per-warm-instance on scaled platforms (see §6 for the follow-up)
+- [ ] **Rate limits active**: Firestore-backed fixed-window limits enforced per route (battle 30/min, messages 20/min, writes 15/min, admin 10/IP, exports 5/min, search 20/min, copilot 10/min, mind map 5/min, explanations 30/min — full catalog in `Limits`, `src/lib/rate-limiter.ts:113-130`)
 - [ ] **Auth**: every API route verifies the Bearer ID token + role (`verifyFirebaseTokenWithRole`); Firestore rules enforce roles per request; password change forced for staff accounts
 - [ ] **Headers**: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, HSTS, `Permissions-Policy` served by `next.config.ts`
 - [ ] **Monitoring alerts** on `security_logs` growth and 401/429 spikes (see §7)
@@ -160,7 +162,7 @@ Firestore's managed backups (console or `firestore backups` CLI) are the primary
 | Regional outage | If multi-region Firestore isn't enabled, use the latest cross-region backup export to re-import into a second project; keep a warm container image |
 | Gemini quota/outage | AI routes degrade gracefully (fallback chain, per-model retries, `quota_exceeded`/`all_models_failed` errors surfaced to UI); battle engine is AI-independent and unaffected |
 | Service account compromise | Revoke/rotate key immediately (`firebase projects` / IAM), re-issue, redeploy; check `security_logs` + audit logs |
-| Abuse/attack | Rate limits (in-memory) + `security_logs` provide visibility; scale down max instances; block via CDN rules; revert to previous deploy |
+| Abuse/attack | Rate limits (Firestore fixed-window) + `security_logs` provide visibility; scale down max instances; block via CDN rules; revert to previous deploy |
 
 **RTO/RPO targets (recommended):** RPO ≤ 24 h (daily backups) or ≤ 5 min (PITR); RTO ≤ 4 h for single-project restore (backup export → import), ≤ 1 h for redeploy from image.
 

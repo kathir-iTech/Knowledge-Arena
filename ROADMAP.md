@@ -1,4 +1,4 @@
-# Knowledge Arena — Long-Term Architecture Roadmap
+# Quorena — Long-Term Architecture Roadmap
 
 **Basis:** current architecture (Next.js App Router + Firebase Auth/Firestore/Storage + Genkit/Gemini). Every item below fits the existing structures (collections, route patterns, services, flows) — nothing requires a platform rewrite. This roadmap is forward-looking; the release gate for the current milestone is `FINAL_PROJECT_REPORT.md`.
 
@@ -10,10 +10,10 @@ Small, low-risk improvements that close the gaps found in the final audit. No ne
 
 | Item | Why | Fit |
 |---|---|---|
-| Server-side battle sweep (scheduler/CRON) | Independent-mode battles never auto-end when a participant disconnects (`endBattleIfAllFinished` requires all finished); dangling `live` arenas accumulate | Adds a periodic job over `quizzes` (created_at/status) — no schema change |
-| Distributed rate limiter | In-memory limiter is per-instance; limits multiply with serverless scale | Swap `SlidingWindowLimiter` store for a Firestore (or Redis) backend behind the same interface; all call sites unchanged |
-| Server-side join validation + participant caps | `joinQuiz` is a client-side transaction; no server cap per arena | New route or rules upgrade using existing `participants` subcollection + quiz caps field |
-| Enforce presence (`PRESENCE_WINDOW_MS` / `COMMANDER_PRESENCE_WINDOW_MS`) | Constants exist but are unused — staleness never enforced; zombies stay in `waiting`/`ready` rooms | Sweeper uses the existing lastSeen field |
+| Server-side battle sweep (scheduler/CRON) | Independent-mode battles never auto-end when a participant disconnects (`endBattleIfAllFinished` requires all finished); dangling `live` arenas accumulate | Adds a periodic job over `quizzes` (created_at/status) — no schema change | **Shipped** — `/api/cron/sweep-battles` |
+| Distributed rate limiter | In-memory limiter is per-instance; limits multiply with serverless scale | Swap `SlidingWindowLimiter` store for a Firestore (or Redis) backend behind the same interface; all call sites unchanged | **Shipped** — `FirestoreRateLimiter` (`src/lib/rate-limiter.ts`) |
+| Server-side join validation + participant caps | `joinQuiz` is a client-side transaction; no server cap per arena | New route or rules upgrade using existing `participants` subcollection + quiz caps field | **Shipped** — `/api/battle/can-join` + `max_participants` enforcement |
+| Enforce presence (`PRESENCE_WINDOW_MS` / `COMMANDER_PRESENCE_WINDOW_MS`) | Constants exist but are unused — staleness never enforced; zombies stay in `waiting`/`ready` rooms | Sweeper uses the existing lastSeen field | **Shipped** — `isOnline()` uses `PRESENCE_WINDOW_MS` (command-center.ts, LiveQuiz/WaitingRoom) |
 | Session-cookie auth + token revocation on logout | ID tokens accepted until expiry after sign-out; no server-side logout | `verify-auth.ts` gains a cookie path alongside the Bearer path; AuthContext signOut revokes refresh tokens |
 | Logging completeness | `login_success/login_failed/logout`, `unauthorized_access`, `rate_limited` are declared but never written; insights pages count impossible events | Add server-side login-event capture (client posts to a new `security` log endpoint, or the existing audit route pattern); align insights queries |
 | Strict state-machine enforcement | `battle-machine.ts` helpers are dead code; routes check status inline; commander `end` can force `finished` from any state | Wire `assertQuizTransition` into the 11 battle routes (drop-in, behavior-identical for legal flows) |

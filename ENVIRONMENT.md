@@ -1,4 +1,4 @@
-# Knowledge Arena — Environment Variables Reference
+# Quorena — Environment Variables Reference
 
 ## Overview
 
@@ -81,14 +81,14 @@ Variables prefixed with `NEXT_PUBLIC_` are exposed to client-side code.
 
 ---
 
-## Gladiator Email Domain Lock
+## Gladiator Email Domain Lock (per-arena)
+
+Gladiator sign-up is open — any Google account may create a profile. Domain restriction is enforced **at arena-join time**, not at sign-up: each arena carries an `allowed_gladiator_domain` snapshot (copied from the creating Commander's `institution_domain` by `src/services/arena-creation.service.ts`), checked against the ID-token email in `firestore.rules` (`getAllowedGladiatorDomain()` / `isEmailDomainAllowed()`). Blank means an open arena.
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `ALLOWED_GLADIATOR_EMAIL_DOMAIN` | ❌ | Restricts self-registered Gladiators to a single institutional domain (e.g., `university.edu`). Enforced at sign-up (Google `hd` hint + client rejection in `AuthContext.tsx:41`, `LoginForm.tsx:24`) and in `firestore.rules` (server of record, baked via `npm run rules:generate` from this value). Leave empty to allow any Google account. | `university.edu` |
-| `NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN` | ❌ | Same value with `NEXT_PUBLIC_` prefix so browser code can read it. Must match `ALLOWED_GLADIATOR_EMAIL_DOMAIN` when set. | `university.edu` |
-
-**How it works:** `scripts/generate-firestore-rules.js:32` reads `ALLOWED_GLADIATOR_EMAIL_DOMAIN` (or `NEXT_PUBLIC_` fallback), regex-escapes it, and bakes it into `firestore.rules` (`allowedGladiatorEmailDomain()`). `firebase.json:5` runs this as `predeploy`.
+| `ALLOWED_GLADIATOR_EMAIL_DOMAIN` | ❌ (legacy) | No longer read by any `src/` code. Kept in `.env.example` for backward compat only. | — |
+| `NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN` | ❌ (legacy) | Same — unread, kept for backward compat only. | — |
 
 ---
 
@@ -97,6 +97,15 @@ Variables prefixed with `NEXT_PUBLIC_` are exposed to client-side code.
 | Variable | Required | Description | Example |
 |---|---|---|---|
 | `NEXT_PUBLIC_FIREBASE_EMULATOR` | ❌ (dev) | When `true`, `src/firebase/index.ts:14` and `src/contexts/AuthContext.tsx:42` switch to Firebase Emulator (Firestore `:8080`, Auth `:9099`, RTDB `:9000`, Hosting `:5000`). Set automatically by `npm run demo` / `npm run dev` with emulator flags. | `true` |
+
+---
+
+## Cron & Telemetry
+
+| Variable | Required | Description | Example |
+|---|---|---|---|
+| `CRON_SECRET` | ✅ (prod) | Bearer secret guarding `/api/cron/*` (`sweep-battles`, `forge-worker`, `search-df`, `spaced-repetition`). Must match the GitHub repository secret of the same name used by `.github/workflows/forge-worker.yml`. Requests without `Authorization: Bearer <CRON_SECRET>` get 401. | `openssl rand -hex 32` |
+| `SIEM_WEBHOOK_URL` | ❌ | Optional SIEM webhook URL for security telemetry export (`src/lib/siem.ts` posts CEF payloads fire-and-forget). When unset, export is a no-op. | `https://siem.example.com/ingest` |
 
 ---
 
@@ -128,7 +137,7 @@ These are only used by CLI scripts in `scripts/`. Not required for normal app op
 
 ```bash
 # ═══════════════════════════════════════════════════════════════
-# Knowledge Arena — Environment Variables
+# Quorena — Environment Variables
 # ═══════════════════════════════════════════════════════════════
 
 # ─── AI / Genkit ───────────────────────────────────────────────
@@ -139,6 +148,12 @@ GOOGLE_GENERATIVE_AI_API_KEY=
 
 # ─── Firebase Admin SDK ────────────────────────────────────────
 FIREBASE_SERVICE_ACCOUNT_KEY=
+
+# ─── Cron & Telemetry (prod) ──────────────────────────────────
+# Bearer guard for /api/cron/* (sweep-battles, forge-worker, search-df, spaced-repetition)
+CRON_SECRET=
+# Optional SIEM webhook for security telemetry export (see src/lib/siem.ts)
+SIEM_WEBHOOK_URL=
 
 # ─── Firebase Auth ─────────────────────────────────────────────
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
@@ -178,14 +193,16 @@ cp .env.example .env.local
 
 ---
 
-## Legacy / Removed Variables
+## Additional Single-Key Fallbacks
+
+`GEMINI_API_KEY`, `GOOGLE_API_KEY`, and `GOOGLE_GENAI_API_KEY` are **still read** as single-key fallbacks by `src/ai/key-resolver.ts:50-52` when `GEMINI_API_KEYS` (and `GOOGLE_GENERATIVE_AI_API_KEY`) are unset. They are kept for backward compatibility — the recommended variables are `GEMINI_API_KEYS` (multi-key, preferred) or `GOOGLE_GENERATIVE_AI_API_KEY` (single-key fallback).
+
+## Removed Variables
 
 These variables are no longer read by the application:
 
 | Variable | Reason Removed |
 |---|---|
-| `GEMINI_API_KEY` | Legacy single-key var — still read as fallback by `key-resolver.ts` if `GEMINI_API_KEYS` is unset |
-| `GOOGLE_GENAI_API_KEY` | Legacy alias — still read as fallback by `key-resolver.ts` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase was replaced by Firestore |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase was replaced by Firestore |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase was replaced by Firestore |

@@ -1,4 +1,4 @@
-# Knowledge Arena — API Reference
+# Quorena — API Reference
 
 All API endpoints return JSON responses unless otherwise noted. Authentication is via Firebase ID token in the `Authorization` header:
 
@@ -17,6 +17,16 @@ Authorization: Bearer <firebase-id-token>
 | Signup (per IP) | 5 | 60s |
 | AI APIs (per user) | 10 | 60s |
 | PDF Forge (per user) | 5 | 60s |
+| Battle actions (per user) | 30 | 60s |
+| Search (per user) | 20 | 60s |
+| Messages (per user) | 20 | 60s |
+| Writes (per user) | 15 | 60s |
+| Copilot (per user) | 10 | 60s |
+| Mind map (per user) | 5 | 60s |
+| Explanations (per user) | 30 | 60s |
+| Exports (per user) | 5 | 60s |
+
+(Full catalog in `Limits`, `src/lib/rate-limiter.ts:113-130`; all windows are 60s. AI routes are additionally gated per-UID, not per-IP.)
 
 Rate-limited endpoints return `429 Too Many Requests` with `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers.
 
@@ -279,9 +289,9 @@ Get platform settings.
     "institutionName": "",
     "institutionLogo": "",
     "theme": "system",
-    "workspaceName": "Knowledge Arena",
+    "workspaceName": "Quorena",
     "auth": { "allowCommanderSelfRegistration": false, "allowGladiatorRegistration": true },
-    "battle": { "questionTimerDefault": 30, "maxQuestions": 50, "defaultDifficulty": "medium", "autoEndBattle": false, "leaderboardVisibility": "public" },
+    "battle": { "questionTimerDefault": 30, "maxQuestions": 50, "defaultDifficulty": "medium", "autoEndBattle": false },
     "ai": { "enabled": true, "defaultModel": "gemini-2.5-flash-lite", "maxPdfSize": 10 },
     "messaging": { "enableAnnouncements": true, "enableChat": true },
     "exportPreferences": { "includeStudentNames": true, "includeScores": true, "includeTimestamps": true }
@@ -587,53 +597,49 @@ Gladiator profile with battle history, stats, and active battle info.
 
 ## AI Endpoints
 
-### GET `/api/knowledge/summary`
-AI-generated knowledge summary for the commander.
+### Live AI routes
 
-**Auth:** Required  
-**Role:** Commander  
+### POST `/api/copilot`
+Question-writing assistant for Commanders/Executives.
+
+**Auth:** Required (Bearer token or `idToken` body field)  
 **Rate limit:** 10/min per user
 
-**Response `200`:**
-```json
-{
-  "summary": "AI-generated text summary..."
-}
-```
+### POST `/api/quiz/mindmap`
+Mind-map generation for a quiz (Commander/Executive only).
 
----
+**Rate limit:** 5/min per user
+
+### POST `/api/quiz/explanation`
+Wrong-answer explanation for one question (Gladiator/Commander/Executive).
+
+**Rate limit:** 30/min per user
+
+### Shelved AI routes (deliberately parked, `410 Gone`)
+
+The following return `401` without auth and `410 { error: 'Not available' }` with auth. Implementations are kept in `src/ai/engines/` for future wiring; only `getQuizRecommendations` (via `GET /api/gladiator/recommendations`) is live:
+
+### GET `/api/knowledge/summary`
+Shelved — returns `410`.
+
+**Auth:** Required  
+**Role:** Commander
 
 ### GET `/api/decision-support/summary`
-AI-generated decision support summary.
+Shelved — returns `410`.
 
 **Auth:** Required  
-**Role:** Commander  
-**Rate limit:** 10/min per user
-
-**Response `200`:**
-```json
-{
-  "summary": "AI-generated decision support text..."
-}
-```
-
----
+**Role:** Commander
 
 ### GET `/api/predictions/summary`
-AI-generated prediction summary.
+Shelved — returns `410`.
 
 **Auth:** Required  
-**Role:** Commander  
-**Rate limit:** 10/min per user
-
-**Response `200`:**
-```json
-{
-  "summary": "AI-generated prediction text..."
-}
-```
+**Role:** Commander
 
 ---
+
+> **Coverage note:** this reference documents a subset of the 76 route files under `src/app/api/` (verified by file listing). Undocumented-but-live routes include `/api/battle/can-join`, `/api/quiz/translate`, `/api/gladiator/personalization`, `/api/gladiator/recommendations`, `/api/gladiator/search`, `/api/commander/search`, `/api/executive/question-bank/*`, `/api/executive/insights`, `/api/executive/export`, and `/api/cron/*`. New routes should be added here when they stabilize.
 
 ## Battle Engine
 
