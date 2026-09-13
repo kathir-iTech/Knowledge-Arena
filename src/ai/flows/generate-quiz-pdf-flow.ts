@@ -532,6 +532,8 @@ const ExtractedDocumentSchema = z.object({
   kind: z.enum(['pdf', 'docx', 'txt', 'md', 'image']),
   text: z.string().optional(),
   imageDataUris: z.array(z.string()).optional(),
+  /** Non-primary sibling entry produced by the client transport split. */
+  transportImageRef: z.string().optional(),
 });
 
 const GenerateQuizFromExtractedInputSchema = z.object({
@@ -545,6 +547,24 @@ type GenerateQuizFromExtractedInput = z.infer<typeof GenerateQuizFromExtractedIn
 const MAX_EXTRACTED_IMAGES = 24;
 const MAX_EXTRACTED_TEXT_CHARS = 500000;
 
+/**
+ * Reverses the client's transport split (`splitForTransport`): primary entries
+ * (no `transportImageRef`) are real documents; sibling entries tagged with
+ * `transportImageRef` are image chunks that fold into the preceding real doc.
+ */
+function reassembleForgeDocuments(documents: Array<z.infer<typeof ExtractedDocumentSchema>>): Array<{ name?: string; kind: z.infer<typeof ExtractedDocumentSchema>['kind']; text?: string; imageDataUris: string[] }> {
+  const real: Array<{ name?: string; kind: z.infer<typeof ExtractedDocumentSchema>['kind']; text?: string; imageDataUris: string[] }> = [];
+  for (const d of documents) {
+    if (d.transportImageRef) {
+      const last = real[real.length - 1];
+      if (last) last.imageDataUris.push(...(d.imageDataUris ?? []));
+    } else {
+      real.push({ name: d.name, kind: d.kind, text: d.text, imageDataUris: [...(d.imageDataUris ?? [])] });
+    }
+  }
+  return real;
+}
+
 async function authorizeForgeRequest(idToken: string): Promise<{ uid: string; role: 'executive' | 'commander' } | null> {
   const execAuth = await verifyFirebaseTokenWithRole(idToken, 'executive');
   if (execAuth) return { uid: execAuth.uid, role: 'executive' };
@@ -555,7 +575,9 @@ async function authorizeForgeRequest(idToken: string): Promise<{ uid: string; ro
 
 export async function generateQuizFromExtracted(input: GenerateQuizFromExtractedInput): Promise<GenerateQuizFromPDFOutput> {
   const startTime = Date.now();
-  const fileTypes = input.documents.map((d) => d.kind);
+  // Reassemble transport-split sibling entries back into the real documents.
+  const documents = reassembleForgeDocuments(input.documents);
+  const fileTypes = documents.map((d) => d.kind);
 
   try {
     const auth = await authorizeForgeRequest(input.idToken);
@@ -576,7 +598,7 @@ export async function generateQuizFromExtracted(input: GenerateQuizFromExtracted
     // server-side budget for non-browser callers too.
     const texts: string[] = [];
     const imageDataUris: string[] = [];
-    for (const d of input.documents) {
+    for (const d of documents) {
       if (d.text) texts.push(d.text);
       for (const img of d.imageDataUris || []) {
         imageDataUris.push(img);
@@ -597,7 +619,7 @@ export async function generateQuizFromExtracted(input: GenerateQuizFromExtracted
       userId: uid,
       userRole: role,
       model: result.engine || 'unknown',
-      fileCount: input.documents.length,
+      fileCount: documents.length,
       fileTypes,
       questionCount: result.questions?.length || 0,
       difficulty: input.difficulty,
@@ -1620,7 +1642,10 @@ export async function createForgeJob(input: CreateForgeJobInput): Promise<ForgeC
       return { status: 'queued', questionCount: input.questionCount, error: 'FORGE_RATE_LIMITED' };
     }
 
-    const payload = checkForgePayload(input.documents);
+    // Reassemble transport-split sibling entries back into the real documents.
+    const documents = reassembleForgeDocuments(input.documents);
+
+    const payload = checkForgePayload(documents);
     if ('error' in payload) {
       return { status: 'queued', questionCount: input.questionCount, error: payload.error };
     }
@@ -1631,7 +1656,7 @@ export async function createForgeJob(input: CreateForgeJobInput): Promise<ForgeC
     // Content-addressable cache: identical source material + difficulty +
     // question count returns instantly. File names are excluded so a rename
     // still hits; text/data-URIs fully determine the identity.
-    const hashInput = input.documents.map((d) => ({
+    const hashInput = documents.map((d) => ({
       kind: d.kind,
       text: d.text ?? '',
       imageDataUris: d.imageDataUris ?? [],
@@ -1648,8 +1673,8 @@ export async function createForgeJob(input: CreateForgeJobInput): Promise<ForgeC
         userId: auth.uid,
         userRole: auth.role,
         model: cached.engine || 'cache',
-        fileCount: input.documents.length,
-        fileTypes: input.documents.map((d) => d.kind),
+        fileCount: documents.length,
+        fileTypes: documents.map((d) => d.kind),
         questionCount: cached.questions.length,
         difficulty: input.difficulty,
         success: true,
@@ -1671,7 +1696,7 @@ export async function createForgeJob(input: CreateForgeJobInput): Promise<ForgeC
       userRole: auth.role,
       difficulty: input.difficulty,
       questionCount: input.questionCount,
-      documents: input.documents,
+      documents,
       contentHash,
     });
     return { jobId: job.id, status: 'queued', cached: false, questionCount: input.questionCount };

@@ -30,6 +30,12 @@ export interface PreparedDocument {
   kind: DocumentKind;
   text: string;
   imageDataUris: string[];
+  /**
+   * Set on non-primary sibling entries produced by `prepareDocuments`: names
+   * the real document its image chunk belongs to, so the server can reassemble
+   * it. See `splitForTransport` below.
+   */
+  transportImageRef?: string;
   pageCount: number;
   truncated: boolean;
   truncatedNote?: string;
@@ -71,10 +77,16 @@ const MAX_TEXT_PAGES = 100;
 const MAX_TEXT_CHARS = 40000;
 const MAX_SCANNED_PAGE_IMAGES = 6;
 const SCAN_TEXT_THRESHOLD = 20;
-const RENDER_LONG_SIDE = 2240;
+const RENDER_LONG_SIDE = 1600;
 const IMAGE_LONG_SIDE = 1600;
-const JPEG_QUALITY = 0.8;
+const JPEG_QUALITY = 0.7;
 const MAX_TOTAL_IMAGES = 24;
+// The React Flight action transport rejects a single array whose element
+// bytes exceed ~1e6 (the "Maximum array nesting exceeded" guard that also
+// hardens CVE-2025-55182). Split images into separate sibling document
+// entries (each with its own sub-1MB array), mirroring the img_0..N
+// part-split on the job layer.
+const IMAGE_CHUNK_BUDGET_BYTES = 700000;
 
 let pdfjsPromise: Promise<PdfJsModule> | null = null;
 async function getPdfJs(): Promise<PdfJsModule> {
@@ -318,6 +330,56 @@ async function reencodeImageToJpeg(dataUri: string): Promise<string> {
   }
 }
 
+/**
+ * Splits a flat image list into transport-safe chunks, each under the Flight
+ * action-arg array budget. Base64 data URIs are pure ASCII, so char length
+ * equals byte length. An oversized single URI gets its own chunk (a
+ * single-element array never trips the fork counter).
+ */
+export function chunkImageDataUris(uris: string[]): string[][] {
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let currentBytes = 0;
+  for (const uri of uris) {
+    if (current.length > 0 && currentBytes + uri.length > IMAGE_CHUNK_BUDGET_BYTES) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(uri);
+    currentBytes += uri.length;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * Turns a prepared document into one or more transport sibling entries so no
+ * single document carries a >1MB image array over the wire. The primary entry
+ * keeps the real document's fields plus the first chunk; every later chunk
+ * becomes its own `kind: 'image'` entry tagged with `transportImageRef`. The
+ * server reassembles these back into the original document.
+ */
+function splitForTransport(doc: PreparedDocument): PreparedDocument[] {
+  const chunks = chunkImageDataUris(doc.imageDataUris);
+  if (chunks.length === 0) return [{ ...doc, transportImageRef: undefined }];
+  const entries: PreparedDocument[] = [
+    { ...doc, imageDataUris: chunks[0], transportImageRef: undefined },
+  ];
+  for (const c of chunks.slice(1)) {
+    entries.push({
+      name: doc.name,
+      kind: 'image',
+      text: '',
+      imageDataUris: c,
+      transportImageRef: doc.name,
+      pageCount: 0,
+      truncated: false,
+    });
+  }
+  return entries;
+}
+
 export async function prepareDocuments(files: File[], onProgress: ProgressCallback): Promise<PreparedDocument[]> {
   const prepared: PreparedDocument[] = [];
   let totalImageCount = 0;
@@ -366,5 +428,10 @@ export async function prepareDocuments(files: File[], onProgress: ProgressCallba
     // counted exactly once against MAX_TOTAL_IMAGES.
     totalImageCount += prepared.length ? prepared[prepared.length - 1].imageDataUris.length : 0;
   }
-  return prepared;
+
+  // Transport normalization: a single >1MB multi-element image array trips the
+  // React Flight action guard, so every document is split into sub-1MB
+  // sibling entries before returning. The server reassembles via
+  // `transportImageRef`.
+  return prepared.flatMap(splitForTransport);
 }
