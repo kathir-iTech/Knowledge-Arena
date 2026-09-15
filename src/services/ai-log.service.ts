@@ -12,19 +12,22 @@ export interface AiLogEntry {
   difficulty: string;
   success: boolean;
   durationMs: number;
-  error?: string;
+  error?: string | null;
   metadata?: Record<string, unknown>;
 }
 
 export const aiLogService = {
   async record(entry: AiLogEntry): Promise<void> {
     try {
-      await getAdminDb().collection(COLLECTIONS.AI_LOGS).add({
-        ...entry,
-        createdAt: Timestamp.fromMillis(Date.now()),
-      });
-    } catch {
-      /* log failures should never break the app */
+      const data: Record<string, unknown> = { ...entry, createdAt: Timestamp.fromMillis(Date.now()) };
+      // Firestore rejects undefined as a field value — strip optional fields that
+      // weren't provided so the document only contains valid values.
+      for (const [key, value] of Object.entries(data)) {
+        if (value === undefined) delete (data as Record<string, unknown>)[key];
+      }
+      await getAdminDb().collection(COLLECTIONS.AI_LOGS).add(data);
+    } catch (err) {
+      console.error('[AI-Log] Failed to record ai_log:', err);
     }
   },
 

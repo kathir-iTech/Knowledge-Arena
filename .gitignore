@@ -53,6 +53,7 @@ result.txt
 # Firebase service account credentials — NEVER COMMIT
 service-account.json
 *-firebase-adminsdk-*.json
+scripts/diagnostics/*.json
 
 # dev server logs
 dev-server*.log

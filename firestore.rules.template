@@ -44,26 +44,30 @@ service cloud.firestore {
     // creator's institution_domain (or both open). Prevents spoofing other
     // institution's domain. Executives may set any.
     function isAllowedDomainValidForCreate() {
-      if (isExecutive()) return true;
+      // Firestore rules are expression-only (no if statements), so the
+      // executive bypass and domain guards are ternaries. The get() reads the
+      // creator profile; executives always have a user doc.
       let requested = request.resource.data.keys().hasAll(['allowed_gladiator_domain'])
         ? request.resource.data.allowed_gladiator_domain : null;
       let commanderDomain = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.institution_domain;
       let reqNorm = requested is string ? requested : '';
       let cmdNorm = commanderDomain is string ? commanderDomain : '';
       // Normalize: trim not possible in rules, but treat '' and null as open; compare lowercased
-      return reqNorm.lower() == cmdNorm.lower();
+      return isExecutive() ? true : reqNorm.lower() == cmdNorm.lower();
     }
 
     function isEmailDomainAllowed(email) {
       let domain = getAllowedGladiatorDomain();
-      // Blank/null/empty = open arena (fail-open per product call).
-      if (!(domain is string) || domain == '' || domain.trim() == '') return true;
-      if (!(email is string) || email == '') return false;
-      let lowerEmail = email.lower();
-      let lowerDomain = domain.lower();
+      // Blank/null/empty = open arena (fail-open per product call). Rules are
+      // expression-only (no if statements), so guards are ternaries and
+      // .lower()/.split() only run on genuinely valid inputs.
+      let openDomain = !(domain is string) || domain == '' || domain.trim() == '';
+      let notAllowed = !(email is string) || email == '';
+      let lowerEmail = notAllowed ? '' : email.lower();
+      let lowerDomain = openDomain ? '' : domain.lower();
       // Exact domain match after @ (prevents notpsgitech.ac.in bypass). Use split to avoid regex-escaping dots.
       let parts = lowerEmail.split('@');
-      return parts.size() == 2 && parts[1] == lowerDomain;
+      return openDomain ? true : (notAllowed ? false : (parts.size() == 2 && parts[1] == lowerDomain));
     }
 
     function isQuizCreator(quizId) {

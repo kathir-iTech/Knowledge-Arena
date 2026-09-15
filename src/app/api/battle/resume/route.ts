@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
 
     const db = getAdminDb();
     let pausedMs = 0;
+    let didResume = false;
     await db.runTransaction(async (tx) => {
       const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
       const snap = await tx.get(quizRef);
@@ -28,9 +29,18 @@ export async function POST(req: NextRequest) {
       if (!isCreator(quiz, auth.uid)) {
         throw new Error('Only the Commander can resume this arena');
       }
+      if (quiz.status === QUIZ_LIVE) {
+        // Idempotent self-transition (the state machine allows live->live as a
+        // no-op). This is the losing side of a concurrent resume — a battle that
+        // is already live was already resumed by the winning call, so succeed
+        // silently instead of 409-ing. Never re-shift timers against a live
+        // battle, or the question clock runs ahead of where the winner left it.
+        return;
+      }
       if (quiz.status !== QUIZ_PAUSED) {
         throw new Error(`Cannot resume a battle in state: ${quiz.status}`);
       }
+      didResume = true;
       const now = Date.now();
       pausedMs = Math.max(0, now - getMs(quiz.paused_at));
       const update: Record<string, any> = {
@@ -58,14 +68,16 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    await writeBattleLog({
-      quizId,
-      event: 'battle_resumed',
-      actor: auth.uid,
-      actorRole: 'commander',
-      metadata: { pausedMs },
-    });
-    return NextResponse.json({ ok: true, pausedMs });
+    if (didResume) {
+      await writeBattleLog({
+        quizId,
+        event: 'battle_resumed',
+        actor: auth.uid,
+        actorRole: 'commander',
+        metadata: { pausedMs },
+      });
+    }
+    return NextResponse.json({ ok: true, pausedMs, alreadyResumed: !didResume });
   } catch (err: unknown) {
     return battleErrorResponse(err);
   }

@@ -481,7 +481,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
       difficulty: input.difficulty,
       success: !result.error && (result.questions?.length || 0) > 0,
       durationMs,
-      error: result.error || undefined,
+      error: result.error,
       metadata: result.error ? { rawErrors: result.error } : undefined,
     });
 
@@ -625,7 +625,7 @@ export async function generateQuizFromExtracted(input: GenerateQuizFromExtracted
       difficulty: input.difficulty,
       success: !result.error && (result.questions?.length || 0) > 0,
       durationMs,
-      error: result.error || undefined,
+      error: result.error,
       metadata: result.error ? { rawErrors: result.error } : undefined,
     });
 
@@ -1612,8 +1612,7 @@ async function finalizeForgeJob(job: ForgeJobDoc): Promise<void> {
     difficulty: job.difficulty,
     success: job.status === AI_JOB_DONE,
     durationMs: Math.max(0, Date.now() - job.createdAt),
-    error: job.error ?? undefined,
-    metadata: { jobId: job.id, progress: job.progressNote },
+    error: job.error,
   });
 }
 
