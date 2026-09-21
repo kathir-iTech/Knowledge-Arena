@@ -49,7 +49,8 @@ service cloud.firestore {
       // creator profile; executives always have a user doc.
       let requested = request.resource.data.keys().hasAll(['allowed_gladiator_domain'])
         ? request.resource.data.allowed_gladiator_domain : null;
-      let commanderDomain = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.institution_domain;
+      let commanderData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let commanderDomain = commanderData.keys().hasAll(['institution_domain']) ? commanderData.institution_domain : null;
       let reqNorm = requested is string ? requested : '';
       let cmdNorm = commanderDomain is string ? commanderDomain : '';
       // Normalize: trim not possible in rules, but treat '' and null as open; compare lowercased
@@ -240,26 +241,25 @@ service cloud.firestore {
         // questions stay under the 10-get limit by carrying ownership in the
         // document itself, avoiding a parent get() per question.
         allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId)
-          || (request.resource.data.keys().hasAll(['created_by']) && request.resource.data.created_by == request.auth.uid);
+          || (
+            request.resource.data.keys().hasAll(['created_by'])
+            && request.resource.data.created_by == request.auth.uid
+            && request.auth.token.role in ['commander', 'executive']
+          );
         allow update, delete: if canEditQuiz(quizId);
 
         match /submissions/{userId} {
           allow read: if isExecutive() || isQuizCreator(quizId) || isOwner(userId);
-          // Submissions are only accepted while the battle is live (canSubmitAnswer
-          // semantics enforced server-side as well), only by the owner, and only
-          // for the arena's current question (pre-submission / question-id-forging
-          // guard). The question_id field must also match the doc path it is written to.
-          allow create: if isOwner(userId) && isNotBlocked(quizId, userId)
-            && isQuizParticipant(quizId, userId)
-            && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'live'
-            && isCurrentQuestion(quizId, userId, questionId)
-            && request.resource.data.question_id == questionId
-            && request.resource.data.selected_option >= 0
-            && request.resource.data.selected_option <= 3
-            && request.resource.data.keys().hasOnly(['question_id', 'selected_option', 'submittedAt', 'clientTime'])
-            && request.resource.data.submittedAt == request.time;
+          // SECURITY (audit + shadow-state): submissions are now written
+          // EXCLUSIVELY by the server via POST /api/battle/submit (Admin SDK,
+          // HMAC-signed, idempotent, server-verified current-question binding).
+          // Direct client creation is locked so a gladiator can never forge
+          // submittedAt, double-submit/overwrite their answer, or bypass the
+          // live-only + one-shot guarantees with a hand-rolled Firestore SDK
+          // client. The evaluation engine (battle-server) reads via Admin SDK.
+          allow create: if false;
           allow update: if false;
-          allow delete: if isQuizCreator(quizId);
+          allow delete: if isQuizCreator(quizId); // waiting-arena content replacement cleanup
         }
       }
 
@@ -271,9 +271,17 @@ service cloud.firestore {
         );
         // isQuizCreatorAfter supports atomic writeBatch where parent quiz is created
         // in the same batch. The created_by fallback (same as questions) avoids
-        // per-document parent gets for large batches.
+        // per-document parent gets for large batches. SECURITY (audit): the
+        // created_by self-match alone let a participant overwrite ANY answer key
+        // in an arena they had joined — a correctness-forging vector. The
+        // fallback now requires a commander/executive role claim (token claim,
+        // no extra get()). Gladiators can never author answer keys.
         allow create: if isQuizCreator(quizId) || isQuizCreatorAfter(quizId)
-          || (request.resource.data.keys().hasAll(['created_by']) && request.resource.data.created_by == request.auth.uid);
+          || (
+            request.resource.data.keys().hasAll(['created_by'])
+            && request.resource.data.created_by == request.auth.uid
+            && request.auth.token.role in ['commander', 'executive']
+          );
         allow update, delete: if canEditQuiz(quizId);
       }
 
@@ -355,14 +363,27 @@ service cloud.firestore {
         // also allow a direct ownership fallback via the config doc's own created_by
         // field so the batch succeeds even if the emulator/production evaluation order
         // differs. Least-privilege: only the owner (or an executive) may create.
+        // SECURITY (audit): the created_by fallback is role-gated to
+        // commander/executive so a participant can never author a scoring/config
+        // document that would be honored by server-side scoring.
         allow create: if (
             isQuizCreator(quizId)
             || isQuizCreatorAfter(quizId)
             || isExecutive()
-            || (request.resource.data.keys().hasAll(['created_by']) && request.resource.data.created_by == request.auth.uid)
+            || (
+              request.resource.data.keys().hasAll(['created_by'])
+              && request.resource.data.created_by == request.auth.uid
+              && request.auth.token.role in ['commander', 'executive']
+            )
           )
           && request.resource.data.keys().hasOnly(['scoring_config', 'governance_config', 'skipped_question_ids', 'created_by']);
+        // SECURITY (audit): scoring/governance shape may only be changed while
+        // the arena has NOT started. Once a battle is live/paused/finished the
+        // config is immutable from clients (the battle engine writes via the
+        // Admin SDK, rules-bypassing). This stops a creator from silently
+        // rewriting the scoring rules mid-battle.
         allow update: if (isQuizCreator(quizId) || isExecutive())
+          && !(get(/databases/$(database)/documents/quizzes/$(quizId)).data.status in ['live', 'paused', 'finished', 'archived', 'abandoned'])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scoring_config', 'governance_config', 'skipped_question_ids']);
         allow delete: if isQuizCreator(quizId) || isExecutive();
       }
