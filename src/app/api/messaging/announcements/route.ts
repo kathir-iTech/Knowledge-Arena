@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
@@ -21,17 +22,19 @@ export async function GET(req: NextRequest) {
       .orderBy('createdAt', 'desc')
       .limit(200)
       .get();
-    let announcements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let announcements: Array<{ id: string } & DocumentData> = snapshot.docs
+      .map((doc): { id: string } & DocumentData => ({ id: doc.id, ...doc.data() }));
 
     if (role === 'commander') {
-      announcements = announcements.filter((a: any) =>
+      announcements = announcements.filter((a) =>
         a.targetRole === 'all_commanders' || (a.targetRole === 'specific' && a.targetId === auth.uid)
       );
     }
 
     return NextResponse.json({ announcements });
-  } catch (err: any) {
-    console.error('[Announcements GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Announcements GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -108,8 +111,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, id: docRef.id });
-  } catch (err: any) {
-    console.error('[Announcements POST] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Announcements POST] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -153,8 +157,9 @@ export async function PUT(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Announcements PUT] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Announcements PUT] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -203,8 +208,9 @@ export async function DELETE(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Announcements DELETE] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Announcements DELETE] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

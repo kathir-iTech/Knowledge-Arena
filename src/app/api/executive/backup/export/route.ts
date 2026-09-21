@@ -50,10 +50,11 @@ export async function POST(req: NextRequest) {
       try {
         const snap = await db.collection(name).get();
         backup.data[name] = snap.docs.map(d => ({ id: d.id, ...d.data() })) as { id: string; [key: string]: unknown }[];
-      } catch (err: any) {
-        console.error(`[Backup Export] Failed to export collection "${name}":`, err?.message);
-        backup.data[name] = [];
-        backup.warnings.push(`Failed to export collection "${name}": ${err?.message || 'unknown error'}`);
+  } catch (err) {
+    const e = err as { message?: string };
+    console.error(`[Backup Export] Failed to export collection "${name}":`, e?.message);
+    backup.data[name] = [];
+    backup.warnings.push(`Failed to export collection "${name}": ${e?.message || 'unknown error'}`);
       }
     }
 
@@ -67,8 +68,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(backup);
-  } catch (err: any) {
-    console.error('[Backup Export] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Backup Export] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Backup failed' }, { status: 500 });
   }
 }

@@ -14,8 +14,9 @@ async function safeQuery<T>(
 ): Promise<T> {
   try {
     return await run();
-  } catch (err: any) {
-    console.error(`[BattleDetail GET] ${label} failed, degrading gracefully:`, err?.name, err?.message, '\n', err?.stack);
+  } catch (err) {
+  const e = err as { message?: string; name?: string; stack?: string };
+  console.error(`[BattleDetail GET] ${label} failed, degrading gracefully:`, e?.name, e?.message, '\n', e?.stack);
     return fallback;
   }
 }
@@ -44,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // arenas. Never leaks to non-participants — the rules gate the subcollection.
     const cfgSnap = await quizRef.collection('config').doc('settings').get().catch(() => null);
     const cfg = cfgSnap?.exists ? (cfgSnap.data() ?? {}) : {};
-    const scoringConfig = cfg.scoring_config ?? (quiz as any).scoring_config ?? {};
+    const scoringConfig = cfg.scoring_config ?? quiz.scoring_config ?? {};
 
     // Commander info
     let commander: { name: string; email: string | null } | null = null;
@@ -67,9 +68,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           try {
             const snap = await quizRef.collection('questions').orderBy('sort_index', 'asc').get();
             return snap.docs;
-          } catch (err: any) {
-            if (err?.code !== 'FAILED_PRECONDITION') throw err;
-            console.warn('[BattleDetail GET] questions sort_index index missing, falling back to in-memory sort:', err?.message);
+  } catch (err) {
+  const e = err as { code?: string; message?: string };
+  if (e?.code !== 'FAILED_PRECONDITION') throw err;
+  console.warn('[BattleDetail GET] questions sort_index index missing, falling back to in-memory sort:', e?.message);
             const snap = await quizRef.collection('questions').get();
             const docs = snap.docs.slice();
             docs.sort((a, b) => (a.data().sort_index ?? Number.MAX_SAFE_INTEGER) - (b.data().sort_index ?? Number.MAX_SAFE_INTEGER));
@@ -136,8 +138,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           submissionsByUserId.set(subDoc.id, list);
         }
       });
-    } catch (err: any) {
-      console.error('[BattleDetail GET] submissions failed, degrading gracefully:', err?.name, err?.message, '\n', err?.stack);
+  } catch (err) {
+  const e = err as { message?: string; name?: string; stack?: string };
+  console.error('[BattleDetail GET] submissions failed, degrading gracefully:', e?.name, e?.message, '\n', e?.stack);
     }
 
     const participantPromises = participantDocs.map(async p => {
@@ -181,9 +184,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         .orderBy('timestamp', 'desc')
         .limit(200)
         .get();
-    } catch (err: any) {
-      if (err?.code !== 'FAILED_PRECONDITION') throw err;
-      console.warn('[BattleDetail GET] battle_logs index missing, falling back to in-memory sort:', err?.message);
+  } catch (err) {
+  const e = err as { code?: string; message?: string };
+  if (e?.code !== 'FAILED_PRECONDITION') throw err;
+  console.warn('[BattleDetail GET] battle_logs index missing, falling back to in-memory sort:', e?.message);
       battleLogsSnap = await db.collection('battle_logs')
         .where('quizId', '==', id)
         .get();
@@ -261,8 +265,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         winner,
       },
     });
-  } catch (err: any) {
-    console.error('[BattleDetail GET] Error:', err?.name, err?.message, '\n', err?.stack);
+  } catch (err) {
+    const e = err as { message?: string; name?: string; stack?: string };
+    console.error('[BattleDetail GET] Error:', e?.name, e?.message, '\n', e?.stack);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

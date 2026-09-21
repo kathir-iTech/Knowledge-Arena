@@ -19,7 +19,7 @@ import { Textarea } from '../ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler, AlertTriangle } from 'lucide-react';
+import { Trash2, PlusCircle, Loader2, Sparkles, Info, PencilRuler } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { AICopilot } from '@/components/quiz/AICopilot';
 import { AdvancedScoringSection } from '@/components/quiz/AdvancedScoringSection';
@@ -51,8 +51,15 @@ const quizSchema = z.object({
 
 type QuizFormData = z.infer<typeof quizSchema>;
 
+interface InitialQuestion {
+  text: string;
+  options: string[];
+  correctAnswerIndex: number;
+  explanation?: string;
+}
+
 interface QuizCreatorFormProps {
-  initialQuestions?: any[];
+  initialQuestions?: InitialQuestion[];
   onDirtyChange?: (dirty: boolean) => void;
 }
 
@@ -90,9 +97,10 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
     },
   });
 
+  const isDirty = form.formState.isDirty;
   useEffect(() => {
-    onDirtyChange?.(form.formState.isDirty);
-  }, [onDirtyChange]);
+    onDirtyChange?.(isDirty);
+  }, [onDirtyChange, isDirty]);
 
   useEffect(() => {
     if (initialQuestions) {
@@ -159,11 +167,11 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
             streak_multiplier: data.streakMultiplier,
           },
           governanceConfig: toGovernanceConfig({
-            revealTiming: data.revealTiming as any,
+            revealTiming: data.revealTiming,
             showLiveLeaderboard: data.showLiveLeaderboard,
             allowLateJoin: data.allowLateJoin,
             negativeMarking: data.negativeMarking,
-            antiCheatStrictness: data.antiCheatStrictness as any,
+            antiCheatStrictness: data.antiCheatStrictness,
           }),
         });
     } catch (error: unknown) {
@@ -265,18 +273,18 @@ export function QuizCreatorForm({ initialQuestions, onDirtyChange }: QuizCreator
         {/* Advanced Governance — Phase 107, sibling to AdvancedScoringSection */}
         <AdvancedGovernanceSection
           value={{
-            revealTiming: form.watch('revealTiming') as any,
+            revealTiming: form.watch('revealTiming'),
             showLiveLeaderboard: form.watch('showLiveLeaderboard'),
             allowLateJoin: form.watch('allowLateJoin'),
             negativeMarking: form.watch('negativeMarking'),
-            antiCheatStrictness: form.watch('antiCheatStrictness') as any,
+            antiCheatStrictness: form.watch('antiCheatStrictness'),
           }}
           onChange={(v) => {
-            form.setValue('revealTiming', v.revealTiming as any);
+            form.setValue('revealTiming', v.revealTiming);
             form.setValue('showLiveLeaderboard', v.showLiveLeaderboard);
             form.setValue('allowLateJoin', v.allowLateJoin);
             form.setValue('negativeMarking', v.negativeMarking);
-            form.setValue('antiCheatStrictness', v.antiCheatStrictness as any);
+            form.setValue('antiCheatStrictness', v.antiCheatStrictness);
           }}
         />
 

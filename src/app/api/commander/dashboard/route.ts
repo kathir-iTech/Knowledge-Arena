@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
@@ -26,7 +27,9 @@ export async function GET(req: NextRequest) {
       .limit(100)
       .get();
 
-    const allQuizzes = quizzesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+    const allQuizzes: Array<{ id: string } & DocumentData> = quizzesSnap.docs.map(
+    (doc): { id: string } & DocumentData => ({ id: doc.id, ...doc.data() })
+  );
 
     const activeBattles = allQuizzes.filter(q => q.status === 'live');
     const upcomingBattles = allQuizzes.filter(q => q.status === 'waiting');
@@ -69,8 +72,9 @@ export async function GET(req: NextRequest) {
       },
       pendingRequestsCount: requestsSnap.docs.length,
     });
-  } catch (err: any) {
-    console.error('[CommanderDashboard] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[CommanderDashboard] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

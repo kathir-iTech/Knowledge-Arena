@@ -110,7 +110,7 @@ export function QuizEditor({ quizId, initialTitle, initialQuestions, initialAnsw
         sort_index: idx,
       }));
 
-      const answerKeyPayload = data.questions.map((q, idx) => ({
+      const answerKeyPayload = data.questions.map((q) => ({
         questionId: q.id,
         correct_option_index: q.correctAnswerIndex,
       }));

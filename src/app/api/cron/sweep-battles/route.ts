@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS, QUIZ_LIVE, QUIZ_ABANDONED_AFTER_MS } from '@/lib/constants';
 import { abandonBattle, getMs } from '@/lib/battle-server';
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
 
   for (const doc of snapshot.docs) {
     const quizId = doc.id;
-    const data = doc.data() as Record<string, any>;
+    const data = doc.data() as DocumentData;
     const lastActivityMs = getMs(data.question_start_at);
     const stale =
       typeof lastActivityMs === 'number' &&

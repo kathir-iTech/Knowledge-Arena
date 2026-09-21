@@ -18,7 +18,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from '@/components/ui/dialog';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Conversation {
@@ -579,6 +579,8 @@ export default function CommanderMessagesPage() {
                                   const isPdf = /\.pdf$/i.test(f.name);
                                   return isImage ? (
                                     <button key={i} onClick={() => setPreviewImageUrl(f.data)} className="block max-w-[200px] rounded-lg overflow-hidden border border-border/30 hover:opacity-90 transition-opacity duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+                                      {/* next/image cannot optimize local data-URI attachments; plain img is correct. */}
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
                                       <img src={f.data} alt={f.name} className="w-full h-auto object-cover max-h-[200px]" />
                                       <div className="flex items-center gap-1 px-2 py-1 text-[10px] text-muted-foreground bg-background/80">
                                         <Download className="w-3 h-3" />
@@ -787,7 +789,11 @@ export default function CommanderMessagesPage() {
           </DialogHeader>
           <div className="flex justify-center">
             {previewImageUrl && (
-              <img src={previewImageUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain rounded-lg" />
+              <>
+                {/* next/image cannot optimize local data-URI previews; plain img is correct. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={previewImageUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain rounded-lg" />
+              </>
             )}
           </div>
         </DialogContent>

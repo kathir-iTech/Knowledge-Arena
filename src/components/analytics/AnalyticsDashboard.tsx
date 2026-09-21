@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { RefreshCw, Download, FileText, BarChart3, TrendingUp, Users, MessageSquare, BrainCircuit, Swords } from 'lucide-react';
+import { RefreshCw, Download, FileText, BarChart3, Users, MessageSquare, Swords } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,

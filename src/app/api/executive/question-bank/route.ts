@@ -58,8 +58,9 @@ export async function GET(req: NextRequest) {
     const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : null;
 
     return NextResponse.json({ questions, nextCursor, hasMore });
-  } catch (err: any) {
-    console.error('[QuestionBank GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuestionBank GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -137,8 +138,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, saved: savedIds.length, ids: savedIds, importSessionId: sessionId });
-  } catch (err: any) {
-    console.error('[QuestionBank POST] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuestionBank POST] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

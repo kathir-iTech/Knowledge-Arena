@@ -25,7 +25,8 @@ export interface ValidatedQuestion {
 
 const MIN_QUESTION_LENGTH = 5;
 const MAX_QUESTION_LENGTH = 500;
-const MIN_OPTION_LENGTH = 1;
+// Note: no MIN_OPTION_LENGTH — empty options are rejected outright by the
+// `empty_option` check below, which is stricter than any minimum length.
 const MAX_OPTION_LENGTH = 200;
 
 export function validateQuiz(questions: ValidatedQuestion[]): QuizValidationIssue[] {

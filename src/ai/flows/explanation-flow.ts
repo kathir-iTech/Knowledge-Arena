@@ -41,13 +41,6 @@ function buildExplanationSources(args: {
   return out.slice(0, 4);
 }
 
-function attachExplanationSources<T extends { explanation: string }>(
-  result: T,
-  args: { questionText: string; options: string[]; correctAnswer: string; wrongAnswer: string },
-): T & { sources: string[] } {
-  return { ...result, sources: buildExplanationSources(args) };
-}
-
 const ExplanationInputSchema = z.object({
   questionText: z.string().describe('The question text'),
   options: z.array(z.string()).describe('All answer options'),

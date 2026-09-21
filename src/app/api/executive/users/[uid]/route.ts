@@ -26,9 +26,10 @@ async function queryRecent(
   try {
     const snap = await buildOrdered().limit(cap).get();
     return snap.docs.map(d => ({ id: d.id, data: d.data() }));
-  } catch (err: any) {
-    if (err?.code !== 'FAILED_PRECONDITION') throw err;
-    console.warn('[UserDetail GET] Composite index missing, falling back to in-memory sort:', err?.message);
+  } catch (err) {
+  const e = err as { code?: string; message?: string };
+  if (e?.code !== 'FAILED_PRECONDITION') throw err;
+  console.warn('[UserDetail GET] Composite index missing, falling back to in-memory sort:', e?.message);
     const snap = await buildUnordered().get();
     return snap.docs
       .map(d => ({ id: d.id, data: d.data() }))
@@ -46,8 +47,9 @@ async function safeQuery<T>(
 ): Promise<T> {
   try {
     return await run();
-  } catch (err: any) {
-    console.error(`[UserDetail GET] ${label} failed, degrading gracefully:`, err?.name, err?.message, '\n', err?.stack);
+  } catch (err) {
+  const e = err as { message?: string; name?: string; stack?: string };
+  console.error(`[UserDetail GET] ${label} failed, degrading gracefully:`, e?.name, e?.message, '\n', e?.stack);
     return fallback;
   }
 }
@@ -155,8 +157,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
           lastActivity: data.lastActivity?.toMillis?.() ?? data.lastActivity ?? null,
         };
       });
-    } catch (err: any) {
-      console.error('[UserDetail GET] conversations query failed (degraded to empty):', err?.name, err?.message);
+  } catch (err) {
+  const e = err as { message?: string; name?: string };
+  console.error('[UserDetail GET] conversations query failed (degraded to empty):', e?.name, e?.message);
     }
 
     const base = {
@@ -238,8 +241,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
             const data = d.data();
             return { id: d.id, title: data.title || 'Untitled Request', type: data.type || 'general', status: data.status || 'pending', createdAt: data.createdAt || 0 };
           });
-        } catch (err: any) {
-          console.error('[UserDetail GET] commander requests query failed (degraded to empty):', err?.name, err?.message);
+  } catch (err) {
+  const e = err as { message?: string; name?: string };
+  console.error('[UserDetail GET] commander requests query failed (degraded to empty):', e?.name, e?.message);
           requests = [];
         }
       }
@@ -272,9 +276,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
               .limit(100)
               .get();
             return snap.docs;
-          } catch (err: any) {
-            if (err?.code !== 'FAILED_PRECONDITION') throw err;
-            console.warn('[UserDetail GET] participants collection-group index missing, falling back to in-memory sort:', err?.message);
+  } catch (err) {
+  const e = err as { code?: string; message?: string };
+  if (e?.code !== 'FAILED_PRECONDITION') throw err;
+  console.warn('[UserDetail GET] participants collection-group index missing, falling back to in-memory sort:', e?.message);
             const snap = await db.collectionGroup('participants')
               .where('user_id', '==', uid)
               .select('user_id', 'name', 'score', 'status', 'finished_at')
@@ -297,7 +302,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
       // wrapped so a single failing battle can never take the profile down.
       let correct = 0;
       let answered = 0;
-      let battlesWithAnswers = 0;
       await safeQuery(
         'gladiator accuracy',
         async () => {
@@ -313,7 +317,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
             if (keys.size === 0) return;
             const questionsSnap = await db.collection('quizzes').doc(quizId).collection('questions').select('sort_index').get().catch(() => null);
             if (!questionsSnap || questionsSnap.empty) return;
-            battlesWithAnswers++;
             const correctKeyed = new Map<string, number>();
             questionsSnap.docs.forEach(q => {
               const idx = keys.get(q.id);
@@ -371,8 +374,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
     }
 
     return NextResponse.json({ profile: base });
-  } catch (err: any) {
-    console.error('[UserDetail GET] Error:', err?.name, err?.message, '\n', err?.stack);
+  } catch (err) {
+    const e = err as { message?: string; name?: string; stack?: string };
+    console.error('[UserDetail GET] Error:', e?.name, e?.message, '\n', e?.stack);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -11,13 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ValidatedQuiz } from '@/lib/schemas';
 import type { ExistingQuestion, ExistingAnswerKey } from '@/components/quiz/QuizEditor';
-import { useToast } from '@/hooks/use-toast';
 
 export default function EditArenaPage() {
   const { quizId } = useParams<{ quizId: string }>();
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
-  const { toast } = useToast();
   const [quiz, setQuiz] = useState<ValidatedQuiz | null>(null);
   const [questions, setQuestions] = useState<ExistingQuestion[]>([]);
   const [answerKeys, setAnswerKeys] = useState<ExistingAnswerKey[]>([]);

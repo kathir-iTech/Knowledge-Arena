@@ -21,9 +21,9 @@ function resolveInitialApiKey(): string | undefined {
 
 const apiKey = resolveInitialApiKey();
 
-const configuredCount = getConfiguredKeys().length;
-const keyPreview = apiKey ? `${apiKey.slice(0, 4)}…${apiKey.slice(-4)}` : 'none';
-console.log(`[Genkit] AI keys configured: ${configuredCount} | default key: ${apiKey ? keyPreview : 'none set'} (multi-key rotation via key-resolver)`);
+// Note: key count is intentionally not logged — server logs must not carry
+// key material (not even partial previews). Rotation state is observable via
+// the key-resolver cooldown API instead.
 
 export const ai = genkit({
   plugins: [

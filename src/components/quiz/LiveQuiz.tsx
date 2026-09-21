@@ -43,8 +43,7 @@ function useCommanderPresence(quiz: ValidatedQuiz, presence: PresenceMap | null)
   return !!(presence[quiz.created_by] && presence[quiz.created_by].online);
 }
 
-const CountdownTimer = React.memo(({ timeLeft, totalSec, idle }: { timeLeft: number; totalSec: number; idle?: boolean }) => {
-  const progress = totalSec > 0 ? (timeLeft / totalSec) * 100 : 0;
+const CountdownTimer = React.memo(function CountdownTimer({ timeLeft, idle }: { timeLeft: number; idle?: boolean }) {
   const isUrgent = timeLeft <= 5;
   const isCritical = timeLeft <= 3;
 
@@ -145,7 +144,7 @@ function AnimatedScore({ value, className }: { value: number; className?: string
   return <span className={cn("font-mono font-semibold tabular-nums", className)}>{display} PTS</span>;
 }
 
-const LiveLeaderboard = React.memo(({ participants, teacherId, currentUserId, presence }: { participants: ValidatedParticipant[], teacherId: string, currentUserId: string, presence: PresenceMap | null }) => {
+const LiveLeaderboard = React.memo(function LiveLeaderboard({ participants, teacherId, currentUserId, presence }: { participants: ValidatedParticipant[], teacherId: string, currentUserId: string, presence: PresenceMap | null }) {
     const sortedParticipants = useMemo(() => [...participants].sort((a,b) => b.score - a.score), [participants]);
     const [rankDeltas, setRankDeltas] = useState<Record<string, number>>({});
     const prevRanksRef = useRef<Record<string, number>>({});
@@ -858,6 +857,10 @@ const tryAutoAdvance = useCallback(() => {
       if (clamped <= 0) clearInterval(interval);
     }, 200);
     return () => clearInterval(interval);
+    // `currentQuestion` itself intentionally excluded: only its stable id and
+    // timer are tracked. Depending on the whole object would restart the
+    // countdown interval on every quiz-doc write, visibly jumping the timer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isQuestionTimerActive, currentQuestion?.id, currentQuestion?.timer, answerStartAt, isTeacher, independent, participant.status]);
 
   useEffect(() => {
@@ -885,6 +888,11 @@ const tryAutoAdvance = useCallback(() => {
       }
     }, () => {});
     return () => { unsub(); };
+    // `currentQuestion` / `user` themselves intentionally excluded: only their
+    // stable ids are tracked. Depending on whole objects would tear down and
+    // recreate this submission listener on every quiz-doc write or profile
+    // refetch, dropping live updates mid-answer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentQuestion?.id, isTeacher, user?.id, firestore, quiz.id]);
 
   useEffect(() => {
@@ -916,7 +924,7 @@ const tryAutoAdvance = useCallback(() => {
       await participantService.updateParticipant(quiz.id, user.id, {
         violations_count: newCount,
         status: newStatus,
-      } as any);
+      });
       if (newStatus === 'blocked') {
         try { sessionStorage.setItem('blocked_at', Date.now().toString()); sessionStorage.setItem('blocked_violations', String(newCount)); } catch {}
       }
@@ -1010,7 +1018,12 @@ const tryAutoAdvance = useCallback(() => {
       }, 1200);
       return () => clearTimeout(t);
     }
-  }, [independent, isTeacher, currentQuestion?.id, quiz.status, participant.status, hasAnswered, timeLeft, quiz.id]);
+    // `currentQuestion` itself intentionally excluded: only its stable id is
+    // tracked. Depending on the whole object would clear and recreate the
+    // pending end-timeout on every quiz-doc write, so auto-advance could
+    // never fire. `toast` is a stable module function, safe to track.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [independent, isTeacher, currentQuestion?.id, quiz.status, participant.status, hasAnswered, timeLeft, quiz.id, toast]);
 
   useEffect(() => {
     if (!independent && quiz.status === 'live' && timeLeft === 0 && currentQuestion && !isTeacher) {
@@ -1026,7 +1039,12 @@ const tryAutoAdvance = useCallback(() => {
       }, 2000);
       return () => clearTimeout(t);
     }
-  }, [independent, quiz.status, timeLeft, currentQuestion?.id, quiz.current_question_index, quiz.question_count, isTeacher, quiz.id]);
+    // `currentQuestion` itself intentionally excluded: only its stable id is
+    // tracked. Depending on the whole object would clear and recreate the
+    // pending end-timeout on every quiz-doc write, so auto-end could never
+    // fire. `toast` is a stable module function, safe to track.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [independent, quiz.status, timeLeft, currentQuestion?.id, quiz.current_question_index, quiz.question_count, isTeacher, quiz.id, toast]);
 
   const handleNext = async () => {
     if (!isTeacher || independent || advancingRef.current || operationLock.current) return;
@@ -1240,7 +1258,7 @@ const tryAutoAdvance = useCallback(() => {
           <WifiOff className="w-4 h-4 text-warning shrink-0" />
           <div className="text-sm">
             <span className="font-medium text-warning">Commander connection interrupted</span>
-            <p className="text-xs text-muted-foreground">The battle won't stall — once the grace period ends, the next question will advance automatically.</p>
+            <p className="text-xs text-muted-foreground">The battle won&apos;t stall — once the grace period ends, the next question will advance automatically.</p>
           </div>
         </div>
       )}
@@ -1296,7 +1314,7 @@ const tryAutoAdvance = useCallback(() => {
       )}
 
       {!isTeacher && !isGladiatorFinished && participant.status !== 'blocked' && !hold && (
-        <CountdownTimer idle={!currentQuestion} timeLeft={timeLeft} totalSec={currentQuestion?.timer ?? 0} />
+        <CountdownTimer idle={!currentQuestion} timeLeft={timeLeft} />
       )}
 
       {!isGladiatorFinished && participant.status !== 'blocked' && (

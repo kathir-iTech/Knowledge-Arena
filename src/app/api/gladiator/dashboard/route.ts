@@ -83,8 +83,9 @@ export async function GET(req: NextRequest) {
       recentBattles: recentBattles.slice(0, 10),
       activeBattle: activeBattleId ? { id: activeBattleId, title: activeBattleTitle } : null,
     }, { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=60' } });
-  } catch (err: any) {
-    console.error('[GladiatorDashboard] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[GladiatorDashboard] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

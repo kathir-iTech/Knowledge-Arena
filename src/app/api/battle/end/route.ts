@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { COLLECTIONS, QUIZ_LIVE, QUIZ_PAUSED } from '@/lib/constants';
+import { COLLECTIONS, QUIZ_LIVE } from '@/lib/constants';
 import { evaluateQuestionForAll, finishBattle, isCreator, getMs, battleErrorResponse } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     const db = getAdminDb();
     const quizSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
     if (!quizSnap.exists) throw new Error('Arena not found');
-    const quiz = quizSnap.data() as Record<string, any>;
+    const quiz = quizSnap.data() as DocumentData;
 
     // Gladiator auto-end: only valid on the final question with an expired
     // timer, and only while the battle is live (not paused).

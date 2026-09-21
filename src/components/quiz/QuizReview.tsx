@@ -31,10 +31,9 @@ interface ReviewSubmission {
 
 interface QuizReviewProps {
   quizId: string;
-  questionStartAt?: number | null;
 }
 
-export function QuizReview({ quizId, questionStartAt }: QuizReviewProps) {
+export function QuizReview({ quizId }: QuizReviewProps) {
   const { user } = useAuth();
   const [questions, setQuestions] = useState<ReviewQuestion[]>([]);
   const [answerKeys, setAnswerKeys] = useState<ReviewAnswerKey[]>([]);

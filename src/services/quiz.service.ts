@@ -1,21 +1,8 @@
 'use client';
 
 import { initializeFirebase } from '@/firebase';
-import {
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  collection,
-  query,
-  where,
-  onSnapshot,
-  runTransaction,
-  writeBatch,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
+import type { DocumentData, Query, QuerySnapshot, Transaction } from 'firebase/firestore';
 import type { ValidatedQuiz } from '@/lib/schemas';
 import { generateRoomCode } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
@@ -41,10 +28,24 @@ function getFirestore() {
   return initializeFirebase().firestore;
 }
 
+// The installed firebase client types only declare Transaction.get for
+// DocumentReference, but the Firestore backend (and SDK runtime) support
+// Query reads inside transactions. This wrapper types that supported shape
+// in one place instead of scattering casts at every call site.
+function txGetQuery(
+  transaction: Transaction,
+  q: Query<DocumentData>
+): Promise<QuerySnapshot<DocumentData>> {
+  const get = transaction.get as unknown as (
+    query: Query<DocumentData>
+  ) => Promise<QuerySnapshot<DocumentData>>;
+  return get(q);
+}
+
 function normalizeQuiz(data: Record<string, unknown>): void {
-  const qsa = data.question_start_at;
-  if (qsa && typeof (qsa as any).toMillis === 'function') {
-    data.question_start_at = (qsa as any).toMillis();
+  const qsa = data.question_start_at as { toMillis?: () => number } | undefined;
+  if (qsa && typeof qsa.toMillis === 'function') {
+    data.question_start_at = qsa.toMillis();
   }
 }
 
@@ -102,7 +103,7 @@ export const quizService = {
 
     if (!data.id || data.id.length !== ROOM_CODE_LENGTH) throw new Error('Invalid quiz ID');
     if (!data.title || data.title.length < MIN_TITLE_LENGTH) throw new Error('Title must be at least 3 characters');
-    if (![QUIZ_WAITING, QUIZ_READY, QUIZ_STARTING, QUIZ_LIVE, QUIZ_PAUSED, QUIZ_FINISHED, QUIZ_ARCHIVED].includes(data.status as any)) throw new Error('Invalid status');
+    if (!([QUIZ_WAITING, QUIZ_READY, QUIZ_STARTING, QUIZ_LIVE, QUIZ_PAUSED, QUIZ_FINISHED, QUIZ_ARCHIVED] as string[]).includes(data.status)) throw new Error('Invalid status');
     if (data.question_count < MIN_QUESTIONS) throw new Error('Question count must be at least 1');
     if (data.current_question_index < -1) throw new Error('Invalid question index');
     if (!data.created_by) throw new Error('Creator ID required');
@@ -219,39 +220,37 @@ export const quizService = {
     await runTransaction(db, async (transaction) => {
       // All reads are performed via transaction.get so they are part of the
       // transaction's read set and benefit from optimistic concurrency control.
-      // Cast to any because the SDK overloads transaction.get for Query vs
-      // DocumentReference and CollectionReference is a Query subtype.
       const questionsRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS);
-      const questionsSnap = await (transaction as any).get(questionsRef);
+      const questionsSnap = await txGetQuery(transaction, questionsRef);
       for (const qDoc of questionsSnap.docs) {
         const subRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUESTIONS, qDoc.id, COLLECTIONS.SUBMISSIONS);
-        const subSnap = await (transaction as any).get(subRef);
+        const subSnap = await txGetQuery(transaction, subRef);
         for (const subDoc of subSnap.docs) {
-          (transaction as any).delete(subDoc.ref);
+          transaction.delete(subDoc.ref);
         }
       }
 
       // Delete all participant docs — read inside transaction
       const participantsRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.PARTICIPANTS);
-      const participantsSnap = await (transaction as any).get(participantsRef);
+      const participantsSnap = await txGetQuery(transaction, participantsRef);
       for (const pDoc of participantsSnap.docs) {
-        (transaction as any).delete(pDoc.ref);
+        transaction.delete(pDoc.ref);
       }
 
       // Delete all answer key docs — read inside transaction
       const answerKeysRef = collection(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.ANSWER_KEYS);
-      const answerKeysSnap = await (transaction as any).get(answerKeysRef);
+      const answerKeysSnap = await txGetQuery(transaction, answerKeysRef);
       for (const aDoc of answerKeysSnap.docs) {
-        (transaction as any).delete(aDoc.ref);
+        transaction.delete(aDoc.ref);
       }
 
       // Delete the config doc
       const configDocRef = doc(db, COLLECTIONS.QUIZZES, id, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC);
-      (transaction as any).delete(configDocRef);
+      transaction.delete(configDocRef);
 
       // Update quiz status to waiting — atomic with the deletes
       const quizRef = doc(db, COLLECTIONS.QUIZZES, id);
-      (transaction as any).update(quizRef, {
+      transaction.update(quizRef, {
         status: QUIZ_WAITING,
         current_question_index: -1,
         question_start_at: null,

@@ -89,8 +89,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, totalDocs, collections: collections.length });
-  } catch (err: any) {
-    console.error('[Backup Import] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Backup Import] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Import failed' }, { status: 500 });
   }
 }

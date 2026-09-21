@@ -29,8 +29,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         createdAt: data.createdAt?.toMillis?.() ?? data.createdAt ?? null,
       },
     });
-  } catch (err: any) {
-    console.error('[Notification GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Notification GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Failed to fetch notification' }, { status: 500 });
   }
 }
@@ -54,8 +55,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
     await notificationService.delete(id);
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Notification DELETE] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Notification DELETE] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Failed to delete notification' }, { status: 500 });
   }
 }

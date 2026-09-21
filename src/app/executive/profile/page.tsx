@@ -85,8 +85,8 @@ export default function ExecutiveProfilePage() {
           setNotifCount(n.unreadCount || 0);
         }
         if (convRes.ok) {
-          const c = await convRes.json();
-          const total = (c.conversations || []).reduce((sum: number, conv: any) => sum + (conv.unreadCount?.[user.id] || 0), 0);
+          const c: { conversations?: Array<{ unreadCount?: Record<string, number> }> } = await convRes.json();
+          const total = (c.conversations || []).reduce((sum, conv) => sum + (conv.unreadCount?.[user.id] || 0), 0);
           setMsgCount(total);
         }
       } catch {}

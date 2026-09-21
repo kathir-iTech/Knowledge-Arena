@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface IntersectionObserverEntry {
   target: Element;
@@ -63,10 +63,6 @@ export function useSharedIntersectionObserver(
   const [isIntersecting, setIsIntersecting] = useState(false);
   const observerRef = useRef(SharedIntersectionObserver.getInstance());
 
-  const setRef = useCallback((node: HTMLElement | null) => {
-    ref.current = node;
-  }, []);
-
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
@@ -84,6 +80,11 @@ export function useSharedIntersectionObserver(
     );
 
     return cleanup;
+    // `options` itself intentionally excluded: callers (and the default `{}`)
+    // create a fresh object every render, so depending on it would tear down
+    // and recreate the observer on every render. The primitive fields above
+    // are the stable values that actually matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options.threshold, options.rootMargin, options.root]);
 
   return [ref, isIntersecting];

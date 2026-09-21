@@ -69,8 +69,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ id: docRef.id, success: true });
-  } catch (err: any) {
-    console.error('[CommanderRequests POST] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[CommanderRequests POST] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -93,8 +94,9 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json({ requests });
-  } catch (err: any) {
-    console.error('[CommanderRequests GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[CommanderRequests GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

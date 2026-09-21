@@ -11,7 +11,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Trash2, Edit3, ChevronDown, ChevronUp, Save, X, Sparkles, CheckCircle2, AlertTriangle, Loader2, RefreshCw, Copy, ArrowUp, ArrowDown, Plus, Shuffle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { v4 as uuidv4 } from 'uuid';
-import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -57,7 +56,6 @@ export function ExecutiveQuestionReviewPanel({
   onRegenerateQuestion,
   onImportComplete,
 }: ExecutiveQuestionReviewPanelProps) {
-  const { user } = useAuth();
   const { auth } = useFirebase();
   const { toast } = useToast();
 

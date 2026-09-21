@@ -74,8 +74,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         editedAt: data.editedAt ?? null,
       },
     });
-  } catch (err: any) {
-    console.error('[AnnouncementDetail GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[AnnouncementDetail GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

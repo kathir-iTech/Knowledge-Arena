@@ -103,10 +103,15 @@ export default function AiLogsPage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [user, auth, modelFilter, successFilter, nextCursor]);
+    }, [user, auth, successFilter, nextCursor]);
 
   useEffect(() => {
     fetchLogs(false);
+    // fetchLogs intentionally excluded: it is rebuilt when pagination state
+    // (nextCursor) changes, so depending on it would refire this effect on
+    // every "load more" and reset the list in a loop. Filter changes are the
+    // only intended trigger; pagination calls it directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [successFilter]);
 
   const loadMore = () => {

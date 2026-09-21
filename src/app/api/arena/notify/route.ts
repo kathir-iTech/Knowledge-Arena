@@ -59,8 +59,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, notified });
-  } catch (err: any) {
-    console.error('[ArenaNotify POST] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[ArenaNotify POST] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

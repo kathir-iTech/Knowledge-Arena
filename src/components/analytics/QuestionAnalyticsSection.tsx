@@ -4,22 +4,10 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Search, Clock, Brain, AlertTriangle, Target } from 'lucide-react';
+import { Search, Clock, AlertTriangle, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { QuestionAnalytics } from '@/services/analytics.service';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from './charts';
+import { ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Legend } from './charts';
 
 const PIE_COLORS = ['hsl(var(--success))', 'hsl(var(--destructive))', 'hsl(var(--muted-foreground))'];
 

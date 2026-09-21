@@ -50,7 +50,7 @@ export function SessionTimeout() {
       events.forEach(ev => window.removeEventListener(ev, handleActivity));
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [user, logout, resetTimer]);
+  }, [user, logout, resetTimer, showWarning]);
 
   if (!user) return null;
 

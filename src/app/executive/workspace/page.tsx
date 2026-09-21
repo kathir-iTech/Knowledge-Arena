@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,14 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageError } from '@/components/ui/page-error';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useRouter } from 'next/navigation';
-import {
-  Users, Shield, User, BookOpen, Swords, MessageSquare,
-  Inbox, Activity, Database, Wifi, BrainCircuit,
-  CheckCircle2, AlertTriangle, AlertCircle, Clock, TrendingUp,
-  Calendar, Award, Zap, PlayCircle, Bell, BellOff,
-  Plus, Settings, ChevronRight, RefreshCw, ShieldAlert,
-  HardDrive, Archive, BarChart3, Timer, Cpu,
-} from 'lucide-react';
+import { Users, Shield, User, BookOpen, Swords, MessageSquare, Inbox, Activity, Database, Wifi, BrainCircuit, CheckCircle2, AlertTriangle, AlertCircle, TrendingUp, Calendar, Award, Zap, PlayCircle, Bell, BellOff, Settings, ChevronRight, RefreshCw, ShieldAlert, HardDrive, Archive, BarChart3, Timer, Cpu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SystemHealth {
@@ -248,7 +241,7 @@ export default function ExecutiveWorkspacePage() {
   const [recentNotifications, setRecentNotifications] = useState<Array<{ id: string; type: string; title: string; createdAt: number }>>([]);
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       setLoading(true);
       setError(false);
@@ -269,9 +262,9 @@ export default function ExecutiveWorkspacePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [auth]);
 
-  const fetchNotifs = async () => {
+  const fetchNotifs = useCallback(async () => {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
@@ -283,7 +276,7 @@ export default function ExecutiveWorkspacePage() {
         setRecentNotifications((data.notifications || []).slice(0, 5));
       }
     } catch {}
-  };
+  }, [auth]);
 
   useEffect(() => {
     if (!user) return;
@@ -294,7 +287,7 @@ export default function ExecutiveWorkspacePage() {
       fetchNotifs();
     }, 30000);
     return () => clearInterval(interval);
-  }, [user, auth]);
+  }, [user, auth, fetchStats, fetchNotifs]);
 
   const totalWarnings = stats
     ? Object.values(stats.systemHealth || {}).filter(h => h.status !== 'healthy').length

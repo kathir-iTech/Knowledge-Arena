@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { WriteResult } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { auditService } from '@/services/audit.service';
@@ -32,7 +33,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const messagesSnap = await convRef.collection('messages').select().get();
     if (!messagesSnap.empty) {
-      const batches: any[] = [];
+      const batches: Array<Promise<WriteResult[]>> = [];
       let batch = db.batch();
       let opCount = 0;
       for (const msgDoc of messagesSnap.docs) {
@@ -59,8 +60,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Conversation DELETE] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Conversation DELETE] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -115,8 +117,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Conversation PATCH] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Conversation PATCH] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

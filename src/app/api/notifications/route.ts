@@ -27,8 +27,9 @@ export async function GET(req: NextRequest) {
     });
     const unreadCount = await notificationService.getUnreadCount(auth.uid);
     return NextResponse.json({ notifications, unreadCount, nextCursor });
-  } catch (err: any) {
-    console.error('[Notifications GET] Error:', err?.name, err?.message, err?.stack);
+  } catch (err) {
+    const e = err as { message?: string; name?: string; stack?: string };
+    console.error('[Notifications GET] Error:', e?.name, e?.message, e?.stack);
     return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
   }
 }
@@ -54,8 +55,9 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Provide markAllRead or ids array' }, { status: 400 });
     }
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Notifications PATCH] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Notifications PATCH] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Failed to update notifications' }, { status: 500 });
   }
 }

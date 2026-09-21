@@ -28,8 +28,9 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ categories: Array.from(categories).sort((a, b) => a.localeCompare(b)) });
-  } catch (err: any) {
-    console.error('[QuestionBank Categories] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuestionBank Categories] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

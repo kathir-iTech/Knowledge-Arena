@@ -64,8 +64,9 @@ export async function GET(req: NextRequest) {
     const items = filtered.slice(start, start + pageSize);
 
     return NextResponse.json({ sets: items, total, sources, page, pageSize });
-  } catch (err: any) {
-    console.error('[QuizSets GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuizSets GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

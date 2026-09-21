@@ -39,8 +39,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         updatedAt: data.updatedAt?.toMillis?.() ?? data.updatedAt ?? null,
       },
     });
-  } catch (err: any) {
-    console.error('[QuestionBank GET single] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuestionBank GET single] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -99,8 +100,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
 
     return NextResponse.json({ success: true, id });
-  } catch (err: any) {
-    console.error('[QuestionBank PATCH] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuestionBank PATCH] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -132,8 +134,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     });
 
     return NextResponse.json({ success: true, id });
-  } catch (err: any) {
-    console.error('[QuestionBank DELETE] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuestionBank DELETE] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -14,7 +14,7 @@ interface GeneratedQuestion {
   explanation: string;
 }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PencilRuler, Sparkles, BookOpen, ChevronLeft, ArrowLeft } from "lucide-react";
+import { PencilRuler, Sparkles, ChevronLeft, ArrowLeft } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';

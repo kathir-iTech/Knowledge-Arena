@@ -33,14 +33,6 @@ export function BulkSelection({ selectedIds, onSelectionChange, allIds, actions,
     }
   };
 
-  const toggleOne = (id: string) => {
-    if (selectedIds.includes(id)) {
-      onSelectionChange(selectedIds.filter(s => s !== id));
-    } else {
-      onSelectionChange([...selectedIds, id]);
-    }
-  };
-
   return (
     <div className={cn('flex items-center gap-3 flex-wrap', className)}>
       <Checkbox

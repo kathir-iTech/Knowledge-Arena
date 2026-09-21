@@ -21,7 +21,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { AvatarEditor } from './AvatarEditor';
 import { cn } from '@/lib/utils';
 import { QUIZ_ABANDONED_AFTER_MS, QUIZ_WAITING_ABANDONED_AFTER_MS } from '@/lib/constants';
-import { collectionGroup, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collectionGroup, query, where, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import type { DocumentData } from 'firebase/firestore';
 
 const GladiatorSidebar = () => {
   const { user, logout } = useAuth();
@@ -81,7 +82,7 @@ const GladiatorSidebar = () => {
           let hasActive = false;
           for (const qd of quizDocs) {
             if (!qd.exists()) continue;
-            const data = qd.data() as any;
+            const data = qd.data() as DocumentData;
             const status: string = data.status;
             const isActiveStatus =
               status === 'waiting' || status === 'ready' || status === 'starting' || status === 'live' || status === 'paused';

@@ -46,9 +46,9 @@ const CommanderSidebar = () => {
         ]);
         if (cancelled) return;
         if (convRes.ok) {
-          const data = await convRes.json();
+          const data: { conversations?: Array<{ unreadCount?: Record<string, number> }> } = await convRes.json();
           const total = (data.conversations || []).reduce(
-            (sum: number, c: any) => sum + (c.unreadCount?.[user.id] || 0), 0
+            (sum, c) => sum + (c.unreadCount?.[user.id] || 0), 0
           );
           if (!cancelled) setUnreadCount(total);
         }

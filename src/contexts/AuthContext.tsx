@@ -38,7 +38,6 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 // (arena.allowed_gladiator_domain snapshot of Commander institution_domain).
 // The old global ALLOWED_GLADIATOR_DOMAIN env var is no longer used for
 // signup enforcement; it remains only for reference / legacy.
-const IS_EMULATOR = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true';
 
 const PROFILE_TIMEOUT_MS = 10000;
 const AUTH_OP_TIMEOUT_MS = 10000;
@@ -93,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const lastFetchedUid = useRef<string | null>(null);
   const fetchInProgress = useRef(false);
   const fetchInProgressUid = useRef<string | null>(null);
+  const migrationDone = useRef(false);
 
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
@@ -308,27 +308,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [firestore, auth, user, ensureGladiatorProfile]);
 
-  useEffect(() => {
-    if (isUserLoading) {
-      setIsLoading(true);
-      return;
+  // Migrate existing ID token to session cookie on load (existing users with no session cookie).
+  const migrateSession = useCallback(async () => {
+    if (migrationDone.current) return;
+    migrationDone.current = true;
+    try {
+      const user = auth?.currentUser;
+      if (!user) return;
+      const idToken = await user.getIdToken();
+      await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+    } catch {
+      // migration is best-effort; user can re-authenticate if needed
     }
+  }, [auth]);
+
+  useEffect(() => {
+    if (isUserLoading) { setIsLoading(true); return; }
     if (firebaseUser) {
-      if (signupInProgress.current && signupUserId.current === firebaseUser.uid) {
-        // Ensure we don't hang forever if signup stalls
-        // No-op: global timeout will clear loading if profile never resolves
-        return;
-      }
-      // Part 5A: signup is open — no domain gate at sign-in. Domain is enforced
-      // at arena-join time via allowed_gladiator_domain.
+      if (signupInProgress.current && signupUserId.current === firebaseUser.uid) { return; }
       fetchUserDocument(firebaseUser.uid);
+      void migrateSession();
     } else {
+      migrationDone.current = false;
       setUser(null);
       fetchInProgress.current = false;
       fetchInProgressUid.current = null;
       setIsLoading(false);
     }
-  }, [firebaseUser, isUserLoading, fetchUserDocument, firestore, auth, toast]);
+  }, [firebaseUser, isUserLoading, fetchUserDocument, migrateSession, firestore, auth, toast]);
 
   const checkRateLimit = async (type: 'login' | 'signup', identifier?: string) => {
     try {
@@ -521,6 +532,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       authTimeoutRef.current = null;
     }
     try {
+      await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` } });
+    } catch {
+      // server-side logout best-effort
+    }
+    try {
       await signOut(auth);
     } catch {
       // ensure cleanup runs even if signOut fails
@@ -568,6 +584,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await fetchUserDocument(uid);
   }, [auth, firestore, fetchUserDocument]);
 
+  // NOTE on the dep array below: login/logout/updateAvatar/updateProfile are
+  // intentionally excluded. They are recreated every render, so depending on
+  // them would defeat this memo (new value object every render, re-rendering
+  // all consumers) with zero staleness benefit — they only close over stable
+  // singletons (auth, firestore, toast) and React state setters, so they can
+  // never go stale.
   const contextValue = useMemo(() => ({
     user,
     isAuthenticated: !!user,
@@ -580,6 +602,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateAvatar,
     updateProfile,
     refreshUser,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [user, isLoading, authError, clearAuthError, signInWithGoogle, refreshUser]);
 
   return (

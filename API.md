@@ -6,6 +6,8 @@ All API endpoints return JSON responses unless otherwise noted. Authentication i
 Authorization: Bearer <firebase-id-token>
 ```
 
+Route handlers verify the token (and role) server-side with `verifyFirebaseToken*` (`src/lib/verify-auth.ts`). HTML responses also carry a strict nonce-based CSP injected by the middleware (see [Security Headers](#security-headers)).
+
 ---
 
 ## Rate Limiting
@@ -26,7 +28,7 @@ Authorization: Bearer <firebase-id-token>
 | Explanations (per user) | 30 | 60s |
 | Exports (per user) | 5 | 60s |
 
-(Full catalog in `Limits`, `src/lib/rate-limiter.ts:113-130`; all windows are 60s. AI routes are additionally gated per-UID, not per-IP.)
+(Full catalog in `Limits`, `src/lib/rate-limiter.ts:113-130`; all windows are 60s. AI routes are additionally gated per-UID, not per-IP. `POST /api/battle/submit` is rate limited by the generic `battle:*` budget, key `battle:submit:<uid>`.)
 
 Rate-limited endpoints return `429 Too Many Requests` with `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers.
 
@@ -639,11 +641,57 @@ Shelved — returns `410`.
 
 ---
 
-> **Coverage note:** this reference documents a subset of the 76 route files under `src/app/api/` (verified by file listing). Undocumented-but-live routes include `/api/battle/can-join`, `/api/quiz/translate`, `/api/gladiator/personalization`, `/api/gladiator/recommendations`, `/api/gladiator/search`, `/api/commander/search`, `/api/executive/question-bank/*`, `/api/executive/insights`, `/api/executive/export`, and `/api/cron/*`. New routes should be added here when they stabilize.
-
 ## Battle Engine
 
-All battle endpoints are role-checked (Commander or Executive) and rate limited (30/min per user). Errors use a shared mapper: 404 (not found), 403 (not allowed / not a member), 409 (invalid state transition).
+Battle endpoints are role-checked and rate limited (30/min per user). Errors use a shared mapper: 404 (not found), 403 (not allowed / not a member), 409 (invalid state transition).
+
+### POST `/api/battle/submit` — submit an answer (server-gated)
+**The only write path for answers.** Client-side Firestore writes to
+`quizzes/{id}/questions/{q}/submissions` are disabled in the rules
+(`allow create: if false`).
+
+**Auth:** Required  
+**Role:** Gladiator or Commander (must be a participant of the arena)
+
+**Rate limit:** `battle:submit:<uid>` → 30/60s
+
+**Request Body:**
+```json
+{
+  "quizId": "arena-id",
+  "questionId": "question-doc-id",
+  "selectedOption": 2,            // integer 0-3
+  "nonce": "8-128 char random",   // binds signature to one payload
+  "clientTime": 1700000000000,    // epoch ms; must be within ±5s of server time
+  "signature": "<hmac-sha256 hex>" // see below
+}
+```
+
+`signature` = HMAC-SHA256 over the canonical payload
+`quizId | questionId | selectedOption | nonce | floor(clientTime)` using the
+participant's per-battle session key `quorena:submit:<quizId>:<userId>:<sessionToken>`
+(helpers in `src/lib/submit-answer.ts`; the client mints it via
+`submissionService.submitAnswer`).
+
+**Server pipeline:**
+1. Verify token (+ role).
+2. Rate limit.
+3. Validate shape; freshness window `SUBMIT_CLOCK_SKEW_TOLERANCE_MS = 5000`.
+4. Sweep zombie live arenas (`sweepStaleLiveArena`).
+5. Recompute + timing-safe-verify the HMAC from the participant doc's `session_token`.
+6. **One Admin-SDK transaction**: quiz still `live` → participant exists/not blocked/finished → no prior submission (one-shot idempotency) → current-question binding re-verified → write with server `Timestamp`.
+
+**Response `200`:**
+```json
+{ "ok": true, "alreadySubmitted": false }
+```
+A concurrent double-tap (or a retry after a dropped response) returns
+`{ "ok": true, "alreadySubmitted": true }` — a graceful no-op, never an
+overwrite of the prior answer.
+
+**Status codes:** `200` Recorded (or already submitted), `400` Bad payload / stale timestamp, `401` Unauthorized, `403` Signature/key failure, `409` Not live / wrong question / finished / abandoned arena, `429` Rate limited, `500` Server error.
+
+Security-violation paths (bad signature, missing key, stale timestamp, wrong question) additionally write a `security_logs` entry via `logSecurityViolation`.
 
 ### POST `/api/battle/start`
 Transition an arena `waiting`/`ready` → `starting`. Creator only.
@@ -924,6 +972,22 @@ List active commanders for initiating conversations (with optional search).
 
 ---
 
+## Security Headers
+
+Applied to every HTTP response (Next.js `headers()` in `next.config.ts`, plus middleware-emitted CSP on HTML routes):
+
+| Header | Value |
+|---|---|
+| `Content-Security-Policy` | Per-request nonce policy from `src/middleware.ts` (HTML routes only; `default-src 'self'`, `script-src 'self' 'nonce-<n>' 'strict-dynamic'`, locked `connect-src`/`img-src`, `frame-ancestors 'none'`, `upgrade-insecure-requests` in prod). Relies on per-request dynamic rendering (`connection()` in the root layout) and `experimental.ppr: false`. |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains; preload` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), interest-cohort=()` |
+| `X-Powered-By` | removed (`poweredByHeader: false`) |
+
+---
+
 ## Error Responses
 
 All endpoints return errors in the following format:
@@ -940,8 +1004,14 @@ All endpoints return errors in the following format:
 | `201` | Created |
 | `400` | Bad request (invalid input, missing fields) |
 | `401` | Unauthorized (missing/invalid auth token) |
-| `403` | Forbidden (insufficient role) |
+| `403` | Forbidden (insufficient role / submission signature failure) |
 | `404` | Resource not found |
-| `409` | Conflict (e.g., email already exists) |
+| `409` | Conflict (e.g., email already exists, battle state, wrong question) |
 | `429` | Rate limited (check `Retry-After` header) |
 | `500` | Internal server error |
+
+---
+
+> **Coverage note:** this reference documents a large subset of the route files under `src/app/api/`. Undocumented-but-live routes include `/api/battle/can-join`, `/api/quiz/translate`, `/api/gladiator/personalization`, `/api/gladiator/recommendations`, `/api/gladiator/search`, `/api/commander/search`, `/api/executive/question-bank/*`, `/api/executive/insights`, `/api/executive/export`, and `/api/cron/*`. New routes should be added here when they stabilize. The submission path above (`POST /api/battle/submit`) is the ONLY route that may write a `submissions` document.
+>
+> **Verification note:** `npm run lint` runs ESLint 9 + `eslint-config-next@15` with a strict `.eslintrc.json` ruleset (`no-explicit-any`, `no-unused-vars`, `no-console`, `react-hooks/exhaustive-deps`). The hardening-sprint code is lint-clean; the wider legacy codebase has a tracked backlog of explicit `any` annotations. `next lint` is deprecated (removed in Next 16) — migrate to the ESLint CLI + flat config when upgrading.

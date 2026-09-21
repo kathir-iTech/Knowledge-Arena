@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
       const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
       const snap = await tx.get(quizRef);
       if (!snap.exists) throw new Error('Arena not found');
-      const quiz = snap.data() as Record<string, any>;
+      const quiz = snap.data() as DocumentData;
       if (!isCreator(quiz, auth.uid)) {
         throw new Error('Only the Commander can resume this arena');
       }
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
       didResume = true;
       const now = Date.now();
       pausedMs = Math.max(0, now - getMs(quiz.paused_at));
-      const update: Record<string, any> = {
+      const update: DocumentData = {
         status: QUIZ_LIVE,
         paused_at: null,
         paused_ms: (quiz.paused_ms || 0) + pausedMs,
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
           .get();
         for (const p of partsSnap.docs) {
           const pSnap = await tx.get(p.ref);
-          const pData = pSnap.data() as Record<string, any>;
+          const pData = pSnap.data() as DocumentData;
           if (pData?.question_start_at) {
             tx.update(p.ref, { question_start_at: getMs(pData.question_start_at) + pausedMs });
           }

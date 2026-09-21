@@ -102,8 +102,9 @@ export async function GET(req: NextRequest) {
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
-  } catch (err: any) {
-    console.error('[Export] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Export] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Export failed' }, { status: 500 });
   }
 }

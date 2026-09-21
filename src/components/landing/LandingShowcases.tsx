@@ -174,7 +174,7 @@ export function LandingShowcases() {
               </span>
             </div>
             <p className="mt-4 rounded-xl border bg-background/60 p-3 text-[11px] leading-relaxed text-muted-foreground">
-              A preview of the leaderboard — during a real quiz, students'
+              A preview of the leaderboard — during a real quiz, students&apos;
               names and live scores appear here.
             </p>
             {/* Leaderboard mockup — same neo-roman style */}
@@ -231,7 +231,7 @@ export function LandingShowcases() {
               ))}
             </div>
             <p className="mt-5 border-t pt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
-              A preview — during a real quiz, these charts show your class's
+              A preview — during a real quiz, these charts show your class&apos;s
               week-to-week engagement.
             </p>
           </div>

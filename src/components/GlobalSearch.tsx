@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Search, Loader2, Swords, Shield, User, BookOpen, AlertCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
+
 
 interface SearchHit {
   type: string;

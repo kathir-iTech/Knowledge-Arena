@@ -1,0 +1,11 @@
+# Force LF for git-hook and verification scripts so Git-for-Windows never
+# checks them out with CRLF (a CRLF shebang / body breaks `sh` hook execution).
+scripts/git-hooks/pre-push       text eol=lf
+scripts/git-hooks/*.sh           text eol=lf
+scripts/git-hooks/.lint-baseline text eol=lf
+scripts/*.sh                     text eol=lf
+scripts/*.bat                    text eol=crlf
+
+# All source files: consistent LF line endings.
+/src/**/*.{ts,tsx} text eol=lf
+*.{ts,tsx,js,tsx,mjs,json,md,css} text eol=lf

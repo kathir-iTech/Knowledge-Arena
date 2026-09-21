@@ -173,6 +173,10 @@ export default function WaitingRoom({ quiz, isTeacher, joinError, onRetryJoin, i
       window.removeEventListener('pageshow', handlePageShow);
       unsubQuiz();
     };
+    // `user` itself intentionally excluded: only its stable id is tracked.
+    // Depending on the whole object would tear down and recreate the roster
+    // subscriptions on every profile refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quiz.id, quiz.created_by, isTeacher, user?.id]);
 
   const studentParticipants = useMemo(() => {

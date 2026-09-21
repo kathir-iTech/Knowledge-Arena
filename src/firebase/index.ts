@@ -6,7 +6,20 @@ import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, Firestore, connectFirestoreEmulator } from 'firebase/firestore'
 import { getDatabase, Database, connectDatabaseEmulator } from 'firebase/database'
 
+const EMULATOR_PROJECT_ID = 'demo-quorena';
+
 let emulatorsConnected = false;
+
+// In emulator mode the client app MUST mint ID tokens whose `aud` matches the
+// Admin verifier's binding (demo-quorena). The real firebaseConfig (config.ts)
+// pins the PROD projectId, so a prod-initialized client mints `aud = studio-...`
+// tokens that `verifyIdToken` rejects. Override projectId here in emulator mode.
+function getClientConfig() {
+  const isEmulator = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true';
+  return isEmulator
+    ? { projectId: EMULATOR_PROJECT_ID, apiKey: 'demo-key' }
+    : firebaseConfig;
+}
 
 function connectEmulators(auth: Auth, firestore: Firestore, rtdb: Database) {
   // Local emulator support for development/QA only. Never enabled in production
@@ -23,7 +36,7 @@ export function initializeFirebase() {
   if (getApps().length) {
     return getSdks(getApp());
   }
-  const firebaseApp = initializeApp(firebaseConfig);
+  const firebaseApp = initializeApp(getClientConfig());
   return getSdks(firebaseApp);
 }
 

@@ -97,8 +97,9 @@ export async function GET(req: NextRequest) {
         events: Array.from(allEvents).sort(),
       },
     });
-  } catch (err: any) {
-    console.error('[SecurityLogs] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[SecurityLogs] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

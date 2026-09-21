@@ -18,7 +18,7 @@ import { QuizRecommendations } from '@/components/dashboard/QuizRecommendations'
 import { WeakAreas } from '@/components/dashboard/WeakAreas';
 import { UpcomingArenas } from '@/components/dashboard/UpcomingArenas';
 import { GladiatorOnboarding } from '@/components/onboarding/GladiatorOnboarding';
-import { Loader2, Swords, UserCircle, History, ExternalLink, Trophy, Star, TrendingUp, Zap, Bell, ChevronRight, Play, Sparkles, ArrowRight } from 'lucide-react';
+import { Loader2, Swords, UserCircle, History, Trophy, Star, TrendingUp, Zap, ChevronRight, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'success' | 'warning'> = {
@@ -56,6 +56,14 @@ interface DashboardStats {
   accuracy: number;
 }
 
+interface RecentBattle {
+  quizId: string;
+  title: string;
+  created_at: number;
+  status: string;
+  score: number;
+}
+
 export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCode?: string }) {
   const { user } = useAuth();
   const { auth } = useFirebase();
@@ -71,7 +79,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
     return '';
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [dashboardData, setDashboardData] = useState<{ stats: DashboardStats; recentBattles: any[]; activeBattle: { id: string; title: string } | null } | null>(null);
+  const [dashboardData, setDashboardData] = useState<{ stats: DashboardStats; recentBattles: RecentBattle[]; activeBattle: { id: string; title: string } | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const autoJoinTriggered = useRef(false);
@@ -328,7 +336,7 @@ export default function GladiatorDashboard({ initialRoomCode }: { initialRoomCod
           <CardContent className="pt-4">
             {dashboardData?.recentBattles && dashboardData.recentBattles.length > 0 ? (
               <div className="space-y-1">
-                {dashboardData.recentBattles.slice(0, 8).map((h: any) => {
+                {dashboardData.recentBattles.slice(0, 8).map((h) => {
                   return (
                     <Link key={h.quizId} href={`/battle/${h.quizId}`} className="group block">
                       <div className="flex items-center gap-3 p-2.5 rounded-[10px] hover:bg-muted/30 hover:shadow-elevation-small transition-all duration-300 border border-transparent hover:border-border/50">

@@ -1,4 +1,5 @@
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import { logAuthFailure } from '@/lib/security-log';
 import { hasPermission as hasCapPermission, type CapabilityName } from '@/lib/permissions';
 
@@ -119,7 +120,7 @@ export async function verifyFirebaseTokenWithRole(
   // Single Firestore read reused for both role and mustChangePassword (TOCTOU fix).
   try {
     let role: string | undefined;
-    let cachedUserDoc: any = null;
+    let cachedUserDoc: DocumentSnapshot | null = null;
     if (typeof decoded.customClaims !== 'undefined' && decoded.customClaims?.role) {
       role = decoded.customClaims.role as string;
     } else {
@@ -186,7 +187,7 @@ export async function verifyFirebaseTokenWithAnyRole(
     const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
     if (!userDoc.exists) return null;
     const role = userDoc.data()?.role as string;
-    if (!roles.includes(role as any)) {
+    if (!(roles as readonly string[]).includes(role)) {
       if (typeof tokenOrRequest !== 'string') {
         logAuthFailure(`role:${decoded.uid}`, `role_mismatch:allowed_${roles.join('|')}`);
       }

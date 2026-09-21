@@ -2,15 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
-import {
-  COLLECTIONS,
-  QUIZ_CONFIG_SETTINGS_DOC,
-  QUIZ_LIVE,
-  QUIZ_PAUSED,
-  QUIZ_FINISHED,
-  PS_BLOCKED,
-} from '@/lib/constants';
+import { FieldValue, type DocumentData, type DocumentReference } from 'firebase-admin/firestore';
+import { COLLECTIONS, QUIZ_LIVE, QUIZ_PAUSED, QUIZ_FINISHED, PS_BLOCKED } from '@/lib/constants';
 import { writeBattleLog, isCreator, normalizeSkipConfig, scoringConfigFrom, quizConfigRef, evaluateQuestionForAll, battleErrorResponse, notifyBattleCompleted } from '@/lib/battle-server';
 
 export const runtime = 'nodejs';
@@ -38,7 +31,7 @@ export async function POST(req: NextRequest) {
     // auto-advance that already evaluated this question is a harmless no-op.
     const preQuizSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
     if (preQuizSnap.exists) {
-      const preQuiz = preQuizSnap.data() as Record<string, any>;
+      const preQuiz = preQuizSnap.data() as DocumentData;
       const preIndex = preQuiz.current_question_index ?? 0;
       const preQuestionsSnap = await db
         .collection(COLLECTIONS.QUIZZES).doc(quizId)
@@ -55,7 +48,7 @@ export async function POST(req: NextRequest) {
       const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
       const snap = await tx.get(quizRef);
       if (!snap.exists) throw new Error('Arena not found');
-      const quiz = snap.data() as Record<string, any>;
+      const quiz = snap.data() as DocumentData;
       if (!isCreator(quiz, auth.uid)) {
         throw new Error('Only the Commander can skip a question');
       }
@@ -83,7 +76,7 @@ export async function POST(req: NextRequest) {
       const cfgSnap = await tx.get(cfgRef);
       const config = normalizeSkipConfig(scoringConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined, quiz));
 
-      const quizUpdate: Record<string, any> = {
+      const quizUpdate: DocumentData = {
         current_question_index: nextIndex,
         question_start_at: ended ? null : now,
       };
@@ -100,11 +93,11 @@ export async function POST(req: NextRequest) {
 
       // Firestore transactions require all reads before any writes. Gather
       // every read first, then apply the writes below.
-      const participantUpdates: Array<{ ref: any; data: Record<string, any> }> = [];
+      const participantUpdates: Array<{ ref: DocumentReference; data: DocumentData }> = [];
       for (const p of partsSnap.docs) {
         const pSnap = await tx.get(p.ref);
         if (!pSnap.exists || p.id === quiz.created_by || pSnap.data()?.status === PS_BLOCKED) continue;
-        const updates: Record<string, any> = {
+        const updates: DocumentData = {
           skipped_question_ids: FieldValue.arrayUnion(question.id),
         };
         if (ended) {

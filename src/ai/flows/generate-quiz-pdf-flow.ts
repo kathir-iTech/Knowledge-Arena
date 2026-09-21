@@ -109,19 +109,30 @@ function errorToString(err: unknown): string {
   return String(err);
 }
 
+/** Structural view over arbitrary thrown values (API/SDK errors). */
+interface ErrorLike {
+  status?: unknown;
+  stack?: unknown;
+  cause?: unknown;
+  rawResponse?: unknown;
+  response?: unknown;
+  details?: unknown;
+}
+
 function formatError(err: unknown): string {
   const parts = [errorToString(err)];
-  const status = (err as any).status;
+  const e = err as ErrorLike;
+  const status = e.status;
   if (status) parts.unshift(`STATUS: ${status}`);
-  const stack = (err as any).stack;
+  const stack = e.stack;
   if (stack) parts.push(`STACK: ${stack}`);
-  const cause = (err as any).cause;
+  const cause = e.cause;
   if (cause) {
     parts.push(`CAUSE: ${errorToString(cause)}`);
-    const causeStack = (cause as any).stack;
+    const causeStack = (cause as ErrorLike).stack;
     if (causeStack) parts.push(`CAUSE_STACK: ${causeStack}`);
   }
-  const raw = (err as any).rawResponse ?? (err as any).response ?? (err as any).details;
+  const raw = e.rawResponse ?? e.response ?? e.details;
   if (raw) parts.push(`RAW_RESPONSE: ${typeof raw === 'string' ? raw.slice(0, 2000) : JSON.stringify(raw).slice(0, 2000)}`);
   return parts.join('\n');
 }
@@ -211,7 +222,7 @@ function repairJson(raw: string): string {
           JSON.parse(objectMatch[0]);
           return objectMatch[0];
         } catch {
-          let cleanedAgain = objectMatch[0]
+          const cleanedAgain = objectMatch[0]
             .replace(/[\u0000-\u001F]+/g, ' ')
             .replace(/\s+/g, ' ')
             .trim();
@@ -488,7 +499,7 @@ export async function generateQuizFromPDF(input: GenerateQuizFromPDFInput): Prom
     if (result.questions && result.questions.length > 0) {
       const warnings = validateQuestions(result.questions);
       if (warnings.length > 0 && !result.error) {
-        (result as any).warnings = warnings;
+        result.warnings = warnings;
       }
     }
 
@@ -536,6 +547,9 @@ const ExtractedDocumentSchema = z.object({
   transportImageRef: z.string().optional(),
 });
 
+// Retained as the canonical input contract (single source of truth for the
+// inferred type below and future runtime validation); referenced via z.infer.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const GenerateQuizFromExtractedInputSchema = z.object({
   documents: z.array(ExtractedDocumentSchema).min(1).max(10),
   difficulty: z.enum(['easy', 'moderate', 'hard']),
@@ -632,7 +646,7 @@ export async function generateQuizFromExtracted(input: GenerateQuizFromExtracted
     if (result.questions && result.questions.length > 0) {
       const warnings = validateQuestions(result.questions);
       if (warnings.length > 0 && !result.error) {
-        (result as any).warnings = warnings;
+        result.warnings = warnings;
       }
     }
 
@@ -731,6 +745,16 @@ function extractTextFromDocxBuffer(buffer: Buffer): string {
   }
 }
 
+/**
+ * Minimal structural view over the pdfjs-dist module surface this file uses.
+ * The package ships no types for the dynamically imported builds, so this
+ * interface pins exactly the members we touch (nothing more).
+ */
+interface PdfJsModule {
+  getDocument(params: Record<string, unknown>): PDFDocumentLoadingTask;
+  GlobalWorkerOptions?: { workerSrc?: string };
+}
+
 async function ensurePdfJsPolyfills(): Promise<void> {
   // pdfjs-dist legacy build in Node requires DOMMatrix/Path2D globals.
   // We stub minimal versions so pdfjs does not need the heavy native
@@ -738,21 +762,21 @@ async function ensurePdfJsPolyfills(): Promise<void> {
   // Vercel and avoids ERR_ABORTED. The package stays in dependencies so
   // pdfjs's internal try-require can succeed if present, but we don't
   // load it here.
-  if (typeof (globalThis as any).DOMMatrix !== 'undefined' && typeof (globalThis as any).Path2D !== 'undefined') return;
-  if (typeof (globalThis as any).DOMMatrix === 'undefined') {
-    (globalThis as any).DOMMatrix = class DOMMatrix {
+  // Writable view over the globals pdfjs probes for (untyped by design).
+  const g = globalThis as unknown as Record<string, unknown>;
+  if (typeof g.DOMMatrix !== 'undefined' && typeof g.Path2D !== 'undefined') return;
+  if (typeof g.DOMMatrix === 'undefined') {
+    g.DOMMatrix = class DOMMatrix {
       constructor(_init?: string | number[]) {}
       toString() { return 'matrix(1, 0, 0, 1, 0, 0)'; }
     };
-    (global as any).DOMMatrix = (globalThis as any).DOMMatrix;
   }
-  if (typeof (globalThis as any).Path2D === 'undefined') {
-    (globalThis as any).Path2D = class Path2D {};
-    (global as any).Path2D = (globalThis as any).Path2D;
+  if (typeof g.Path2D === 'undefined') {
+    g.Path2D = class Path2D {};
   }
   // Also stub ImageData/canvas elements that pdfjs may probe in Node.
-  if (typeof (globalThis as any).ImageData === 'undefined') {
-    (globalThis as any).ImageData = class ImageData {
+  if (typeof g.ImageData === 'undefined') {
+    g.ImageData = class ImageData {
       constructor() {}
     };
   }
@@ -778,14 +802,14 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
       // We also set disableWorker:true so no separate thread is needed, and
       // set workerSrc to '' to avoid any fetch. The dynamic import is wrapped
       // to allow a fallback to pdfjs build/ variant if legacy is missing.
-      let pdfjs: any;
+      let pdfjs: PdfJsModule;
       try {
         pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
       } catch (e) {
         const msg = errorToString(e);
         if (msg.includes('pdf.worker') || msg.includes('Cannot find module')) {
           console.warn('[Forge] legacy pdf.mjs import failed, trying build/pdf.mjs fallback', msg);
-          // @ts-ignore — build/pdf.mjs has no types
+          // @ts-expect-error — build/pdf.mjs has no types
           pdfjs = await import('pdfjs-dist/build/pdf.mjs');
         } else {
           throw e;
@@ -795,9 +819,10 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
       // Previously we set an absolute file:// URL which still required the file
       // to exist (tracing miss → fatal). Now we explicitly disable and leave
       // workerSrc empty; pdf.js will use the in-process fake worker.
-      if (typeof window === 'undefined' && (pdfjs as any).GlobalWorkerOptions) {
+      const workerOptions = pdfjs.GlobalWorkerOptions;
+      if (typeof window === 'undefined' && workerOptions) {
         try {
-          (pdfjs as any).GlobalWorkerOptions.workerSrc = '';
+          workerOptions.workerSrc = '';
         } catch {}
       }
       const { getDocument } = pdfjs;
@@ -809,7 +834,7 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
         useSystemFonts: true,
         disableFontFace: true,
         verbosity: 0,
-      } as any);
+      } as Record<string, unknown>);
       const pdf = await loadingTask.promise;
 
       try {
@@ -821,7 +846,7 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<{
           try {
             const textContent = await page.getTextContent();
             const pageText = textContent.items
-              .map((item: any) => ('str' in item ? item.str : ''))
+              .map((item) => ('str' in item ? item.str : ''))
               .join(' ')
               .trim();
             textsByPage.push(pageText);
@@ -976,7 +1001,7 @@ async function generatePromptWithImages(
       try {
         const promptText = buildVisionPrompt(chunks[0], difficulty, questionCount);
 
-        const parts: any[] = [{ text: promptText }];
+        const parts: VisionPart[] = [{ text: promptText }];
         for (const imgUri of imageDataUris) {
           // Genkit expects { media: { url: dataUri } }, not raw inlineData
           // (inlineData is the underlying Google API type that caused
@@ -1440,6 +1465,9 @@ interface ForgeQuestion {
   explanation: string;
 }
 
+// Retained as the canonical input contract (single source of truth for the
+// inferred type below and future runtime validation); referenced via z.infer.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const CreateForgeJobInputSchema = z.object({
   documents: z.array(ExtractedDocumentSchema).min(1).max(10),
   difficulty: z.enum(['easy', 'moderate', 'hard']),
@@ -1448,6 +1476,9 @@ const CreateForgeJobInputSchema = z.object({
 });
 type CreateForgeJobInput = z.infer<typeof CreateForgeJobInputSchema>;
 
+// Retained as the canonical input contract (single source of truth for the
+// inferred type below and future runtime validation); referenced via z.infer.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const RunForgeTickInputSchema = z.object({
   jobId: z.string().min(1),
   idToken: z.string().optional(),
@@ -1485,6 +1516,9 @@ type SingleAttemptResult =
   | { ok: true; questions: QuizQuestions; engine: string }
   | { ok: false; category: 'quota' | 'timeout' | 'auth' | 'other'; error: string; retryAfterMs?: number };
 
+/** Gemini content parts this file builds: text prompts + image data URIs. */
+type VisionPart = { text: string } | { media: { url: string } };
+
 function checkForgePayload(documents: GenerateQuizFromExtractedInput['documents']):
   | { combinedText: string; imageDataUris: string[] }
   | { error: string } {
@@ -1505,7 +1539,7 @@ function checkForgePayload(documents: GenerateQuizFromExtractedInput['documents'
 // One and only one Gemini attempt — no in-invocation retry loops. Every retry
 // happens across ticks (next tick picks the next key / model and re-claims the
 // lease), which keeps each function invocation comfortably inside maxDuration.
-async function generateOnceForJob(promptText: string, modelName: string, parts?: any[]): Promise<SingleAttemptResult> {
+async function generateOnceForJob(promptText: string, modelName: string, parts?: VisionPart[]): Promise<SingleAttemptResult> {
   let apiKey: string | null = null;
   try {
     apiKey = await getGeminiApiKey();

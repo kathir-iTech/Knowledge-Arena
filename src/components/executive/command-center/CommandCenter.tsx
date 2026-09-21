@@ -27,7 +27,8 @@ import { Radar, Eye } from 'lucide-react';
 
 function toMillis(value: unknown): number | null {
   if (typeof value === 'number') return value;
-  if (value && typeof (value as any).toMillis === 'function') return (value as any).toMillis();
+  const ts = value as { toMillis?: () => number };
+  if (value && typeof ts.toMillis === 'function') return ts.toMillis();
   return null;
 }
 

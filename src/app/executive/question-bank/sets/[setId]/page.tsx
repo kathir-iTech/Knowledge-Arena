@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -140,7 +140,7 @@ export default function QuizSetDetailPage({ params }: { params: Promise<{ setId:
     } finally {
       setLoading(false);
     }
-  }, [auth, id, getToken]);
+    }, [id, getToken]);
 
   useEffect(() => {
     if (id) fetchSet();

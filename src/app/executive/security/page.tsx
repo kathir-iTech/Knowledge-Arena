@@ -140,6 +140,11 @@ export default function SecurityLogsPage() {
   useEffect(() => {
     setPage(1);
     fetchLogs(false);
+    // fetchLogs intentionally excluded: it is rebuilt when pagination state
+    // (page/nextCursor) changes, so depending on it would refire this effect
+    // on every "load more" and reset the list to page 1 in a loop. Filter
+    // changes are the only intended trigger; pagination calls it directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventFilter]);
 
   const loadMore = () => {

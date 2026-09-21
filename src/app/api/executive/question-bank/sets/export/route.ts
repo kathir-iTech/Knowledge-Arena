@@ -63,8 +63,9 @@ export async function POST(req: NextRequest) {
         'Content-Disposition': `attachment; filename="quiz-sets-${Date.now()}.json"`,
       },
     });
-  } catch (err: any) {
-    console.error('[QuizSets BULK EXPORT] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuizSets BULK EXPORT] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

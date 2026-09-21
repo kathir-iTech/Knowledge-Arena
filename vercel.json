@@ -13,6 +13,14 @@
     {
       "path": "/api/cron/forge-worker",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/search-df",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/spaced-repetition",
+      "schedule": "30 9 * * *"
     }
   ]
 }

@@ -1,0 +1,56 @@
+#!/bin/sh
+# Quorena pre-push verification gate.
+#
+# Runs before every `git push` and aborts the push if any gate fails:
+#   1. lint        — enforced as a RATCHET: the live error count must not
+#                    exceed .lint-baseline (currently 389). New code cannot
+#                    increase debt; reducing the backlog is always allowed.
+#   2. typecheck   — hard gate.
+#   3. build       — hard gate (production build, same as CI).
+#
+# Skip (not recommended) with:  git push --no-verify
+#
+# Requires: node, npm, and dependencies installed.
+
+set -e
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+baseline_file="scripts/git-hooks/.lint-baseline"
+tmp_out=".lint-gate-output.tmp"
+
+if [ ! -f "$baseline_file" ]; then
+  echo "pre-push: missing baseline file $baseline_file — run the hook installer."
+  exit 1
+fi
+baseline="$(cat "$baseline_file")"
+
+cleanup() {
+  rm -f "$tmp_out"
+}
+trap cleanup EXIT INT TERM
+
+echo "== [1/3] ESLint (ratchet vs baseline $baseline) =="
+if npm run lint > "$tmp_out" 2>&1; then
+  echo "Lint clean (0 errors)."
+else
+  count="$(grep -c 'Error:' "$tmp_out" 2>/dev/null || true)"
+  if [ -z "$count" ]; then count=0; fi
+  if [ "$count" -gt "$baseline" ]; then
+    echo "FAIL: lint errors ($count) exceed the tracked baseline ($baseline)."
+    echo "New code must not add violations. Existing backlog is refactored in"
+    echo "localized cycles; update scripts/git-hooks/.lint-baseline only when a"
+    echo "ruleset change legitimately alters the count."
+    exit 1
+  fi
+  echo "Lint backlog: $count errors (baseline $baseline) — no new debt introduced."
+fi
+
+echo "== [2/3] TypeScript typecheck =="
+npm run typecheck
+
+echo "== [3/3] Production build =="
+CI=true npm run build
+
+echo "pre-push: all gates passed."

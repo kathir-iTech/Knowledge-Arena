@@ -70,8 +70,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ set
     });
 
     return NextResponse.json({ success: true, count: newIds.length, setId: encodeSetId(`i:${sessionId}`) });
-  } catch (err: any) {
-    console.error('[QuizSets DUPLICATE] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuizSets DUPLICATE] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

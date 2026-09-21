@@ -70,8 +70,9 @@ export async function GET(req: NextRequest) {
       messages,
       nextCursor: snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null,
     });
-  } catch (err: any) {
-    console.error('[Messages GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Messages GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -91,7 +92,6 @@ export async function POST(req: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
 
     const { text, attachments, idempotencyKey } = await req.json();
-    console.log('[MSG-API] POST message, conv:', convId, 'text:', text?.substring(0, 50), 'attachments:', attachments?.length, 'idempotencyKey:', idempotencyKey);
     if (!text?.trim() && (!attachments || attachments.length === 0)) {
       return NextResponse.json({ error: 'Message text or attachment is required' }, { status: 400 });
     }
@@ -148,11 +148,9 @@ export async function POST(req: NextRequest) {
 
       transaction.update(verified.convRef, updateData);
 
-      console.log('[MSG-API] Message written:', msgRef.id, 'conv:', convId, 'path:', verified.convRef.path + '/messages/' + msgRef.id);
       return { id: msgRef.id, ...msgData };
     });
 
-    console.log('[MSG-API] POST success, conv:', convId, 'result id:', result.id);
     await auditService.record({
       timestamp: Date.now(),
       actor: verified.auth.uid,
@@ -187,8 +185,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ message: result });
-  } catch (err: any) {
-    console.error('[Messages POST] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Messages POST] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

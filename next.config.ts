@@ -24,12 +24,25 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   eslint: {
+    // Kept true intentionally: the codebase carries pre-existing
+    // no-explicit-any debt in Firestore data-mapping layers (services/,
+    // AI flows) plus a few exhaustive-deps cases. `next lint --fix` cleared
+    // the auto-fixable subset (prefer-const). Flipping this to false would
+    // fail `npm run build` until the any-debt is typed out file by file.
     ignoreDuringBuilds: true,
   },
   experimental: {
     serverActions: {
       bodySizeLimit: '20mb',
     },
+    // SECURITY (CSP nonce): do NOT enable Partial Prerendering (experimental.ppr)
+    // or any static-shell/`force-static` optimization for HTML routes. The
+    // middleware injects a per-request Content-Security-Policy + nonce and the
+    // root layout calls `await connection()` to force request-time rendering.
+    // A PPR static shell bakes the framework scripts WITHOUT a nonce, which the
+    // strict policy would then block, hard-failing the app in production.
+    // See src/app/layout.tsx and src/middleware.ts.
+    ppr: false,
   },
   // pdfjs-dist contains `new URL('pdf.worker.mjs', import.meta.url)` which
   // Webpack tries to bundle as `/var/task/.next/server/chunks/pdf.worker.mjs`
@@ -38,22 +51,12 @@ const nextConfig: NextConfig = {
   // @napi-rs/canvas is also external to avoid bundling the .node binary.
   serverExternalPackages: ['@napi-rs/canvas', 'pdfjs-dist'],
   images: {
+    // Only Google profile photos are loaded from remote origins
+    // (Gladiator Google sign-in avatars). No placeholder/CDN hosts needed.
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'placehold.co',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'picsum.photos',
+        hostname: 'lh3.googleusercontent.com',
         port: '',
         pathname: '/**',
       },

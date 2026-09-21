@@ -1,33 +1,10 @@
 'use client';
 
 import { initializeFirebase } from '@/firebase';
-import {
-  doc,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  writeBatch,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { doc, getDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { generateRoomCode } from '@/lib/utils';
-import {
-  COLLECTIONS,
-  QUIZ_CONFIG_SETTINGS_DOC,
-  QUIZ_WAITING,
-  PS_PLAYING,
-  ROOM_CODE_RETRIES,
-  MAX_BATCH_OPS,
-  MIN_TITLE_LENGTH,
-  MIN_QUESTIONS,
-  DEFAULT_SCORE_MAX,
-  DEFAULT_SCORE_MIN,
-  DEFAULT_WRONG_PENALTY,
-  DEFAULT_SKIP_PENALTY,
-  DEFAULT_TIME_DECAY,
-  DEFAULT_STREAK_MULTIPLIER,
-  DEFAULT_TIME_LIMIT_SECONDS,
-} from '@/lib/constants';
+import { COLLECTIONS, QUIZ_CONFIG_SETTINGS_DOC, QUIZ_WAITING, PS_PLAYING, ROOM_CODE_RETRIES, MAX_BATCH_OPS, MIN_TITLE_LENGTH, DEFAULT_SCORE_MAX, DEFAULT_SCORE_MIN, DEFAULT_WRONG_PENALTY, DEFAULT_SKIP_PENALTY, DEFAULT_TIME_DECAY, DEFAULT_STREAK_MULTIPLIER, DEFAULT_TIME_LIMIT_SECONDS } from '@/lib/constants';
 
 function getFirestore() {
   return initializeFirebase().firestore;
@@ -114,7 +91,7 @@ export const arenaCreationService = {
     try {
       const commanderSnap = await getDoc(doc(db, COLLECTIONS.USERS, createdBy));
       if (commanderSnap.exists()) {
-        const raw = (commanderSnap.data() as any).institution_domain;
+        const raw = commanderSnap.data()?.institution_domain;
         if (typeof raw === 'string' && raw.trim() !== '') {
           const t = raw.trim().toLowerCase();
           if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(t)) allowedDomain = t;

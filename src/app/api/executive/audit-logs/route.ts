@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
       snap = await query.get();
     }
 
-    let docs = snap.docs;
+    const docs = snap.docs;
 
     // Gather filter metadata from the full window (not just the current page)
     const allActions = new Set<string>();
@@ -101,8 +101,9 @@ export async function GET(req: NextRequest) {
         roles: Array.from(allRoles).sort(),
       },
     });
-  } catch (err: any) {
-    console.error('[AuditLogs] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[AuditLogs] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -223,7 +223,7 @@ export function PostBattleAnalysis({ quizId }: { quizId: string }) {
                       </span>
                       {q.mostCommonWrongAnswer && (
                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-destructive/10 text-destructive border border-destructive/20">
-                          Most wrong: "{q.mostCommonWrongAnswer.option}" ×{q.mostCommonWrongAnswer.count}
+                          Most wrong: &quot;{q.mostCommonWrongAnswer.option}&quot; ×{q.mostCommonWrongAnswer.count}
                         </span>
                       )}
                     </div>

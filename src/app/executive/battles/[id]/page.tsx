@@ -9,11 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useRouter } from 'next/navigation';
-import {
-  Swords, Trophy, Users, CheckCircle2, XCircle, Timer, Target,
-  Shield, ChevronRight, AlertTriangle, RefreshCw, Activity, Clock,
-  BarChart3, Award, Crown,
-} from 'lucide-react';
+import { Trophy, Users, CheckCircle2, XCircle, Timer, Target, Shield, ChevronRight, AlertTriangle, RefreshCw, Activity, Clock, BarChart3, Award, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BattleReplay } from '@/components/battle/BattleReplay';
 

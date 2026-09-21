@@ -98,7 +98,7 @@ const arenaStatusBadge: Record<string, string> = {
   paused: 'border-border/60 text-muted-foreground bg-muted/40',
 };
 
-export default function UserDetail({ uid, expectedRole }: { uid: string; expectedRole?: string }) {
+export default function UserDetail({ uid }: { uid: string }) {
   const { user } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();

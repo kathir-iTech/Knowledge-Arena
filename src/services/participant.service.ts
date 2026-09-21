@@ -1,23 +1,7 @@
 'use client';
 
 import { initializeFirebase } from '@/firebase';
-import {
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  collection,
-  collectionGroup,
-  documentId,
-  onSnapshot,
-  query,
-  where,
-  writeBatch,
-  runTransaction,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { doc, getDoc, getDocs, updateDoc, deleteDoc, collection, collectionGroup, documentId, onSnapshot, query, where, writeBatch, runTransaction, serverTimestamp } from 'firebase/firestore';
 import type { ValidatedParticipant } from '@/lib/schemas';
 import {
   COLLECTIONS,
@@ -92,14 +76,14 @@ export const participantService = {
       // authority the backend rule uses (request.auth.token.email) — so a stale or
       // missing Firestore user-doc `email` can never diverge from the authoritative
       // domain gate. Doc email is still read above for the disabled check.
-      const allowedDomainRaw = (quizData as any).allowed_gladiator_domain as string | null | undefined;
+      const allowedDomainRaw = quizData.allowed_gladiator_domain as string | null | undefined;
       const allowedDomain = typeof allowedDomainRaw === 'string' ? allowedDomainRaw.trim().toLowerCase() : '';
       if (allowedDomain && userId !== quizData.created_by) {
         const tokenEmail = initializeFirebase().auth.currentUser?.email;
         const emailRaw =
           typeof tokenEmail === 'string' && tokenEmail
             ? tokenEmail
-            : (userSnap.exists() ? (userSnap.data() as any).email : null);
+            : (userSnap.exists() ? userSnap.data()?.email : null);
         const emailLower = typeof emailRaw === 'string' ? emailRaw.trim().toLowerCase() : '';
         const parts = emailLower.split('@');
         const emailDomain = parts.length === 2 ? parts[1] : '';

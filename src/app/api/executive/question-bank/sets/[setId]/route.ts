@@ -51,8 +51,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ setI
     });
 
     return NextResponse.json({ set: { ...set, questions } });
-  } catch (err: any) {
-    console.error('[QuizSets GET detail] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuizSets GET detail] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -118,8 +119,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ se
     });
 
     return NextResponse.json({ success: true, setId, count: docs.length });
-  } catch (err: any) {
-    console.error('[QuizSets PATCH] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuizSets PATCH] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -161,8 +163,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     });
 
     return NextResponse.json({ success: true, setId, deleted: docs.length });
-  } catch (err: any) {
-    console.error('[QuizSets DELETE] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuizSets DELETE] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

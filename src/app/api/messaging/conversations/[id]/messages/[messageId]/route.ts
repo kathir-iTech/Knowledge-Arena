@@ -54,8 +54,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Message PATCH] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Message PATCH] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -99,8 +100,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await msgRef.delete();
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Message DELETE] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Message DELETE] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { quizService } from '@/services/quiz.service';
 import { participantService } from '@/services/participant.service';
 import { Swords, Users, Calendar, ArrowLeft, Search, Download, Star, Trophy, AlertTriangle, RefreshCw, BarChart3 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+
 import { useRouter } from 'next/navigation';
 import type { ValidatedQuiz, ValidatedParticipant } from '@/lib/schemas';
 

@@ -28,8 +28,9 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ logs, nextCursor, hasMore });
-  } catch (err: any) {
-    console.error('[AiLogs GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[AiLogs GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

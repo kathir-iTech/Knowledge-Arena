@@ -60,8 +60,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ setI
         'Content-Disposition': `attachment; filename="${safeName}.json"`,
       },
     });
-  } catch (err: any) {
-    console.error('[QuizSets EXPORT] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[QuizSets EXPORT] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

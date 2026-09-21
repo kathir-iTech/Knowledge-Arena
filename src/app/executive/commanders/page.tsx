@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar, Key, Trash2, CheckSquare, ChevronRight, Copy, CheckCircle2 as CheckCircle, AlertCircle } from 'lucide-react';
+import { Shield, Plus, Search, Check, Ban, Swords, Clock, Calendar, Key, Trash2, ChevronRight, Copy, CheckCircle2 as CheckCircle, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -169,8 +169,9 @@ export default function CommanderManagementPage() {
       setCreateInstitutionDomain('psgitech.ac.in');
       setCreateErrors({});
       fetchCommanders();
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
+    } catch (err) {
+      const e = err as { message?: string };
+      toast({ variant: 'destructive', title: 'Error', description: e?.message });
     } finally {
       setCreating(false);
     }

@@ -9,8 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, Sparkles, Target, TrendingUp, ChevronRight, Zap, BookOpen, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Sparkles, Target, ChevronRight, BookOpen, AlertTriangle } from 'lucide-react';
+
 import type { QuizRecommendation } from '@/ai/engines/prediction-engine';
 
 export function QuizRecommendations() {

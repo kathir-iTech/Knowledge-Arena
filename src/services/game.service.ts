@@ -14,10 +14,10 @@ import {
   onSnapshot,
   increment,
   runTransaction,
-  serverTimestamp,
   Timestamp,
   writeBatch,
 } from 'firebase/firestore';
+import type { DocumentData, DocumentReference } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import type { QuestionDoc } from '@/lib/schemas';
 import {
@@ -28,11 +28,19 @@ import {
   SCORE_TIMED_BONUS,
   DEFAULT_TIMER_SECONDS,
 } from '@/lib/constants';
+import { getSessionToken } from '@/services/battle.service';
+import {
+  canonicalSubmissionPayload,
+  generateSubmissionNonce,
+  hmacHex,
+  submissionKey,
+} from '@/lib/submit-answer';
 
 function toMillis(val: unknown): number {
   if (typeof val === 'number') return val;
   if (val instanceof Timestamp) return val.toMillis();
-  if (val && typeof (val as any).toMillis === 'function') return (val as any).toMillis();
+  const ts = val as { toMillis?: () => number };
+  if (val && typeof ts.toMillis === 'function') return ts.toMillis();
   return Date.now();
 }
 
@@ -142,7 +150,7 @@ export const questionService = {
         // can use transaction.get() on each ref with proper consistency guarantees.
         // (A full collection-group get inside a transaction is not supported in
         // the Firestore Admin SDK; we pre-fetch and then read individually inside.)
-        let participantRefsOutside: Array<{ ref: any; uid: string }> = [];
+        let participantRefsOutside: Array<{ ref: DocumentReference; uid: string }> = [];
         try {
           const pSnap = await getDocs(
             collection(db, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.PARTICIPANTS)
@@ -157,7 +165,7 @@ export const questionService = {
           const participantRef = ref;
           const pSnap = await transaction.get(ref);
           if (!pSnap.exists()) continue;
-          if ((pSnap.data() as Record<string, any>).status === PS_BLOCKED) continue;
+          if ((pSnap.data() as DocumentData).status === PS_BLOCKED) continue;
 
           const subRef = doc(
             db,
@@ -266,23 +274,49 @@ export const submissionService = {
     if (!submission.user_id) throw new Error('User ID required');
     if (submission.selected_option < 0 || submission.selected_option > 3) throw new Error('Invalid option');
 
-    const db = getFirestore();
-    await setDoc(
-      doc(
-        db,
-        COLLECTIONS.QUIZZES,
-        submission.quiz_id,
-        COLLECTIONS.QUESTIONS,
-        submission.question_id,
-        COLLECTIONS.SUBMISSIONS,
-        submission.user_id
-      ),
-      {
-        question_id: submission.question_id,
-        selected_option: submission.selected_option,
-        submittedAt: serverTimestamp(),
-        clientTime: Date.now(),
-      }
+    // Audit Phase 1 + Phase 2: submissions no longer write Firestore directly.
+    // They go through POST /api/battle/submit which HMAC-verifies the payload
+    // against this participant's battle session token, enforces live-only +
+    // current-question binding + one-shot idempotency server-side, and writes
+    // via the Admin SDK. Client-side Firestore rules lock the submission
+    // subcollection, so a hand-rolled client can never forge a submission.
+    const { auth } = initializeFirebase();
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error('Not authenticated');
+    const sessionToken = getSessionToken(submission.quiz_id);
+    if (!sessionToken) throw new Error('Battle session token missing — please rejoin the battle');
+
+    const nonce = generateSubmissionNonce();
+    const clientTime = Date.now();
+    const signature = await hmacHex(
+      submissionKey(sessionToken, submission.user_id, submission.quiz_id),
+      canonicalSubmissionPayload({
+        quizId: submission.quiz_id,
+        questionId: submission.question_id,
+        selectedOption: submission.selected_option,
+        nonce,
+        clientTime,
+      })
     );
+
+    const res = await fetch('/api/battle/submit', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        quizId: submission.quiz_id,
+        questionId: submission.question_id,
+        selectedOption: submission.selected_option,
+        nonce,
+        clientTime,
+        signature,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error || 'Failed to submit answer');
+    }
   },
 };

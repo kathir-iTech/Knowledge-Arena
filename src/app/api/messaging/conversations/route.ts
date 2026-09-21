@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -22,13 +23,13 @@ export async function GET(req: NextRequest) {
       .limit(200)
       .get();
 
-    let conversations = snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
-      .sort((a: any, b: any) => (b.lastActivity || 0) - (a.lastActivity || 0));
+    let conversations: Array<{ id: string } & DocumentData> = snapshot.docs
+      .map((doc): { id: string } & DocumentData => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
 
     const allUids = new Set<string>();
     for (const conv of conversations) {
-      const participants: string[] = (conv as any).participants || [];
+      const participants: string[] = conv.participants || [];
       for (const uid of participants) allUids.add(uid);
     }
 
@@ -38,11 +39,11 @@ export async function GET(req: NextRequest) {
       const userMap: Record<string, { displayName?: string; email?: string; role?: string; deleted?: boolean }> = {};
       for (const snap of userSnaps) {
         if (snap.exists) {
-          userMap[snap.id] = snap.data() as any;
+          userMap[snap.id] = snap.data() as { displayName?: string; email?: string; role?: string; deleted?: boolean };
         }
       }
 
-      conversations = conversations.filter((conv: any) => {
+      conversations = conversations.filter((conv) => {
         const participants: string[] = conv.participants || [];
         return !participants.some(uid => userMap[uid]?.deleted === true);
       });
@@ -53,15 +54,16 @@ export async function GET(req: NextRequest) {
         participantNames[uid] = user?.displayName || user?.email || 'Unknown User';
       }
 
-      conversations = conversations.map((conv: any) => ({
+      conversations = conversations.map((conv) => ({
         ...conv,
         participantNames,
       }));
     }
 
     return NextResponse.json({ conversations });
-  } catch (err: any) {
-    console.error('[Conversations GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Conversations GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -141,8 +143,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ conversation: result });
-  } catch (err: any) {
-    console.error('[Conversations POST] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Conversations POST] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

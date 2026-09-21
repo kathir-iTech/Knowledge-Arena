@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -23,7 +24,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const quizId = typeof body.quizId === 'string' ? body.quizId.trim() : '';
     const questionId = typeof body.questionId === 'string' ? body.questionId.trim() : '';
-    const targetUserId = typeof body.userId === 'string' ? body.userId.trim() : '';
     if (!quizId || !questionId) {
       return NextResponse.json({ error: 'Missing quizId or questionId' }, { status: 400 });
     }
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const quizRef = db.doc(`quizzes/${quizId}`);
     const quizSnap = await quizRef.get();
     if (!quizSnap.exists) throw new Error('Arena not found');
-    const quiz = quizSnap.data() as Record<string, any>;
+    const quiz = quizSnap.data() as DocumentData;
     const mode = quiz.battle_mode || 'synchronized';
 
     // Verify the question actually belongs to this quiz.
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         );
       }
       const uid = auth.uid;
-      const { allFinished } = await evaluateQuestionForUser(quizId, questionId, uid, uid, 'gladiator');
+      const { allFinished } = await evaluateQuestionForUser(quizId, questionId, uid);
       if (allFinished) {
         await endBattleIfAllFinished(quizId);
       }

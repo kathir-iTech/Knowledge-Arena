@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { WriteResult } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { rateLimiter, getClientIp, buildRateLimitHeaders, Limits } from '@/lib/rate-limiter';
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
         metadata: { commanderId: userRecord.uid },
       });
     } catch (firestoreErr) {
-      console.error('[AdminUsers][POST] Firestore write failed, cleaning up Auth user');
+      console.error('[AdminUsers][POST] Firestore write failed, cleaning up Auth user', firestoreErr);
       await getAdminAuth().deleteUser(userRecord.uid).catch(() => {});
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
@@ -100,9 +101,10 @@ export async function POST(req: NextRequest) {
       email: userRecord.email,
       displayName: userRecord.displayName,
     });
-  } catch (err: any) {
-    const message = err?.message || 'Failed to create user';
-    console.error('[AdminUsers][POST] Error:', err?.name, err?.code);
+  } catch (err) {
+    const e = err as { message?: string; name?: string; code?: string };
+    const message = e?.message || 'Failed to create user';
+    console.error('[AdminUsers][POST] Error:', e?.name, e?.code);
     if (message.includes('EMAIL_EXISTS')) {
       return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
     }
@@ -136,12 +138,27 @@ export async function GET(req: NextRequest) {
         .collection('users')
         .where('role', '==', role)
         .get();
-    } catch (queryErr: any) {
-      console.error('[AdminUsers][GET] Firestore query failed:', queryErr?.name, queryErr?.code);
+      } catch (queryErr) {
+        const e = queryErr as { name?: string; code?: string };
+        console.error('[AdminUsers][GET] Firestore query failed:', e?.name, e?.code);
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
-    const users = snapshot.docs
+    type AdminUserRow = {
+      uid: string;
+      email: string | null;
+      displayName: string | null;
+      role: string;
+      institution_domain: string | null; // Part 5A
+      disabled: boolean;
+      createdAt: number | null;
+      // Enrichment added below for commander / gladiator views.
+      arenaCount?: number;
+      lastActive?: number | null;
+      totalBattles?: number;
+      avgScore?: number;
+    };
+    const users: AdminUserRow[] = snapshot.docs
       .filter(doc => !doc.data().deleted)
       .map(doc => {
       const data = doc.data();
@@ -193,11 +210,12 @@ export async function GET(req: NextRequest) {
         }
 
         for (const u of enriched) {
-          (u as any).arenaCount = arenaCounts[u.uid] || 0;
-          (u as any).lastActive = lastActiveMap[u.uid] || null;
+          u.arenaCount = arenaCounts[u.uid] || 0;
+          u.lastActive = lastActiveMap[u.uid] || null;
         }
-      } catch (enrichErr: any) {
-        console.error('[AdminUsers][GET] Commander enrichment failed:', enrichErr?.name, enrichErr?.code);
+        } catch (enrichErr) {
+          const e = enrichErr as { name?: string; code?: string };
+          console.error('[AdminUsers][GET] Commander enrichment failed:', e?.name, e?.code);
       }
     }
 
@@ -229,20 +247,22 @@ export async function GET(req: NextRequest) {
         }
 
         for (const u of enriched) {
-          (u as any).totalBattles = battleCounts[u.uid] || 0;
+          u.totalBattles = battleCounts[u.uid] || 0;
           const totalScore = scoreSums[u.uid] || 0;
           const totalCount = battleCounts[u.uid] || 0;
-          (u as any).avgScore = totalCount > 0 ? Math.round(totalScore / totalCount) : 0;
-          (u as any).lastActive = null;
+          u.avgScore = totalCount > 0 ? Math.round(totalScore / totalCount) : 0;
+          u.lastActive = null;
         }
-      } catch (enrichErr: any) {
-        console.error('[AdminUsers][GET] Gladiator enrichment failed:', enrichErr?.name, enrichErr?.code);
+        } catch (enrichErr) {
+          const e = enrichErr as { name?: string; code?: string };
+          console.error('[AdminUsers][GET] Gladiator enrichment failed:', e?.name, e?.code);
       }
     }
 
     return NextResponse.json({ users: enriched });
-  } catch (err: any) {
-    console.error('[AdminUsers][GET] Unhandled error:', err?.name, err?.message);
+    } catch (err) {
+      const e = err as { message?: string; name?: string };
+      console.error('[AdminUsers][GET] Unhandled error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -254,7 +274,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { uid, disabled, password, resetPassword, displayName, institution_domain, institutionDomain } = await req.json();
+    const { uid, disabled, password, resetPassword, displayName, role, institution_domain, institutionDomain } = await req.json();
 
     if (!uid) {
       return NextResponse.json({ error: 'uid is required' }, { status: 400 });
@@ -275,6 +295,7 @@ export async function PATCH(req: NextRequest) {
     if (typeof disabled === 'boolean') {
       await getAdminDb().collection('users').doc(uid).set({ disabled }, { merge: true });
       await getAdminAuth().updateUser(uid, { disabled });
+      await getAdminAuth().revokeRefreshTokens(uid);
       await auditService.record({
         timestamp: Date.now(),
         actor: auth.uid,
@@ -301,12 +322,13 @@ export async function PATCH(req: NextRequest) {
         if (!passwordCheck.valid) {
           return NextResponse.json({ error: passwordCheck.errors.join(' ') }, { status: 400 });
         }
-        await getAdminAuth().updateUser(uid, { password });
-        await getAdminDb().collection('users').doc(uid).set(
-          { mustChangePassword: true },
-          { merge: true }
-        );
-        await auditService.record({
+await getAdminAuth().updateUser(uid, { password });
+      await getAdminDb().collection('users').doc(uid).set(
+        { mustChangePassword: true },
+        { merge: true }
+      );
+      await getAdminAuth().revokeRefreshTokens(uid);
+      await auditService.record({
           timestamp: Date.now(),
           actor: auth.uid,
           actorRole: 'executive',
@@ -354,6 +376,29 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: true, uid, displayName: trimmed });
     }
 
+    if (typeof role === 'string' && ['executive', 'commander', 'gladiator'].includes(role)) {
+      const targetDoc = await getAdminDb().collection('users').doc(uid).get();
+      if (!targetDoc.exists) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      const targetRole = targetDoc.data()?.role;
+      if (targetRole === 'executive') {
+        return NextResponse.json({ error: 'Cannot change executive accounts' }, { status: 403 });
+      }
+      await getAdminAuth().setCustomUserClaims(uid, { role });
+      await getAdminDb().collection('users').doc(uid).set({ role }, { merge: true });
+      await getAdminAuth().revokeRefreshTokens(uid);
+      await auditService.record({
+        timestamp: Date.now(),
+        actor: auth.uid,
+        actorRole: 'executive',
+        action: 'role_changed',
+        target: uid,
+        metadata: { newRole: role },
+      });
+      return NextResponse.json({ success: true, uid, role });
+    }
+
     if (typeof institution_domain !== 'undefined' || typeof institutionDomain !== 'undefined') {
       const raw = (institution_domain ?? institutionDomain) as string | null;
       let normalized: string | null = null;
@@ -381,8 +426,9 @@ export async function PATCH(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'No valid operation specified' }, { status: 400 });
-  } catch (err: any) {
-    console.error('[AdminUsers][PATCH] Error:', err?.name, err?.code);
+    } catch (err) {
+      const e = err as { name?: string; code?: string };
+      console.error('[AdminUsers][PATCH] Error:', e?.name, e?.code);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -481,7 +527,7 @@ export async function DELETE(req: NextRequest) {
           .select()
           .get();
         if (!messagesSnap.empty) {
-          const batches: any[] = [];
+          const batches: Array<Promise<WriteResult[]>> = [];
           let batch = db.batch();
           let opCount = 0;
           for (const msgDoc of messagesSnap.docs) {
@@ -531,8 +577,9 @@ export async function DELETE(req: NextRequest) {
           partSnap.docs.forEach(d => partBatch.delete(d.ref));
           await partBatch.commit();
         }
-      } catch (e: any) {
-        console.error('[AdminUsers][DELETE] participant cleanup failed:', e?.name, e?.code);
+        } catch (e) {
+          const qe = e as { name?: string; code?: string };
+          console.error('[AdminUsers][DELETE] participant cleanup failed:', qe?.name, qe?.code);
       }
 
       try {
@@ -544,14 +591,16 @@ export async function DELETE(req: NextRequest) {
           subSnap.docs.forEach(d => subBatch.delete(d.ref));
           await subBatch.commit();
         }
-      } catch (e: any) {
-        console.error('[AdminUsers][DELETE] submission cleanup failed:', e?.name, e?.code);
+        } catch (subErr) {
+          const e = subErr as { name?: string; code?: string };
+          console.error('[AdminUsers][DELETE] submission cleanup failed:', e?.name, e?.code);
       }
     }
 
     return NextResponse.json({ success: true, uid });
-  } catch (err: any) {
-    console.error('[AdminUsers][DELETE] Error:', err?.name, err?.code);
+  } catch (err) {
+    const e = err as { name?: string; code?: string };
+    console.error('[AdminUsers][DELETE] Error:', e?.name, e?.code);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

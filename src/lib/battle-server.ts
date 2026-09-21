@@ -1,5 +1,5 @@
 import { getAdminDb } from '@/lib/firebase-admin';
-import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue, type DocumentData, type DocumentReference, type DocumentSnapshot } from 'firebase-admin/firestore';
 import { NextResponse } from 'next/server';
 import {
   COLLECTIONS,
@@ -51,7 +51,9 @@ export type BattleRole = 'commander' | 'gladiator' | 'executive';
 export function getMs(value: unknown): number {
   if (typeof value === 'number') return value;
   if (value instanceof Timestamp) return value.toMillis();
-  if (value && typeof (value as any).toMillis === 'function') return (value as any).toMillis();
+  if (value && typeof (value as { toMillis?: () => number }).toMillis === 'function') {
+    return (value as { toMillis: () => number }).toMillis();
+  }
   return Date.now();
 }
 
@@ -60,10 +62,10 @@ export async function loadQuizDoc(quizId: string) {
   const ref = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
   const snap = await ref.get();
   if (!snap.exists) throw new Error('Arena not found');
-  return { ref, data: snap.data() as Record<string, any>, exists: true };
+  return { ref, data: snap.data() as DocumentData, exists: true };
 }
 
-export function isCreator(quiz: Record<string, any>, uid: string): boolean {
+export function isCreator(quiz: DocumentData, uid: string): boolean {
   return !!quiz.created_by && quiz.created_by === uid;
 }
 
@@ -79,7 +81,7 @@ export function quizConfigRef(quizId: string) {
 // Returns the raw scoring_config map from the config doc, falling back to a
 // legacy value still sitting on the parent quiz doc (pre-Phase 94 data) when
 // no config document exists yet.
-export function scoringConfigFrom(doc: Record<string, any> | undefined, legacyQuiz?: Record<string, any>): Record<string, any> | null | undefined {
+export function scoringConfigFrom(doc: DocumentData | undefined, legacyQuiz?: DocumentData): DocumentData | null | undefined {
   if (doc && typeof doc.scoring_config !== 'undefined' && doc.scoring_config !== null) {
     return doc.scoring_config;
   }
@@ -102,7 +104,7 @@ export const DEFAULT_GOVERNANCE_CONFIG: GovernanceConfig = {
   anti_cheat_strictness: 'warn_only',
 };
 
-export function normalizeGovernanceConfig(raw?: Record<string, any> | null): GovernanceConfig {
+export function normalizeGovernanceConfig(raw?: DocumentData | null): GovernanceConfig {
   if (!raw) return { ...DEFAULT_GOVERNANCE_CONFIG };
   return {
     reveal_timing: raw.reveal_timing === 'never_during_battle' ? 'never_during_battle' : 'after_timer',
@@ -113,7 +115,7 @@ export function normalizeGovernanceConfig(raw?: Record<string, any> | null): Gov
   };
 }
 
-export function governanceConfigFrom(doc: Record<string, any> | undefined): Record<string, any> | null | undefined {
+export function governanceConfigFrom(doc: DocumentData | undefined): DocumentData | null | undefined {
   if (doc && typeof doc.governance_config !== 'undefined' && doc.governance_config !== null) {
     return doc.governance_config;
   }
@@ -141,7 +143,7 @@ export function battleErrorResponse(err: unknown): NextResponse {
 }
 
 export function normalizeSkipConfig(
-  scoringConfig?: Record<string, any> | null
+  scoringConfig?: DocumentData | null
 ): { skip_penalty: number } {
   const raw = scoringConfig as { skip_penalty?: number } | null | undefined;
   return { skip_penalty: Math.max(0, raw?.skip_penalty ?? 0) };
@@ -357,7 +359,7 @@ export async function abandonBattle(
  */
 export async function sweepStaleLiveArena(
   quizId: string,
-  quiz: Record<string, any>
+  quiz: DocumentData
 ): Promise<boolean> {
   if (quiz.status !== QUIZ_LIVE) return false;
   const lastActivityMs = getMs(quiz.question_start_at);
@@ -378,7 +380,7 @@ export async function sweepStaleLiveArena(
 export async function notifyBattleCompleted(quizId: string): Promise<void> {
   const db = getAdminDb();
   const quizSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
-  const quizData = quizSnap.data() as Record<string, any> | undefined;
+  const quizData = quizSnap.data() as DocumentData | undefined;
   const title: string = typeof quizData?.title === 'string' ? quizData.title : quizId;
   const creatorId: string | undefined = typeof quizData?.created_by === 'string' ? quizData.created_by : undefined;
 
@@ -388,7 +390,7 @@ export async function notifyBattleCompleted(quizId: string): Promise<void> {
     .get();
 
   const gladiators = partsSnap.docs
-    .map(d => ({ id: d.id, data: d.data() as Record<string, any> }))
+    .map(d => ({ id: d.id, data: d.data() as DocumentData }))
     .filter(p => p.id !== creatorId && p.data.status !== PS_BLOCKED);
 
   // Sort by score descending for ranking.
@@ -462,14 +464,14 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
   // Pre-fetch participants outside the transaction so the transaction does
   // not need to do a non-transactional collection get() inside it (which
   // would interleave with writes on the last-question path).
-  let preFetchedParts: Array<{ ref: any; id: string }> | null = null;
+  let preFetchedParts: Array<{ ref: DocumentReference; id: string }> | null = null;
 
   const doAdvance = async (): Promise<void> => {
     await db.runTransaction(async (tx) => {
       const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
       const snap = await tx.get(quizRef);
       if (!snap.exists) throw new Error('Arena not found');
-      const quiz = snap.data() as Record<string, any>;
+      const quiz = snap.data() as DocumentData;
       if (quiz.status !== QUIZ_LIVE && quiz.status !== QUIZ_PAUSED) {
         throw new Error(`Cannot advance a question in state: ${quiz.status}`);
       }
@@ -489,7 +491,7 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
       // Firestore transactions require ALL reads before ANY writes. On the
       // last-question path we must finish gladiators — gather those reads
       // before the quiz update write.
-      let pendingFinishes: Array<{ ref: any; data: Record<string, any> }> = [];
+      const pendingFinishes: Array<{ ref: DocumentReference; data: DocumentData }> = [];
       if (ended) {
         // All reads use tx.get so they are part of the transaction's read set.
         // This ensures the participant finish on last-question path is serialised
@@ -499,7 +501,7 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
         preFetchedParts = partsSnap.docs.map(d => ({ ref: d.ref, id: d.id }));
 
         for (const p of preFetchedParts) {
-          const pSnap: any = await tx.get(p.ref);
+          const pSnap: DocumentSnapshot = await tx.get(p.ref);
           if (!pSnap.exists || p.id === quiz.created_by || pSnap.data()?.status === PS_BLOCKED) continue;
           pendingFinishes.push({
             ref: p.ref,
@@ -508,7 +510,7 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
         }
       }
 
-      const quizUpdate: Record<string, any> = {
+      const quizUpdate: DocumentData = {
         current_question_index: nextIndex,
         question_start_at: ended ? null : now,
       };
@@ -564,22 +566,10 @@ export async function advanceQuestion(quizId: string, expectedFromIndex: number)
   return { nextIndex, ended, alreadyAdvanced };
 }
 
-async function loadQuestions(quizId: string) {
-  const db = getAdminDb();
-  const snap = await db
-    .collection(COLLECTIONS.QUIZZES).doc(quizId)
-    .collection(COLLECTIONS.QUESTIONS)
-    .orderBy('sort_index')
-    .get();
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as { id: string; text: string; options: string[]; timer: number; sort_index: number; scored?: boolean });
-}
-
 export async function evaluateQuestionForUser(
   quizId: string,
   questionId: string,
-  targetUserId: string,
-  actor: string,
-  actorRole: string
+  targetUserId: string
 ): Promise<{ status: string; allFinished: boolean }> {
   const db = getAdminDb();
 
@@ -594,7 +584,7 @@ export async function evaluateQuestionForUser(
     const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
     const quizSnap = await tx.get(quizRef);
     if (!quizSnap.exists) throw new Error('Arena not found');
-    const quiz = quizSnap.data() as Record<string, any>;
+    const quiz = quizSnap.data() as DocumentData;
     if (![QUIZ_LIVE, QUIZ_PAUSED].includes(quiz.status)) {
       throw new Error(`Battle is not live (${quiz.status})`);
     }
@@ -619,7 +609,7 @@ export async function evaluateQuestionForUser(
 
     const cfgSnap = await tx.get(quizConfigRef(quizId));
     const rawGov = governanceConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined);
-    const governance = normalizeGovernanceConfig(rawGov as any);
+    const governance = normalizeGovernanceConfig(rawGov);
     const rawConfig = normalizeScoringConfig(
       scoringConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined, quiz) as ScoringConfig
     );
@@ -630,7 +620,7 @@ export async function evaluateQuestionForUser(
     const partRef = participantRef(quizId, targetUserId);
     const partSnap = await tx.get(partRef);
     if (!partSnap.exists) throw new Error('Participant not found');
-    const participant = partSnap.data() as Record<string, any>;
+    const participant = partSnap.data() as DocumentData;
     if (participant.status === PS_BLOCKED) {
       throw new Error('Participant is blocked from this arena');
     }
@@ -676,7 +666,7 @@ export async function evaluateQuestionForUser(
       const subRef = submissionRef(quizId, questionId, targetUserId);
       const subSnap = await tx.get(subRef);
       if (subSnap.exists) {
-        const sub = subSnap.data() as Record<string, any>;
+        const sub = subSnap.data() as DocumentData;
         const rawSubmittedAt = getMs(sub.submittedAt);
         const submittedAt = Math.max(rawSubmittedAt, participantStart);
         const lateBy = submittedAt - (participantStart + timeLimit);
@@ -726,7 +716,7 @@ export async function evaluateQuestionForUser(
     const nextIdx = idx + 1;
     const finishedNow = nextIdx >= questionCount;
 
-    const update: Record<string, any> = {
+    const update: DocumentData = {
       current_question_index: nextIdx,
       question_start_at: Date.now(),
       answered_question_ids: answered.includes(questionId) ? answered : [...answered, questionId],
@@ -781,7 +771,7 @@ export async function evaluateQuestionForAll(
 
   const quizSnap = await quizRef.get();
   if (!quizSnap.exists) throw new Error('Arena not found');
-  const quiz = quizSnap.data() as Record<string, any>;
+  const quiz = quizSnap.data() as DocumentData;
   if (![QUIZ_LIVE, QUIZ_PAUSED].includes(quiz.status)) {
     throw new Error(`Battle is not live (${quiz.status})`);
   }
@@ -805,7 +795,7 @@ export async function evaluateQuestionForAll(
     .collection(COLLECTIONS.QUIZ_CONFIG).doc(QUIZ_CONFIG_SETTINGS_DOC)
     .get();
   const rawGov2 = governanceConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined);
-  const gov2 = normalizeGovernanceConfig(rawGov2 as any);
+  const gov2 = normalizeGovernanceConfig(rawGov2);
   const rawConfig2 = normalizeScoringConfig(
     scoringConfigFrom(cfgSnap.exists ? cfgSnap.data() : undefined, quiz) as ScoringConfig
   );
@@ -828,11 +818,11 @@ export async function evaluateQuestionForAll(
     // constraint). First pass: gather reads and compute per-participant
     // outcomes; second pass: apply the writes.
     // Phase 99: streak tracking — server-side only (not client).
-    const plans: Array<{ ref: any; scoreToAdd: number; newStreak: number; bestStreak: number }> = [];
+    const plans: Array<{ ref: DocumentReference; scoreToAdd: number; newStreak: number; bestStreak: number }> = [];
     for (const p of partsSnap.docs) {
       const pSnap = await tx.get(p.ref);
       if (!pSnap.exists || pSnap.data()?.status === PS_BLOCKED) continue;
-      const participant = pSnap.data() as Record<string, any>;
+      const participant = pSnap.data() as DocumentData;
       const skipped = Array.isArray(participant.skipped_question_ids)
         ? (participant.skipped_question_ids as string[])
         : [];
@@ -844,7 +834,7 @@ export async function evaluateQuestionForAll(
       const subSnap = await tx.get(submissionRef(quizId, questionId, p.id));
       if (!subSnap.exists) continue;
 
-      const sub = subSnap.data() as Record<string, any>;
+      const sub = subSnap.data() as DocumentData;
       const rawSubmittedAt = getMs(sub.submittedAt);
       const submittedAt = Math.max(rawSubmittedAt, questionStartAt);
       const lateBy = submittedAt - (questionStartAt + timeLimit);
@@ -890,7 +880,7 @@ export async function evaluateQuestionForAll(
       plans.push({ ref: p.ref, scoreToAdd, newStreak, bestStreak: Math.max(bestStreak, newStreak) });
     }
     for (const plan of plans) {
-      const update: Record<string, any> = {
+      const update: DocumentData = {
         current_streak: plan.newStreak,
         best_streak: plan.bestStreak,
       };
@@ -910,7 +900,7 @@ export async function endBattleIfAllFinished(quizId: string): Promise<boolean> {
   const db = getAdminDb();
   const quizSnap = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
   if (!quizSnap.exists) return false;
-  const quiz = quizSnap.data() as Record<string, any>;
+  const quiz = quizSnap.data() as DocumentData;
   if (quiz.status === QUIZ_FINISHED || quiz.status === QUIZ_ARCHIVED) return true;
   if (quiz.status !== QUIZ_LIVE && quiz.status !== QUIZ_PAUSED) return false;
 

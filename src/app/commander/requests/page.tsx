@@ -115,11 +115,11 @@ export default function CommanderRequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, auth]);
+    }, [auth]);
 
-  useEffect(() => {
-    if (user) fetchRequests();
-  }, [user, fetchRequests]);
+    useEffect(() => {
+      if (user) fetchRequests();
+    }, [user, fetchRequests]);
 
   useEffect(() => {
     if (highlightId && requests.length > 0) {
@@ -136,6 +136,10 @@ export default function CommanderRequestsPage() {
       const file = files[i];
       if (file.size > MAX_FILE_SIZE) {
         toast({ variant: 'destructive', title: 'File too large', description: `${file.name} exceeds 500KB limit.` });
+        continue;
+      }
+      if (!ACCEPTED_TYPES.includes(file.type)) {
+        toast({ variant: 'destructive', title: 'Unsupported file type', description: `${file.name} must be PDF, CSV, JSON, XLSX, or TXT.` });
         continue;
       }
       const data = await new Promise<string>((resolve) => {
@@ -226,7 +230,7 @@ export default function CommanderRequestsPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <Inbox className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-            <p className="text-base text-muted-foreground mb-4">You haven't submitted any requests yet.</p>
+            <p className="text-base text-muted-foreground mb-4">You haven&apos;t submitted any requests yet.</p>
             <Button onClick={() => setShowCreateDialog(true)}>
               <Plus className="w-4 h-4 mr-2" />Submit Your First Request
             </Button>

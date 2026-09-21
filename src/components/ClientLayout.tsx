@@ -11,21 +11,21 @@ import { Button } from '@/components/ui/button';
 import { ROLE_HOME, isValidRole } from '@/lib/auth-redirect';
 import { useToast } from '@/hooks/use-toast';
 
+const SPECIAL_PAGES = ['/kicked', '/cheating-detected'];
+
 function ClientLayoutInner({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, authError, clearAuthError, logout } = useAuth() as any;
+  const { user, isLoading, authError, clearAuthError, logout } = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
   const redirecting = useRef<string | null>(null);
 
-  const specialPages = ['/kicked', '/cheating-detected'];
-
   useEffect(() => {
     if (isLoading) return;
 
     const currentPath = pathname;
-    if (specialPages.includes(currentPath)) {
+    if (SPECIAL_PAGES.includes(currentPath)) {
       redirecting.current = null;
       return;
     }
@@ -120,7 +120,7 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     </>
   );
 
-  if (specialPages.includes(pathname)) return shared;
+  if (SPECIAL_PAGES.includes(pathname)) return shared;
   if (!user && (pathname === '/' || pathname === '/login')) return shared;
   if (user && pathname.startsWith('/battle')) return shared;
   if (user) return shared;

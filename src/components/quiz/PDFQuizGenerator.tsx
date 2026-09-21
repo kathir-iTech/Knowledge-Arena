@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { FileText, Loader2, Upload, X, Sparkles, AlertCircle, Key, RefreshCw, Check, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { generateQuizFromExtracted, createForgeJob, runForgeTick } from '@/ai/flows/generate-quiz-pdf-flow';
+import { createForgeJob, runForgeTick } from '@/ai/flows/generate-quiz-pdf-flow';
 import { prepareDocuments, type PreparedDocument } from '@/lib/prepare-documents';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';

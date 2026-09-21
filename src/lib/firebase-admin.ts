@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp, cert, applicationDefault } from 'firebase-admin/app';
+import { initializeApp, getApps, getApp, cert, applicationDefault, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getDatabase, type Database } from 'firebase-admin/database';
@@ -19,8 +19,22 @@ function loadServiceAccountKey(): string | null {
   return null;
 }
 
+const EMULATOR_PROJECT_ID = 'demo-quorena';
+
+function isEmulatorMode(): boolean {
+  return Boolean(
+    process.env.FIRESTORE_EMULATOR_HOST ||
+    process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+    process.env.FIREBASE_DATABASE_EMULATOR_HOST
+  );
+}
+
 function initAdmin() {
   if (getApps().length) return getApp();
+
+  if (isEmulatorMode()) {
+    return initializeApp({ projectId: EMULATOR_PROJECT_ID });
+  }
 
   const raw = loadServiceAccountKey();
   if (raw) {
@@ -58,7 +72,7 @@ function initAdmin() {
     (parsed as Record<string, string>).private_key = (parsed as Record<string, string>).private_key.replace(/\\n/g, '\n');
 
     try {
-      return initializeApp({ credential: cert(parsed as any), databaseURL: initDatabaseUrl() });
+      return initializeApp({ credential: cert(parsed as unknown as ServiceAccount), databaseURL: initDatabaseUrl() });
     } catch (e) {
       throw new Error(`Firebase Admin SDK: Initialization with service account failed. ${(e as Error).message}`);
     }
@@ -66,8 +80,9 @@ function initAdmin() {
 
   try {
     return initializeApp({ credential: applicationDefault(), projectId: firebaseConfig.projectId, databaseURL: initDatabaseUrl() });
-  } catch (e: any) {
-    const msg = e?.message || '';
+  } catch (e) {
+    const err = e as { message?: string };
+    const msg = err?.message || '';
     if (msg.includes('Could not load the default credentials') || msg.includes('Application Default Credentials')) {
       throw new Error(
         'Firebase Admin SDK: FIREBASE_SERVICE_ACCOUNT_KEY is not set and ADC is unavailable. ' +
@@ -80,10 +95,14 @@ function initAdmin() {
   }
 }
 
-const globalForFirebase = globalThis as any;
-let _db = globalForFirebase.__firebaseDb as Firestore | undefined;
-let _auth = globalForFirebase.__firebaseAuth as ReturnType<typeof getAuth> | undefined;
-let _rtdb = globalForFirebase.__firebaseRtdb as Database | undefined;
+const globalForFirebase = globalThis as unknown as {
+  __firebaseDb?: Firestore;
+  __firebaseAuth?: ReturnType<typeof getAuth>;
+  __firebaseRtdb?: Database;
+};
+let _db = globalForFirebase.__firebaseDb;
+let _auth = globalForFirebase.__firebaseAuth;
+let _rtdb = globalForFirebase.__firebaseRtdb;
 
 export function getAdminDb() {
   if (_db) return _db;

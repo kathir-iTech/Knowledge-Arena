@@ -39,8 +39,9 @@ export async function POST(req: NextRequest) {
     await convRef.update(updateData);
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[ConversationRead POST] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[ConversationRead POST] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

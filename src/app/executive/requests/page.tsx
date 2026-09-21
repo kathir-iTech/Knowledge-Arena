@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Inbox, Check, X, MessageSquare, Search, Paperclip, Download, Archive, MoreHorizontal, FileText, Image as ImageIcon, FileType, ExternalLink } from 'lucide-react';
+import { Inbox, Check, X, MessageSquare, Search, Paperclip, Download, Archive, FileText, Image as ImageIcon, FileType, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -85,7 +85,6 @@ export default function ExecutiveRequestsPage() {
   const [comment, setComment] = useState('');
   const [replyAttachments, setReplyAttachments] = useState<Attachment[]>([]);
   const [processing, setProcessing] = useState(false);
-  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const fetchRequests = useCallback(async () => {
@@ -104,11 +103,11 @@ export default function ExecutiveRequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast, statusFilter]);
+  }, [toast, statusFilter, auth.currentUser]);
 
   useEffect(() => {
     if (user) fetchRequests();
-  }, [user, fetchRequests]);
+  }, [user, fetchRequests, auth.currentUser]);
 
   const handleStatusUpdate = async (id: string, newStatus: string) => {
     setProcessing(true);

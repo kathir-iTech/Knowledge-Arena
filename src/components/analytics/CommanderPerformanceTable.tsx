@@ -69,7 +69,7 @@ export function CommanderPerformanceTable() {
       const map = new Map<string, CommanderRow>();
 
       // Optional: try to enrich commander names from users collection (best-effort, no cache)
-      let userNameMap = new Map<string, string>();
+      const userNameMap = new Map<string, string>();
       try {
         const usersSnap = await getDocs(collection(firestore, 'users'));
         for (const u of usersSnap.docs) {
@@ -124,7 +124,12 @@ export function CommanderPerformanceTable() {
     } finally {
       setLoading(false);
     }
-  }, [firestore, refreshNonce]);
+    // refreshNonce is intentionally listed although the callback body does not
+    // read it: bumping it creates a new callback identity, which retriggers the
+    // fetch effect below and powers the manual Refresh buttons. Removing it
+    // would silently break refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [firestore, refreshNonce]);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,8 +156,8 @@ export function CommanderPerformanceTable() {
     if (!rows) return [];
     const copy = [...rows];
     copy.sort((a, b) => {
-      let av: string | number = a[sortKey];
-      let bv: string | number = b[sortKey];
+      const av: string | number = a[sortKey];
+      const bv: string | number = b[sortKey];
       if (typeof av === 'string' && typeof bv === 'string') {
         const cmp = av.localeCompare(bv);
         return sortDir === 'asc' ? cmp : -cmp;

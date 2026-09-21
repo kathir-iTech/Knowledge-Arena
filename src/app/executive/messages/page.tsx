@@ -15,12 +15,12 @@ import { cn } from '@/lib/utils';
 import {
   MessageSquare, Send, Search, Plus, ArrowLeft,
   Loader2, Megaphone, CheckCheck, RefreshCw, WifiOff, Paperclip, X, Download,
-  FileText, ChevronDown, Trash2, Pencil, Check, Edit
+  FileText, ChevronDown, Trash2, Pencil, Check
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from '@/components/ui/dialog';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Conversation {
@@ -106,7 +106,6 @@ export default function ExecutiveMessagesPage() {
   const [announcementText, setAnnouncementText] = useState('');
   const [sendingAnnouncement, setSendingAnnouncement] = useState(false);
   const [offline, setOffline] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
   const [showingMobileList, setShowingMobileList] = useState(true);
   const [showCompose, setShowCompose] = useState(false);
   const [commanders, setCommanders] = useState<CommanderUser[]>([]);
@@ -126,7 +125,6 @@ export default function ExecutiveMessagesPage() {
   const [announcementsError, setAnnouncementsError] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
   const typingWriteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const typingUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     setOffline(!navigator.onLine);
@@ -510,14 +508,20 @@ export default function ExecutiveMessagesPage() {
     }
   };
 
-  const getOtherParticipantId = (conv: Conversation | undefined) =>
-    (conv?.participants || []).find(p => p !== user?.id) || '';
+  const getOtherParticipantId = useCallback(
+    (conv: Conversation | undefined) =>
+      (conv?.participants || []).find(p => p !== user?.id) || '',
+    [user?.id]
+  );
 
-  const getOtherParticipantName = (conv: Conversation | undefined) => {
-    if (!conv) return 'Unknown';
-    const otherId = getOtherParticipantId(conv);
-    return conv.participantNames?.[otherId] || 'Commander';
-  };
+  const getOtherParticipantName = useCallback(
+    (conv: Conversation | undefined) => {
+      if (!conv) return 'Unknown';
+      const otherId = getOtherParticipantId(conv);
+      return conv.participantNames?.[otherId] || 'Commander';
+    },
+    [getOtherParticipantId]
+  );
 
   const filteredConversations = useMemo(() => {
     if (!sidebarSearch) return conversations;
@@ -527,7 +531,7 @@ export default function ExecutiveMessagesPage() {
       const lastMsgText = c.lastMessage?.text?.toLowerCase() || '';
       return otherName.includes(search) || lastMsgText.includes(search);
     });
-  }, [conversations, sidebarSearch]);
+  }, [conversations, sidebarSearch, getOtherParticipantName]);
 
   const activeConv = useMemo(() => conversations.find(c => c.id === activeConvId), [conversations, activeConvId]);
 
@@ -779,6 +783,8 @@ export default function ExecutiveMessagesPage() {
                                               onClick={() => setImagePreview(f.data)}
                                               className="block max-w-[200px] rounded-lg overflow-hidden border border-border/30 hover:opacity-90 transition-opacity"
                                             >
+                                              {/* next/image cannot optimize local data-URI attachments; plain img is correct. */}
+                                              {/* eslint-disable-next-line @next/next/no-img-element */}
                                               <img
                                                 src={f.data}
                                                 alt={f.name}
@@ -1084,6 +1090,9 @@ export default function ExecutiveMessagesPage() {
       <Dialog open={!!imagePreview} onOpenChange={() => setImagePreview(null)}>
         <DialogContent className="sm:max-w-3xl">
           {imagePreview && (
+            // next/image cannot optimize blob:/data: local previews (no remote
+            // loader applies); a plain img is correct here.
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={imagePreview} alt="Preview" className="w-full h-auto max-h-[80vh] object-contain rounded-lg" />
           )}
         </DialogContent>

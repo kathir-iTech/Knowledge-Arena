@@ -5,9 +5,9 @@ import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, Sparkles, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
+
 import { useFirebase } from '@/firebase';
-import { Skeleton } from '@/components/ui/skeleton';
+
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { generateQuizFromPDF, generateQuizFromExtracted } from '@/ai/flows/generate-quiz-pdf-flow';

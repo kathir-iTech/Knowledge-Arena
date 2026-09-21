@@ -49,8 +49,9 @@ export async function GET(req: NextRequest) {
       },
       recentActivity: recentActivity.slice(0, 20),
     }, { headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=120' } });
-  } catch (err: any) {
-    console.error('[Profile] Error:', err?.message);
+  } catch (err) {
+    const e = err as { message?: string };
+    console.error('[Profile] Error:', e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -106,8 +107,9 @@ export async function PATCH(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Profile] Update error:', err?.message);
+  } catch (err) {
+    const e = err as { message?: string };
+    console.error('[Profile] Update error:', e?.message);
     return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
   }
 }

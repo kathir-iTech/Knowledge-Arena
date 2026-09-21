@@ -12,7 +12,7 @@ import {
   Megaphone, CheckCircle2, AlertTriangle, RefreshCw, Users, User, Clock,
   ArrowLeft, Send,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+
 import { useRouter } from 'next/navigation';
 
 interface AnnouncementDetail {

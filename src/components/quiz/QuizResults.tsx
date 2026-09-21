@@ -135,9 +135,9 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
     } catch {
       setMindMapError('Failed to generate mind map');
     } finally {
-      setMindMapLoading(false);
-    }
-  }, [mindMapData, quiz.id, user]);
+    setMindMapLoading(false);
+  }
+  }, [mindMapData, quiz.id, auth.currentUser]);
 
   const getParticipantLabel = (p: ValidatedParticipant) => {
     return p.name || p.user_id.slice(0, 8);
@@ -155,7 +155,7 @@ export default function QuizResults({ quiz, currentUserId }: { quiz: ValidatedQu
         <Button variant="ghost" onClick={() => setShowReview(false)} className="flex items-center gap-2">
           &larr; Back to Results
         </Button>
-        <QuizReview quizId={quiz.id} questionStartAt={quiz.question_start_at} />
+        <QuizReview quizId={quiz.id} />
       </div>
     );
   }

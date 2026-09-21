@@ -21,7 +21,7 @@ import WaitingRoom from '@/components/quiz/WaitingRoom';
 import { Button } from '../ui/button';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import dynamic from 'next/dynamic';
-import { Suspense } from 'react';
+
 
 const LiveQuiz = dynamic(
   () => import('@/components/quiz/LiveQuiz').then(m => ({ default: m.default })),
@@ -141,7 +141,7 @@ export default function BattleRoomLoader() {
     if (!firestore || !quizId) return;
     const cfgRef = doc(firestore, COLLECTIONS.QUIZZES, quizId, COLLECTIONS.QUIZ_CONFIG, QUIZ_CONFIG_SETTINGS_DOC);
     const unsub = onSnapshot(cfgRef, (snap) => {
-      const gc = (snap.data() as any)?.governance_config;
+      const gc = snap.data()?.governance_config;
       if (gc && typeof gc.allow_late_join === 'boolean') setAllowLateJoin(gc.allow_late_join);
       else setAllowLateJoin(true);
     }, () => {});
@@ -271,6 +271,10 @@ export default function BattleRoomLoader() {
     if (!user || !quizId) return;
     const role = user.role === 'gladiator' ? 'gladiator' : 'commander';
     return presenceService.setPresence(quizId, user.id, role);
+    // `user` itself intentionally excluded: only its stable primitives are
+    // tracked. Depending on the whole object would tear down and re-register
+    // presence on every profile refetch, flapping the RTDB node for everyone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId, user?.id, user?.role]);
 
   useEffect(() => {

@@ -82,8 +82,9 @@ export function SystemInsightsSection({ getToken }: { getToken?: () => Promise<s
         if (!res.ok) throw new Error('Failed to load insights');
         const data = await res.json();
         if (!cancelled) setInsights(data);
-      } catch (err: any) {
-        if (!cancelled) setError(err?.message || 'Failed to load insights');
+      } catch (err) {
+        const e = err as { message?: string };
+        if (!cancelled) setError(e?.message || 'Failed to load insights');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -192,10 +193,10 @@ export function SystemInsightsSection({ getToken }: { getToken?: () => Promise<s
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={topEvents} dataKey="count" nameKey="event" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }: any) => `${eventLabels[name] || name} ${((percent || 0) * 100).toFixed(0)}%`} labelLine={false}>
+                    <Pie data={topEvents} dataKey="count" nameKey="event" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }: { name?: string; percent?: number }) => `${eventLabels[name ?? ''] || name} ${((percent || 0) * 100).toFixed(0)}%`} labelLine={false}>
                       {topEvents.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(value: any, name: any) => [value, eventLabels[name as string] || name]} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
+                    <Tooltip formatter={(value, name) => [value ?? '', typeof name === 'string' ? eventLabels[name] || name : name]} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>

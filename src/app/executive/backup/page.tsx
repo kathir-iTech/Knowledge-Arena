@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +22,6 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export default function ExecutiveBackupPage() {
-  const { user } = useAuth();
   const { auth } = useFirebase();
   const { toast } = useToast();
   const [exporting, setExporting] = useState(false);

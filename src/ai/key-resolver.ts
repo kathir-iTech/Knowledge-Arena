@@ -45,12 +45,10 @@ function parseKeysFromEnv(): string[] {
   // Fallback to single-key vars (first set wins; but also collect all set? spec says one key fallback)
   // For backward compat if only one is set, return that single key.
   // Also if multiple legacy vars are set (edge), prefer GOOGLE_GENERATIVE_AI_API_KEY first.
-  const legacyOrder: string[] = [
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY || '',
-    process.env.GEMINI_API_KEY || '',
-    process.env.GOOGLE_API_KEY || '',
-    process.env.GOOGLE_GENAI_API_KEY || '',
-  ];
+  // (GEMINI_API_KEYS is covered by the plural branch above and is empty here, so it contributes nothing.)
+  const legacyOrder: string[] = SINGLE_KEY_VARS.filter((v) => v !== 'GEMINI_API_KEYS').map(
+    (v) => process.env[v] || '',
+  );
   const found = legacyOrder.map((k) => k.trim()).filter((k) => k.length > 0);
   if (found.length > 0) {
     // Dedupe

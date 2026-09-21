@@ -59,19 +59,18 @@ export default function StudentManagementPage() {
   const [processingDelete, setProcessingDelete] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const getToken = async (): Promise<string> => {
-    const firebaseAuth = auth as any;
-    if (firebaseAuth?.currentUser) {
-      return await firebaseAuth.currentUser.getIdToken();
+  const getToken = useCallback(async (): Promise<string> => {
+    if (auth?.currentUser) {
+      return await auth.currentUser.getIdToken();
     }
     for (let i = 0; i < 10; i++) {
       await new Promise(r => setTimeout(r, 300));
-      if (firebaseAuth?.currentUser) {
-        return await firebaseAuth.currentUser.getIdToken();
+      if (auth?.currentUser) {
+        return await auth.currentUser.getIdToken();
       }
     }
     throw new Error('Not authenticated');
-  };
+  }, [auth]);
 
   const fetchGladiators = useCallback(async () => {
     try {
@@ -93,7 +92,7 @@ export default function StudentManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [auth, toast]);
+  }, [toast, getToken]);
 
   useEffect(() => {
     if (user) fetchGladiators();

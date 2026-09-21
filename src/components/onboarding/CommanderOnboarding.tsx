@@ -7,7 +7,7 @@ import { useFirebase } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+
 import { Swords, Sparkles, PencilRuler, Zap } from 'lucide-react';
 
 export function CommanderOnboarding() {

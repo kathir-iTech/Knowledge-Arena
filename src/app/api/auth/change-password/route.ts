@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
     }
 
     await getAdminAuth().updateUser(decoded.uid, { password: newPassword });
+    await getAdminAuth().revokeRefreshTokens(decoded.uid);
 
     const update: Record<string, unknown> = { mustChangePassword: false };
     await getAdminDb().collection('users').doc(decoded.uid).update(update);
@@ -76,8 +77,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[ChangePassword] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[ChangePassword] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Failed to change password' }, { status: 500 });
   }
 }

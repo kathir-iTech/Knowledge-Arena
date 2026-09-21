@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
@@ -26,10 +27,10 @@ export async function GET(req: NextRequest) {
       db.collection('conversations').select('createdAt', 'messageCount').get(),
     ]);
 
-    const users: Record<string, any>[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const quizzes: Record<string, any>[] = quizzesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const questions: Record<string, any>[] = questionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const conversations: Record<string, any>[] = conversationsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const users: DocumentData[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const quizzes: DocumentData[] = quizzesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const questions: DocumentData[] = questionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const conversations: DocumentData[] = conversationsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
     const localDateStr = (ts: number) => {
       const d = new Date(ts);
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
     const aiUsage: Record<string, number> = {};
     const messageActivity: Record<string, number> = {};
 
-    const isAiQuestion = (q: Record<string, any>): boolean => {
+    const isAiQuestion = (q: DocumentData): boolean => {
       const source = (q.source as string) || '';
       const createdBy = (q.createdBy as string) || '';
       return createdBy === 'ai_import' || ['ai', 'ai_pdf_forge', 'pdf'].includes(source);
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest) {
       const cat = (q.subject || q.category || 'General') as string;
       categoryUsage[cat] = (categoryUsage[cat] || 0) + 1;
       if (isAiQuestion(q)) {
-        const created = (q.createdAt as any)?.toMillis?.() ?? (q.createdAt as number) ?? (q.created_at as number) ?? 0;
+        const created = (q.createdAt)?.toMillis?.() ?? (q.createdAt as number) ?? (q.created_at as number) ?? 0;
         if (created >= last30Days) {
           const ds = localDateStr(created);
           aiUsage[ds] = (aiUsage[ds] || 0) + 1;
@@ -92,7 +93,7 @@ export async function GET(req: NextRequest) {
     }
 
     for (const c of conversations) {
-      const created = (c.createdAt as any)?.toMillis?.() ?? (c.createdAt as number) ?? 0;
+      const created = (c.createdAt)?.toMillis?.() ?? (c.createdAt as number) ?? 0;
       if (created >= last30Days) {
         const ds = localDateStr(created);
         messageActivity[ds] = (messageActivity[ds] || 0) + ((c.messageCount as number) || 1);
@@ -133,8 +134,9 @@ export async function GET(req: NextRequest) {
         totalConversations: conversations.length,
       },
     });
-  } catch (err: any) {
-    console.error('[AnalyticsData GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[AnalyticsData GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Analytics data fetch failed' }, { status: 500 });
   }
 }

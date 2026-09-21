@@ -70,8 +70,9 @@ export async function GET(req: NextRequest) {
     };
 
     return NextResponse.json({ settings: merged }, { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=60' } });
-  } catch (err: any) {
-    console.error('[Settings GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Settings GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -108,8 +109,9 @@ export async function PUT(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error('[Settings PUT] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Settings PUT] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

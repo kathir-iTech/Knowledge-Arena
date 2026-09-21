@@ -29,8 +29,9 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json({ requests });
-  } catch (err: any) {
-    console.error('[ExecutiveRequests GET] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[ExecutiveRequests GET] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -101,8 +102,9 @@ export async function PATCH(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, id, status });
-  } catch (err: any) {
-    console.error('[ExecutiveRequests PATCH] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[ExecutiveRequests PATCH] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -151,8 +153,9 @@ export async function DELETE(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, id });
-  } catch (err: any) {
-    console.error('[ExecutiveRequests DELETE] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[ExecutiveRequests DELETE] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -62,3 +62,23 @@ nxlog.txt
 # test artifacts
 test-results/
 .vscode/
+
+# pre-push hook scratch
+.lint-gate-output.tmp
+
+# local Firebase emulator state (never share)
+/firebase-emulator-data/
+firestore-debug.log
+firestore-export-*.log
+emulators-*.json
+
+# Playwright
+node_modules/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# local browser test profile + trace snapshots (regenerable, never share)
+.lighthouse-chrome/
+snapshot/

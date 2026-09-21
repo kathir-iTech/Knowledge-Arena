@@ -30,7 +30,6 @@ export async function POST(req: NextRequest) {
 
     const quizData = quizSnap.data() as Record<string, unknown>;
     const quizTitle = String(quizData.title || 'Quiz');
-    const createdBy = quizData.created_by as string | undefined;
 
     // Fetch questions and answer keys
     const [questionsSnap, answerKeysSnap] = await Promise.all([
@@ -100,8 +99,9 @@ export async function POST(req: NextRequest) {
       connections: result.connections,
       cached: false,
     });
-  } catch (err: any) {
-    console.error('[MindMap POST] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[MindMap POST] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

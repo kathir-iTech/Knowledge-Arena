@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Search, Download, Filter, Clock, Activity, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, Download, Activity, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
 
@@ -111,7 +111,6 @@ function formatMetadata(metadata: Record<string, unknown>): { label: string; val
 export default function AuditLogsPage() {
   const { user } = useAuth();
   const { auth } = useFirebase();
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [allLogs, setAllLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -164,6 +163,11 @@ export default function AuditLogsPage() {
   useEffect(() => {
     setPage(1);
     fetchLogs(false);
+    // fetchLogs intentionally excluded: it is rebuilt when pagination state
+    // (page/nextCursor) changes, so depending on it would refire this effect
+    // on every "load more" and reset the list to page 1 in a loop. Filter
+    // changes are the only intended trigger; pagination calls it directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionFilter, roleFilter]);
 
   const loadMore = () => {

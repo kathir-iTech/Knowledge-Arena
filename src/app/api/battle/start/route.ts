@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
       const quizRef = db.collection(COLLECTIONS.QUIZZES).doc(quizId);
       const snap = await tx.get(quizRef);
       if (!snap.exists) throw new Error('Arena not found');
-      const quiz = snap.data() as Record<string, any>;
+      const quiz = snap.data() as DocumentData;
       if (!isCreator(quiz, auth.uid)) {
         throw new Error('Only the Commander can start this arena');
       }

@@ -1,4 +1,5 @@
 import { getAdminDb } from '@/lib/firebase-admin';
+import type { DocumentData } from 'firebase-admin/firestore';
 import { COLLECTIONS } from '@/lib/constants';
 
 export const SET_SCAN_LIMIT = 5000;
@@ -20,10 +21,10 @@ export interface QuizSetSummary {
 
 export interface QuizSetDoc {
   id: string;
-  data: Record<string, any>;
+  data: DocumentData;
 }
 
-export function docGroupKey(data: Record<string, any>): string | null {
+export function docGroupKey(data: DocumentData): string | null {
   if (typeof data.importSessionId === 'string' && data.importSessionId.trim()) {
     return `i:${data.importSessionId.trim()}`;
   }
@@ -60,7 +61,7 @@ export function decodeSetId(setId: string): string | null {
   }
 }
 
-function normalizeDoc(data: Record<string, any>) {
+function normalizeDoc(data: DocumentData) {
   return {
     text: data.text || data.question_text || '',
     category: data.category || data.subject || 'General',
@@ -124,7 +125,7 @@ export async function scanAllQuestionDocs(): Promise<QuizSetDoc[]> {
     const snap = await query.get();
     if (snap.empty) break;
     for (const doc of snap.docs) {
-      docs.push({ id: doc.id, data: doc.data() as Record<string, any> });
+      docs.push({ id: doc.id, data: doc.data() as DocumentData });
       last = doc;
     }
     if (snap.docs.length < 1000) break;
@@ -142,7 +143,7 @@ export async function fetchSetDocs(setId: string): Promise<QuizSetDoc[]> {
 
   if (key.startsWith('i:')) {
     const snap = await ref.where('importSessionId', '==', key.slice(2)).limit(1000).get();
-    return snap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
+    return snap.docs.map(d => ({ id: d.id, data: d.data() as DocumentData }));
   }
 
   const docs = await scanAllQuestionDocs();
@@ -187,7 +188,7 @@ export async function fetchSetSummaries(options?: { searchTerm?: string }): Prom
       .where('searchTokens', 'array-contains', firstTerm)
       .limit(SET_SCAN_LIMIT)
       .get();
-    const docs: QuizSetDoc[] = snap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
+    const docs: QuizSetDoc[] = snap.docs.map(d => ({ id: d.id, data: d.data() as DocumentData }));
     return summarizeGroups(docs);
   }
 

@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Orphaned-lease telemetry (read-only, never mutates jobs).
-  let orphaned: string[] = [];
+  const orphaned: string[] = [];
   try {
     const { getAdminDb } = await import('@/lib/firebase-admin');
     const { COLLECTIONS } = await import('@/lib/constants');

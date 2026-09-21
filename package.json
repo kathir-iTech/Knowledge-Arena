@@ -14,9 +14,12 @@
     "lint": "next lint",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "rules:generate": "node scripts/generate-firestore-rules.js",
+    "emulators:start": "firebase emulators:start --import=./.firebase-emulator-data --export-on-exit=./.firebase-emulator-data",
+    "emulators:debug": "firebase emulators:start",
+    "stress:submissions": "cross-env FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 node scripts/stress-test-submissions.mjs",
     "test": "playwright test",
-    "demo:seed": "cross-env FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 tsx scripts/seed-demo.ts",
-    "demo": "npm run demo:seed && cross-env NEXT_PUBLIC_FIREBASE_EMULATOR=true FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run dev"
+    "demo:seed": "cross-env FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_DATABASE_EMULATOR_HOST=127.0.0.1:9000 tsx scripts/seed-demo.ts",
+    "demo": "npm run demo:seed && cross-env NEXT_PUBLIC_FIREBASE_EMULATOR=true FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_DATABASE_EMULATOR_HOST=127.0.0.1:9000 npm run dev"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.0.0",
@@ -45,7 +48,7 @@
     "firebase-admin": "^14.1.0",
     "genkit": "^1.39.0",
     "lucide-react": "^0.475.0",
-    "next": "^15.5.20",
+    "next": "^15.5.25",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
@@ -63,18 +66,24 @@
     "fast-uri": "3.1.6",
     "nanoid": "3.3.18",
     "fast-xml-parser": "5.10.1",
-    "ip-address": "10.3.1"
+    "ip-address": "10.3.1",
+    "@next/env": "15.5.23",
+    "postcss": "$postcss",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.0",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^20",
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
     "@types/uuid": "^9.0.8",
     "cross-env": "^7.0.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.23",
+    "firebase-tools": "^15.28.1",
     "genkit-cli": "^1.0.0",
     "playwright": "^1.62.0",
-    "postcss": "^8",
+    "postcss": "^8.5.26",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.9.3"
   },
@@ -83,6 +92,6 @@
     "@firebase/util@1.15.1": true,
     "esbuild@0.28.1": true,
     "protobufjs@7.6.5": true,
-    "sharp@0.34.5": true
+    "sharp@0.35.4": true
   }
 }

@@ -2,7 +2,7 @@
 
 import { initializeFirebase } from '@/firebase';
 
-async function post(path: string, body: Record<string, unknown>): Promise<any> {
+async function post(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
   const { auth } = initializeFirebase();
   const token = await auth.currentUser?.getIdToken();
   if (!token) throw new Error('Not authenticated');

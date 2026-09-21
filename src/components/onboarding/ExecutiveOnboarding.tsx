@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, query, where, limit, getDocs } from 'firebase/firestore';
@@ -10,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Shield, Users, Check, Sparkles, Copy, Key, AlertCircle } from 'lucide-react';
 
 const COMMANDER_DOMAIN = 'knowledgearena.app';
@@ -89,12 +87,6 @@ export function ExecutiveOnboarding() {
   const handleDismiss = async () => {
     setStep(0);
     await markComplete();
-  };
-
-  const handleNext = () => {
-    if (step === 1) setStep(2);
-    else if (step === 2 && created) setStep(3);
-    else if (step === 3) handleDismiss();
   };
 
   const getOrGenerateEmail = (input: string): string => {

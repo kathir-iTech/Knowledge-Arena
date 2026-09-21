@@ -139,8 +139,9 @@ export async function GET(req: NextRequest) {
       },
       windowDays: 30,
     });
-  } catch (err: any) {
-    console.error('[Insights] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Insights] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

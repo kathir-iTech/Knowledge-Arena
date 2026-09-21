@@ -14,8 +14,9 @@ async function safeQuery<T>(
 ): Promise<T> {
   try {
     return await run();
-  } catch (err: any) {
-    console.error(`[Recommendations GET] ${label} failed, degrading gracefully:`, err?.name, err?.message, '\n', err?.stack);
+  } catch (err) {
+    const e = err as { message?: string; name?: string; stack?: string };
+    console.error(`[Recommendations GET] ${label} failed, degrading gracefully:`, e?.name, e?.message, '\n', e?.stack);
     return fallback;
   }
 }
@@ -34,8 +35,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ recommendations }, {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
     });
-  } catch (err: any) {
-    console.error('[Recommendations] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Recommendations] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

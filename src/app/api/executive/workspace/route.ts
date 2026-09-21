@@ -393,8 +393,9 @@ export async function GET(req: NextRequest) {
       },
       systemHealth,
     });
-  } catch (err: any) {
-    console.error('[Workspace] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[Workspace] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

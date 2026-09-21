@@ -61,7 +61,6 @@ export async function GET(req: NextRequest) {
 
       const studentParticipants = participants.filter(p => p.data().user_id !== data.created_by);
       const scores = studentParticipants.map(p => p.data().score || 0);
-      const positiveScores = scores.filter(s => s > 0);
       const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0;
 
       const scored = studentParticipants.filter(p => (p.data().score || 0) > 0);
@@ -87,8 +86,9 @@ export async function GET(req: NextRequest) {
     const totalBattles = finished.length;
 
     return NextResponse.json({ battles, totalBattles, hasMore: offset + limit < finished.length });
-  } catch (err: any) {
-    console.error('[ExecutiveBattles] Error:', err?.name, err?.message);
+  } catch (err) {
+    const e = err as { message?: string; name?: string };
+    console.error('[ExecutiveBattles] Error:', e?.name, e?.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

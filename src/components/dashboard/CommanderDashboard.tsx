@@ -14,12 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageError } from '@/components/ui/page-error';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  PlusCircle, Swords, Search as SearchIcon, MoreHorizontal, Pencil, Copy,
-  Trash2, Download, FileText, RefreshCw, Users, PlayCircle, Calendar,
-  Shield, HelpCircle, Bell, Inbox, Star, TrendingUp, Clock, MessageSquare,
-  BookOpen, Zap, ChevronRight, FlaskConical,
-} from 'lucide-react';
+import { PlusCircle, Swords, Search as SearchIcon, MoreHorizontal, Pencil, Copy, Trash2, Download, FileText, RefreshCw, Users, PlayCircle, Calendar, Shield, HelpCircle, Inbox, Star, TrendingUp, Clock, MessageSquare, BookOpen, Zap, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
@@ -109,7 +104,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
             await quizService.deleteQuiz(quiz.id);
             toast({ title: 'Arena Purged', description: 'Arena and all data destroyed.' });
             onUpdate();
-        } catch (e) {
+        } catch {
             toast({ variant: 'destructive', title: 'Error', description: 'Could not delete arena.' });
         } finally {
             setIsProcessing(false);
@@ -124,7 +119,7 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
         const newId = await quizService.duplicateQuiz(quiz.id, quiz.created_by);
         toast({ title: 'Arena Duplicated', description: `New room code: ${newId}` });
         onUpdate();
-      } catch (e) {
+      } catch {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not duplicate arena.' });
       } finally {
         setIsProcessing(false);
@@ -327,7 +322,6 @@ const QuizCard = ({ quiz, onUpdate }: { quiz: ValidatedQuiz; onUpdate: () => voi
 export default function CommanderDashboard() {
   const { user } = useAuth();
   const { auth } = useFirebase();
-  const { toast } = useToast();
   const router = useRouter();
   const [quizzes, setQuizzes] = useState<ValidatedQuiz[]>([]);
   const [loading, setLoading] = useState(true);
@@ -377,7 +371,7 @@ export default function CommanderDashboard() {
           setDashboardError(errorData.error || `Failed to load dashboard stats (${res.status}).`);
         }
       }
-    } catch (e) {
+    } catch {
       setDashboardError('Network error while loading dashboard. Please check your connection and retry.');
     }
   }, [auth]);

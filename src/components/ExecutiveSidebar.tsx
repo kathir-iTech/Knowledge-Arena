@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, BrainCircuit, LayoutDashboard, BarChart3, Shield, Users, BookOpen, Inbox, Settings, MessageSquare, ClipboardList, Activity, Database, Wifi, Search, Bell, User, Archive, Bot, Swords, Radar } from 'lucide-react';
+import { LogOut, BrainCircuit, LayoutDashboard, BarChart3, Shield, Users, BookOpen, Inbox, Settings, MessageSquare, ClipboardList, Search, Bell, User, Archive, Bot, Swords, Radar } from 'lucide-react';
 import {
   Sidebar,
   SidebarHeader,
@@ -45,9 +45,9 @@ const ExecutiveSidebar = () => {
         ]);
         if (!cancelled) {
           if (convRes.ok) {
-            const convData = await convRes.json();
+            const convData: { conversations?: Array<{ unreadCount?: Record<string, number> }> } = await convRes.json();
             const total = (convData.conversations || []).reduce(
-              (sum: number, c: any) => sum + (c.unreadCount?.[user.id] || 0), 0
+              (sum, c) => sum + (c.unreadCount?.[user.id] || 0), 0
             );
             setUnreadCount(total);
           }
