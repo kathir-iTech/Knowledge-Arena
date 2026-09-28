@@ -3,7 +3,7 @@
 > **The ultimate AI-powered quiz battleground. Create, compete, and conquer.**
 
 Quorena is a real-time multiplayer quiz platform where educators generate AI-powered quizzes from PDFs and students compete in live battles. Built with Next.js, Firebase, and Google Gemini AI.
----
+-----
 
 ## Features ✨
 
