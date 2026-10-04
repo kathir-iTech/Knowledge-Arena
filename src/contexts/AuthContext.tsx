@@ -6,7 +6,8 @@ import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc, runTransaction, getDoc } from 'firebase/firestore';
 import {
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
 } from 'firebase/auth';
@@ -327,6 +328,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [auth]);
 
   useEffect(() => {
+    if (!auth) return;
+    // Handle return from signInWithRedirect (SIH preview popup compatibility).
+    // onAuthStateChanged (via useFirebaseUserHook) will pick up the user automatically.
+    void getRedirectResult(auth).catch(() => {
+      // Best-effort: auth state listener below handles the signed-in user.
+    });
     if (isUserLoading) { setIsLoading(true); return; }
     if (firebaseUser) {
       if (signupInProgress.current && signupUserId.current === firebaseUser.uid) { return; }
@@ -488,11 +495,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prompt: 'select_account',
     });
     try {
-      await withTimeout(signInWithPopup(auth, provider), 120000, 'Google redirect');
-      // onAuthStateChanged will fire and fetchUserDocument will handle profile creation.
+      // Redirect-based auth for SIH preview URL popup compatibility:
+      // redirects the whole tab to Google and back instead of opening a popup.
+      await signInWithRedirect(auth, provider);
+      // onAuthStateChanged will fire on return and fetchUserDocument will handle profile creation.
       // Part 5A: domain is enforced at arena-join, not at Google sign-in.
     } catch (error: unknown) {
-      console.error('[Auth] signInWithPopup error', error);
+      console.error('[Auth] signInWithRedirect error', error);
       setIsLoading(false);
       const code = (error as { code?: string })?.code || '';
       const msg = getErrorMessage(error).toLowerCase();
