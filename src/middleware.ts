@@ -66,6 +66,7 @@ function buildCspHeader(nonce: string): string {
     `base-uri 'self'`,
     `form-action 'self'`,
     `frame-ancestors 'none'`,
+    `frame-src 'self' https://studio-4092189688-c74a7.firebaseapp.com https://vercel.live`,
     `worker-src 'self' blob:`,
     `manifest-src 'self'`,
   ];
