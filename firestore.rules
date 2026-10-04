@@ -527,5 +527,30 @@ service cloud.firestore {
   match /{path=**}/participants/{userId} {
     allow read: if request.auth != null && request.auth.uid == userId;
   }
+// ============================================================
+// SIH-26242 RPL TRACK — additive block, never merges to main rules without review
+// ============================================================
+match /rpl_workers/{workerId} {
+  allow read: if isSignedIn() && (request.auth.uid == workerId || isCommander() || isExecutive());
+  allow create: if isSignedIn() && request.auth.uid == workerId;
+  allow update: if isSignedIn() && (request.auth.uid == workerId || isExecutive());
+}
+match /rpl_assessments/{assessmentId} {
+  allow read: if isSignedIn() && (isCommander() || isExecutive() || request.auth.uid == resource.data.workerId);
+  allow create, update: if isCommander() || isExecutive();
+}
+match /rpl_assessments/{assessmentId}/items/{itemId} {
+  allow read: if isSignedIn() && (isCommander() || isExecutive());
+  allow write: if isCommander();
+}
+match /rpl_consistency/{packId} {
+  allow read: if isSignedIn();
+  allow write: if isExecutive();
+}
+match /rpl_certifications/{workerId} {
+  allow read: if isSignedIn() && (request.auth.uid == workerId || isCommander() || isExecutive());
+  allow write: if isExecutive();
+}
+// ============================================================
   }
 }

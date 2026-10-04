@@ -116,6 +116,25 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // SIH-26242 RPL track — additive branch (approved exception to the
+  // never-touch-existing-files rule: without this, middleware 307s every
+  // /rpl/* path to / and the RPL UI is unreachable in any browser).
+  // Requires any valid session cookie; fine-grained role gating lives in
+  // src/app/(rpl)/rpl/layout.tsx + page-level guards (which read Firestore
+  // roles and work with emulator demo accounts). No existing route changes.
+  if (pathname === '/rpl' || pathname.startsWith('/rpl/')) {
+    const rplCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    if (!rplCookie) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    try {
+      await getAdminAuth().verifySessionCookie(rplCookie, true);
+    } catch {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    return withCspResponse(request);
+  }
+
   if (!requiredRole) {
     return NextResponse.redirect(new URL('/', request.url));
   }

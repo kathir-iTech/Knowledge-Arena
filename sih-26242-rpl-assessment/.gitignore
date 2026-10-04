@@ -1,0 +1,6 @@
+# This entire folder is local-only by design. It must never be committed or pushed.
+# Guard 1 of 3: this file (contents ignored).
+# Guard 2 of 3: /sih-26242-rpl-assessment/ in ../../.git/info/exclude (untracked by definition).
+# Guard 3 of 3: work lives on branch `sih-26242-rpl`, never merged to main during the competition.
+*
+!.gitignore
