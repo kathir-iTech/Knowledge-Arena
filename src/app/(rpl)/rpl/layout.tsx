@@ -38,7 +38,8 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      router.replace('/login');
+      // Phase A5: preserve the RPL destination so login returns here.
+      router.replace('/login?next=' + encodeURIComponent(pathname ?? '/rpl'));
       return;
     }
     const current =

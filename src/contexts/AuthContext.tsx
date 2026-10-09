@@ -17,6 +17,7 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { mapFirebaseAuthError } from '@/lib/firebase-auth-errors';
 import { mapStaffIdToEmail } from '@/lib/staff-login';
 import { getDemoAccount } from '@/lib/demo-accounts';
+import { mintSessionCookie } from '@/lib/client-session';
 
 interface AuthContextType {
   user: User | null;
@@ -42,6 +43,14 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const PROFILE_TIMEOUT_MS = 10000;
 const AUTH_OP_TIMEOUT_MS = 10000;
+// The rate-limit pre-check is a Firestore-backed transaction on the server; on
+// a cold start (or a cold dev server) it legitimately exceeds AUTH_OP_TIMEOUT_MS.
+// Failing the WHOLE sign-in because the limiter was slow is wrong — the limiter
+// already fails open server-side — so it gets a longer, separate budget.
+const RATE_LIMIT_TIMEOUT_MS = 30000;
+// Phase A2: background session mint retries (bounded so a server-side
+// misconfiguration surfaces as a visible error instead of an endless loop).
+const MIGRATION_MAX_ATTEMPTS = 3;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -94,6 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchInProgress = useRef(false);
   const fetchInProgressUid = useRef<string | null>(null);
   const migrationDone = useRef(false);
+  const migrationAttempts = useRef(0);
 
   const getRandomAvatar = useCallback(() => {
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
@@ -315,21 +325,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // so a transient failure retries on the next auth-state tick instead of
   // stranding the user with Firebase auth but no server cookie (middleware
   // would then bounce every portal nav to /login).
+  // Phase A2: mintSessionCookie also completes the role-claim handshake
+  // (server returns claimsRefresh -> forced token refresh -> re-mint), so the
+  // cookie always carries `role` for the edge middleware.
   const migrateSession = useCallback(async () => {
     if (migrationDone.current) return;
+    if (migrationAttempts.current >= MIGRATION_MAX_ATTEMPTS) {
+      console.error(
+        '[Auth] session mint still failing after ' + MIGRATION_MAX_ATTEMPTS + ' attempts',
+      );
+      setAuthError('Could not establish a server session after several attempts — please reload or sign in again.');
+      return;
+    }
+    migrationAttempts.current += 1;
+    const user = auth?.currentUser;
+    if (!user) return;
     try {
-      const user = auth?.currentUser;
-      if (!user) return;
-      const idToken = await user.getIdToken();
-      const res = await fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-      });
-      if (!res.ok) return;
+      const result = await withTimeout(
+        mintSessionCookie((forceRefresh) => user.getIdToken(forceRefresh)),
+        AUTH_OP_TIMEOUT_MS,
+        'Session creation',
+      );
+      if (!result.ok) {
+        console.error('[Auth] session mint failed', result.errorCode, result.errorMessage);
+        return;
+      }
       migrationDone.current = true;
-    } catch {
-      // best-effort; retry on next tick, user can re-authenticate if needed
+    } catch (err) {
+      console.error('[Auth] session mint error', getErrorMessage(err));
     }
   }, [auth]);
 
@@ -337,8 +360,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!auth) return;
     // Handle return from signInWithRedirect (SIH preview popup compatibility).
     // onAuthStateChanged (via useFirebaseUserHook) will pick up the user automatically.
-    void getRedirectResult(auth).catch(() => {
-      // Best-effort: auth state listener below handles the signed-in user.
+    void getRedirectResult(auth).catch((err: unknown) => {
+      const code = (err as { code?: string })?.code || '';
+      const msg = getErrorMessage(err);
+      // No pending redirect is the normal case on a plain page load.
+      if (code === 'auth/no-auth-event' || msg.includes('no-auth-event')) {
+        return;
+      }
+      console.error('[Auth] Google redirect return failed', code, msg);
+      setIsLoading(false);
+      setAuthError(
+        `Google sign-in did not complete${code ? ` (${code})` : ''}: ${msg}. Please try again.`,
+      );
+      toast({
+        variant: 'destructive',
+        title: 'Google Sign-In Failed',
+        description: `${msg || 'The sign-in redirect failed.'} Please try again.`,
+      });
     });
     if (isUserLoading) { setIsLoading(true); return; }
     if (firebaseUser) {
@@ -347,6 +385,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       void migrateSession();
     } else {
       migrationDone.current = false;
+      migrationAttempts.current = 0;
       setUser(null);
       fetchInProgress.current = false;
       fetchInProgressUid.current = null;
@@ -385,7 +424,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       const email = mapStaffIdToEmail(credentials.email);
-      await withTimeout(checkRateLimit('login', email), AUTH_OP_TIMEOUT_MS, 'Rate limit check');
+      await withTimeout(checkRateLimit('login', email), RATE_LIMIT_TIMEOUT_MS, 'Rate limit check');
       await withTimeout(signInWithEmailAndPassword(auth, email, credentials.password), AUTH_OP_TIMEOUT_MS, 'Sign in');
 
       const uid = auth.currentUser?.uid;
@@ -448,30 +487,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Phase 1 login chain: mint the server session cookie NOW and fail hard
-      // if it fails. Previously login relied solely on the background
+      // Phase A1/A2: mint the server session cookie NOW and fail hard if it
+      // fails. Previously login relied solely on the background
       // migrateSession() best-effort call, so a /api/auth/session failure left
       // the client thinking it was logged in while middleware (cookie-gated)
-      // bounced every portal navigation back to /login.
+      // bounced every portal navigation back to /login. mintSessionCookie also
+      // completes the role-claim handshake (claimsRefresh -> forced refresh ->
+      // re-mint) so the cookie always carries `role`.
       try {
-        const idToken = await withTimeout(
-          auth.currentUser!.getIdToken(true),
+        const currentUser = auth.currentUser;
+        if (!currentUser) throw new Error('Unable to verify account.');
+        const sessionResult = await withTimeout(
+          mintSessionCookie((forceRefresh) => currentUser.getIdToken(forceRefresh)),
           AUTH_OP_TIMEOUT_MS,
-          'Session token'
+          'Session creation',
         );
-        const sessionRes = await withTimeout(
-          fetch('/api/auth/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken }),
-          }),
-          AUTH_OP_TIMEOUT_MS,
-          'Session creation'
-        );
-        if (!sessionRes.ok) {
-          throw new Error('Session creation failed');
+        if (!sessionResult.ok) {
+          await signOut(auth).catch(() => {});
+          const friendly = sessionResult.errorMessage || 'Sign-in failed — please try again';
+          console.error('[Auth] login session mint failed', sessionResult.errorCode, sessionResult.errorMessage);
+          setAuthError(friendly);
+          setIsLoading(false);
+          throw new Error(`Sign-in failed — ${friendly}`);
         }
       } catch (e) {
+        if (e instanceof Error && e.message.startsWith('Sign-in failed —')) throw e;
         await signOut(auth).catch(() => {});
         if (isTimeoutError(e)) {
           setAuthError("Sign-in failed — please try again");

@@ -25,6 +25,9 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
   const { login, signInWithGoogle } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  // Phase A4: a visible, non-spinning failure state on the page itself —
+  // the toast disappears, this stays until the user retries.
+  const [formError, setFormError] = useState<string | null>(null);
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -38,10 +41,12 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
 
   const onLoginSubmit = async (values: z.infer<typeof loginSchema>) => {
     setIsLoading(true);
+    setFormError(null);
     try {
       await login(values);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      setFormError(message);
       toast({ variant: 'destructive', title: 'Login Failed', description: message });
     } finally {
       setIsLoading(false);
@@ -49,16 +54,32 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
   };
 
   const onGoogleSignIn = async () => {
-    await signInWithGoogle();
+    setFormError(null);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Google sign-in failed. Please try again.';
+      setFormError(message);
+      toast({ variant: 'destructive', title: 'Google Sign-In Failed', description: message });
+    }
   };
 
   return (
     <Card>
       <CardContent className="pt-6 px-4 sm:px-6 space-y-6">
+        {formError && (
+          <div role="alert" className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
+            <p className="font-medium text-destructive">Sign-in failed</p>
+            <p className="mt-1 text-xs text-muted-foreground break-words">{formError}</p>
+            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => setFormError(null)}>
+              Try again
+            </Button>
+          </div>
+        )}
         {/* Section 1: Gladiators — Sign in with Google (Part 5A: open signup) */}
         <div className="space-y-3">
           <h2 className="text-sm font-semibold">Gladiators — Sign in with Google</h2>
-          <p className="text-xs text-muted-foreground" role="note">Any Google account can sign in. Battle access is controlled per arena.</p>
+          <p className="text-xs text-muted-foreground" role="note">First sign-in creates your account - there is no separate sign-up step. Existing accounts just sign in. Battle access is controlled per arena.</p>
           <Button type="button" variant="outline" className="w-full h-11" onClick={onGoogleSignIn} disabled={isLoading} aria-label="Continue with Google — Gladiators">
             <svg className="mr-2 h-4 w-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>

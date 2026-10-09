@@ -38,7 +38,15 @@ function buildCspHeader(nonce: string): string {
     'https://securetoken.googleapis.com',
     'wss://*.firebaseio.com',
   ];
-  if (isDev) {
+  // Local emulators (Auth :9099 / Firestore :8080 / RTDB :9000) are reachable
+  // from the browser only when this build is EXPLICITLY pointed at them:
+  // either `next dev`, or a production build with
+  // NEXT_PUBLIC_FIREBASE_EMULATOR=true (set by `npm run demo` and the local
+  // verification scripts, never by Vercel). Deployed responses therefore keep
+  // the locked connect-src, and script-src (nonce + 'strict-dynamic') is NOT
+  // relaxed for emulator builds — only connect-src gains localhost.
+  const allowLocalEmulator = isDev || process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true';
+  if (allowLocalEmulator) {
     connectSources.push(
       'http://localhost:*',
       'http://127.0.0.1:*',
@@ -124,14 +132,18 @@ export async function middleware(request: NextRequest) {
   // src/app/(rpl)/rpl/layout.tsx + page-level guards (which read Firestore
   // roles and work with emulator demo accounts). No existing route changes.
   if (pathname === '/rpl' || pathname.startsWith('/rpl/')) {
+    // Phase A5: remember where the user was going so login returns them there
+    // instead of dropping them on the Quorena dashboard.
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('next', pathname + request.nextUrl.search);
     const rplCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
     if (!rplCookie) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(loginUrl);
     }
     try {
       await getAdminAuth().verifySessionCookie(rplCookie, true);
     } catch {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(loginUrl);
     }
     return withCspResponse(request);
   }

@@ -39,8 +39,10 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       // Phase 1 login chain: /rpl is cookie-gated server-side (middleware →
       // /login). Let the RPL layout own that redirect so server and client
       // agree; everything else unauthenticated goes to the landing page.
+      // Phase A5: carry `next` so login returns the user to /rpl.
       if (currentPath === '/rpl' || currentPath.startsWith('/rpl/')) {
-        if (currentPath !== '/login') router.replace('/login');
+        const qs = searchParams.toString();
+        router.replace('/login?next=' + encodeURIComponent(currentPath + (qs ? `?${qs}` : '')));
       } else if (currentPath !== '/' && currentPath !== '/login') {
         router.replace('/');
       }
@@ -75,7 +77,11 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       const qs = searchParams.toString();
       target = qs ? `${base}?${qs}` : base;
     } else if (currentPath === '/login') {
-      target = ROLE_HOME[user.role] || ROLE_HOME.gladiator;
+      // Phase A5: /login?next=<path> wins over ROLE_HOME (only same-origin
+      // absolute paths — reject scheme-relative "//host" and anything else).
+      const next = searchParams.get('next');
+      const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+      target = safeNext || ROLE_HOME[user.role] || ROLE_HOME.gladiator;
     } else {
       const isExecutivePage = currentPath.startsWith('/executive');
       const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/create-quiz');
