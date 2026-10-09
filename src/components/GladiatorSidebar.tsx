@@ -120,6 +120,7 @@ const GladiatorSidebar = () => {
 
   if (!user) return null;
 
+  // [SIH-RPL] Insert <RPLGladiatorNav /> here post-merge — never make the actual edit in this branch.
   const nav = [
     { href: '/gladiator/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/gladiator/history', label: 'Battle History', icon: Swords },

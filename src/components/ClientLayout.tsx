@@ -36,7 +36,12 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     }
 
     if (!user) {
-      if (currentPath !== '/' && currentPath !== '/login') {
+      // Phase 1 login chain: /rpl is cookie-gated server-side (middleware →
+      // /login). Let the RPL layout own that redirect so server and client
+      // agree; everything else unauthenticated goes to the landing page.
+      if (currentPath === '/rpl' || currentPath.startsWith('/rpl/')) {
+        if (currentPath !== '/login') router.replace('/login');
+      } else if (currentPath !== '/' && currentPath !== '/login') {
         router.replace('/');
       }
       redirecting.current = null;

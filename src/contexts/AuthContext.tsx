@@ -310,20 +310,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [firestore, auth, user, ensureGladiatorProfile]);
 
   // Migrate existing ID token to session cookie on load (existing users with no session cookie).
+  // Covers the Google signInWithRedirect return path (whole-tab redirect, no
+  // login() call). Best-effort but status-checked: only marks done on success
+  // so a transient failure retries on the next auth-state tick instead of
+  // stranding the user with Firebase auth but no server cookie (middleware
+  // would then bounce every portal nav to /login).
   const migrateSession = useCallback(async () => {
     if (migrationDone.current) return;
-    migrationDone.current = true;
     try {
       const user = auth?.currentUser;
       if (!user) return;
       const idToken = await user.getIdToken();
-      await fetch('/api/auth/session', {
+      const res = await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
       });
+      if (!res.ok) return;
+      migrationDone.current = true;
     } catch {
-      // migration is best-effort; user can re-authenticate if needed
+      // best-effort; retry on next tick, user can re-authenticate if needed
     }
   }, [auth]);
 
@@ -440,6 +446,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           toast({ variant: "destructive", title: "Access Denied", description: "Staff login is not available for this account. Gladiators must use Google Sign-In." });
           throw new Error("Staff login is not available for this account.");
         }
+      }
+
+      // Phase 1 login chain: mint the server session cookie NOW and fail hard
+      // if it fails. Previously login relied solely on the background
+      // migrateSession() best-effort call, so a /api/auth/session failure left
+      // the client thinking it was logged in while middleware (cookie-gated)
+      // bounced every portal navigation back to /login.
+      try {
+        const idToken = await withTimeout(
+          auth.currentUser!.getIdToken(true),
+          AUTH_OP_TIMEOUT_MS,
+          'Session token'
+        );
+        const sessionRes = await withTimeout(
+          fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+          }),
+          AUTH_OP_TIMEOUT_MS,
+          'Session creation'
+        );
+        if (!sessionRes.ok) {
+          throw new Error('Session creation failed');
+        }
+      } catch (e) {
+        await signOut(auth).catch(() => {});
+        if (isTimeoutError(e)) {
+          setAuthError("Sign-in failed — please try again");
+          toast({ variant: "destructive", title: "Sign In Failed", description: "Request timed out. Please try again." });
+          throw new Error("Request timed out. Please try again.");
+        }
+        setAuthError("Sign-in failed — please try again");
+        toast({ variant: "destructive", title: "Sign In Failed", description: "Could not establish server session. Please try again." });
+        throw new Error("Sign-in failed — please try again");
       }
     } catch (error: unknown) {
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {

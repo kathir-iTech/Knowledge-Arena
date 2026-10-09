@@ -3,7 +3,7 @@ import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../src/lib/demo-accounts';
 
-const PROJECT_ID = 'studio-4092189688-c74a7';
+const PROJECT_ID = process.env.SEED_PROJECT_ID ?? 'studio-4092189688-c74a7';
 const NOW = Date.now();
 const MIN = 60 * 1000;
 const HOUR = 60 * MIN;

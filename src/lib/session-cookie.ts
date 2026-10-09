@@ -31,9 +31,13 @@ export interface SessionCookieOptions {
 }
 
 export function cookieOptions(opts: SessionCookieOptions = {}): Record<string, string | number | boolean> {
+  // Phase 1 login chain: Secure cookies are rejected over http (localhost
+  // emulator dev, http preview probes). Only force Secure in production
+  // (https). Explicit opt-in/out still wins when passed.
+  const defaultSecure = process.env.NODE_ENV === 'production';
   return {
     httpOnly: opts.httpOnly ?? true,
-    secure: opts.secure ?? true,
+    secure: opts.secure ?? defaultSecure,
     sameSite: opts.sameSite ?? 'Lax',
     maxAge: opts.maxAge ?? SESSION_COOKIE_MAX_AGE_S,
     path: opts.path ?? '/',
