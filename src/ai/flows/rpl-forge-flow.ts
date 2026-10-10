@@ -226,7 +226,7 @@ function normalizeForgeOutput(
         : [],
     }));
   const unitIds = new Set(units.map((u) => u.id));
-  const allowedMethods = ['observation', 'product evidence', 'oral questioning'] as const;
+  type AssessmentMethod = 'observation' | 'product evidence' | 'oral questioning';
   const items: RPLAssessmentPack['items'] = (Array.isArray(raw.items) ? raw.items : [])
     .filter(
       (i) =>
@@ -251,7 +251,7 @@ function normalizeForgeOutput(
         methodRaw === 'oral_questioning'
           ? methodRaw.replace(/_/g, ' ')
           : 'observation'
-      ) as (typeof allowedMethods)[number];
+      ) as AssessmentMethod;
       return {
         id:
           typeof i.id === 'string' && i.id.trim().length > 0

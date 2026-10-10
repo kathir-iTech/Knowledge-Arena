@@ -354,6 +354,7 @@ export default function RplProfilePage() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {imgs.map((ev) => (
+                    // eslint-disable-next-line @next/next/no-img-element -- evidence is a stored data: URL; next/image cannot optimize data URLs
                     <img
                       key={ev.imageId}
                       src={ev.dataUrl}

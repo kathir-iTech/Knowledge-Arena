@@ -595,6 +595,7 @@ export default function RplAssessScoringPage() {
                 (evidenceByUnit[unit.id]?.length ?? 0) > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {(previewUrls[unit.id] ?? []).map((src) => (
+                      // eslint-disable-next-line @next/next/no-img-element -- blob: preview of a just-picked local file; next/image cannot optimize blob URLs
                       <img
                         key={src}
                         src={src}
@@ -604,6 +605,7 @@ export default function RplAssessScoringPage() {
                     ))}
                     {(evidenceByUnit[unit.id] ?? []).map((ev) => (
                       <div key={ev.imageId} className="flex flex-col items-center gap-1">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- evidence is a stored data: URL; next/image cannot optimize data URLs */}
                         <img
                           src={ev.dataUrl}
                           alt={`Evidence for ${unit.id}`}
