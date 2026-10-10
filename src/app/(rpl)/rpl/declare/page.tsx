@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
@@ -28,7 +28,8 @@ import {
 } from '@/lib/rpl/nsqf-packs';
 import type { DeclarationMark } from '@/lib/rpl/types';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-import { getPendingCount, queueDeclarationForSync } from '@/lib/rpl/offline-store';
+import { getPendingSummary, queueDeclarationForSync, type PendingSummary } from '@/lib/rpl/offline-store';
+import { syncPendingDeclarations } from '@/lib/rpl/offline-sync';
 
 // Inline constant: standard Indian states (~28 entries).
 const INDIAN_STATES = [
@@ -111,7 +112,9 @@ export default function RplDeclarePage() {
   // keyword-matcher effect above stays the checklist source of truth.
   const [aiMatching, setAiMatching] = useState(false);
   const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [queueState, setQueueState] = useState<PendingSummary>({ total: 0, needsSignIn: 0, errors: 0 });
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
   const { status: connectionStatus } = useOnlineStatus();
 
   const sectors = useMemo(() => listSectors(), []);
@@ -121,21 +124,73 @@ export default function RplDeclarePage() {
     if (!user) router.replace('/login');
   }, [user, isLoading, router]);
 
-  // P11b offline banner (additive): refresh the queued-declaration count
-  // whenever connectivity changes. Failures resolve to 0, never an error.
-  useEffect(() => {
-    let cancelled = false;
-    getPendingCount()
-      .then((n) => {
-        if (!cancelled) setPendingCount(n);
-      })
-      .catch(() => {
-        if (!cancelled) setPendingCount(0);
+  // B1: the visible state of the offline queue (counts only, never silent).
+  const refreshQueue = useCallback(async () => {
+    try {
+      setQueueState(await getPendingSummary());
+    } catch {
+      setQueueState({ total: 0, needsSignIn: 0, errors: 0 });
+    }
+  }, []);
+
+  // B1: replay with a FRESH ID token at replay time; failures keep records
+  // queued and are reported here (401 -> "sign in to sync", never dropped).
+  const runQueueSync = useCallback(async () => {
+    if (connectionStatus === 'offline') return;
+    setSyncing(true);
+    try {
+      const report = await syncPendingDeclarations({
+        isAuthenticated: Boolean(user),
+        getIdToken: async (forceRefresh) => {
+          if (!auth?.currentUser) return null;
+          return auth.currentUser.getIdToken(forceRefresh).catch(() => null);
+        },
       });
-    return () => {
-      cancelled = true;
+      if (report.total > 0) {
+        if (report.synced > 0 && report.synced === report.total) {
+          setSyncNote(`Synced ${report.synced} saved declaration${report.synced === 1 ? '' : 's'}.`);
+        } else if (report.synced > 0) {
+          setSyncNote(
+            `Synced ${report.synced} of ${report.total} — the rest stay saved: ${report.errors[0] ?? 'see below'}`,
+          );
+        } else {
+          setSyncNote(report.errors[0] ?? 'Could not sync yet — your declaration stays saved on this device.');
+        }
+      } else {
+        setSyncNote(null);
+      }
+    } catch (err) {
+      setSyncNote(
+        `Sync failed (${err instanceof Error ? err.message : String(err)}) — your declaration stays saved on this device.`,
+      );
+    } finally {
+      setSyncing(false);
+      await refreshQueue();
+    }
+  }, [auth, connectionStatus, refreshQueue, user]);
+
+  // Refresh counts whenever connectivity/auth changes; replay automatically
+  // when we come back online or finish signing in.
+  useEffect(() => {
+    void refreshQueue();
+  }, [connectionStatus, user, refreshQueue]);
+
+  useEffect(() => {
+    if (connectionStatus === 'offline' || !user) return;
+    void runQueueSync();
+  }, [connectionStatus, user, runQueueSync]);
+
+  // The service worker asks the page to replay (it cannot: no Firebase SDK).
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      if ((event.data as { type?: string } | null)?.type === 'RPL_SYNC_PENDING') {
+        void runQueueSync();
+      }
     };
-  }, [connectionStatus]);
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [runQueueSync]);
 
   // Client-side matcher: top 3 packs for [trade, sector]. Never blank —
   // fall back to the top NSQF_PACKS entry with all of its units.
@@ -245,8 +300,17 @@ export default function RplDeclarePage() {
       });
       const body = (await res.json().catch(() => null)) as {
         referenceCode?: string;
+        queued?: boolean;
         error?: string;
       } | null;
+      // The service worker queues on a network failure and answers 202 —
+      // that is a SUCCESSFUL save-for-later, not an error (B1).
+      if (res.status === 202 || body?.queued === true) {
+        setOfflineNotice('Saved on this device — it will sync automatically when you reconnect.');
+        await refreshQueue();
+        setSubmitting(false);
+        return;
+      }
       if (!res.ok || !body?.referenceCode) {
         setError(
           typeof body?.error === 'string' ? body.error : 'Submit failed. Please try again.',
@@ -262,7 +326,8 @@ export default function RplDeclarePage() {
       // unchanged — only the network-failure path gains this branch.
       try {
         await queueDeclarationForSync({ workerId: auth.currentUser?.uid ?? '', ...payload });
-        setOfflineNotice('Saved offline — will submit on reconnect.');
+        setOfflineNotice('Saved on this device — it will sync automatically when you reconnect.');
+        await refreshQueue();
       } catch {
         setError('Submit failed. Please check your connection and try again.');
       } finally {
@@ -425,8 +490,41 @@ export default function RplDeclarePage() {
           <CardContent className="pt-4">
             <p className="text-sm text-muted-foreground">
               {"You're offline — your declaration will be saved and submitted when you reconnect."}
-              {pendingCount > 0 && ` (${pendingCount} pending)`}
+              {queueState.total > 0 && ` (${queueState.total} saved on this device)`}
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* B1: visible offline-queue state — counts, sign-in requirement and a
+          manual replay. Records are NEVER dropped silently. */}
+      {queueState.total > 0 && (
+        <Card className={queueState.needsSignIn > 0 ? 'border-warning/50' : undefined}>
+          <CardContent className="space-y-2 pt-4">
+            <p className="text-sm text-muted-foreground">
+              {queueState.total} declaration{queueState.total === 1 ? '' : 's'} saved on this device
+              {queueState.needsSignIn > 0
+                ? ' — sign in to sync them.'
+                : queueState.errors > 0
+                  ? ' — sync failed, still saved.'
+                  : isOffline
+                    ? ' — waiting to reconnect.'
+                    : '.'}
+            </p>
+            {syncNote && <p className="text-xs text-muted-foreground">{syncNote}</p>}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={syncing || isOffline}
+                onClick={() => void runQueueSync()}
+              >
+                {syncing ? 'Syncing…' : 'Sync now'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => void refreshQueue()}>
+                Refresh
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

@@ -36,10 +36,17 @@ export interface SelfDeclaration {
   matchedPacks?: string[];
 }
 
+/** Sync state of a queued declaration (B1: never dropped, always visible). */
+export type PendingSyncState = 'queued' | 'needs-signin' | 'error';
+
 /** Self-declaration queued in IndexedDB while offline. */
 export interface PendingDeclaration extends SelfDeclaration {
   localId: string;
   savedAt: number;
+  /** 'needs-signin' = replay got 401 / no session; 'error' = server refused. */
+  syncState?: PendingSyncState;
+  lastError?: string;
+  attempts?: number;
 }
 
 // ---------------------------------------------------------------------------

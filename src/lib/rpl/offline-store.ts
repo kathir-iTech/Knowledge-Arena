@@ -1,4 +1,4 @@
-import type { PendingDeclaration, SelfDeclaration } from '@/lib/rpl/types';
+import type { PendingDeclaration, PendingSyncState, SelfDeclaration } from '@/lib/rpl/types';
 
 const DB_NAME = 'rpl-offline';
 const DB_VERSION = 1;
@@ -105,6 +105,45 @@ export async function getPendingCount(): Promise<number> {
   } finally {
     db.close();
   }
+}
+
+/** B1: update the visible sync state of one queued record (never deletes it). */
+export async function markPendingDeclaration(
+  id: string,
+  patch: { syncState?: PendingSyncState; lastError?: string; bumpAttempt?: boolean },
+): Promise<void> {
+  assertIndexedDB();
+  const db = await openDatabase();
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const existing = (await requestToPromise(store.get(id))) as PendingDeclaration | undefined;
+    if (!existing) return;
+    const next: PendingDeclaration = { ...existing };
+    if (patch.syncState) next.syncState = patch.syncState;
+    if (typeof patch.lastError === 'string') next.lastError = patch.lastError;
+    if (patch.bumpAttempt) next.attempts = (existing.attempts ?? 0) + 1;
+    await requestToPromise(store.put(next));
+    await transactionComplete(tx);
+  } finally {
+    db.close();
+  }
+}
+
+export interface PendingSummary {
+  total: number;
+  needsSignIn: number;
+  errors: number;
+}
+
+/** B1: counts for the declare page's visible offline-queue state. */
+export async function getPendingSummary(): Promise<PendingSummary> {
+  const records = await getPendingDeclarations();
+  return {
+    total: records.length,
+    needsSignIn: records.filter((r) => r.syncState === 'needs-signin').length,
+    errors: records.filter((r) => r.syncState === 'error').length,
+  };
 }
 
 export async function queueDeclarationForSync(

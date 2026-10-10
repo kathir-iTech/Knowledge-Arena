@@ -66,27 +66,10 @@ function getAllRecords() {
   });
 }
 
-function deleteRecord(id) {
-  return openDb().then(function (db) {
-    return new Promise(function (resolve, reject) {
-      var tx = db.transaction(STORE_NAME, 'readwrite');
-      var store = tx.objectStore(STORE_NAME);
-      store.delete(id);
-      tx.oncomplete = function () {
-        db.close();
-        resolve();
-      };
-      tx.onerror = function () {
-        db.close();
-        reject(tx.error);
-      };
-      tx.onabort = function () {
-        db.close();
-        reject(tx.error);
-      };
-    });
-  });
-}
+// NOTE: record deletion lives ONLY in the page replay module
+// (src/lib/rpl/offline-sync.ts → removePendingDeclaration). The SW never
+// deletes queue entries: dropping one that was never accepted would be silent
+// data loss.
 
 self.addEventListener('install', function (event) {
   event.waitUntil(
@@ -194,23 +177,47 @@ self.addEventListener('fetch', function (event) {
 
 self.addEventListener('sync', function (event) {
   if (event.tag !== SYNC_TAG) return;
+  // B1: the SW has no Firebase SDK, so it can NEVER attach a valid
+  // Authorization header — a direct replay here is exactly the bug that made
+  // the queue fail with 401 forever. The replay (with a fresh ID token from
+  // getIdToken()) now runs in the controlled page via
+  // src/lib/rpl/offline-sync.ts. The SW's only job is to nudge any open /rpl
+  // client to run it. If no client is open the records stay queued and are
+  // replayed on the next page load — never dropped, never POSTed unauthenticated.
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then(function (clientList) {
+        clientList.forEach(function (client) {
+          try {
+            client.postMessage({ type: 'RPL_SYNC_PENDING' });
+          } catch (err) {
+            console.warn('[rpl-sw] failed to notify client', err);
+          }
+        });
+      })
+      .catch(function () {
+        // No clients reachable: keep the queue intact for the next load.
+      })
+  );
+});
+
+// The page asks the SW (via postMessage) whether a queue exists so it can
+// offer a visible "Sync now" affordance without touching the queue itself.
+self.addEventListener('message', function (event) {
+  if (!event.data || event.data.type !== 'RPL_GET_QUEUE_STATE') return;
   event.waitUntil(
     getAllRecords().then(function (records) {
-      return Promise.all(
-        records.map(function (record) {
-          return fetch('/api/rpl/declare', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(record),
-          })
-            .then(function (res) {
-              if (res && res.ok) {
-                return deleteRecord(record.localId);
-              }
-            })
-            .catch(function () {});
-        })
-      );
+      var ports = event.ports || [];
+      ports.forEach(function (port) {
+        port.postMessage({
+          type: 'RPL_QUEUE_STATE',
+          count: records.length,
+          needsSignIn: records.filter(function (r) {
+            return r.syncState === 'needs-signin';
+          }).length,
+        });
+      });
     })
   );
 });
