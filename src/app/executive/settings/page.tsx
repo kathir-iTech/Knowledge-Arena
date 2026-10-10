@@ -68,7 +68,7 @@ const defaultSettings: PlatformSettings = {
   institutionName: '',
   institutionLogo: '',
   theme: 'system',
-  workspaceName: 'Quorena',
+  workspaceName: 'RPL Compass',
   auth: {
     allowCommanderSelfRegistration: false,
     allowGladiatorRegistration: true,
@@ -226,7 +226,7 @@ export default function ExecutiveSettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="workspaceName">Workspace Name</Label>
-                <Input id="workspaceName" value={settings.workspaceName} onChange={e => setSettings({ ...settings, workspaceName: e.target.value })} placeholder="Quorena" />
+                <Input id="workspaceName" value={settings.workspaceName} onChange={e => setSettings({ ...settings, workspaceName: e.target.value })} placeholder="RPL Compass" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="institutionName">Institution Name</Label>

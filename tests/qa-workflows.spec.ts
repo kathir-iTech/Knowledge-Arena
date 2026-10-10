@@ -32,9 +32,9 @@ test.describe('Authentication Flow', () => {
     await waitForApp(page);
 
     // Heading
-    await expect(page.locator('h1')).toContainText('Quorena');
+    await expect(page.locator('h1')).toContainText('RPL Compass');
     // Subheading (matches live /login copy)
-    await expect(page.locator('p')).toContainText('Sign in to continue to the arena.');
+    await expect(page.locator('p')).toContainText('Sign in to continue to the assessment workspace.');
     // Google Sign-In button
     await expect(page.locator('button:has-text("Continue with Google")')).toBeVisible();
     // Staff Login separator
@@ -317,7 +317,7 @@ test.describe('Error Boundaries & 404', () => {
     // ClientLayout redirects to / for unauthenticated users
     // So we should be on the login page
     expect(page.url()).toBe(BASE_URL + '/');
-    await expect(page.locator('h1')).toContainText('Quorena');
+    await expect(page.locator('h1')).toContainText('Standardise how assessors');
   });
 
   test('Root-level non-existent route redirects to home via middleware', async ({ page }) => {

@@ -59,6 +59,6 @@ test.describe('R2-20 battle idempotency + Set-2 pure logic', () => {
     expect(hasPermission('executive', 'bank_edit')).toBe(true);
     expect(hasPermission('commander', 'bank_edit')).toBe(false);
     expect(hasPermission('gladiator', 'quiz_create')).toBe(false);
-    expect(toCEF({ type: 'security_violation', actor: 'u1', detail: 'x' })).toContain('CEF:0|Quorena');
+    expect(toCEF({ type: 'security_violation', actor: 'u1', detail: 'x' })).toContain('CEF:0|RPLCompass');
   });
 });

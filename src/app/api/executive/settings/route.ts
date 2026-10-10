@@ -14,7 +14,7 @@ const defaultSettings = {
   institutionName: '',
   institutionLogo: '',
   theme: 'system',
-  workspaceName: 'Quorena',
+  workspaceName: 'RPL Compass',
   auth: {
     allowCommanderSelfRegistration: false,
     allowGladiatorRegistration: true,

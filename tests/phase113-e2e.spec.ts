@@ -22,7 +22,7 @@ test.describe('Phase 113 — Full End-to-End Loop (Step 4)', () => {
     const ct = res.headers()['content-type'] || '';
     expect(ct).toMatch(/application\/manifest\+json|application\/json/);
     const json = await res.json();
-    expect(json.name).toBe('Quorena');
+    expect(json.name).toBe('RPL Compass');
     expect(json.icons.length).toBeGreaterThanOrEqual(2);
     // icons should be PNGs
     for (const icon of json.icons) {
@@ -44,16 +44,16 @@ test.describe('Phase 113 — Full End-to-End Loop (Step 4)', () => {
     }
   });
 
-  test('Quorena rename complete — no Knowledge Arena in user-facing metadata', async ({ request }) => {
+  test('RPL Compass branding — no Quorena or Knowledge Arena in user-facing title', async ({ request }) => {
     const res = await request.get(`${BASE_URL}/`);
     const html = await res.text();
-    // Title should be Quorena, not Knowledge Arena
-    expect(html).toContain('Quorena');
-    // Knowledge Arena may still appear in docs (*.md) but not in rendered HTML title
-    // This is a soft check — we allow the string in comments/docs but not in <title>
+    // Title/brand should be RPL Compass
+    expect(html).toContain('RPL Compass');
+    // Neither the old quiz brand nor the repo name may appear in <title>
     const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
     if (titleMatch) {
       expect(titleMatch[1]).not.toContain('Knowledge Arena');
+      expect(titleMatch[1]).not.toContain('Quorena');
     }
   });
 

@@ -1,12 +1,12 @@
 import Link from 'next/link';
-import { BrainCircuit, LogIn } from 'lucide-react';
+import { Compass, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const NAV_LINKS = [
-  { href: '#product', label: 'How it works' },
-  { href: '#ai-forge', label: 'Quiz Creator' },
-  { href: '#live-battle', label: 'Live Quizzes' },
-  { href: '#analytics', label: 'Insights' },
+  { href: '#workflow', label: 'How it works' },
+  { href: '#consistency', label: 'Consistency' },
+  { href: '#certify', label: 'Certification' },
+  { href: '#quiz', label: 'Live Quizzes' },
 ];
 
 export function LandingNav() {
@@ -16,12 +16,12 @@ export function LandingNav() {
         <Link
           href="/"
           className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-sm"
-          aria-label="Quorena home"
+          aria-label="RPL Compass home"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-elevation-medium">
-            <BrainCircuit className="h-5 w-5 text-primary-foreground" />
+            <Compass className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-headline text-lg font-bold tracking-tight">Quorena</span>
+          <span className="font-headline text-lg font-bold tracking-tight">RPL Compass</span>
         </Link>
 
         <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary">
@@ -36,16 +36,26 @@ export function LandingNav() {
           ))}
         </nav>
 
-        <Button
-          asChild
-          size="sm"
-          className="shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-        >
-          <Link href="/login">
-            <LogIn className="mr-1.5 h-4 w-4" />
-            Sign in
-          </Link>
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <Link href="/login">
+              <LogIn className="mr-1.5 h-4 w-4" />
+              Sign in
+            </Link>
+          </Button>
+          <Button
+            asChild
+            size="sm"
+            className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <Link href="/rpl">Open RPL</Link>
+          </Button>
+        </div>
       </div>
     </header>
   );

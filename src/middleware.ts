@@ -133,7 +133,7 @@ export async function middleware(request: NextRequest) {
   // roles and work with emulator demo accounts). No existing route changes.
   if (pathname === '/rpl' || pathname.startsWith('/rpl/')) {
     // Phase A5: remember where the user was going so login returns them there
-    // instead of dropping them on the Quorena dashboard.
+    // instead of dropping them on the RPL Compass dashboard.
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('next', pathname + request.nextUrl.search);
     const rplCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;

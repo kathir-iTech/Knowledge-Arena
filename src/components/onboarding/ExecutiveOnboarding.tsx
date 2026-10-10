@@ -137,7 +137,7 @@ export function ExecutiveOnboarding() {
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" /> Welcome to Quorena
+                <Sparkles className="w-5 h-5 text-primary" /> Welcome to RPL Compass
               </DialogTitle>
               <DialogDescription>
                 You are the Executive — the architect of this arena. Let&apos;s get your platform ready in 30 seconds.

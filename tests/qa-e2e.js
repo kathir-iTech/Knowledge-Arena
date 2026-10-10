@@ -89,7 +89,7 @@ function assertIsPage(response, pageName) {
   assert(response.status === 200,
     `${pageName}: expected 200, got ${response.status}`);
   // Every page renders a loading screen initially (Firebase auth)
-  assertContains(response.body, 'Quorena',
+  assertContains(response.body, 'RPL Compass',
     `${pageName}: missing app shell`);
   assertContains(response.body, 'Authenticating',
     `${pageName}: missing loading state`);
@@ -214,7 +214,7 @@ function testApiRouteWithBodyCheck(method, path, expectedStatus, body, bodyCheck
       assert(res.status === 200 || res.status === 307,
         `Page ${page.path} returned ${res.status} — crash or redirect failure`);
       if (res.status === 200) {
-assertContains(res.body, 'Quorena',
+assertContains(res.body, 'RPL Compass',
           `${page.path}: missing app shell`);
       }
     });
@@ -522,7 +522,7 @@ assertContains(res.body, 'Quorena',
     const res = await fetch('/battle/TEST123');
     assert(res.status === 200,
       `Battle page returned ${res.status} instead of 200`);
-    assertContains(res.body, 'Quorena', 'Missing app shell');
+    assertContains(res.body, 'RPL Compass', 'Missing app shell');
   });
 
   await test('Battle page loads with battle-specific bundle', async () => {
@@ -565,7 +565,7 @@ assertContains(res.body, 'Quorena',
       assert(res.status === 200 || res.status === 307 || res.status === 302,
         `${pagePath} crashed with ${res.status}`);
       if (res.status === 200) {
-        assertContains(res.body, 'Quorena', `${pagePath}: missing app shell`);
+        assertContains(res.body, 'RPL Compass', `${pagePath}: missing app shell`);
       }
     });
   }

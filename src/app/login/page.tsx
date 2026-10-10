@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, BrainCircuit, Sparkles } from 'lucide-react';
+import { ArrowLeft, Compass, Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { getDemoAccount } from '@/lib/demo-accounts';
@@ -18,10 +18,10 @@ function LoginPageContent() {
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center space-y-3">
           <Link href="/" aria-label="Back to home" className="mx-auto flex w-16 h-16 rounded-[18px] bg-primary/10 items-center justify-center border border-primary/20">
-            <BrainCircuit className="w-8 h-8 text-primary" />
+            <Compass className="w-8 h-8 text-primary" />
           </Link>
-          <h1 className="text-3xl font-headline font-bold tracking-tight">Quorena</h1>
-          <p className="text-sm text-muted-foreground">Sign in to continue to the arena.</p>
+          <h1 className="text-3xl font-headline font-bold tracking-tight">RPL Compass</h1>
+          <p className="text-sm text-muted-foreground">Sign in to continue to the assessment workspace.</p>
         </div>
 
         {demoAccount && (

@@ -18,7 +18,7 @@ export function toCEF(e: SiemEvent): string {
   const type = safe(String(e.type ?? 'unknown'));
   const actor = safe(String(e.actor ?? 'anonymous'));
   const detail = safe(String(e.detail ?? ''));
-  return `CEF:0|Quorena|Platform|1.0|${type}|${actor}|${detail}`;
+  return `CEF:0|RPLCompass|Platform|1.0|${type}|${actor}|${detail}`;
 }
 
 /** Fire-and-forget: posts CEF to SIEM_WEBHOOK_URL when set; no-op otherwise. Never throws. */

@@ -11,7 +11,7 @@ export function MobileSidebarHeader() {
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent">
           <BrainCircuit className="h-4 w-4 text-primary-foreground" aria-hidden="true" />
         </div>
-        <span className="font-headline text-sm font-bold tracking-tight">Quorena</span>
+        <span className="font-headline text-sm font-bold tracking-tight">RPL Compass</span>
       </div>
     </header>
   );

@@ -9,9 +9,10 @@ import { FirebaseClientProvider } from '@/firebase';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'Quorena',
-  description: 'Turn any lesson into a live quiz. Teachers upload a PDF, students join with a room code, and everyone sees the leaderboard update in real time.',
-  applicationName: 'Quorena',
+  title: 'RPL Compass',
+  description:
+    'AI-assisted RPL assessment for NSQF certification — AI-matched self-declarations, per-criterion rubric scoring, and live inter-assessor consistency (Cohen\u2019s \u03BA).',
+  applicationName: 'RPL Compass',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: 'Quorena',
+    title: 'RPL Compass',
     statusBarStyle: 'default',
   },
 };

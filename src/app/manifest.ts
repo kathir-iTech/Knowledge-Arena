@@ -2,9 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Quorena',
-    short_name: 'Quorena',
-    description: 'The ultimate quiz battleground for students and teachers.',
+    name: 'RPL Compass',
+    short_name: 'RPL Compass',
+    description:
+      'AI-assisted RPL assessment — NSQF matching, per-criterion rubric scoring, live assessor consistency.',
     start_url: '/',
     scope: '/',
     display: 'standalone',
