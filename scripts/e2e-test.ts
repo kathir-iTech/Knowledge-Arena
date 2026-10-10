@@ -45,7 +45,12 @@ async function test(label: string, fn: () => Promise<void>) {
 }
 
 async function signIn(email: string, password: string): Promise<string> {
-  const apiKey = 'AIzaSyDnqpDkmttNbyPcZadBKMOrPjZLSN0SNyo';
+  const apiKey = process.env.FIREBASE_WEB_API_KEY ?? process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      'FIREBASE_WEB_API_KEY (or NEXT_PUBLIC_FIREBASE_API_KEY) must be set — the Firebase web API key is read from the environment, never hardcoded.',
+    );
+  }
   const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
