@@ -208,6 +208,24 @@ export async function recomputePackConsistency(packId: string): Promise<Consiste
 
   const computedAt = Date.now();
 
+  // Read existing doc first to preserve history and the isDemoData flag.
+  let history: HistoryEntry[] = [];
+  let existingIsDemoData = false;
+  try {
+    const existing = await db.collection('rpl_consistency').doc(sanitizeRplDocId(packId)).get();
+    if (existing.exists) {
+      const data = existing.data() as Partial<RPLConsistencyDoc> & { history?: HistoryEntry[]; isDemoData?: boolean };
+      if (Array.isArray(data.history)) {
+        history = data.history
+          .filter((h) => typeof h?.at === 'number' && typeof h?.kappa === 'number')
+          .slice(-20);
+      }
+      existingIsDemoData = data.isDemoData === true;
+    }
+  } catch {
+    history = [];
+  }
+
   const report: ConsistencyReport = {
     packId,
     overallKappa,
@@ -219,24 +237,9 @@ export async function recomputePackConsistency(packId: string): Promise<Consiste
     assistedKappa,
     assessmentCount,
     computedAt,
+    isDemoData: existingIsDemoData,
   };
 
-  // Maintain history (capped at 20) in the stored doc. Only measured kappa
-  // values enter history — a "No data" recomputation is not a data point.
-  let history: HistoryEntry[] = [];
-  try {
-    const existing = await db.collection('rpl_consistency').doc(sanitizeRplDocId(packId)).get();
-    if (existing.exists) {
-      const data = existing.data() as Partial<RPLConsistencyDoc> & { history?: HistoryEntry[] };
-      if (Array.isArray(data.history)) {
-        history = data.history
-          .filter((h) => typeof h?.at === 'number' && typeof h?.kappa === 'number')
-          .slice(-20);
-      }
-    }
-  } catch {
-    history = [];
-  }
   if (overallKappa !== null) {
     history = [...history, { at: computedAt, kappa: overallKappa }].slice(-20);
   }
@@ -256,7 +259,8 @@ export async function recomputePackConsistency(packId: string): Promise<Consiste
     assistedKappa,
     assessmentCount,
     history,
-  } as RPLConsistencyDoc & { history: HistoryEntry[] };
+    isDemoData: existingIsDemoData,
+  } as RPLConsistencyDoc & { history: HistoryEntry[]; isDemoData?: boolean };
 
   try {
     await db.collection('rpl_consistency').doc(sanitizeRplDocId(packId)).set(docToStore, { merge: true });

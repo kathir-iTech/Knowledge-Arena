@@ -192,6 +192,7 @@ export interface ConsistencyReport {
   assistedKappa: number | null;
   assessmentCount: number;
   computedAt: number;
+  isDemoData?: boolean;
 }
 
 export interface KappaAlert {
@@ -276,6 +277,7 @@ export interface PackPerformanceRow {
   avgScore: number;
   kappa: number | null;
   interpretation: string;
+  isDemoData?: boolean;
 }
 
 export interface ActivityEvent {

@@ -204,7 +204,7 @@ function buildPlannedWrites(shared, kappaLib) {
   // canonical ids live in the FIELDS (packId/unitId).
   const pushDoc = (collection, docId, data) => {
     const path = `${collection}/${docId}`;
-    writes.push({ collection, docId, path, fields: Object.keys(data).sort(), data });
+    writes.push({ collection, docId, path, fields: Object.keys(data).sort(), data: { ...data, isDemoData: true } });
   };
   const pushItem = (assessmentId, itemId, data) => {
     // Doc id sanitized via the SHARED scheme (item-ids.ts): itemId FIELD
@@ -218,13 +218,13 @@ function buildPlannedWrites(shared, kappaLib) {
       subDocId,
       path,
       fields: Object.keys(data).sort(),
-      data,
+      data: { ...data, isDemoData: true },
     });
   };
   const pushConsistency = (packId, data) => {
     const docId = sanitizeDocId(packId);
     const path = `${RPL_CONSISTENCY}/${docId}`;
-    writes.push({ collection: RPL_CONSISTENCY, docId, path, packId, fields: Object.keys(data).sort(), data });
+    writes.push({ collection: RPL_CONSISTENCY, docId, path, packId, fields: Object.keys(data).sort(), data: { ...data, isDemoData: true } });
   };
 
   // -- 1. Workers ------------------------------------------------------------

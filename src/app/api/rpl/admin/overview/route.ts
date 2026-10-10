@@ -146,6 +146,7 @@ export async function GET(req: NextRequest) {
         avgScore: mean(perAssessmentScores) ?? 0,
         kappa,
         interpretation: interpretationForKappa(kappa, consistency?.interpretation),
+        isDemoData: consistency?.isDemoData === true,
       };
     });
 
