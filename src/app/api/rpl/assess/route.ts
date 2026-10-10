@@ -5,6 +5,8 @@ import {
 } from '@/lib/verify-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { RPL_ASSESSMENTS } from '@/lib/rpl/rpl-collections';
+import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
+import { computeAssessmentScores } from '@/lib/rpl/scores';
 import type { AssessmentItem, RPLAssessmentDoc } from '@/lib/rpl/types';
 
 export const runtime = 'nodejs';
@@ -102,6 +104,12 @@ export async function POST(req: NextRequest) {
     if (typeof packId !== 'string' || !packId.trim()) {
       return NextResponse.json({ error: 'packId is required' }, { status: 400 });
     }
+    // Score fields are computed from the pack's units (shared scoring lib),
+    // so an unknown packId must fail visibly — never write an unscored doc.
+    const pack = NSQF_PACKS.find((p) => p.id === packId);
+    if (!pack) {
+      return NextResponse.json({ error: `Unknown packId: ${packId}` }, { status: 400 });
+    }
     if (!Array.isArray(items)) {
       return NextResponse.json({ error: 'items must be an array' }, { status: 400 });
     }
@@ -133,12 +141,20 @@ export async function POST(req: NextRequest) {
     const createdAt =
       existingData && typeof existingData.createdAt === 'number' ? existingData.createdAt : now;
 
+    // D2 fix: persist the score fields the admin overview reads. Same
+    // formula as the competency profile (shared src/lib/rpl/scores.ts), so
+    // doc-level scores can never disagree with the profile/certify path.
+    const scoreFields = computeAssessmentScores(validItems, pack);
+
     const parentData: Record<string, unknown> = {
       assessorId: auth.uid,
       workerId,
       packId,
       status,
       aiSuggestionUsed,
+      overallScore: scoreFields.overallScore,
+      unitScores: scoreFields.unitScores,
+      scores: scoreFields.scores,
       createdAt,
       updatedAt: now,
     };
@@ -203,6 +219,7 @@ export async function POST(req: NextRequest) {
       status,
       aiSuggestionUsed,
       itemCount: validItems.length,
+      overallScore: scoreFields.overallScore,
     });
   } catch (err) {
     console.error('[RPL Assess POST] Error:', err instanceof Error ? err.message : String(err));

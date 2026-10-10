@@ -3,6 +3,10 @@
 // consistency docs, competency rollup + certification, and Meena AI-assisted
 // scenario. Idempotent: all writes are set-merge. Defaults to emulator-safe.
 //
+// Doc-level score fields (overallScore/unitScores/scores, 0-100) are computed
+// with the SHARED lib src/lib/rpl/scores.ts — the same computeAssessmentScores
+// POST /api/rpl/assess uses — never hard-coded (D2/D3).
+//
 // Admin init mirrors src/lib/firebase-admin.ts (emulator vs service-account
 // vs ADC + env vars) and scripts/seed-demo.ts (emulator projectId pattern).
 // Collection names use the string values from src/lib/rpl/rpl-collections.ts.
@@ -97,11 +101,12 @@ function sanitizeItemId(unitId, idx) {
 }
 
 // ---------------------------------------------------------------------------
-// Kappa import — pattern copied from scripts/test-kappa.mjs (Node type-
+// TS module loader — pattern copied from scripts/test-kappa.mjs (Node type-
 // stripping of .ts). Candidates ordered for scripts/rpl/ depth first.
+// scores.ts / nsqf-packs.ts / kappa.ts all use type-only imports internally,
+// so plain `node` (>=22.13) can strip-load them; no tsx required.
 // ---------------------------------------------------------------------------
-async function loadKappa() {
-  const candidates = ['../../src/lib/rpl/kappa.ts', '../src/lib/rpl/kappa.ts'];
+async function loadTsModule(candidates, label) {
   let mod = null;
   let used = null;
   for (const p of candidates) {
@@ -110,15 +115,39 @@ async function loadKappa() {
       used = p;
       break;
     } catch (err) {
-      console.log(`TS import path failed: ${p}: ${err?.message ?? err}`);
+      console.log(`TS import path failed (${label}): ${p}: ${err?.message ?? err}`);
     }
   }
   if (!mod) {
-    console.log('DIRECT_TS_IMPORT_FAILED — run with a Node version supporting type-stripping (>=22.13).');
+    console.log(
+      `DIRECT_TS_IMPORT_FAILED (${label}) — run with a Node version supporting type-stripping (>=22.13).`
+    );
     process.exit(1);
   }
-  console.log(`TS import path worked: ${used} (Node type-stripping)`);
+  console.log(`TS import path worked: ${used} (${label}, Node type-stripping)`);
   return mod;
+}
+
+async function loadKappa() {
+  return loadTsModule(['../../src/lib/rpl/kappa.ts', '../src/lib/rpl/kappa.ts'], 'kappa');
+}
+
+// Shared scoring lib (src/lib/rpl/scores.ts) + NSQF packs: the SAME
+// computeAssessmentScores() the app calls in POST /api/rpl/assess, so
+// seeded docs and live docs can never disagree on scale or formula.
+async function loadSharedScoring() {
+  const scoresMod = await loadTsModule(
+    ['../../src/lib/rpl/scores.ts', '../src/lib/rpl/scores.ts'],
+    'scores'
+  );
+  const packsMod = await loadTsModule(
+    ['../../src/lib/rpl/nsqf-packs.ts', '../src/lib/rpl/nsqf-packs.ts'],
+    'nsqf-packs'
+  );
+  return {
+    computeAssessmentScores: scoresMod.computeAssessmentScores,
+    NSQF_PACKS: packsMod.NSQF_PACKS,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +189,7 @@ function initAdminForTarget() {
   console.log('Admin init: ADC mode (applicationDefault)');
 }
 
-function buildPlannedWrites() {
+function buildPlannedWrites(shared) {
   const writes = [];
   // Structured refs avoid '/' splitting bugs: doc ids with '/' are sanitized,
   // canonical ids live in the FIELDS (packId/unitId).
@@ -314,19 +343,48 @@ function buildPlannedWrites() {
   const a2Id = 'demo-suresh-ele-a2';
   const submittedAt = NOW - 1 * DAY;
 
-  const scoresMap = (eu1, eu2) => {
-    const m = {};
-    eu1.forEach((s, i) => { m[`ELE/N1301#${i}`] = s; });
-    eu2.forEach((s, i) => { m[`ELE/N1302#${i}`] = s; });
-    return m;
+  // Items are built FIRST so the doc-level score fields come from the
+  // SHARED scoring lib (src/lib/rpl/scores.ts, same formula/scale the app
+  // uses) instead of hard-coded demo numbers (D2/D3).
+  const itemWrites = (assessmentId, assessorId, unitId, unitName, criteria, scores) => {
+    const items = [];
+    criteria.forEach((criterionText, i) => {
+      const itemId = sanitizeItemId(unitId, i);
+      const doc = {
+        itemId,
+        assessmentId,
+        unitId,
+        unitName,
+        kind: 'performance',
+        criterionText,
+        rubricScore: scores[i],
+        scoredBy: assessorId,
+        scoredAt: submittedAt,
+      };
+      pushItem(assessmentId, itemId, doc);
+      items.push(doc);
+    });
+    return items;
   };
+
+  const elePack = shared.NSQF_PACKS.find((p) => p.id === ELE_Q1301);
+  const a1Items = [
+    ...itemWrites(a1Id, 'demo-assessor-1', 'ELE/N1301', 'Installation of electrical systems', ELE_N1301_CRITERIA, ASSESSOR1_EU1),
+    ...itemWrites(a1Id, 'demo-assessor-1', 'ELE/N1302', 'Maintenance and repair of electrical systems', ELE_N1302_CRITERIA, ASSESSOR1_EU2),
+  ];
+  const a2Items = [
+    ...itemWrites(a2Id, 'demo-assessor-2', 'ELE/N1301', 'Installation of electrical systems', ELE_N1301_CRITERIA, ASSESSOR2_EU1),
+    ...itemWrites(a2Id, 'demo-assessor-2', 'ELE/N1302', 'Maintenance and repair of electrical systems', ELE_N1302_CRITERIA, ASSESSOR2_EU2),
+  ];
+  const a1Scores = shared.computeAssessmentScores(a1Items, elePack);
+  const a2Scores = shared.computeAssessmentScores(a2Items, elePack);
 
   const a1Doc = {
     assessorId: 'demo-assessor-1',
     workerId: 'demo-suresh-kumar',
     assessmentId: a1Id,
     packId: ELE_Q1301,
-    scores: scoresMap(ASSESSOR1_EU1, ASSESSOR1_EU2),
+    ...a1Scores,
     status: 'submitted',
     aiSuggestionUsed: false,
     createdAt: NOW - 2 * DAY,
@@ -339,7 +397,7 @@ function buildPlannedWrites() {
     workerId: 'demo-suresh-kumar',
     assessmentId: a2Id,
     packId: ELE_Q1301,
-    scores: scoresMap(ASSESSOR2_EU1, ASSESSOR2_EU2),
+    ...a2Scores,
     status: 'submitted',
     aiSuggestionUsed: false,
     createdAt: NOW - 2 * DAY,
@@ -349,27 +407,6 @@ function buildPlannedWrites() {
   };
   pushDoc(RPL_ASSESSMENTS, a1Id, a1Doc);
   pushDoc(RPL_ASSESSMENTS, a2Id, a2Doc);
-
-  const itemWrites = (assessmentId, assessorId, unitId, unitName, criteria, scores) => {
-    criteria.forEach((criterionText, i) => {
-      const itemId = sanitizeItemId(unitId, i);
-      pushItem(assessmentId, itemId, {
-        itemId,
-        assessmentId,
-        unitId,
-        unitName,
-        kind: 'performance',
-        criterionText,
-        rubricScore: scores[i],
-        scoredBy: assessorId,
-        scoredAt: submittedAt,
-      });
-    });
-  };
-  itemWrites(a1Id, 'demo-assessor-1', 'ELE/N1301', 'Installation of electrical systems', ELE_N1301_CRITERIA, ASSESSOR1_EU1);
-  itemWrites(a1Id, 'demo-assessor-1', 'ELE/N1302', 'Maintenance and repair of electrical systems', ELE_N1302_CRITERIA, ASSESSOR1_EU2);
-  itemWrites(a2Id, 'demo-assessor-2', 'ELE/N1301', 'Installation of electrical systems', ELE_N1301_CRITERIA, ASSESSOR2_EU1);
-  itemWrites(a2Id, 'demo-assessor-2', 'ELE/N1302', 'Maintenance and repair of electrical systems', ELE_N1302_CRITERIA, ASSESSOR2_EU2);
 
   // -- 3. Consistency ELE/Q1301 (canonical pack id in FIELD; doc id sanitized
   // because Firestore doc ids cannot contain '/') ---------------------------
@@ -383,23 +420,15 @@ function buildPlannedWrites() {
     computedAt: NOW,
   });
 
-  // -- 4. Suresh rollup (merged onto latest assessment a2) + certification --
-  // Combined-assessor means: EU1 28/8=3.5 competent, EU2 22/8=2.75 partial,
-  // overall 50/16=3.125 -> 3.13.
-  pushDoc(RPL_ASSESSMENTS, a2Id, {
-    overallScore: 3.13,
-    unitScores: {
-      'ELE/N1301': { score: 3.5, status: 'competent', unitName: 'Installation of electrical systems' },
-      'ELE/N1302': { score: 2.75, status: 'partial', unitName: 'Maintenance and repair of electrical systems' },
-    },
-  });
+  // -- 4. Certification (rollup fields now ride on a2Doc via the shared lib;
+  //        scores are 0-100, e.g. EU1 assessor means 3.5 -> 83) ------------
   pushDoc(RPL_CERTIFICATIONS, 'demo-suresh-kumar', {
     workerId: 'demo-suresh-kumar',
     executiveUid: 'demo-executive-1',
     recommendedLevel: 4,
     status: 'pending_human_signoff',
     rationale:
-      'Suresh averages 3.5 on installation (competent) and 2.75 on maintenance (partial) across two assessors; NSQF level 4 recommended pending human sign-off with gap training on fault diagnosis.',
+      'Assessor 1 scores 92/100 on installation (competent) and 67/100 on maintenance (partial); units N1303/N1304 are part of the pack but carry no demo items, so the pack-wide overall is 40/100. Assessor 2 scores lower on the same worker (75 and 50). NSQF level 4 recommended pending human sign-off with gap training on fault diagnosis.',
     requiredGapTraining: [],
     signedAt: NOW,
   });
@@ -407,30 +436,9 @@ function buildPlannedWrites() {
   // -- 5. Meena AI-assisted scenario (CON/Q0304) -----------------------------
   const meenaAId = 'demo-meena-con-a1';
   const meenaSubmittedAt = NOW - 1 * DAY;
-  pushDoc(RPL_ASSESSMENTS, meenaAId, {
-    assessorId: 'demo-assessor-1',
-    workerId: 'demo-meena-devi',
-    assessmentId: meenaAId,
-    packId: CON_Q0304,
-    scores: {
-      'CON/N0304-1#0': MEENA_U1[0],
-      'CON/N0304-1#1': MEENA_U1[1],
-      'CON/N0304-1#2': MEENA_U1[2],
-      'CON/N0304-1#3': MEENA_U1[3],
-      'CON/N0304-2#0': MEENA_U2[0],
-      'CON/N0304-2#1': MEENA_U2[1],
-      'CON/N0304-2#2': MEENA_U2[2],
-      'CON/N0304-2#3': MEENA_U2[3],
-    },
-    status: 'submitted',
-    aiSuggestionUsed: true,
-    createdAt: NOW - 2 * DAY,
-    submittedAt: meenaSubmittedAt,
-    workerName: 'Meena Devi',
-    referenceCode: 'RPL-2026-MD-002',
-  });
 
   const meenaItems = (unitId, unitName, criteria, scores, aiFlags) => {
+    const items = [];
     criteria.forEach((criterionText, i) => {
       const itemId = sanitizeItemId(unitId, i);
       const doc = {
@@ -449,11 +457,31 @@ function buildPlannedWrites() {
         doc.aiAccepted = true;
       }
       pushItem(meenaAId, itemId, doc);
+      items.push(doc);
     });
+    return items;
   };
   // Several items carry AI proposals that were accepted.
-  meenaItems('CON/N0304-1', 'Installation of water supply systems', CON_N0304_1_CRITERIA, MEENA_U1, [true, true, false, true]);
-  meenaItems('CON/N0304-2', 'Installation of drainage systems', CON_N0304_2_CRITERIA, MEENA_U2, [true, false, true, false]);
+  const conPack = shared.NSQF_PACKS.find((p) => p.id === CON_Q0304);
+  const meenaAllItems = [
+    ...meenaItems('CON/N0304-1', 'Installation of water supply systems', CON_N0304_1_CRITERIA, MEENA_U1, [true, true, false, true]),
+    ...meenaItems('CON/N0304-2', 'Installation of drainage systems', CON_N0304_2_CRITERIA, MEENA_U2, [true, false, true, false]),
+  ];
+  const meenaScores = shared.computeAssessmentScores(meenaAllItems, conPack);
+
+  pushDoc(RPL_ASSESSMENTS, meenaAId, {
+    assessorId: 'demo-assessor-1',
+    workerId: 'demo-meena-devi',
+    assessmentId: meenaAId,
+    packId: CON_Q0304,
+    ...meenaScores,
+    status: 'submitted',
+    aiSuggestionUsed: true,
+    createdAt: NOW - 2 * DAY,
+    submittedAt: meenaSubmittedAt,
+    workerName: 'Meena Devi',
+    referenceCode: 'RPL-2026-MD-002',
+  });
 
   pushConsistency(CON_Q0304, {
     packId: CON_Q0304,
@@ -487,6 +515,7 @@ async function main() {
   console.log(`node ${process.version}`);
 
   const kappaMod = await loadKappa();
+  const shared = await loadSharedScoring();
   const seedKappa = kappaMod.computeKappa(RATINGS_A, RATINGS_B);
   console.log(
     `seed-array kappa: kappa=${seedKappa.kappa.toFixed(4)} ` +
@@ -495,7 +524,7 @@ async function main() {
     `(A=[${RATINGS_A}] B=[${RATINGS_B}])`
   );
 
-  const writes = buildPlannedWrites();
+  const writes = buildPlannedWrites(shared);
 
   // -- dry-run: print everything, write nothing ------------------------------
   if (DRY_RUN) {
@@ -553,8 +582,16 @@ function printSummary(writes, seedKappa, dryRun) {
   console.log('  Ravi Shankar  uid=demo-ravi-shankar   (Data Entry/IT, 3y, Tamil Nadu)');
   console.log('assessments:');
   console.log('  demo-suresh-ele-a1 (assessor demo-assessor-1, ELE/Q1301, submitted, aiSuggestionUsed=false)');
-  console.log('  demo-suresh-ele-a2 (assessor demo-assessor-2, ELE/Q1301, submitted, aiSuggestionUsed=false) + rollup merge');
+  console.log('  demo-suresh-ele-a2 (assessor demo-assessor-2, ELE/Q1301, submitted, aiSuggestionUsed=false)');
   console.log('  demo-meena-con-a1  (assessor demo-assessor-1, CON/Q0304, submitted, aiSuggestionUsed=true)');
+  for (const w of writes) {
+    if (w.collection === RPL_ASSESSMENTS && typeof w.data.overallScore === 'number') {
+      const units = Object.fromEntries(
+        Object.entries(w.data.unitScores ?? {}).map(([k, v]) => [k, v.score])
+      );
+      console.log(`  score fields (${w.docId}): overallScore=${w.data.overallScore} unitScores=${JSON.stringify(units)} (0-100, shared lib)`);
+    }
+  }
   console.log(`computed seed kappa: ${seedKappa.kappa.toFixed(4)} (${seedKappa.interpretation})`);
   console.log('writes by collection:');
   for (const col of RPL_COLLECTIONS) {

@@ -6,9 +6,9 @@ import type {
   AssessmentItem,
   CompetencyProfile,
   RPLCertificationRecommendation,
-  UnitMastery,
 } from './types';
 import type { NSQFQualificationPack } from './nsqf-packs';
+import { scoreItemsAgainstUnits } from './scores';
 
 // ---------------------------------------------------------------------------
 // Local extension (never edit src/lib/rpl/types.ts).
@@ -25,16 +25,9 @@ export interface DraftCertificationRecommendation extends RPLCertificationRecomm
   requiresHumanSignoff: true;
 }
 
-function mean(values: number[]): number | null {
-  if (values.length === 0) return null;
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
-
-function statusForScore(score: number): UnitMastery {
-  if (score >= 75) return 'competent';
-  if (score >= 50) return 'partial';
-  return 'not_yet';
-}
+// The unit/overall scoring math lives in ./scores (scoreItemsAgainstUnits)
+// and is shared with the assessment-save path (computeAssessmentScores) —
+// do not re-implement formulas here.
 
 /**
  * Build a CompetencyProfile for a worker against one qualification pack.
@@ -68,69 +61,17 @@ export function generateCompetencyProfile(
   assessmentItems: AssessmentItem[],
   pack: NSQFQualificationPack,
 ): CompetencyProfile {
-  const byUnit = new Map<string, AssessmentItem[]>();
-  for (const item of assessmentItems) {
-    if (!item || typeof item.unitId !== 'string') continue;
-    const list = byUnit.get(item.unitId) ?? [];
-    list.push(item);
-    byUnit.set(item.unitId, list);
-  }
-
-  const unitScores: NonNullable<CompetencyProfile['unitScores']> = {};
-  const topLevelGaps: string[] = [];
-
-  for (const unit of pack.competencyUnits) {
-    const items = byUnit.get(unit.id) ?? [];
-
-    const performanceValues: number[] = [];
-    for (const item of items) {
-      if (item.kind !== 'performance') continue;
-      if (typeof item.rubricScore !== 'number') continue;
-      if (!Number.isInteger(item.rubricScore) || item.rubricScore < 1 || item.rubricScore > 4) continue;
-      performanceValues.push(((item.rubricScore - 1) / 3) * 100);
-    }
-
-    const knowledgeValues: number[] = [];
-    const unitGaps: string[] = [];
-    for (const item of items) {
-      if (item.kind !== 'knowledge') continue;
-      if (typeof item.knowledgePass !== 'boolean') continue;
-      knowledgeValues.push(item.knowledgePass ? 100 : 0);
-      if (item.knowledgePass === false) unitGaps.push(item.criterionText);
-    }
-
-    const performanceMean = mean(performanceValues);
-    const knowledgeMean = mean(knowledgeValues);
-    let raw: number;
-    if (performanceMean !== null && knowledgeMean !== null) {
-      raw = (performanceMean + knowledgeMean) / 2;
-    } else if (performanceMean !== null) {
-      raw = performanceMean;
-    } else if (knowledgeMean !== null) {
-      raw = knowledgeMean;
-    } else {
-      raw = 0;
-    }
-
-    const score = Math.round(raw);
-    unitScores[unit.id] = {
-      score,
-      status: statusForScore(score),
-      unitName: unit.name,
-      knowledgeGaps: unitGaps,
-    };
-    topLevelGaps.push(...unitGaps);
-  }
-
-  const unitScoreValues = Object.values(unitScores).map((u) => u.score);
-  const overallScore = unitScoreValues.length > 0 ? Math.round(mean(unitScoreValues) ?? 0) : 0;
+  const { unitScores, overallScore, knowledgeGaps } = scoreItemsAgainstUnits(
+    pack.competencyUnits,
+    assessmentItems,
+  );
 
   return {
     workerId: '',
     packId: pack.id,
     overallScore,
     unitScores,
-    knowledgeGaps: topLevelGaps,
+    knowledgeGaps,
     nsqfLevelRecommended: overallScore >= 50 ? pack.nsqfLevel : Math.max(1, pack.nsqfLevel - 1),
     generatedAt: Date.now(),
   };

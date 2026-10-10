@@ -8,6 +8,7 @@ import {
   RPL_CONSISTENCY,
   RPL_WORKERS,
 } from '@/lib/rpl/rpl-collections';
+import { storedAssessmentScore } from '@/lib/rpl/scores';
 import type {
   ActivityEvent,
   AdminOverview,
@@ -55,37 +56,13 @@ function interpretationForKappa(kappa: number | null, stored: unknown): string {
 }
 
 /**
- * avgScore definition (deliberate choice, computed in memory):
- * Per submitted, non-template assessment for the pack, prefer a numeric
- * `overallScore` field when present; otherwise the mean of the stored
- * `unitScores` entries (each entry is either a number or `{ score: number }`);
- * otherwise the mean of the stored `scores` map values
- * (AssessorScore.scores). Assessments with no usable score are skipped; the
- * pack avgScore is the mean of the per-assessment scores, or 0 when no
- * submitted assessment for the pack carries a score.
+ * avgScore definition: the shared read-side helper
+ * storedAssessmentScore() (src/lib/rpl/scores.ts) — prefer numeric
+ * `overallScore` (always written by POST /api/rpl/assess since the D2 fix),
+ * else mean of `unitScores` entries, else mean of the raw `scores` map.
+ * Assessments with no usable score are skipped; pack avgScore is the mean
+ * of the per-assessment scores, or 0 when none carries a score.
  */
-function assessmentScore(data: DocData): number | null {
-  const overall = finiteNumber(data.overallScore);
-  if (overall !== null) return overall;
-  const unitEntries = Object.values(asRecord(data.unitScores));
-  if (unitEntries.length > 0) {
-    const vals: number[] = [];
-    for (const entry of unitEntries) {
-      if (typeof entry === 'number' && Number.isFinite(entry)) {
-        vals.push(entry);
-      } else {
-        const s = finiteNumber(asRecord(entry).score);
-        if (s !== null) vals.push(s);
-      }
-    }
-    const m = mean(vals);
-    if (m !== null) return m;
-  }
-  const scoreVals = Object.values(asRecord(data.scores)).filter(
-    (v): v is number => typeof v === 'number' && Number.isFinite(v),
-  );
-  return mean(scoreVals);
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -147,7 +124,7 @@ export async function GET(req: NextRequest) {
       for (const s of forPack) {
         const workerId = nonEmptyString(s.data.workerId);
         if (workerId) workerIds.add(workerId);
-        const score = assessmentScore(s.data);
+        const score = storedAssessmentScore(s.data);
         if (score !== null) perAssessmentScores.push(score);
       }
       const consistency = consistencyByPack.get(pack.id);
