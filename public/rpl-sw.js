@@ -1,7 +1,10 @@
 /* RPL offline service worker — scope /rpl/ ONLY. Plain worker, no imports. */
 
-var RPL_CACHE = 'rpl-precache-v1';
-var PRECACHE_URLS = ['/rpl/declare', '/rpl/status', '/rpl'];
+var RPL_CACHE = 'rpl-precache-v2';
+// Only the two offline-first RPL pages. '/rpl' is intentionally NOT
+// precached: production answers it with 307 → '/' (outside SW scope) and
+// preview with 307 → /login — caching a redirect chain poisons the cache.
+var PRECACHE_URLS = ['/rpl/declare', '/rpl/status'];
 var DB_NAME = 'rpl-offline';
 var STORE_NAME = 'rpl-pending-declarations';
 var SYNC_TAG = 'rpl-sync';
@@ -78,7 +81,10 @@ self.addEventListener('install', function (event) {
         PRECACHE_URLS.map(function (url) {
           return fetch(url)
             .then(function (res) {
-              if (res && res.ok) {
+              // Skip ok-but-redirected responses (e.g. middleware 307s): a
+              // followed redirect's body must never be stored under the
+              // original key.
+              if (res && res.ok && !res.redirected) {
                 return cache.put(url, res);
               }
             })
@@ -90,7 +96,27 @@ self.addEventListener('install', function (event) {
 });
 
 self.addEventListener('activate', function (event) {
-  event.waitUntil(clients.claim());
+  // Drop caches from earlier SW versions (v1 stored /api/rpl/status/* PII
+  // responses and a '/rpl' redirect body on the device). Deleting them here
+  // is what actually removes already-placed at-rest data.
+  event.waitUntil(
+    caches
+      .keys()
+      .then(function (keys) {
+        return Promise.all(
+          keys
+            .filter(function (key) {
+              return key.indexOf('rpl-precache-') === 0 && key !== RPL_CACHE;
+            })
+            .map(function (key) {
+              return caches.delete(key);
+            })
+        );
+      })
+      .then(function () {
+        return self.clients.claim();
+      })
+  );
 });
 
 self.addEventListener('fetch', function (event) {
@@ -108,7 +134,7 @@ self.addEventListener('fetch', function (event) {
         caches.match(event.request).then(function (cached) {
           if (cached) return cached;
           return fetch(event.request).then(function (res) {
-            if (res && res.ok) {
+            if (res && res.ok && !res.redirected) {
               var copy = res.clone();
               caches.open(RPL_CACHE).then(function (cache) {
                 cache.put(event.request, copy);
@@ -122,27 +148,11 @@ self.addEventListener('fetch', function (event) {
     }
   }
 
-  // Network-first with cache fallback for GET /api/rpl/status/*.
-  // (Reachable when the SW controls /rpl pages issuing same-origin API reads;
-  // scope isolation above keeps all non-/rpl navigations untouched.)
-  if (event.request.method === 'GET' && url.pathname.startsWith('/api/rpl/status/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then(function (res) {
-          if (res && res.ok) {
-            var copy = res.clone();
-            caches.open(RPL_CACHE).then(function (cache) {
-              cache.put(event.request, copy);
-            });
-          }
-          return res;
-        })
-        .catch(function () {
-          return caches.match(event.request);
-        })
-    );
-    return;
-  }
+  // Status reads are NOT cached: /api/rpl/status/* responses carry worker PII
+  // (name, declaration, employer) and Cache Storage would keep that PII at
+  // rest on the shared/demo device indefinitely. The request passes through
+  // to the network untouched; offline users see the normal network error and
+  // the offline declaration queue below is unaffected.
 
   // Offline queue for POST /api/rpl/declare when the network throws.
   if (event.request.method === 'POST' && url.pathname === '/api/rpl/declare') {
