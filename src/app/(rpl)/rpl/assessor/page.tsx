@@ -269,7 +269,7 @@ export default function RplAssessorPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium">{packTitle(p.packId)}</p>
                       <Badge variant={kappaVariant(p.packKappa)}>
-                        {p.packKappa === null ? 'no data' : `κ ${p.packKappa.toFixed(3)}`}
+                        {p.packKappa === null ? 'n/a — needs 2+ assessors' : `κ ${p.packKappa.toFixed(3)}`}
                       </Badge>
                     </div>
                     <p className="mt-1 font-mono text-xs text-muted-foreground">{p.packId}</p>

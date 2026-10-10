@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import type { ConsistencyReport } from '@/lib/rpl/types';
 import { computeKappaImprovement } from '@/lib/rpl/kappa';
+import { DemoBadge } from '@/components/rpl/DemoBadge';
 
 interface HistoryEntry {
   at: number;
@@ -206,17 +207,17 @@ export default function RplConsistencyPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Overall agreement</CardTitle>
+          <CardTitle>Overall agreement <DemoBadge isDemoData={report.isDemoData} /></CardTitle>
           <CardDescription>
             Linear-weighted Cohen&apos;s kappa across pooled item scores (categories 1–4)
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-4">
           <span className="text-4xl font-bold text-primary">
-            {report.overallKappa === null ? '—' : report.overallKappa.toFixed(3)}
+            {report.overallKappa === null ? 'n/a' : report.overallKappa.toFixed(3)}
           </span>
           <Badge variant={report.overallKappa === null ? 'outline' : badgeVariantFor(report.overallKappa)}>
-            {report.interpretation}
+            {report.overallKappa === null ? 'needs 2+ assessors' : report.interpretation}
           </Badge>
           {report.overallKappa !== null && (
             <span className="text-sm text-muted-foreground">
@@ -253,13 +254,13 @@ export default function RplConsistencyPage() {
           <div className="rounded-[12px] border border-border/60 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Unassisted baseline</p>
             <p className="text-2xl font-bold text-primary">
-              {report.unassistedKappa === null ? '—' : report.unassistedKappa.toFixed(3)}
+              {report.unassistedKappa === null ? 'n/a — needs 2+ assessors' : report.unassistedKappa.toFixed(3)}
             </p>
           </div>
           <div className="rounded-[12px] border border-accent/50 bg-accent/10 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">AI-assisted</p>
             <p className="text-2xl font-bold text-primary">
-              {report.assistedKappa === null ? '—' : report.assistedKappa.toFixed(3)}
+              {report.assistedKappa === null ? 'n/a — needs 2+ assessors' : report.assistedKappa.toFixed(3)}
             </p>
           </div>
           <div className="rounded-[12px] border border-border/60 p-4">

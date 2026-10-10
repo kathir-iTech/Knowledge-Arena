@@ -23,6 +23,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { ActivityEvent, AdminOverview, AssessorLeaderboardRow, KappaAlert } from '@/lib/rpl/types';
+import { DemoBadge } from '@/components/rpl/DemoBadge';
 
 type KappaTone = 'red' | 'amber' | 'green' | 'none';
 
@@ -272,7 +273,7 @@ export default function RplAdminPage() {
     { label: 'Completed', value: String(overview.assessmentsCompleted), icon: ClipboardCheck },
     {
       label: 'Avg kappa',
-      value: overview.averageKappa === null ? '—' : overview.averageKappa.toFixed(3),
+      value: overview.averageKappa === null ? 'n/a — needs 2+ assessors' : overview.averageKappa.toFixed(3),
       icon: Scale,
     },
     { label: 'Certifications this month', value: String(overview.certificationsThisMonth), icon: Award },
@@ -396,7 +397,7 @@ export default function RplAdminPage() {
                       className="grid grid-cols-[2fr_1fr_1fr_1fr_1.6fr_auto] items-center gap-3 px-3 py-3 border-b border-border/20 last:border-0"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{pack.title}</p>
+                        <p className="text-sm font-medium truncate">{pack.title} <DemoBadge isDemoData={pack.isDemoData} /></p>
                         <p className="text-xs font-mono text-muted-foreground">{pack.packId}</p>
                       </div>
                       <span className="text-sm">Level {pack.nsqfLevel}</span>
@@ -408,9 +409,9 @@ export default function RplAdminPage() {
                           style={{ backgroundColor: kappaVar(tone) }}
                         />
                         <span className="text-sm font-semibold tabular-nums">
-                          {pack.kappa === null ? '—' : pack.kappa.toFixed(3)}
+                          {pack.kappa === null ? 'n/a' : pack.kappa.toFixed(3)}
                         </span>
-                        <Badge variant={kappaBadgeVariant(tone)}>{pack.interpretation}</Badge>
+                        <Badge variant={kappaBadgeVariant(tone)}>{pack.kappa === null ? 'needs 2+ assessors' : pack.interpretation}</Badge>
                       </span>
                       <Link
                         href={`/rpl/consistency/${encodeURIComponent(pack.packId)}`}
@@ -491,7 +492,7 @@ export default function RplAdminPage() {
                       <span className="text-sm font-medium font-mono truncate">{row.assessorId}</span>
                       <span className="text-sm font-semibold tabular-nums">{row.assessments}</span>
                       <span className="text-sm tabular-nums">
-                        {row.avgAgreement === null ? '—' : row.avgAgreement.toFixed(3)}
+                        {row.avgAgreement === null ? 'n/a — needs 2+ assessors' : row.avgAgreement.toFixed(3)}
                       </span>
                       <TrendMark trend={row.trend} />
                     </div>
