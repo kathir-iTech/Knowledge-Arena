@@ -173,9 +173,13 @@ export async function recomputePackConsistency(packId: string): Promise<Consiste
     }
   }
 
+  // No pooled pairs -> kappa is genuinely unknown. Store null (never a
+  // fabricated 0: a 0 would read as measured "Poor" agreement and trigger
+  // false calibration alerts for single-assessment packs).
   const overall = safeKappa(overallA, overallB);
-  const overallKappa = overall?.kappa ?? 0;
-  const interpretation = (overall?.interpretation ?? 'Poor') as ConsistencyReport['interpretation'];
+  const overallKappa: number | null = overall?.kappa ?? null;
+  const interpretation: ConsistencyReport['interpretation'] = (overall?.interpretation ??
+    'No data') as ConsistencyReport['interpretation'];
   const confidence: [number, number] = overall?.confidence ?? [0, 0];
 
   const unassisted = safeKappa(unassistedA, unassistedB);
@@ -217,7 +221,8 @@ export async function recomputePackConsistency(packId: string): Promise<Consiste
     computedAt,
   };
 
-  // Maintain history (capped at 20) in the stored doc.
+  // Maintain history (capped at 20) in the stored doc. Only measured kappa
+  // values enter history — a "No data" recomputation is not a data point.
   let history: HistoryEntry[] = [];
   try {
     const existing = await db.collection('rpl_consistency').doc(sanitizeRplDocId(packId)).get();
@@ -232,10 +237,14 @@ export async function recomputePackConsistency(packId: string): Promise<Consiste
   } catch {
     history = [];
   }
-  history = [...history, { at: computedAt, kappa: overallKappa }].slice(-20);
+  if (overallKappa !== null) {
+    history = [...history, { at: computedAt, kappa: overallKappa }].slice(-20);
+  }
 
   const docToStore = {
     packId,
+    // Explicit null (not undefined) so a recompute that LOSES its pair data
+    // clears stale stored numbers instead of leaving them behind on merge.
     kappa: overallKappa,
     interpretation,
     confidenceLower: confidence[0],
@@ -243,8 +252,8 @@ export async function recomputePackConsistency(packId: string): Promise<Consiste
     computedAt,
     assessorPairs,
     perCriterion: perCriterion.map((c) => ({ criterionId: c.criterionId, kappa: c.kappa })),
-    unassistedKappa: unassistedKappa ?? undefined,
-    assistedKappa: assistedKappa ?? undefined,
+    unassistedKappa,
+    assistedKappa,
     assessmentCount,
     history,
   } as RPLConsistencyDoc & { history: HistoryEntry[] };

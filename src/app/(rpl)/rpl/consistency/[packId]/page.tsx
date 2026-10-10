@@ -164,7 +164,9 @@ export default function RplConsistencyPage() {
     );
   }
 
-  const needsCalibration = report.overallKappa < 0.2;
+  // null overallKappa = fewer than 2 assessors have scored this pack; that is
+  // "no data", NOT Poor, so it never triggers the calibration card (D3).
+  const needsCalibration = report.overallKappa !== null && report.overallKappa < 0.2;
   const improvement =
     report.unassistedKappa !== null && report.assistedKappa !== null
       ? computeKappaImprovement(report.unassistedKappa, report.assistedKappa)
@@ -210,18 +212,24 @@ export default function RplConsistencyPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-4">
-          <span className="text-4xl font-bold text-primary">{report.overallKappa.toFixed(3)}</span>
-          <Badge variant={badgeVariantFor(report.overallKappa)}>{report.interpretation}</Badge>
-          <span className="text-sm text-muted-foreground">
-            95% CI [{report.confidence[0].toFixed(3)}, {report.confidence[1].toFixed(3)}]
+          <span className="text-4xl font-bold text-primary">
+            {report.overallKappa === null ? '—' : report.overallKappa.toFixed(3)}
           </span>
+          <Badge variant={report.overallKappa === null ? 'outline' : badgeVariantFor(report.overallKappa)}>
+            {report.interpretation}
+          </Badge>
+          {report.overallKappa !== null && (
+            <span className="text-sm text-muted-foreground">
+              95% CI [{report.confidence[0].toFixed(3)}, {report.confidence[1].toFixed(3)}]
+            </span>
+          )}
           <Button variant="outline" size="sm" onClick={fetchReport}>
             Refresh
           </Button>
         </CardContent>
       </Card>
 
-      {needsCalibration && (
+      {needsCalibration && report.overallKappa !== null && (
         <Card className="border-destructive/50 bg-destructive/10">
           <CardHeader>
             <CardTitle className="text-destructive">Assessor calibration session recommended</CardTitle>

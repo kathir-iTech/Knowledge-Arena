@@ -81,9 +81,14 @@ const ASSESSOR2_EU2 = [2, 3, 2, 3]; // ELE/N1302
 const RATINGS_A = [...ASSESSOR1_EU1, ...ASSESSOR1_EU2];
 const RATINGS_B = [...ASSESSOR2_EU1, ...ASSESSOR2_EU2];
 
-// Meena (CON/Q0304, AI-assisted) rubric arrays.
-const MEENA_U1 = [3, 3, 4, 3]; // CON/N0304-1
-const MEENA_U2 = [3, 2, 3, 3]; // CON/N0304-2
+// Meena (CON/Q0304, AI-assisted) rubric arrays — TWO assessors so the pack
+// has a REAL pairwise kappa (a single assessment cannot produce one, D3).
+const MEENA_U1 = [3, 3, 4, 3]; // CON/N0304-1, assessor 1
+const MEENA_U2 = [3, 2, 3, 3]; // CON/N0304-2, assessor 1
+const MEENA2_U1 = [3, 3, 4, 2]; // CON/N0304-1, assessor 2
+const MEENA2_U2 = [3, 2, 3, 3]; // CON/N0304-2, assessor 2
+const CON_RATINGS_A = [...MEENA_U1, ...MEENA_U2];
+const CON_RATINGS_B = [...MEENA2_U1, ...MEENA2_U2];
 
 const NOW = Date.now();
 const DAY = 24 * 60 * 60 * 1000;
@@ -189,7 +194,7 @@ function initAdminForTarget() {
   console.log('Admin init: ADC mode (applicationDefault)');
 }
 
-function buildPlannedWrites(shared) {
+function buildPlannedWrites(shared, kappaLib) {
   const writes = [];
   // Structured refs avoid '/' splitting bugs: doc ids with '/' are sanitized,
   // canonical ids live in the FIELDS (packId/unitId).
@@ -409,12 +414,20 @@ function buildPlannedWrites(shared) {
   pushDoc(RPL_ASSESSMENTS, a2Id, a2Doc);
 
   // -- 3. Consistency ELE/Q1301 (canonical pack id in FIELD; doc id sanitized
-  // because Firestore doc ids cannot contain '/') ---------------------------
+  // because Firestore doc ids cannot contain '/').
+  // kappa/interpretation/CI are COMPUTED with the app's own computeKappa from
+  // src/lib/rpl/kappa.ts — never hard-coded (D3: the old 0.58 "Moderate"
+  // contradicted the same arrays' real 0.385 "Fair").
+  const eleKappa = kappaLib.computeKappa(RATINGS_A, RATINGS_B);
   pushConsistency(ELE_Q1301, {
     packId: ELE_Q1301,
-    kappa: 0.58,
-    interpretation: 'Moderate',
-    unassistedKappa: 0.58,
+    kappa: eleKappa.kappa,
+    interpretation: eleKappa.interpretation,
+    confidenceLower: eleKappa.confidence[0],
+    confidenceUpper: eleKappa.confidence[1],
+    // Both assessors are unassisted, so the unassisted split equals the
+    // overall pool; there is no assisted pair to measure.
+    unassistedKappa: eleKappa.kappa,
     assistedKappa: null,
     assessmentCount: 2,
     computedAt: NOW,
@@ -433,41 +446,48 @@ function buildPlannedWrites(shared) {
     signedAt: NOW,
   });
 
-  // -- 5. Meena AI-assisted scenario (CON/Q0304) -----------------------------
+  // -- 5. Meena AI-assisted scenario (CON/Q0304) — TWO assessors so the pack
+  //        yields a REAL assisted pairwise kappa (D3) ------------------------
   const meenaAId = 'demo-meena-con-a1';
+  const meenaA2Id = 'demo-meena-con-a2';
   const meenaSubmittedAt = NOW - 1 * DAY;
 
-  const meenaItems = (unitId, unitName, criteria, scores, aiFlags) => {
+  const meenaItems = (assessmentId, assessorId, scoredAt, unitId, unitName, criteria, scores, aiFlags) => {
     const items = [];
     criteria.forEach((criterionText, i) => {
       const itemId = sanitizeItemId(unitId, i);
       const doc = {
         itemId,
-        assessmentId: meenaAId,
+        assessmentId,
         unitId,
         unitName,
         kind: 'performance',
         criterionText,
         rubricScore: scores[i],
-        scoredBy: 'demo-assessor-1',
-        scoredAt: meenaSubmittedAt,
+        scoredBy: assessorId,
+        scoredAt,
       };
       if (aiFlags[i]) {
         doc.aiProposedScore = scores[i];
         doc.aiAccepted = true;
       }
-      pushItem(meenaAId, itemId, doc);
+      pushItem(assessmentId, itemId, doc);
       items.push(doc);
     });
     return items;
   };
-  // Several items carry AI proposals that were accepted.
+
   const conPack = shared.NSQF_PACKS.find((p) => p.id === CON_Q0304);
-  const meenaAllItems = [
-    ...meenaItems('CON/N0304-1', 'Installation of water supply systems', CON_N0304_1_CRITERIA, MEENA_U1, [true, true, false, true]),
-    ...meenaItems('CON/N0304-2', 'Installation of drainage systems', CON_N0304_2_CRITERIA, MEENA_U2, [true, false, true, false]),
+  const meenaItemsA1 = [
+    ...meenaItems(meenaAId, 'demo-assessor-1', meenaSubmittedAt, 'CON/N0304-1', 'Installation of water supply systems', CON_N0304_1_CRITERIA, MEENA_U1, [true, true, false, true]),
+    ...meenaItems(meenaAId, 'demo-assessor-1', meenaSubmittedAt, 'CON/N0304-2', 'Installation of drainage systems', CON_N0304_2_CRITERIA, MEENA_U2, [true, false, true, false]),
   ];
-  const meenaScores = shared.computeAssessmentScores(meenaAllItems, conPack);
+  const meenaItemsA2 = [
+    ...meenaItems(meenaA2Id, 'demo-assessor-2', meenaSubmittedAt, 'CON/N0304-1', 'Installation of water supply systems', CON_N0304_1_CRITERIA, MEENA2_U1, [false, true, false, true]),
+    ...meenaItems(meenaA2Id, 'demo-assessor-2', meenaSubmittedAt, 'CON/N0304-2', 'Installation of drainage systems', CON_N0304_2_CRITERIA, MEENA2_U2, [true, false, false, false]),
+  ];
+  const meenaScores = shared.computeAssessmentScores(meenaItemsA1, conPack);
+  const meena2Scores = shared.computeAssessmentScores(meenaItemsA2, conPack);
 
   pushDoc(RPL_ASSESSMENTS, meenaAId, {
     assessorId: 'demo-assessor-1',
@@ -482,14 +502,33 @@ function buildPlannedWrites(shared) {
     workerName: 'Meena Devi',
     referenceCode: 'RPL-2026-MD-002',
   });
+  pushDoc(RPL_ASSESSMENTS, meenaA2Id, {
+    assessorId: 'demo-assessor-2',
+    workerId: 'demo-meena-devi',
+    assessmentId: meenaA2Id,
+    packId: CON_Q0304,
+    ...meena2Scores,
+    status: 'submitted',
+    aiSuggestionUsed: true,
+    createdAt: NOW - 2 * DAY,
+    submittedAt: meenaSubmittedAt,
+    workerName: 'Meena Devi',
+    referenceCode: 'RPL-2026-MD-002',
+  });
 
+  // CON consistency: computed, not hard-coded. Both assessors accepted AI
+  // suggestions, so the measured pair feeds the ASSISTED split and the
+  // unassisted baseline stays null (genuinely unmeasured).
+  const conKappa = kappaLib.computeKappa(CON_RATINGS_A, CON_RATINGS_B);
   pushConsistency(CON_Q0304, {
     packId: CON_Q0304,
-    kappa: 0.71,
-    interpretation: 'Substantial',
+    kappa: conKappa.kappa,
+    interpretation: conKappa.interpretation,
+    confidenceLower: conKappa.confidence[0],
+    confidenceUpper: conKappa.confidence[1],
     unassistedKappa: null,
-    assistedKappa: 0.71,
-    assessmentCount: 1,
+    assistedKappa: conKappa.kappa,
+    assessmentCount: 2,
     computedAt: NOW,
   });
 
@@ -524,7 +563,7 @@ async function main() {
     `(A=[${RATINGS_A}] B=[${RATINGS_B}])`
   );
 
-  const writes = buildPlannedWrites(shared);
+  const writes = buildPlannedWrites(shared, kappaMod);
 
   // -- dry-run: print everything, write nothing ------------------------------
   if (DRY_RUN) {
@@ -584,6 +623,7 @@ function printSummary(writes, seedKappa, dryRun) {
   console.log('  demo-suresh-ele-a1 (assessor demo-assessor-1, ELE/Q1301, submitted, aiSuggestionUsed=false)');
   console.log('  demo-suresh-ele-a2 (assessor demo-assessor-2, ELE/Q1301, submitted, aiSuggestionUsed=false)');
   console.log('  demo-meena-con-a1  (assessor demo-assessor-1, CON/Q0304, submitted, aiSuggestionUsed=true)');
+  console.log('  demo-meena-con-a2  (assessor demo-assessor-2, CON/Q0304, submitted, aiSuggestionUsed=true)');
   for (const w of writes) {
     if (w.collection === RPL_ASSESSMENTS && typeof w.data.overallScore === 'number') {
       const units = Object.fromEntries(
@@ -592,15 +632,22 @@ function printSummary(writes, seedKappa, dryRun) {
       console.log(`  score fields (${w.docId}): overallScore=${w.data.overallScore} unitScores=${JSON.stringify(units)} (0-100, shared lib)`);
     }
   }
-  console.log(`computed seed kappa: ${seedKappa.kappa.toFixed(4)} (${seedKappa.interpretation})`);
+  console.log(`computed seed kappa (app computeKappa): ELE pair=${seedKappa.kappa.toFixed(4)} (${seedKappa.interpretation})`);
   console.log('writes by collection:');
   for (const col of RPL_COLLECTIONS) {
     console.log(`  ${col}: ${byCollection[col] || 0}`);
   }
   console.log(`total planned writes: ${writes.length}`);
-  console.log('consistency docs (canonical packId in FIELD; doc id sanitized as Firestore ids cannot contain "/"):');
-  console.log('  rpl_consistency/ELE_Q1301 packId=ELE/Q1301 kappa=0.58 Moderate unassistedKappa=0.58 assistedKappa=null assessmentCount=2');
-  console.log('  rpl_consistency/CON_Q0304 packId=CON/Q0304 kappa=0.71 Substantial unassistedKappa=null assistedKappa=0.71 assessmentCount=1');
+  console.log('consistency docs (canonical packId in FIELD; doc id sanitized as Firestore ids cannot contain "/"; kappa COMPUTED, never hard-coded):');
+  for (const w of writes) {
+    if (w.collection !== RPL_CONSISTENCY) continue;
+    const d = w.data;
+    console.log(
+      `  rpl_consistency/${w.docId} packId=${d.packId} kappa=${d.kappa} (${d.interpretation}) ` +
+        `CI=[${Number(d.confidenceLower).toFixed(4)}, ${Number(d.confidenceUpper).toFixed(4)}] ` +
+        `unassistedKappa=${d.unassistedKappa} assistedKappa=${d.assistedKappa} assessmentCount=${d.assessmentCount}`
+    );
+  }
   console.log('certification: rpl_certifications/demo-suresh-kumar status=pending_human_signoff recommendedLevel=4');
   console.log(dryRun ? 'dry-run complete: nothing written.' : 'seed complete.');
 }

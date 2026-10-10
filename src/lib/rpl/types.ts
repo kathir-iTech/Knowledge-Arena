@@ -114,8 +114,8 @@ export interface RPLWorkerDoc extends WorkerProfile {
 export interface RPLConsistencyDoc extends InterAssessorAgreement {
   assessorPairs?: { assessorA: string; assessorB: string; kappa: number }[];
   perCriterion?: { criterionId: string; kappa: number }[];
-  unassistedKappa?: number;
-  assistedKappa?: number;
+  unassistedKappa?: number | null;
+  assistedKappa?: number | null;
   assessmentCount?: number;
 }
 
@@ -166,11 +166,14 @@ export type KappaInterpretation =
   | 'Fair'
   | 'Moderate'
   | 'Substantial'
-  | 'Almost perfect';
+  | 'Almost perfect'
+  /** No pairwise data yet (fewer than 2 assessors on the worker/pack). */
+  | 'No data';
 
 export interface InterAssessorAgreement {
   packId: string;
-  kappa?: number;
+  /** null = no pairwise data yet (never a fabricated 0). */
+  kappa?: number | null;
   interpretation?: string;
   confidenceLower?: number;
   confidenceUpper?: number;
@@ -179,7 +182,8 @@ export interface InterAssessorAgreement {
 
 export interface ConsistencyReport {
   packId: string;
-  overallKappa: number;
+  /** null = no pairwise data yet (never a fabricated 0). */
+  overallKappa: number | null;
   interpretation: KappaInterpretation;
   confidence: [number, number];
   assessorPairs: { assessorA: string; assessorB: string; kappa: number }[];
