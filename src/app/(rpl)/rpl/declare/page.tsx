@@ -111,6 +111,9 @@ export default function RplDeclarePage() {
   // AI pack-matching (additive): loading flag + offline banner state. The
   // keyword-matcher effect above stays the checklist source of truth.
   const [aiMatching, setAiMatching] = useState(false);
+  // Surfaced when Gemini is down or the request fails: the keyword matches
+  // stay on screen but the worker is told WHY they are not AI-ranked.
+  const [aiMatchNote, setAiMatchNote] = useState<string | null>(null);
   const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
   const [queueState, setQueueState] = useState<PendingSummary>({ total: 0, needsSignIn: 0, errors: 0 });
   const [syncing, setSyncing] = useState(false);
@@ -342,9 +345,11 @@ export default function RplDeclarePage() {
   // the 1st/2nd/3rd mapped packs get 90/80/70. suggestedUnits are filtered to
   // real unit names with a fallback to all units; raw matches are stashed to
   // localStorage['rpl:aiMatches'] for the result page. On ANY failure the
-  // keyword matches are silently kept (never blank, never error-toast).
+  // keyword matches are kept and a visible note explains that AI ranking was
+  // unavailable (never blank, never silent).
   async function findMatchingQualifications() {
     setAiMatching(true);
+    setAiMatchNote(null);
     try {
       const token = await auth.currentUser?.getIdToken().catch(() => null);
       if (!token) return;
@@ -363,8 +368,15 @@ export default function RplDeclarePage() {
           packTitle?: string;
           suggestedUnits?: string[];
         }[];
+        aiUsed?: boolean;
       } | null;
-      if (!res.ok || !matchBody || !Array.isArray(matchBody.matches)) return;
+      if (!res.ok || !matchBody || !Array.isArray(matchBody.matches)) {
+        setAiMatchNote('AI matching failed — showing keyword matches instead.');
+        return;
+      }
+      if (matchBody.aiUsed === false) {
+        setAiMatchNote('AI is unavailable right now — showing keyword matches instead.');
+      }
       try {
         localStorage.setItem('rpl:aiMatches', JSON.stringify(matchBody.matches));
       } catch {
@@ -391,7 +403,7 @@ export default function RplDeclarePage() {
       });
       if (mapped.length > 0) setMatchedPacks(mapped);
     } catch {
-      /* silent: keep keyword matches */
+      setAiMatchNote('AI matching failed — showing keyword matches instead.');
     } finally {
       setAiMatching(false);
     }
@@ -638,6 +650,11 @@ export default function RplDeclarePage() {
               >
                 {aiMatching ? 'Analyzing your experience...' : 'Find matching qualifications'}
               </Button>
+              {aiMatchNote && (
+                <p role="status" className="mt-2 text-xs text-amber-700">
+                  {aiMatchNote}
+                </p>
+              )}
             </CardContent>
           </Card>
           {matchedPacks.map((m) => (

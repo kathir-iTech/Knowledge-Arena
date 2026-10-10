@@ -37,6 +37,7 @@ export default function RplForgePage() {
   const [status, setStatus] = useState<'idle' | 'uploading' | 'review' | 'saving' | 'saved'>('idle');
   const [pack, setPack] = useState<EditablePack | null>(null);
   const [wasCached, setWasCached] = useState(false);
+  const [wasParseError, setWasParseError] = useState(false);
   const [templateId, setTemplateId] = useState<string | null>(null);
 
   if (isLoading) {
@@ -106,7 +107,7 @@ export default function RplForgePage() {
         body: form,
       });
       const body = (await res.json().catch(() => null)) as {
-        pack?: EditablePack;
+        pack?: EditablePack & { parseError?: boolean };
         cached?: boolean;
         error?: string;
       } | null;
@@ -117,6 +118,7 @@ export default function RplForgePage() {
       }
       setPack(body.pack);
       setWasCached(body.cached === true);
+      setWasParseError(body.pack.parseError === true);
       setStatus('review');
     } catch {
       setStatus('idle');
@@ -243,6 +245,13 @@ export default function RplForgePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {wasParseError && (
+              <p role="alert" className="rounded-[12px] border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                AI could not fully parse the qualification pack — the unit list below comes from the
+                official NSQF catalogue, but the task items may be missing or incomplete. Review every
+                item carefully and add tasks manually where needed.
+              </p>
+            )}
             {units.map((unit) => {
               const unitItems = pack.items.filter((i) => i.unitId === unit.id);
               return (

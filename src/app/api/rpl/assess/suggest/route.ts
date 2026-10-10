@@ -11,12 +11,8 @@ export const runtime = 'nodejs';
 // AI score suggestion for one competency unit (Commander only).
 // Gemini is framed as an assistant whose suggestion the assessor must verify;
 // the UI renders the proposal greyed-out until the assessor accepts or edits it.
-// Defensive parse with a safe manual-scoring fallback on any failure.
-
-const FALLBACK = {
-  proposedScore: 2,
-  rationale: 'AI suggestion unavailable — score manually.',
-} as const;
+// Honest failure: when Gemini fails or its output cannot be parsed we return a
+// real error status (502/504) with an error code — never a fabricated score.
 
 const SUGGEST_TIMEOUT_MS = 30000;
 
@@ -78,7 +74,7 @@ function clampScore(v: unknown): 1 | 2 | 3 | 4 | null {
 function parseSuggestResponse(res: { output?: unknown; text?: string }): {
   proposedScore: 1 | 2 | 3 | 4;
   rationale: string;
-} {
+} | null {
   const out = res.output as Partial<SuggestOutput> | undefined;
   const fromSchema = clampScore(out?.proposedScore);
   if (fromSchema && typeof out?.rationale === 'string' && out.rationale.trim()) {
@@ -97,10 +93,10 @@ function parseSuggestResponse(res: { output?: unknown; text?: string }): {
         }
       }
     } catch {
-      // fall through to fallback
+      // fall through — caller treats null as a parse failure
     }
   }
-  return { proposedScore: FALLBACK.proposedScore, rationale: FALLBACK.rationale };
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -153,15 +149,39 @@ export async function POST(req: NextRequest) {
           }),
           SUGGEST_TIMEOUT_MS,
         )) as unknown as { output?: SuggestOutput; text?: string };
-        return parseSuggestResponse(res);
+        const parsed = parseSuggestResponse(res);
+        if (!parsed) throw new Error('SUGGEST_PARSE_FAILED');
+        return parsed;
       });
       return NextResponse.json(result);
     } catch (err) {
-      console.warn('[RPL Suggest] Gemini failed, returning fallback:', err);
-      return NextResponse.json({
-        proposedScore: FALLBACK.proposedScore,
-        rationale: FALLBACK.rationale,
-      });
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('[RPL Suggest] Gemini failed:', message);
+      if (message.includes('SUGGEST_TIMEOUT')) {
+        return NextResponse.json(
+          {
+            error: 'AI suggestion timed out — score manually.',
+            code: 'AI_TIMEOUT',
+          },
+          { status: 504 },
+        );
+      }
+      if (message.includes('SUGGEST_PARSE_FAILED')) {
+        return NextResponse.json(
+          {
+            error: 'AI suggestion could not be understood — score manually.',
+            code: 'AI_PARSE_FAILED',
+          },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json(
+        {
+          error: 'AI suggestion is unavailable — score manually.',
+          code: 'AI_UNAVAILABLE',
+        },
+        { status: 502 },
+      );
     }
   } catch (err) {
     console.error('[RPL Suggest] Error:', err instanceof Error ? err.message : String(err));
