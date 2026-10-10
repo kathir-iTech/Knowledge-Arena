@@ -551,6 +551,15 @@ match /rpl_certifications/{workerId} {
   allow read: if isSignedIn() && (request.auth.uid == workerId || isCommander() || isExecutive());
   allow write: if isExecutive();
 }
+// RPL Forge cache: Admin-SDK-only (rpl-forge-flow.ts cache reads/writes).
+// Explicitly denied so no client path can ever touch it; distinct from the
+// legacy Phase 115C forge_cache collection above.
+match /rpl_forge_cache/{hash} {
+  allow read, write: if false;
+  match /{document=**} {
+    allow read, write: if false;
+  }
+}
 // ============================================================
   }
 }

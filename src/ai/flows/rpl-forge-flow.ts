@@ -10,7 +10,8 @@
  * 'gemini-3.6-flash' with fallback chain to 'gemini-3.5-flash').
  *
  * Cache: rpl_forge_cache/{sha256 of pdfExtractedText} via the Admin SDK with
- * a 30-day expiresAt, mirroring the forge_cache reference pattern.
+ * a 30-day expiresAt. Admin-SDK-only collection (denied in firestore.rules);
+ * layout follows the legacy Phase 115C forge_cache pattern but is separate.
  *
  * NOTE: this flow accepts already-extracted text only. It never performs OCR:
  * the main Forge pipeline REJECTS scanned PDFs (PDF_IMAGE_ONLY).
@@ -405,8 +406,9 @@ async function runRplForge(input: RplForgeInput): Promise<RplForgeFlowOutput> {
   if (!packId) throw new Error('RPL_FORGE_PACK_ID_REQUIRED');
   if (!trade) throw new Error('RPL_FORGE_TRADE_REQUIRED');
 
-  // Content-addressable cache keyed on the extracted text (mirrors the
-  // forge_cache reference pattern: { pack, engine, createdAt, expiresAt }).
+  // Content-addressable cache keyed on the extracted text (rpl_forge_cache:
+  // { pack, engine, createdAt, expiresAt } — Admin-SDK-only, rules deny all
+  // client access).
   const hash = contentHashOf(text);
   const { getAdminDb } = await import('@/lib/firebase-admin');
   const db = getAdminDb();
