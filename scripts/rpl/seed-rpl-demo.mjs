@@ -101,9 +101,6 @@ const DAY = 24 * 60 * 60 * 1000;
 function sanitizeDocId(raw) {
   return String(raw).replace(/\//g, '_').slice(0, 200) || 'untitled';
 }
-function sanitizeItemId(unitId, idx) {
-  return `${String(unitId).replace(/\//g, '-')}-p${idx}`;
-}
 
 // ---------------------------------------------------------------------------
 // TS module loader — pattern copied from scripts/test-kappa.mjs (Node type-
@@ -137,9 +134,10 @@ async function loadKappa() {
   return loadTsModule(['../../src/lib/rpl/kappa.ts', '../src/lib/rpl/kappa.ts'], 'kappa');
 }
 
-// Shared scoring lib (src/lib/rpl/scores.ts) + NSQF packs: the SAME
-// computeAssessmentScores() the app calls in POST /api/rpl/assess, so
-// seeded docs and live docs can never disagree on scale or formula.
+// Shared scoring + item-id libs: the SAME computeAssessmentScores() the app
+// calls in POST /api/rpl/assess and the SAME item-id scheme
+// (src/lib/rpl/item-ids.ts), so seeded docs and live docs can never
+// disagree on scale, formula or ids (D2/D3/D4).
 async function loadSharedScoring() {
   const scoresMod = await loadTsModule(
     ['../../src/lib/rpl/scores.ts', '../src/lib/rpl/scores.ts'],
@@ -149,9 +147,15 @@ async function loadSharedScoring() {
     ['../../src/lib/rpl/nsqf-packs.ts', '../src/lib/rpl/nsqf-packs.ts'],
     'nsqf-packs'
   );
+  const idsMod = await loadTsModule(
+    ['../../src/lib/rpl/item-ids.ts', '../src/lib/rpl/item-ids.ts'],
+    'item-ids'
+  );
   return {
     computeAssessmentScores: scoresMod.computeAssessmentScores,
     NSQF_PACKS: packsMod.NSQF_PACKS,
+    performanceItemId: idsMod.performanceItemId,
+    firestoreItemId: idsMod.firestoreItemId,
   };
 }
 
@@ -203,12 +207,15 @@ function buildPlannedWrites(shared, kappaLib) {
     writes.push({ collection, docId, path, fields: Object.keys(data).sort(), data });
   };
   const pushItem = (assessmentId, itemId, data) => {
-    const path = `${RPL_ASSESSMENTS}/${assessmentId}/items/${itemId}`;
+    // Doc id sanitized via the SHARED scheme (item-ids.ts): itemId FIELD
+    // keeps the canonical `ELE/N1301::p0`, the doc id is `ELE_N1301::p0`.
+    const subDocId = shared.firestoreItemId(itemId);
+    const path = `${RPL_ASSESSMENTS}/${assessmentId}/items/${subDocId}`;
     writes.push({
       collection: RPL_ASSESSMENTS,
       docId: assessmentId,
       subcollection: 'items',
-      subDocId: itemId,
+      subDocId,
       path,
       fields: Object.keys(data).sort(),
       data,
@@ -354,7 +361,7 @@ function buildPlannedWrites(shared, kappaLib) {
   const itemWrites = (assessmentId, assessorId, unitId, unitName, criteria, scores) => {
     const items = [];
     criteria.forEach((criterionText, i) => {
-      const itemId = sanitizeItemId(unitId, i);
+      const itemId = shared.performanceItemId(unitId, i);
       const doc = {
         itemId,
         assessmentId,
@@ -455,7 +462,7 @@ function buildPlannedWrites(shared, kappaLib) {
   const meenaItems = (assessmentId, assessorId, scoredAt, unitId, unitName, criteria, scores, aiFlags) => {
     const items = [];
     criteria.forEach((criterionText, i) => {
-      const itemId = sanitizeItemId(unitId, i);
+      const itemId = shared.performanceItemId(unitId, i);
       const doc = {
         itemId,
         assessmentId,

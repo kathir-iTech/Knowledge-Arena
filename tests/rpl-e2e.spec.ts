@@ -2,12 +2,13 @@
 // Runs against the local dev server (port 3456) + Firebase emulators.
 // NEVER run against production.
 import { test, expect, type Page, type Response } from '@playwright/test';
+import { knowledgeItemId, performanceItemId } from '@/lib/rpl/item-ids';
 
 const BASE = 'http://127.0.0.1:3456';
 const AUTH_EMU =
   'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key';
 const PASSWORD = 'Test123456!';
-const INTERPRETATIONS = ['Poor', 'Fair', 'Moderate', 'Substantial', 'Almost perfect'];
+const INTERPRETATIONS = ['Poor', 'Fair', 'Moderate', 'Substantial', 'Almost perfect', 'No data'];
 
 async function restSignIn(email: string): Promise<{ idToken: string; localId: string }> {
   const res = await fetch(AUTH_EMU, {
@@ -103,8 +104,6 @@ const ELE_UNITS = [
   },
 ];
 
-const safeId = (s: string) => s.replace(/\//g, '-');
-
 test.describe('RPL end-to-end (emulator)', () => {
   // The app's strict CSP drops emulator origins in production builds
   // (middleware only allows http://127.0.0.1:* in dev). Bypass CSP in the
@@ -171,10 +170,12 @@ test.describe('RPL end-to-end (emulator)', () => {
       const assessmentId = `e2e-${Date.now()}`;
 
       // Build all 32 items; pre-score everything EXCEPT 3 perf criteria in ELE/N1301.
+      // Item ids come from the SHARED scheme (src/lib/rpl/item-ids.ts) — the
+      // same ids the assess page looks up, so the UI renders these scores (D4).
       const items: Record<string, unknown>[] = [];
       for (const u of ELE_UNITS) {
         u.pc.forEach((criterionText, i) => {
-          const itemId = `${safeId(u.id)}-p${i}`;
+          const itemId = performanceItemId(u.id, i);
           const preScored = !(u.id === 'ELE/N1301' && i < 3);
           items.push({
             itemId,
@@ -187,7 +188,7 @@ test.describe('RPL end-to-end (emulator)', () => {
         });
         u.kc.forEach((criterionText, i) => {
           items.push({
-            itemId: `${safeId(u.id)}-k${i}`,
+            itemId: knowledgeItemId(u.id, i),
             unitId: u.id,
             unitName: u.name,
             kind: 'knowledge',
@@ -223,23 +224,23 @@ test.describe('RPL end-to-end (emulator)', () => {
 
       // Pre-scored criterion renders checked.
       await expect(
-        page.locator('input[name="ELE-N1301-p3"][value="3"]'),
+        page.locator('input[name="ELE/N1301::p3"][value="3"]'),
       ).toBeChecked({ timeout: 30000 });
 
       // Score the 3 remaining criteria with the 1-4 rubric.
-      await page.locator('input[name="ELE-N1301-p0"][value="3"]').check();
-      await page.locator('input[name="ELE-N1301-p1"][value="2"]').check();
-      await page.locator('input[name="ELE-N1301-p2"][value="4"]').check();
+      await page.locator('input[name="ELE/N1301::p0"][value="3"]').check();
+      await page.locator('input[name="ELE/N1301::p1"][value="2"]').check();
+      await page.locator('input[name="ELE/N1301::p2"][value="4"]').check();
 
       // Save as draft, reload, confirm preservation.
       await page.getByRole('button', { name: 'Save draft' }).click();
       await expect(page.getByText('Draft saved.')).toBeVisible({ timeout: 30000 });
       await page.reload({ waitUntil: 'domcontentloaded' });
-      await expect(page.locator('input[name="ELE-N1301-p0"][value="3"]')).toBeChecked({
+      await expect(page.locator('input[name="ELE/N1301::p0"][value="3"]')).toBeChecked({
         timeout: 30000,
       });
-      await expect(page.locator('input[name="ELE-N1301-p1"][value="2"]')).toBeChecked();
-      await expect(page.locator('input[name="ELE-N1301-p2"][value="4"]')).toBeChecked();
+      await expect(page.locator('input[name="ELE/N1301::p1"][value="2"]')).toBeChecked();
+      await expect(page.locator('input[name="ELE/N1301::p2"][value="4"]')).toBeChecked();
 
       // Submit the full assessment.
       await page.getByRole('button', { name: 'Submit assessment' }).click();
@@ -267,10 +268,17 @@ test.describe('RPL end-to-end (emulator)', () => {
       );
       expect(res.ok, `consistency GET failed: ${res.status}`).toBe(true);
       const body = (await res.json()) as { overallKappa?: unknown; interpretation?: unknown };
-      expect(typeof body.overallKappa).toBe('number');
-      const kappa = body.overallKappa as number;
-      expect(kappa).toBeGreaterThanOrEqual(0);
-      expect(kappa).toBeLessThanOrEqual(1);
+      // B3 contract: overallKappa is null (interpretation 'No data') when the
+      // pack has no >=2-assessor pairs; otherwise a measured weighted kappa
+      // in [-1, 1] (linear-weighted kappa can be negative).
+      if (body.overallKappa === null) {
+        expect(body.interpretation).toBe('No data');
+      } else {
+        expect(typeof body.overallKappa).toBe('number');
+        const kappa = body.overallKappa as number;
+        expect(kappa).toBeGreaterThanOrEqual(-1);
+        expect(kappa).toBeLessThanOrEqual(1);
+      }
       expect(INTERPRETATIONS).toContain(body.interpretation);
     });
   });

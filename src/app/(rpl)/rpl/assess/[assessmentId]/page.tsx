@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { NSQF_PACKS, type NSQFQualificationPack } from '@/lib/rpl/nsqf-packs';
+import { knowledgeItemId, performanceItemId } from '@/lib/rpl/item-ids';
 import type { AssessmentItem, EvidenceImageDoc, RPLAssessmentDoc, RPLWorkerDoc } from '@/lib/rpl/types';
 import { deleteEvidence, listEvidenceForUnit, uploadEvidenceImage } from '@/lib/rpl/evidence-upload';
 
@@ -57,7 +58,7 @@ function buildInitialItems(
   const out: ItemState[] = [];
   for (const unit of pack.competencyUnits) {
     unit.performanceCriteria.forEach((criterionText, idx) => {
-      const itemId = `${unit.id}::p${idx}`;
+      const itemId = performanceItemId(unit.id, idx);
       seen.add(itemId);
       const prev = byId.get(itemId);
       out.push({
@@ -73,7 +74,7 @@ function buildInitialItems(
       });
     });
     unit.knowledgeCriteria.forEach((criterionText, idx) => {
-      const itemId = `${unit.id}::k${idx}`;
+      const itemId = knowledgeItemId(unit.id, idx);
       seen.add(itemId);
       const prev = byId.get(itemId);
       out.push({

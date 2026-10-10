@@ -7,6 +7,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { RPL_ASSESSMENTS } from '@/lib/rpl/rpl-collections';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { computeAssessmentScores } from '@/lib/rpl/scores';
+import { firestoreItemId } from '@/lib/rpl/item-ids';
 import type { AssessmentItem, RPLAssessmentDoc } from '@/lib/rpl/types';
 
 export const runtime = 'nodejs';
@@ -49,10 +50,6 @@ export async function GET(req: NextRequest) {
 
 function isRubricScore(v: unknown): v is 1 | 2 | 3 | 4 {
   return Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 4;
-}
-
-function sanitizeDocId(raw: string): string {
-  return raw.replace(/\//g, '_').slice(0, 200) || 'item';
 }
 
 function isValidItem(raw: unknown): raw is AssessmentItem {
@@ -190,7 +187,7 @@ export async function POST(req: NextRequest) {
       if (typeof item.aiProposedScore === 'number') itemData.aiProposedScore = item.aiProposedScore;
       if (typeof item.aiAccepted === 'boolean') itemData.aiAccepted = item.aiAccepted;
       ops.push({
-        ref: docRef.collection('items').doc(sanitizeDocId(item.itemId)),
+        ref: docRef.collection('items').doc(firestoreItemId(item.itemId)),
         data: itemData,
       });
     }
