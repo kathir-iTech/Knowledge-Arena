@@ -76,11 +76,11 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
             </Button>
           </div>
         )}
-        {/* Section 1: Gladiators — Sign in with Google (Part 5A: open signup) */}
+        {/* Section 1: Google sign-in — open signup (Part 5A) */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold">Gladiators — Sign in with Google</h2>
-          <p className="text-xs text-muted-foreground" role="note">First sign-in creates your account - there is no separate sign-up step. Existing accounts just sign in. Battle access is controlled per arena.</p>
-          <Button type="button" variant="outline" className="w-full h-11" onClick={onGoogleSignIn} disabled={isLoading} aria-label="Continue with Google — Gladiators">
+          <h2 className="text-sm font-semibold">Continue with Google</h2>
+          <p className="text-xs text-muted-foreground" role="note">First sign-in creates your account — there is no separate sign-up step. Your role is assigned after sign-in.</p>
+          <Button type="button" variant="outline" className="w-full h-11" onClick={onGoogleSignIn} disabled={isLoading} aria-label="Continue with Google">
             <svg className="mr-2 h-4 w-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -100,10 +100,10 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
           </div>
         </div>
 
-        {/* Section 2: Staff login — Commanders and Executives (email + password) */}
+        {/* Section 2: Admin & Assessor sign-in (email + password) */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold">Staff login — Commanders &amp; Executives</h2>
-          <p className="text-xs text-muted-foreground">Accounts are created by your Executive. Sign in with your email (or Staff ID) and password.</p>
+          <h2 className="text-sm font-semibold">Admin &amp; Assessor sign-in</h2>
+          <p className="text-xs text-muted-foreground">Accounts are created by your Admin. Sign in with your email (or Staff ID) and password.</p>
           <Form {...loginForm}>
             <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
               <FormField

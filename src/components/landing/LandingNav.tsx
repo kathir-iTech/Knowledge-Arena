@@ -6,7 +6,7 @@ const NAV_LINKS = [
   { href: '#workflow', label: 'How it works' },
   { href: '#consistency', label: 'Consistency' },
   { href: '#certify', label: 'Certification' },
-  { href: '#quiz', label: 'Live Quizzes' },
+  { href: '#problem', label: 'Why RPL' },
 ];
 
 export function LandingNav() {
