@@ -3,6 +3,7 @@ import {
   verifyFirebaseTokenWithAnyRole,
   verifyFirebaseTokenWithRole,
 } from '@/lib/verify-auth';
+import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { RPL_ASSESSMENTS } from '@/lib/rpl/rpl-collections';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
@@ -29,6 +30,14 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive']);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // INLINE rate-limit config (do not touch Limits).
+    const rl = await enforceRateLimit(`rpl:assess-list:${auth.uid}`, {
+      maxRequests: 30,
+      windowMs: 60000,
+      message: 'Too many assessment requests. Please slow down.',
+    });
+    if (rl) return rl;
 
     const db = getAdminDb();
     const snap =
@@ -77,6 +86,14 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await verifyFirebaseTokenWithRole(req, 'commander');
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // INLINE rate-limit config (do not touch Limits).
+    const rl = await enforceRateLimit(`rpl:assess-save:${auth.uid}`, {
+      maxRequests: 15,
+      windowMs: 60000,
+      message: 'Assessment save limit reached (15/min). Please wait.',
+    });
+    if (rl) return rl;
 
     const body = (await req.json().catch(() => null)) as {
       assessmentId?: unknown;

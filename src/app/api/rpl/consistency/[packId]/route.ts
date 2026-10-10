@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
+import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { recomputePackConsistency } from '@/lib/rpl/recompute-consistency';
 import { sanitizeRplDocId } from '@/lib/rpl/rpl-collections';
@@ -20,6 +21,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ pack
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // INLINE rate-limit config (do not touch Limits). Tighter than reads
+    // elsewhere: this route awaits a full pack recompute + Firestore writes.
+    const rl = await enforceRateLimit(`rpl:consistency:${auth.uid}`, {
+      maxRequests: 10,
+      windowMs: 60000,
+      message: 'Consistency recomputes are limited to 10/min. Please wait.',
+    });
+    if (rl) return rl;
 
     const { packId: rawPackId } = await params;
     if (!rawPackId) {

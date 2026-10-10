@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
+import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import {
@@ -70,6 +71,14 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // INLINE rate-limit config (do not touch Limits).
+    const rl = await enforceRateLimit(`rpl:admin-overview:${auth.uid}`, {
+      maxRequests: 30,
+      windowMs: 60000,
+      message: 'Too many overview requests. Please slow down.',
+    });
+    if (rl) return rl;
 
     const db = getAdminDb();
     const nowMs = Date.now();

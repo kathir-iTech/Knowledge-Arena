@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
+import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { RPL_ASSESSMENTS, RPL_WORKERS } from '@/lib/rpl/rpl-collections';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
@@ -17,6 +18,14 @@ export async function GET(
   try {
     const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive']);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // INLINE rate-limit config (do not touch Limits).
+    const rl = await enforceRateLimit(`rpl:assess-detail:${auth.uid}`, {
+      maxRequests: 30,
+      windowMs: 60000,
+      message: 'Too many assessment requests. Please slow down.',
+    });
+    if (rl) return rl;
 
     const { assessmentId } = await params;
     if (!assessmentId) {

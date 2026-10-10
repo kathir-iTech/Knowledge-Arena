@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseToken } from '@/lib/verify-auth';
+import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { NSQF_PACKS, findBestMatchingPacks } from '@/lib/rpl/nsqf-packs';
 import {
@@ -29,6 +30,14 @@ export async function GET(
     if (!caller) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // INLINE rate-limit config (do not touch Limits).
+    const rl = await enforceRateLimit(`rpl:status:${caller.uid}`, {
+      maxRequests: 30,
+      windowMs: 60000,
+      message: 'Too many status requests. Please slow down.',
+    });
+    if (rl) return rl;
 
     const { workerId: rawParam } = await params;
     const workerIdParam = (rawParam ?? '').trim();
