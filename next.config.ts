@@ -24,12 +24,8 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   eslint: {
-    // Kept true intentionally: the codebase carries pre-existing
-    // no-explicit-any debt in Firestore data-mapping layers (services/,
-    // AI flows) plus a few exhaustive-deps cases. `next lint --fix` cleared
-    // the auto-fixable subset (prefer-const). Flipping this to false would
-    // fail `npm run build` until the any-debt is typed out file by file.
-    ignoreDuringBuilds: true,
+    // Lint runs in CI (`npm run lint`) — do NOT set ignoreDuringBuilds.
+    ignoreDuringBuilds: false,
   },
   experimental: {
     serverActions: {
