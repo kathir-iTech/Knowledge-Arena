@@ -211,7 +211,8 @@ test.describe('RPL end-to-end (emulator)', () => {
           items,
           status: 'draft',
           workerName: 'Ruby',
-          referenceCode: glad.localId,
+          // B2: display passthrough is a human reference code, never the UID.
+          referenceCode: 'RPL-2345-6789',
         }),
       });
       expect(createRes.ok, `assess POST failed: ${createRes.status}`).toBe(true);
@@ -284,16 +285,18 @@ test.describe('RPL end-to-end (emulator)', () => {
   });
 
   test.describe('Suite 4 — Access control', () => {
-    test('gladiator cannot access /rpl/admin', async ({ page }) => {
+    test('gladiator cannot access /rpl/admin; sent to their RPL home (/rpl)', async ({ page }) => {
       await uiLogin(page, 'glad1@test.local');
       await page.goto(BASE + '/rpl/admin', { waitUntil: 'domcontentloaded' });
-      await page.waitForURL('**/gladiator/**', { timeout: 30000 });
+      // A1: legacy Quorena roles are treated as candidates for RPL routing, so
+      // the wrong-role redirect lands on /rpl (never the old /gladiator portal).
+      await page.waitForURL('**/rpl', { timeout: 30000 });
     });
 
-    test('commander cannot access /rpl/certify (executive only)', async ({ page }) => {
+    test('commander cannot access /rpl/certify (executive only); sent to /rpl', async ({ page }) => {
       await uiLogin(page, 'commander@test.local');
       await page.goto(BASE + '/rpl/certify/probe-worker', { waitUntil: 'domcontentloaded' });
-      await page.waitForURL('**/commander/**', { timeout: 30000 });
+      await page.waitForURL('**/rpl', { timeout: 30000 });
     });
 
     test('worker cannot see another worker profile; commander cannot use admin API', async () => {

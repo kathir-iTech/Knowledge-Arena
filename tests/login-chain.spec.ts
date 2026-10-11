@@ -10,6 +10,7 @@ interface SessionResponseBody {
   success?: boolean;
   role?: string;
   claimsRefresh?: boolean;
+  code?: string;
 }
 
 interface SessionResult {
@@ -59,23 +60,24 @@ test.describe('Phase A — login chain', () => {
     expect(body?.success).toBe(true);
     expect(body?.role, 'role must be in the response').toBe('executive');
 
-    await expect(page).toHaveURL(/\/executive\/workspace/, { timeout: 30000 });
+    // A1: legacy Quorena roles are routed into the RPL app on this branch.
+    await expect(page).toHaveURL(/\/rpl$/, { timeout: 30000 });
 
-    // Server-side proof: middleware reads the token's top-level role claim, so
-    // an executive hitting a gladiator route must be bounced to their own home.
+    // Server-side proof: middleware quarantines every legacy Quorena route, so
+    // an executive hitting a gladiator route is redirected into the RPL app.
     await page.goto('/gladiator/dashboard', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/executive\/workspace/, { timeout: 30000 });
+    await expect(page).toHaveURL(/\/rpl$/, { timeout: 30000 });
   });
 
   test('no infinite "Authenticating..." spinner after sign-in', async ({ page }) => {
     await staffLogin(page, 'commander@test.local');
-    await expect(page).toHaveURL(/\/commander\/dashboard/, { timeout: 30000 });
+    // A1: commander home is now the RPL app.
+    await expect(page).toHaveURL(/\/rpl$/, { timeout: 30000 });
     // The loading screen must be gone, not stuck.
     await expect(page.getByText('Authenticating...')).toHaveCount(0, { timeout: 15000 });
-    // Two elements can briefly exist because the commander/executive/gladiator
-    // layouts render their own <main id="main-content"> (pre-existing duplicate
-    // id, outside this change) — assert the first resolved main is visible.
-    await expect(page.locator('main#main-content').first()).toBeVisible({ timeout: 15000 });
+    // The RPL shell renders a single page <main> (the old duplicate
+    // main#main-content was a Quorena-portal artifact and no longer renders).
+    await expect(page.locator('main').first()).toBeVisible({ timeout: 15000 });
   });
 
   test('unauthenticated /rpl -> /login?next=/rpl -> back to /rpl after sign-in', async ({ page }) => {
@@ -157,20 +159,23 @@ test.describe('RPL Compass — signup, sign-out, env roles, wrong-role redirect'
     await expect(page.getByText('Access redirected').first()).toBeVisible({ timeout: 15000 });
   });
 
-  test('gladiator visiting /rpl/assessor is redirected to their own portal home', async ({ page }) => {
+  test('gladiator visiting /rpl/assessor is redirected to their own RPL home (/rpl)', async ({ page }) => {
     await staffLogin(page, 'glad1@test.local');
     await page.goto('/rpl/assessor', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/gladiator\/dashboard/, { timeout: 30000 });
+    // A1: gladiator is treated as a candidate for RPL routing -> /rpl.
+    await expect(page).toHaveURL(/\/rpl$/, { timeout: 30000 });
     await expect(page.getByText('Access redirected').first()).toBeVisible({ timeout: 15000 });
   });
 
-  test('RPL_ASSESSOR_EMAILS promotes a seeded user to assessor at session mint', async ({ page }) => {
-    // glad2@test.local is in RPL_ASSESSOR_EMAILS for this dev server; the env
-    // role overrides the gladiator doc and the claims handshake syncs it.
+  test('A2: env-listed email on a Quorena-role account is refused, never rewritten', async ({ page }) => {
+    // glad2@test.local is seeded as a gladiator AND listed in RPL_ASSESSOR_EMAILS
+    // for this dev server. A2 must refuse to promote/rewrite a Quorena account
+    // (it may belong to the owner's personal project): the session POST is a
+    // 403 ENV_ROLE_CONFLICT and no session cookie is minted, so the user stays
+    // on /login with a specific, human-readable error.
     const { response: resp, body } = await staffLogin(page, 'glad2@test.local');
-    expect(resp.status()).toBe(200);
-    expect(body?.success).toBe(true);
-    expect(body?.role, 'env-assigned assessor role must win over the doc').toBe('assessor');
-    await expect(page).toHaveURL(/\/rpl\/assessor/, { timeout: 30000 });
+    expect(resp.status(), 'env role must not rewrite a Quorena account').toBe(403);
+    expect(body?.code, 'the conflict must be coded, not a bare 500').toBe('ENV_ROLE_CONFLICT');
+    await expect(page).toHaveURL(/\/login/, { timeout: 30000 });
   });
 });

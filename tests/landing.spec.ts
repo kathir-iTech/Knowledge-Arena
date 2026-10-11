@@ -77,6 +77,7 @@ test.describe('Login page', () => {
     await expect(page.locator('input[type="password"]')).toHaveValue('Test123456!');
 
     await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/\/executive/, { timeout: 30000 });
+    // A1: the legacy executive demo account now lands in the RPL app.
+    await page.waitForURL(/\/rpl$/, { timeout: 30000 });
   });
 });

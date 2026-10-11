@@ -215,7 +215,7 @@ export default function RplProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [user, isLoading, auth, workerId]);
+  }, [user, isLoading, auth, workerId, paramIsCode]);
 
   if (isLoading || loading) {
     return (
