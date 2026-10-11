@@ -205,11 +205,15 @@ function ResultContent() {
         const res = await fetch(`/api/rpl/status/${encodeURIComponent(ref as string)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const body = (await res.json().catch(() => null)) as StatusResponse & {
+        const body = (await res.json().catch(() => null)) as (StatusResponse & {
           error?: string;
-        };
+          /** B3: 'none' = the reference code has no declaration. */
+          status?: string;
+        }) | null;
         if (!cancelled) {
-          if (!res.ok || !body || Array.isArray(body)) {
+          if (body && body.status === 'none') {
+            setError('Declaration not found for this reference code.');
+          } else if (!res.ok || !body || Array.isArray(body) || typeof body.stage !== 'string') {
             setError(
               typeof body?.error === 'string'
                 ? body.error

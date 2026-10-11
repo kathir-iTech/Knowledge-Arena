@@ -117,7 +117,11 @@ export default function RplLandingPage() {
         const res = await fetch(`/api/rpl/status/${encodeURIComponent(workerId)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!cancelled && res.status === 200) {
+        // B3: only redirect when a REAL status comes back. A 200
+        // { status: 'none' } (own record, no declaration) must keep the worker
+        // on the landing page so they can start their assessment.
+        const body = (await res.json().catch(() => null)) as { stage?: unknown } | null;
+        if (!cancelled && body && typeof body.stage === 'string') {
           router.replace('/rpl/status');
         }
       } catch {

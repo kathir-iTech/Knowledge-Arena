@@ -59,6 +59,12 @@ export async function GET(
         .limit(1)
         .get();
       if (byRef.empty) {
+        // B3: a worker asking about their OWN record that does not exist yet
+        // gets an explicit 200 "not started" state, not a 404 error. Only a
+        // privileged caller requesting someone ELSE's missing record 404s.
+        if (workerIdParam === caller.uid) {
+          return NextResponse.json({ status: 'none' }, { status: 200 });
+        }
         return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
       }
       docId = byRef.docs[0].id;
@@ -83,6 +89,18 @@ export async function GET(
 
     const worker = workerSnap.data() as RPLWorkerDoc;
     const declaration = worker.declaration;
+
+    // B3: a doc can exist for a signed-in candidate before they declare (or a
+    // legacy placeholder). No declaration + no submission timestamp for the
+    // caller's OWN record means "not started", not a fabricated stage.
+    if (
+      docId === caller.uid &&
+      !declaration &&
+      typeof worker.declarationSubmittedAt !== 'number'
+    ) {
+      return NextResponse.json({ status: 'none' }, { status: 200 });
+    }
+
     const trade = (declaration?.trade ?? worker.trade ?? '').trim();
 
     // Resolve matched packs against NSQF_PACKS. Stored pack ids win; the

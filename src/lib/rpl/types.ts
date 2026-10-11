@@ -269,6 +269,26 @@ export interface StatusResponse {
   declarationSubmittedAt?: number;
 }
 
+/**
+ * B3: GET /api/rpl/status/[workerId] answers 200 with this shape when the
+ * caller asks for their OWN record and no declaration exists yet. A missing
+ * own record is a normal "start here" state, not a 404 error.
+ */
+export interface StatusMissingResponse {
+  status: 'none';
+}
+
+export type StatusApiResponse = StatusResponse | StatusMissingResponse;
+
+/** Runtime guard for the B3 missing-status shape. */
+export function isStatusMissing(body: unknown): body is StatusMissingResponse {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    (body as { status?: unknown }).status === 'none'
+  );
+}
+
 export interface PackPerformanceRow {
   packId: string;
   title: string;

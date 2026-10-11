@@ -77,9 +77,19 @@ export default function RplStatusPage() {
         });
         const body = (await res.json().catch(() => null)) as (StatusResponse & {
           error?: string;
+          /** B3: 'none' = caller has no declaration yet (not an error). */
+          status?: string;
         }) | null;
         if (cancelled) return;
-        if (!res.ok || !body || Array.isArray(body) || typeof body.stage !== 'string') {
+        if (body && body.status === 'none') {
+          // B3: normal "not started" state — render the Start CTA, not an error.
+          setError('No declaration found yet. Start your assessment to get your status.');
+        } else if (
+          !res.ok ||
+          !body ||
+          Array.isArray(body) ||
+          typeof body.stage !== 'string'
+        ) {
           setError(
             typeof body?.error === 'string'
               ? body.error
