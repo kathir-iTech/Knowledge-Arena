@@ -255,6 +255,10 @@ export interface MatchedPackSummary {
   nsqfLevel: number;
   matchedUnits: string[];
   practiceQuestions?: string[];
+  /** B4: percent (0-100) of the pack's units the worker claimed can-do/done. */
+  matchScore?: number;
+  /** B4: plain-language explanation of why this pack matched. */
+  matchReason?: string;
 }
 
 export interface StatusResponse {

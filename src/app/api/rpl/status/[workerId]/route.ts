@@ -103,17 +103,55 @@ export async function GET(
 
     const trade = (declaration?.trade ?? worker.trade ?? '').trim();
 
-    // Resolve matched packs against NSQF_PACKS. Stored pack ids win; the
-    // matcher (findBestMatchingPacks) runs ONLY when the stored doc lacks
-    // usable pack ids, in which case its implicated units are used directly.
-    // Otherwise matchedUnits = all unit names of each stored pack.
+    // B4: match packs from the worker's ACTUAL claims. A pack appears only if
+    // the worker marked at least one of its units can-do/done; its matchScore
+    // is the share of the pack's units claimed, and matchedUnits lists only
+    // the claimed units. A declaration with no claims (or none at all) shows
+    // NO packs — never a fabricated match. Legacy docs without per-unit claims
+    // fall back to the previous stored-id / keyword behavior.
     const storedPackIds = Array.isArray(declaration?.matchedPacks)
       ? declaration.matchedPacks.filter(
           (id): id is string => typeof id === 'string' && id.trim().length > 0,
         )
       : [];
+    const declarationsByPack =
+      declaration?.declarationsByPack && typeof declaration.declarationsByPack === 'object'
+        ? declaration.declarationsByPack
+        : null;
+    const hasClaimData = declarationsByPack !== null && Object.keys(declarationsByPack).length > 0;
+
     let matchedPacks: MatchedPackSummary[] = [];
-    if (storedPackIds.length > 0) {
+    if (hasClaimData) {
+      for (const [packId, entries] of Object.entries(declarationsByPack)) {
+        const pack = NSQF_PACKS.find((p) => p.id === packId);
+        if (!pack) continue;
+        const claimedIds = new Set<string>();
+        for (const e of Array.isArray(entries) ? entries : []) {
+          if (
+            e &&
+            typeof e.unitId === 'string' &&
+            (e.status === 'can-do' || e.status === 'done')
+          ) {
+            claimedIds.add(e.unitId);
+          }
+        }
+        if (claimedIds.size === 0) continue;
+        const claimedUnits = pack.competencyUnits.filter((u) => claimedIds.has(u.id));
+        const total = pack.competencyUnits.length || 1;
+        const claimedCount = claimedUnits.length;
+        matchedPacks.push({
+          packId: pack.id,
+          title: pack.title,
+          nsqfLevel: pack.nsqfLevel,
+          matchedUnits: claimedUnits.map((u) => u.name),
+          matchScore: Math.round((claimedCount / total) * 100),
+          matchReason: `You declared ${claimedCount} of ${total} skills for this pack.`,
+        });
+      }
+      matchedPacks.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+    } else if (storedPackIds.length > 0) {
+      // Legacy: packs recorded before per-unit claims existed. Keep the units
+      // visible but do not invent a match score.
       for (const packId of storedPackIds) {
         const pack = NSQF_PACKS.find((p) => p.id === packId);
         if (!pack) continue;
@@ -125,7 +163,7 @@ export async function GET(
         });
       }
     }
-    if (matchedPacks.length === 0) {
+    if (matchedPacks.length === 0 && !hasClaimData && storedPackIds.length === 0) {
       const recomputed = findBestMatchingPacks({
         keywords: trade ? [trade] : [],
         trade,
@@ -135,6 +173,8 @@ export async function GET(
         title: r.pack.title,
         nsqfLevel: r.pack.nsqfLevel,
         matchedUnits: r.matchedUnits,
+        matchScore: r.score,
+        matchReason: `Matched on your trade “${trade || 'your declaration'}”.`,
       }));
     }
 

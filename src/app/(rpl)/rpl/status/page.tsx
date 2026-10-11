@@ -215,10 +215,16 @@ export default function RplStatusPage() {
                 <CardTitle className="flex flex-wrap items-center gap-2">
                   {pack.title}
                   <Badge variant="default">NSQF Level {pack.nsqfLevel}</Badge>
+                  {typeof pack.matchScore === 'number' && (
+                    <Badge variant="secondary">{pack.matchScore}% match</Badge>
+                  )}
                 </CardTitle>
                 <CardDescription>{pack.packId}</CardDescription>
               </CardHeader>
               <CardContent>
+                {pack.matchReason ? (
+                  <p className="mb-2 text-xs text-muted-foreground">{pack.matchReason}</p>
+                ) : null}
                 <div className="flex flex-wrap gap-2" aria-label="Matched units">
                   {pack.matchedUnits.map((unit) => (
                     <Badge key={unit} variant="secondary">

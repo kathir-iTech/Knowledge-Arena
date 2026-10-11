@@ -63,5 +63,17 @@ console.log("\nB3 — own record with no declaration answers { status: 'none' }"
   ok('nav falls back on a missing stage', nav.includes("typeof body.stage !== 'string'"));
 }
 
+console.log("\nB4 — only claimed packs, with score + reason");
+{
+  ok('types expose matchScore/matchReason', /matchScore\?: number;[\s\S]{0,120}matchReason\?: string;/.test(read('src/lib/rpl/types.ts')));
+  ok('status route derives packs from per-unit claims', statusRoute.includes('declarationsByPack'));
+  ok('status route skips packs with no claimed unit', /claimedIds\.size === 0\) continue/.test(statusRoute));
+  ok('status route sets matchScore', /matchScore:\s*Math\.round/.test(statusRoute));
+  ok('status route sets matchReason', /matchReason:\s*`You declared/.test(statusRoute));
+  ok('result page renders the match score', resultPage.includes('pack.matchScore'));
+  ok('result page renders the match reason', resultPage.includes('pack.matchReason'));
+  ok('status page renders the match score', statusPage.includes('pack.matchScore'));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
