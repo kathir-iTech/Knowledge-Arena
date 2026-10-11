@@ -24,11 +24,22 @@ export type SessionRoleAction =
   | 'mint' // claim already carries a valid role — mint the cookie now
   | 'refresh-claims' // claim missing/stale, doc has the role — sync claim, client re-mints
   | 'role-missing' // neither source has a role — nothing safe to mint
-  | 'lookup-failed'; // claim missing and the Firestore read threw — retryable
+  | 'lookup-failed' // claim missing and the Firestore read threw — retryable
+  | 'env-conflict'; // env-listed email already belongs to a Quorena account (A2)
 
 export interface SessionRoleDecision {
   action: SessionRoleAction;
   role: AppRole | null;
+}
+
+// A2: legacy Quorena roles. This branch shares the Firebase project with the
+// owner's personal Quorena app, so an account can already hold one of these.
+// RPL env role config must never rewrite such an account's role/claims.
+export const QUORENA_ROLES = ['executive', 'commander', 'gladiator'] as const;
+export type QuorenaRole = (typeof QUORENA_ROLES)[number];
+
+export function isQuorenaRole(role: string | null | undefined): role is QuorenaRole {
+  return role === 'executive' || role === 'commander' || role === 'gladiator';
 }
 
 function isValidClaimRole(raw: unknown): raw is AppRole {
@@ -63,6 +74,8 @@ export interface SessionRoleInput {
   claimRole?: unknown;
   /** users/{uid}.role — only read when the claim is unusable */
   docRole?: unknown;
+  /** whether users/{uid} exists (undefined when not read) */
+  docExists?: boolean | null;
   /** true when the Firestore role lookup threw (readable but unavailable) */
   lookupFailed?: boolean;
   /**
@@ -78,6 +91,13 @@ export function resolveSessionRole(input: SessionRoleInput): SessionRoleDecision
   // assignment and must not be stale-claimed or doc-overridden.
   if (input.envRole && (VALID_ROLES as readonly string[]).includes(input.envRole)) {
     const envRole = input.envRole as AppRole;
+    // A2: env role config applies ONLY when the user doc is missing or already
+    // holds an RPL role. If this account already holds a Quorena role it
+    // belongs to the shared personal project — refuse instead of rewriting it.
+    // (An existing claim of a Quorena role is treated the same way.)
+    if (isQuorenaRole(normalizeDocRole(input.docRole)) || isQuorenaRole(normalizeDocRole(input.claimRole))) {
+      return { action: 'env-conflict', role: null };
+    }
     if (isValidClaimRole(input.claimRole) && input.claimRole.trim() === envRole) {
       return { action: 'mint', role: envRole };
     }

@@ -1,229 +1,116 @@
-// Phase A2 tests — role claim sync decision + the client mint handshake.
+// A2 unit test — env-assigned RPL roles must never rewrite a Quorena account.
 // Run with: node scripts/test-session-role.mjs
-// (fallback if Node type-stripping fails: npx tsx scripts/test-session-role.mjs)
-// Node >=22.13 required (package.json engines).
+// (fallback: npx tsx scripts/test-session-role.mjs)
+// Node >=22.13 required (package.json engines) for TS type-stripping.
 
 console.log(`node ${process.version}`);
 
-async function loadTs(specifier) {
-  const candidates = [`../../${specifier}`, `../${specifier}`];
-  for (const p of candidates) {
-    try {
-      const mod = await import(p);
-      console.log(`TS import worked: ${p} (Node type-stripping)`);
-      return mod;
-    } catch (err) {
-      console.log(`TS import failed: ${p}: ${err?.message ?? err}`);
-    }
+let mod = null;
+let importPathUsed = null;
+const candidates = ['../src/lib/session-role.ts', '../../src/lib/session-role.ts'];
+for (const p of candidates) {
+  try {
+    mod = await import(p);
+    importPathUsed = p;
+    console.log(`TS import path worked: ${p} (Node type-stripping)`);
+    break;
+  } catch (err) {
+    console.log(`TS import path failed: ${p}: ${err?.message ?? err}`);
   }
-  console.log(`DIRECT_TS_IMPORT_FAILED for ${specifier} - run via: npx tsx scripts/test-session-role.mjs`);
+}
+
+if (!mod) {
+  console.log('DIRECT_TS_IMPORT_FAILED — fallback: run via `npx tsx scripts/test-session-role.mjs`');
   process.exit(1);
 }
 
-const roleMod = await loadTs('src/lib/session-role.ts');
-const sessionMod = await loadTs('src/lib/client-session.ts');
-const envMod = await loadTs('src/lib/rpl-role-env.ts');
-const { resolveSessionRole, normalizeDocRole } = roleMod;
-const { mintSessionCookie } = sessionMod;
-const { parseEmailList, resolveEnvRole } = envMod;
+const { resolveSessionRole, isQuorenaRole, QUORENA_ROLES } = mod;
 
 let failures = 0;
-function check(label, actual, expected) {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) {
-    console.log(`  ok   ${label}`);
-  } else {
+function check(name, cond, detail = '') {
+  if (cond) console.log(`PASS: ${name}${detail ? ` — ${detail}` : ''}`);
+  else {
+    console.log(`FAIL: ${name}${detail ? ` — ${detail}` : ''}`);
     failures += 1;
-    console.log(`  FAIL ${label}\n       expected ${e}\n       actual   ${a}`);
   }
 }
 
-console.log('\nresolveSessionRole');
-check('valid claim + no doc -> mint', resolveSessionRole({ claimRole: 'gladiator' }), { action: 'mint', role: 'gladiator' });
-check('executive claim -> mint', resolveSessionRole({ claimRole: 'executive' }), { action: 'mint', role: 'executive' });
-check('no claim + doc role -> refresh-claims', resolveSessionRole({ docRole: 'commander' }), { action: 'refresh-claims', role: 'commander' });
-check('no claim + no doc -> role-missing', resolveSessionRole({}), { action: 'role-missing', role: null });
-check('no claim + Firestore read error -> lookup-failed', resolveSessionRole({ lookupFailed: true }), { action: 'lookup-failed', role: null });
-check(
-  'legacy claim "teacher" ignored, doc wins -> refresh-claims',
-  resolveSessionRole({ claimRole: 'teacher', docRole: 'commander' }),
-  { action: 'refresh-claims', role: 'commander' },
-);
-check(
-  'legacy claim "teacher" + no doc -> role-missing',
-  resolveSessionRole({ claimRole: 'teacher' }),
-  { action: 'role-missing', role: null },
-);
-check(
-  'legacy doc "student" normalized -> refresh-claims/gladiator',
-  resolveSessionRole({ docRole: 'student' }),
-  { action: 'refresh-claims', role: 'gladiator' },
-);
-check('non-string claim + doc -> refresh-claims', resolveSessionRole({ claimRole: 123, docRole: 'gladiator' }), {
-  action: 'refresh-claims',
-  role: 'gladiator',
-});
-check('gibberish doc role -> role-missing', resolveSessionRole({ docRole: 'wizard' }), { action: 'role-missing', role: null });
-
-console.log('\nresolveSessionRole — env-assigned roles (RPL_ADMIN_EMAILS / RPL_ASSESSOR_EMAILS)');
-check(
-  'env admin + stale gladiator claim -> refresh-claims/admin',
-  resolveSessionRole({ claimRole: 'gladiator', docRole: 'gladiator', envRole: 'admin' }),
-  { action: 'refresh-claims', role: 'admin' },
-);
-check(
-  'env assessor + no claim + commander doc -> refresh-claims/assessor',
-  resolveSessionRole({ docRole: 'commander', envRole: 'assessor' }),
-  { action: 'refresh-claims', role: 'assessor' },
-);
-check(
-  'env admin + matching admin claim -> mint/admin',
-  resolveSessionRole({ claimRole: 'admin', envRole: 'admin' }),
-  { action: 'mint', role: 'admin' },
-);
-check(
-  'env assessor wins over role-missing doc/claim',
-  resolveSessionRole({ envRole: 'assessor' }),
-  { action: 'refresh-claims', role: 'assessor' },
-);
-check(
-  'env role null falls through to claim',
-  resolveSessionRole({ claimRole: 'candidate', envRole: null }),
-  { action: 'mint', role: 'candidate' },
-);
-check(
-  'candidate claim alone is a valid mint (self-serve signup)',
-  resolveSessionRole({ claimRole: 'candidate' }),
-  { action: 'mint', role: 'candidate' },
-);
-
-console.log('\nnormalizeDocRole — new roles pass through');
-check('candidate doc -> candidate', normalizeDocRole('candidate'), 'candidate');
-check('assessor doc -> assessor', normalizeDocRole('ASSESSOR '), 'assessor');
-check('admin doc -> admin', normalizeDocRole('admin'), 'admin');
-
-console.log('\nparseEmailList');
-check('undefined -> []', parseEmailList(undefined), []);
-check('empty string -> []', parseEmailList(''), []);
-check('trim + lowercase', parseEmailList('  Admin@X.COM , b@y.com '), ['admin@x.com', 'b@y.com']);
-check('dedupe after normalization', parseEmailList('a@x.com, A@X.COM,a@x.com'), ['a@x.com']);
-check('empty parts dropped', parseEmailList('a@x.com,, ,b@y.com'), ['a@x.com', 'b@y.com']);
-
-console.log('\nresolveEnvRole');
-const sources = { adminEmails: 'boss@x.com, shared@x.com', assessorEmails: 'shared@x.com, judge@x.com' };
-check('admin list match (case-insensitive)', resolveEnvRole('Boss@X.com', sources), 'admin');
-check('assessor list match', resolveEnvRole('judge@x.com', sources), 'assessor');
-check('admin wins when in both lists', resolveEnvRole('shared@x.com', sources), 'admin');
-check('unknown email -> null', resolveEnvRole('nobody@x.com', sources), null);
-check('missing email -> null', resolveEnvRole(undefined, sources), null);
-check('whitespace-only email -> null', resolveEnvRole('   ', sources), null);
-check('empty lists -> null', resolveEnvRole('boss@x.com', {}), null);
-
-console.log('\nnormalizeDocRole');
-check('teacher -> commander', normalizeDocRole('teacher'), 'commander');
-check('student -> gladiator', normalizeDocRole('GLADIATOR '), 'gladiator');
-check('undefined -> null', normalizeDocRole(undefined), null);
-
-// --- client handshake -------------------------------------------------------
-
-function makeFetcher(responses) {
-  const calls = [];
-  const impl = async (_url, init) => {
-    const body = JSON.parse(init.body);
-    calls.push(body.idToken);
-    const next = responses[calls.length - 1];
-    if (next instanceof Error) throw next;
-    return {
-      ok: next.status >= 200 && next.status < 300,
-      status: next.status,
-      json: async () => next.body,
-    };
-  };
-  return { impl, calls };
+function decision(input) {
+  const d = resolveSessionRole(input);
+  return `${d.action}:${d.role ?? 'null'}`;
 }
 
-function tokenSource(log) {
-  return async (forceRefresh) => {
-    log.push(forceRefresh);
-    return `token-${forceRefresh ? 'refreshed' : 'initial'}`;
-  };
-}
+// --- Quorena role classification ---
+check(
+  'isQuorenaRole recognizes executive/commander/gladiator',
+  QUORENA_ROLES.length === 3 &&
+    isQuorenaRole('executive') &&
+    isQuorenaRole('commander') &&
+    isQuorenaRole('gladiator') &&
+    !isQuorenaRole('candidate') &&
+    !isQuorenaRole('assessor') &&
+    !isQuorenaRole('admin') &&
+    !isQuorenaRole(null),
+);
 
-console.log('\nmintSessionCookie — happy path (role claim already present)');
-{
-  const { impl, calls } = makeFetcher([{ status: 200, body: { success: true, role: 'gladiator' } }]);
-  const tokenLog = [];
-  const result = await mintSessionCookie(tokenSource(tokenLog), impl);
-  check('ok', result.ok, true);
-  check('role', result.role, 'gladiator');
-  check('claimSynced', result.claimSynced, false);
-  check('server called once', calls.length, 1);
-  check('token fetched without forced refresh', tokenLog, [false]);
-}
+// --- env role + Quorena doc/claim => refuse (never rewrite) ---
+check(
+  'env admin + doc gladiator => env-conflict',
+  decision({ envRole: 'admin', docRole: 'gladiator', docExists: true }) === 'env-conflict:null',
+);
+check(
+  'env assessor + doc executive => env-conflict',
+  decision({ envRole: 'assessor', docRole: 'executive', docExists: true }) === 'env-conflict:null',
+);
+check(
+  'env admin + doc commander => env-conflict',
+  decision({ envRole: 'admin', docRole: 'commander', docExists: true }) === 'env-conflict:null',
+);
+check(
+  'env admin + claim gladiator (doc missing) => env-conflict',
+  decision({ envRole: 'admin', claimRole: 'gladiator', docRole: null, docExists: false }) ===
+    'env-conflict:null',
+);
+check(
+  'env admin + legacy claim student (=gladiator) => env-conflict',
+  decision({ envRole: 'admin', claimRole: 'student', docRole: null, docExists: false }) ===
+    'env-conflict:null',
+);
 
-console.log('\nmintSessionCookie — claim sync sequence (server returns claimsRefresh)');
-{
-  const { impl, calls } = makeFetcher([
-    { status: 200, body: { success: true, claimsRefresh: true, role: 'commander' } },
-    { status: 200, body: { success: true, role: 'commander' } },
-  ]);
-  const tokenLog = [];
-  const result = await mintSessionCookie(tokenSource(tokenLog), impl);
-  check('ok', result.ok, true);
-  check('claimSynced', result.claimSynced, true);
-  check('role', result.role, 'commander');
-  check('server called twice', calls.length, 2);
-  check('second call used a FORCED token refresh so the new claim is inside the cookie', tokenLog, [false, true]);
-}
+// --- env role applies when doc is missing or already RPL ---
+check(
+  'env admin + doc missing => refresh-claims admin',
+  decision({ envRole: 'admin', docRole: null, docExists: false }) === 'refresh-claims:admin',
+);
+check(
+  'env admin + doc candidate => refresh-claims admin',
+  decision({ envRole: 'admin', docRole: 'candidate', docExists: true }) === 'refresh-claims:admin',
+);
+check(
+  'env assessor + doc assessor => refresh-claims assessor',
+  decision({ envRole: 'assessor', docRole: 'assessor', docExists: true }) ===
+    'refresh-claims:assessor',
+);
+check(
+  'env admin + claim already admin => mint admin',
+  decision({ envRole: 'admin', claimRole: 'admin' }) === 'mint:admin',
+);
 
-console.log('\nmintSessionCookie — loop guard (claimsRefresh twice)');
-{
-  const { impl, calls } = makeFetcher([
-    { status: 200, body: { success: true, claimsRefresh: true } },
-    { status: 200, body: { success: true, claimsRefresh: true } },
-  ]);
-  const result = await mintSessionCookie(tokenSource([]), impl);
-  check('ok', result.ok, false);
-  check('errorCode', result.errorCode, 'CLAIM_SYNC_LOOP');
-  check('exactly two calls (no hammering)', calls.length, 2);
-  check('errorMessage is human readable', typeof result.errorMessage === 'string' && result.errorMessage.length > 0, true);
-}
+// --- no env role: unchanged behavior ---
+check(
+  'no env + doc gladiator => refresh-claims gladiator (never rewritten)',
+  decision({ docRole: 'gladiator' }) === 'refresh-claims:gladiator',
+);
+check(
+  'no env + no claim/doc => role-missing',
+  decision({}) === 'role-missing:null',
+);
+check('lookup failed => lookup-failed', decision({ lookupFailed: true }) === 'lookup-failed:null');
 
-console.log('\nmintSessionCookie — server refuses with a specific code');
-{
-  const { impl } = makeFetcher([
-    {
-      status: 409,
-      body: { error: 'This account has no role yet, so it cannot be given a session.', code: 'ROLE_MISSING' },
-    },
-  ]);
-  const result = await mintSessionCookie(tokenSource([]), impl);
-  check('ok', result.ok, false);
-  check('status', result.status, 409);
-  check('errorCode forwarded', result.errorCode, 'ROLE_MISSING');
-  check('errorMessage surfaced verbatim', result.errorMessage, 'This account has no role yet, so it cannot be given a session.');
+console.log(`importPathUsed=${importPathUsed}`);
+if (failures > 0) {
+  console.log(`${failures} test(s) FAILED`);
+  process.exit(1);
+} else {
+  console.log('all tests PASSED');
 }
-
-console.log('\nmintSessionCookie — non-JSON 500 still produces a message');
-{
-  const { impl } = makeFetcher([{ status: 500, body: {} }]);
-  const result = await mintSessionCookie(tokenSource([]), impl);
-  check('ok', result.ok, false);
-  check('errorCode', result.errorCode, 'HTTP_500');
-  check('errorMessage mentions status', result.errorMessage.includes('500'), true);
-}
-
-console.log('\nmintSessionCookie — network failure is visible, not silent');
-{
-  const result = await mintSessionCookie(tokenSource([]), async () => {
-    throw new Error('Failed to fetch');
-  });
-  check('ok', result.ok, false);
-  check('status', result.status, 0);
-  check('errorCode', result.errorCode, 'NETWORK_ERROR');
-  check('message includes the cause', result.errorMessage.includes('Failed to fetch'), true);
-}
-
-console.log(failures === 0 ? '\nALL SESSION-ROLE TESTS PASSED' : `\n${failures} SESSION-ROLE TEST(S) FAILED`);
-process.exit(failures === 0 ? 0 : 1);

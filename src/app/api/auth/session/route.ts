@@ -125,7 +125,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const decision = resolveSessionRole({ claimRole, docRole, lookupFailed, envRole });
+    const decision = resolveSessionRole({ claimRole, docRole, docExists, lookupFailed, envRole });
+
+    // A2: an env-listed email that already belongs to a Quorena account (shared
+    // Firebase project) is refused outright. We never rewrite that account's
+    // role/claims or user doc — it may be the owner's personal account.
+    if (decision.action === 'env-conflict') {
+      console.error(
+        `[Session] ENV_ROLE_CONFLICT uid=${decoded.uid} email=${decoded.email ?? 'n/a'} ` +
+          `project=${firebaseConfig.projectId} — email is listed in RPL_ADMIN_EMAILS/` +
+          `RPL_ASSESSOR_EMAILS but the account already holds a Quorena role`,
+      );
+      return NextResponse.json(
+        {
+          error: 'This email belongs to another project account. Use a different email.',
+          code: 'ENV_ROLE_CONFLICT',
+        },
+        { status: 403 },
+      );
+    }
 
     if (decision.action === 'role-missing') {
       console.error(
