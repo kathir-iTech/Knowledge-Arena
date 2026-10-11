@@ -8,7 +8,7 @@ import type { AssessmentItem, RPLAssessmentDoc, RPLWorkerDoc } from '@/lib/rpl/t
 
 export const runtime = 'nodejs';
 
-// Single-assessment detail (Commander owns-own + Executive sees-all).
+// Single-assessment detail (Commander/Assessor owns-own + Executive sees-all).
 // Returns { assessment, items, worker (rpl_workers doc), pack (NSQF_PACKS by packId) }.
 
 export async function GET(
@@ -16,7 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ assessmentId: string }> },
 ) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive', 'assessor']);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).
@@ -40,8 +40,9 @@ export async function GET(
     }
     const data = snap.data() as Partial<RPLAssessmentDoc>;
 
-    // Commander may read only their own assessments; executives may read any.
-    if (auth.role === 'commander' && data.assessorId !== auth.uid) {
+    // Commander and assessor may read only their own assessments; executives
+    // may read any.
+    if (auth.role !== 'executive' && data.assessorId !== auth.uid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

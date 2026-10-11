@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  verifyFirebaseTokenWithAnyRole,
-  verifyFirebaseTokenWithRole,
-} from '@/lib/verify-auth';
+import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { RPL_ASSESSMENTS } from '@/lib/rpl/rpl-collections';
@@ -13,14 +10,20 @@ import type { AssessmentItem, RPLAssessmentDoc } from '@/lib/rpl/types';
 
 export const runtime = 'nodejs';
 
-// RPL assessor queue + save endpoint (Commander + Executive read, Commander write).
-// - GET: commander sees own assessments (assessorId == uid), executive sees all.
-//   Single-field where() only + in-memory filter; docs with isTemplate == true
-//   (forge template contract) are always excluded. Sorted by createdAt desc.
-// - POST: commander only. Writes rpl_assessments/{assessmentId} (set-merge)
-//   plus all items into the items subcollection via batched writes (chunk 500).
+// RPL assessor queue + save endpoint (Commander/Executive/Assessor read,
+// Commander/Assessor write).
+// - GET: commander AND assessor see own assessments (assessorId == uid),
+//   executive sees all. Single-field where() only + in-memory filter; docs
+//   with isTemplate == true (forge template contract) are always excluded.
+//   Sorted by createdAt desc.
+// - POST: commander or assessor. Writes rpl_assessments/{assessmentId}
+//   (set-merge) plus all items into the items subcollection via batched
+//   writes (chunk 500).
 
 type AssessmentRow = Partial<RPLAssessmentDoc> & { id: string };
+
+const QUEUE_ROLES = ['commander', 'executive', 'assessor'] as const;
+const WRITER_ROLES = ['commander', 'assessor'] as const;
 
 function toRow(id: string, data: Record<string, unknown>): AssessmentRow {
   return { id, ...(data as Partial<RPLAssessmentDoc>) };
@@ -28,7 +31,7 @@ function toRow(id: string, data: Record<string, unknown>): AssessmentRow {
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, QUEUE_ROLES);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).
@@ -40,8 +43,9 @@ export async function GET(req: NextRequest) {
     if (rl) return rl;
 
     const db = getAdminDb();
+    // Non-executive callers (commander/assessor) only ever see their OWN queue.
     const snap =
-      auth.role === 'commander'
+      auth.role !== 'executive'
         ? await db.collection(RPL_ASSESSMENTS).where('assessorId', '==', auth.uid).get()
         : await db.collection(RPL_ASSESSMENTS).get();
 
@@ -84,7 +88,7 @@ function isValidItem(raw: unknown): raw is AssessmentItem {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithRole(req, 'commander');
+    const auth = await verifyFirebaseTokenWithAnyRole(req, WRITER_ROLES);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).

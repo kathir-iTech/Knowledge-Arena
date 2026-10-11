@@ -36,11 +36,11 @@ function toEvidenceDoc(
   };
 }
 
-// POST /api/rpl/evidence — commander/executive only.
+// POST /api/rpl/evidence — commander/executive/assessor.
 // Body: { assessmentId, workerId, unitId, dataUrl, mimeType, sizeBytes }.
 export async function POST(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive', 'assessor']);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).
@@ -128,11 +128,17 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/rpl/evidence?assessmentId= — commander/executive any; gladiator
-// ONLY when the assessment's workerId == requester uid (never leak others).
+// GET /api/rpl/evidence?assessmentId= — commander/executive/assessor any;
+// gladiator ONLY when the assessment's workerId == requester uid (never leak
+// others).
 export async function GET(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive', 'gladiator']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, [
+      'commander',
+      'executive',
+      'assessor',
+      'gladiator',
+    ]);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).
@@ -157,7 +163,8 @@ export async function GET(req: NextRequest) {
     const assessment = assessSnap.data() as Partial<RPLAssessmentDoc>;
 
     // Explicit privacy check: non-privileged callers see only their own worker record.
-    const isPrivileged = auth.role === 'commander' || auth.role === 'executive';
+    const isPrivileged =
+      auth.role === 'commander' || auth.role === 'executive' || auth.role === 'assessor';
     if (!isPrivileged && assessment.workerId !== auth.uid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -180,10 +187,10 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// DELETE /api/rpl/evidence — commander/executive only. Body: { assessmentId, imageId }.
+// DELETE /api/rpl/evidence — commander/executive/assessor. Body: { assessmentId, imageId }.
 export async function DELETE(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive', 'assessor']);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).

@@ -7,7 +7,8 @@ import type { AssessmentItem, RPLAssessmentDoc, RPLConsistencyDoc } from '@/lib/
 
 export const runtime = 'nodejs';
 
-// GET /api/rpl/assess/my-consistency — commander (own) or executive (?assessorId= to inspect).
+// GET /api/rpl/assess/my-consistency — commander/assessor (own) or executive
+// (?assessorId= to inspect).
 // Derives the target assessor's packIds from their submitted assessments, reads
 // rpl_consistency/{packId} keeping pairs involving them, and computes
 // per-criterion calibration deltas (own mean vs panel mean on shared itemIds).
@@ -48,7 +49,7 @@ function isValidScore(v: unknown): v is number {
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive', 'assessor']);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

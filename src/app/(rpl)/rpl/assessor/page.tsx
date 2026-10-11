@@ -56,8 +56,9 @@ function kappaVariant(kappa: number | null): 'destructive' | 'warning' | 'succes
 }
 
 export default function RplAssessorPage() {
-  // Authoritative page-level guard (commander-or-executive; the global (rpl)
-  // layout guard also covers /rpl/assessor but this guard stays authoritative).
+  // Authoritative page-level guard (commander/executive/assessor; the global
+  // (rpl) layout guard also covers /rpl/assessor but this guard stays
+  // authoritative).
   const { user, isLoading } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();
@@ -74,7 +75,7 @@ export default function RplAssessorPage() {
       router.replace('/');
       return;
     }
-    if (user.role !== 'commander' && user.role !== 'executive') {
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') {
       router.replace('/');
     }
   }, [user, isLoading, router]);
@@ -131,7 +132,8 @@ export default function RplAssessorPage() {
   }, [auth]);
 
   useEffect(() => {
-    if (!user || (user.role !== 'commander' && user.role !== 'executive')) return;
+    if (!user) return;
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') return;
     void fetchAll();
   }, [user, fetchAll]);
 
@@ -162,7 +164,7 @@ export default function RplAssessorPage() {
     );
   }
 
-  if (!user || (user.role !== 'commander' && user.role !== 'executive')) {
+  if (!user || (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor')) {
     return null;
   }
 

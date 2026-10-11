@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
+import { getRoleHome } from '@/lib/auth-redirect';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -88,8 +89,8 @@ function TrendMark({ trend }: { trend: AssessorLeaderboardRow['trend'] }) {
 }
 
 export default function RplAdminPage() {
-  // Authoritative page-level executive guard (the global (rpl) layout guard
-  // exists in parallel; this guard stays authoritative).
+  // Authoritative page-level guard (executive or admin; the global (rpl)
+  // layout guard exists in parallel; this guard stays authoritative).
   const { user, isLoading } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();
@@ -106,8 +107,9 @@ export default function RplAdminPage() {
       router.replace('/');
       return;
     }
-    if (user.role !== 'executive') {
-      router.replace('/');
+    if (user.role !== 'executive' && user.role !== 'admin') {
+      // Wrong role: own home, never /login.
+      router.replace(getRoleHome(user.role));
     }
   }, [user, isLoading, router]);
 
@@ -138,7 +140,7 @@ export default function RplAdminPage() {
   }, [auth]);
 
   useEffect(() => {
-    if (!user || user.role !== 'executive') return;
+    if (!user || (user.role !== 'executive' && user.role !== 'admin')) return;
     fetchOverview();
   }, [user, fetchOverview]);
 
@@ -161,7 +163,7 @@ export default function RplAdminPage() {
   }, [auth]);
 
   useEffect(() => {
-    if (!user || user.role !== 'executive') return;
+    if (!user || (user.role !== 'executive' && user.role !== 'admin')) return;
     fetchAlerts();
   }, [user, fetchAlerts]);
 
@@ -213,7 +215,7 @@ export default function RplAdminPage() {
     );
   }
 
-  if (!user || user.role !== 'executive') {
+  if (!user || (user.role !== 'executive' && user.role !== 'admin')) {
     return null;
   }
 

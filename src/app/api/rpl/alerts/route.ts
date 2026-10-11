@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
+import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { enforceRateLimit } from '@/lib/rate-limiter';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { checkKappaThresholds } from '@/lib/rpl/kappa-monitor';
@@ -7,11 +7,11 @@ import type { KappaAlert } from '@/lib/rpl/types';
 
 export const runtime = 'nodejs';
 
-// GET /api/rpl/alerts — executive only.
+// GET /api/rpl/alerts — executive or admin.
 // Runs checkKappaThresholds for every NSQF pack, returns { alerts } newest-first.
 export async function GET(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['executive', 'admin']);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

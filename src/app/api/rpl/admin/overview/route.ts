@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
+import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
@@ -19,7 +19,7 @@ import type {
 
 export const runtime = 'nodejs';
 
-// SIH-26242 RPL admin overview (Executive only).
+// SIH-26242 RPL admin overview (Executive or admin).
 // Aggregation rules:
 // - Only single-field where() / orderBy() queries are used; all cross-field
 //   filtering, joins and aggregation happen in memory (firestore.indexes.json
@@ -67,7 +67,7 @@ function interpretationForKappa(kappa: number | null, stored: unknown): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['executive', 'admin']);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

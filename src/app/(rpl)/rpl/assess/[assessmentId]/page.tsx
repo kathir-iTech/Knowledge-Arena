@@ -149,7 +149,7 @@ export default function RplAssessScoringPage() {
 
   useEffect(() => {
     if (isLoading || !user || !assessmentId) return;
-    if (user.role !== 'commander' && user.role !== 'executive') return;
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') return;
     let cancelled = false;
     (async () => {
       try {
@@ -214,7 +214,7 @@ export default function RplAssessScoringPage() {
 
   useEffect(() => {
     if (isLoading || !user || !assessmentId || !pack) return;
-    if (user.role !== 'commander' && user.role !== 'executive') return;
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') return;
     let cancelled = false;
     (async () => {
       try {
@@ -478,13 +478,15 @@ export default function RplAssessScoringPage() {
     );
   }
   const role = user?.role;
-  if (!user || (role !== 'commander' && role !== 'executive')) {
+  if (!user || (role !== 'commander' && role !== 'executive' && role !== 'assessor')) {
     return (
       <main className="mx-auto max-w-3xl p-6">
         <Card>
           <CardHeader>
             <CardTitle>Access denied</CardTitle>
-            <CardDescription>Only commanders and executives can score assessments.</CardDescription>
+            <CardDescription>
+              Only commanders, executives and assessors can score assessments.
+            </CardDescription>
           </CardHeader>
         </Card>
       </main>

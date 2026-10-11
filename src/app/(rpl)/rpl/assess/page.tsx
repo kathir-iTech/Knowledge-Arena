@@ -19,8 +19,9 @@ function packTitle(packId: string | undefined): string {
 }
 
 export default function RplAssessListPage() {
-  // Authoritative page-level guard (commander-or-executive; the global (rpl)
-  // layout guard also covers /rpl/assess* but this guard stays authoritative).
+  // Authoritative page-level guard (commander/executive/assessor; the global
+  // (rpl) layout guard also covers /rpl/assess* but this guard stays
+  // authoritative).
   const { user, isLoading } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();
@@ -35,14 +36,14 @@ export default function RplAssessListPage() {
       router.replace('/');
       return;
     }
-    if (user.role !== 'commander' && user.role !== 'executive') {
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') {
       router.replace('/');
     }
   }, [user, isLoading, router]);
 
   useEffect(() => {
     if (isLoading || !user) return;
-    if (user.role !== 'commander' && user.role !== 'executive') return;
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') return;
     let cancelled = false;
     (async () => {
       try {
@@ -104,13 +105,15 @@ export default function RplAssessListPage() {
     );
   }
   const role = user?.role;
-  if (!user || (role !== 'commander' && role !== 'executive')) {
+  if (!user || (role !== 'commander' && role !== 'executive' && role !== 'assessor')) {
     return (
       <main className="mx-auto max-w-3xl p-6">
         <Card>
           <CardHeader>
             <CardTitle>Access denied</CardTitle>
-            <CardDescription>Only commanders and executives can view assessments.</CardDescription>
+            <CardDescription>
+              Only commanders, executives and assessors can view assessments.
+            </CardDescription>
           </CardHeader>
         </Card>
       </main>
