@@ -27,6 +27,8 @@ import {
   type NSQFMatchResult,
 } from '@/lib/rpl/nsqf-packs';
 import type { DeclarationMark } from '@/lib/rpl/types';
+import { t, type Lang } from '@/lib/rpl/i18n';
+import { LanguageToggle } from '@/components/rpl/LanguageToggle';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { getPendingSummary, queueDeclarationForSync, type PendingSummary } from '@/lib/rpl/offline-store';
 import { syncPendingDeclarations } from '@/lib/rpl/offline-sync';
@@ -63,19 +65,6 @@ const INDIAN_STATES = [
   'West Bengal',
 ];
 
-const STEPS = [
-  'Personal & trade',
-  'Experience declaration',
-  'Evidence summary',
-  'Review & submit',
-] as const;
-
-const MARKS: { value: DeclarationMark; label: string }[] = [
-  { value: 'can-do', label: 'I can do this' },
-  { value: 'done', label: 'I have done this before' },
-  { value: 'never', label: 'I have never done this' },
-];
-
 interface DeclarePayload {
   trade: string;
   sector: string;
@@ -94,6 +83,12 @@ export default function RplDeclarePage() {
   const { user, isLoading } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();
+
+  // P11d: language toggle for declaration UI (EN/HI/TA).
+  const [lang, setLang] = useState<Lang>('en');
+  const toggleLang = (newLang: Lang) => {
+    setLang(newLang);
+  };
 
   const [step, setStep] = useState(0);
   const [trade, setTrade] = useState('');
@@ -400,11 +395,11 @@ export default function RplDeclarePage() {
         aiUsed?: boolean;
       } | null;
       if (!res.ok || !matchBody || !Array.isArray(matchBody.matches)) {
-        setAiMatchNote('AI matching failed — showing keyword matches instead.');
+        setAiMatchNote(t('aiMatchNoteFailed', lang));
         return;
       }
       if (matchBody.aiUsed === false) {
-        setAiMatchNote('AI is unavailable right now — showing keyword matches instead.');
+        setAiMatchNote(t('aiMatchNoteUnavailable', lang));
       }
       try {
         localStorage.setItem('rpl:aiMatches', JSON.stringify(matchBody.matches));
@@ -432,7 +427,7 @@ export default function RplDeclarePage() {
       });
       if (mapped.length > 0) setMatchedPacks(mapped);
     } catch {
-      setAiMatchNote('AI matching failed — showing keyword matches instead.');
+      setAiMatchNote(t('aiMatchNoteFailed', lang));
     } finally {
       setAiMatching(false);
     }
@@ -471,16 +466,19 @@ export default function RplDeclarePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:p-6">
-      <div>
-        <h1 className="text-xl font-bold sm:text-2xl">Declare your experience</h1>
-        <p className="text-sm text-muted-foreground">
-          Tell us what you can do. A qualified assessor will review it later.
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-bold sm:text-2xl">{t('step1', lang)}</h1>
+        <LanguageToggle lang={lang} onChange={toggleLang} />
       </div>
+
+      <p className="text-sm text-muted-foreground">
+        {t('personalTradeContext', lang)}
+      </p>
 
       {/* Hand-rolled numbered step indicator */}
       <div className="grid grid-cols-4 gap-2" aria-label="Declaration progress">
-        {STEPS.map((label, idx) => {
+        {(['step1', 'step2', 'step3', 'step4'] as const).map((stepKey, idx) => {
+          const label = t(stepKey, lang);
           const status = idx < step ? 'done' : idx === step ? 'active' : 'pending';
           return (
             <div
@@ -530,7 +528,7 @@ export default function RplDeclarePage() {
         <Card>
           <CardContent className="pt-4">
             <p className="text-sm text-muted-foreground">
-              {"You're offline — your declaration will be saved and submitted when you reconnect."}
+              {t('offlineNotice', lang)}
               {queueState.total > 0 && ` (${queueState.total} saved on this device)`}
             </p>
           </CardContent>
@@ -587,7 +585,7 @@ export default function RplDeclarePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="trade">Trade / occupation</Label>
+              <Label htmlFor="trade">{t('trade', lang)}</Label>
               <Input
                 id="trade"
                 placeholder="e.g. Electrician, Plumber, Data Entry Operator"
@@ -596,7 +594,7 @@ export default function RplDeclarePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="sector">Sector</Label>
+              <Label htmlFor="sector">{t('sector', lang)}</Label>
               <Select value={sector} onValueChange={setSector}>
                 <SelectTrigger id="sector">
                   <SelectValue placeholder="Select sector" />
@@ -611,7 +609,7 @@ export default function RplDeclarePage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="years">Years of experience</Label>
+              <Label htmlFor="years">{t('years', lang)}</Label>
               <Input
                 id="years"
                 type="number"
@@ -623,7 +621,7 @@ export default function RplDeclarePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="location">Location (state)</Label>
+              <Label htmlFor="location">{t('location', lang)}</Label>
               <Select value={location} onValueChange={setLocation}>
                 <SelectTrigger id="location">
                   <SelectValue placeholder="Select state" />
@@ -638,7 +636,7 @@ export default function RplDeclarePage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Employer type</Label>
+              <Label>{t('employerType', lang)}</Label>
               <RadioGroup value={employerType} onValueChange={setEmployerType}>
                 <div className="flex items-center gap-2">
                   <RadioGroupItem id="emp-informal" value="informal" />
@@ -677,7 +675,7 @@ export default function RplDeclarePage() {
                 disabled={aiMatching}
                 onClick={() => void findMatchingQualifications()}
               >
-                {aiMatching ? 'Analyzing your experience...' : 'Find matching qualifications'}
+                {aiMatching ? t('analyzing', lang) : t('findMatching', lang)}
               </Button>
               {aiMatchNote && (
                 <p role="status" className="mt-2 text-xs text-amber-700">
@@ -706,17 +704,20 @@ export default function RplDeclarePage() {
                       value={marks[m.pack.id]?.[u.id] ?? 'never'}
                       onValueChange={(v) => setMark(m.pack.id, u.id, v as DeclarationMark)}
                     >
-                      {MARKS.map((opt) => (
-                        <div key={opt.value} className="flex items-center gap-2">
-                          <RadioGroupItem
-                            id={`${m.pack.id}-${u.id}-${opt.value}`}
-                            value={opt.value}
-                          />
-                          <Label htmlFor={`${m.pack.id}-${u.id}-${opt.value}`}>
-                            {opt.label}
-                          </Label>
-                        </div>
-                      ))}
+                      {(['can-do', 'done', 'never'] as const).map((optValue) => {
+                          const optLabel = optValue === 'can-do' ? t('canDo', lang) : optValue === 'done' ? t('doneBefore', lang) : t('neverDone', lang);
+                          return (
+                            <div key={optValue} className="flex items-center gap-2">
+                              <RadioGroupItem
+                                id={`${m.pack.id}-${u.id}-${optValue}`}
+                                value={optValue}
+                              />
+                              <Label htmlFor={`${m.pack.id}-${u.id}-${optValue}`}>
+                                {optLabel}
+                              </Label>
+                            </div>
+                          );
+                        })}
                     </RadioGroup>
                     <Separator />
                   </div>
@@ -839,13 +840,13 @@ export default function RplDeclarePage() {
               disabled={submitting || !step1Valid || !hasClaimedSkill}
               onClick={() => void submitDeclaration(buildPayload())}
             >
-              {submitting ? 'Submitting…' : 'Submit declaration'}
+              {submitting ? t('submitting', lang) : t('submit', lang)}
             </Button>
             {(!step1Valid || !hasClaimedSkill) && (
               <p className="text-xs text-muted-foreground">
                 {!step1Valid
-                  ? 'Trade and years of experience (0–60) are required before submitting.'
-                  : 'Mark at least one skill as “I can do this” or “I have done this before” before submitting.'}
+                  ? t('tradeRequired', lang)
+                  : t('skillRequired', lang)}
               </p>
             )}
           </CardContent>
