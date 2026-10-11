@@ -200,12 +200,12 @@ service cloud.firestore {
       // executive workspace/search/analytics) go through the Admin SDK, so
       // commanders have no client-side read need — preventing roster enumeration.
       allow read: if isOwner(userId) || isExecutive();
-      // Self-signup: only gladiator role allowed (no privilege escalation).
-      // Part 5A: signup is open — any authenticated Google account may create a
-      // gladiator profile. Domain restriction is enforced at arena-join time
-      // (participants create rule) via the arena's allowed_gladiator_domain.
+      // Self-signup: only unprivileged self-roles allowed (no escalation).
+      // SIH-26242: this branch creates RPL 'candidate' profiles (never
+      // 'gladiator'); 'gladiator' stays allowed so the rule is not a hard
+      // dependency of the RPL branch and existing Quorena signups still work.
       allow create: if isOwner(userId)
-        && request.resource.data.role == 'gladiator'
+        && (request.resource.data.role == 'gladiator' || request.resource.data.role == 'candidate')
         && request.resource.data.keys().hasOnly(['name', 'email', 'avatar', 'role', 'onboarding_complete']);
       // Owners may only update their display name and avatar, and mark onboarding complete. Role, email,
       // mustChangePassword, disabled and all other fields are server-only.

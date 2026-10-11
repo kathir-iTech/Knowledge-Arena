@@ -136,12 +136,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   }, []);
 
+  // SIH-26242: new accounts on this branch are RPL CANDIDATES, never Quorena
+  // gladiators (A3). No gladiator profile is ever created here.
   const buildFallbackProfile = useCallback((uid: string, defaults?: { name?: string; email?: string; photoURL?: string }): User => ({
     id: uid,
-    name: defaults?.name || auth?.currentUser?.displayName || 'Gladiator',
+    name: defaults?.name || auth?.currentUser?.displayName || 'Candidate',
     email: defaults?.email || auth?.currentUser?.email || '',
     avatar: defaults?.photoURL || auth?.currentUser?.photoURL || getRandomAvatar(),
-    role: 'gladiator' as const,
+    role: 'candidate' as const,
   }), [auth, getRandomAvatar]);
 
   const ensureGladiatorProfile = useCallback(async (uid: string, defaults?: { name?: string; email?: string; photoURL?: string }): Promise<User> => {
@@ -174,23 +176,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               mustChangePassword: data.mustChangePassword === true,
             } as User;
           }
-          const displayName = defaults?.name || auth.currentUser?.displayName || 'Gladiator';
+          const displayName = defaults?.name || auth.currentUser?.displayName || 'Candidate';
           const email = defaults?.email || auth.currentUser?.email || '';
           const photoURL = defaults?.photoURL || auth.currentUser?.photoURL || undefined;
           const avatar = photoURL || getRandomAvatar();
 
+          // SIH-26242: self-serve accounts are RPL candidates (A3) — this
+          // branch must not create Quorena gladiator profiles. The Firestore
+          // rule allows client self-create with role 'candidate'.
           const newUser: User = {
             id: uid,
             name: displayName,
             email,
             avatar,
-            role: 'gladiator',
+            role: 'candidate',
           };
           transaction.set(userRef, {
             name: newUser.name,
             email: newUser.email,
             avatar: newUser.avatar,
-            role: 'gladiator',
+            role: 'candidate',
           });
           return newUser;
         }),
@@ -603,7 +608,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         migrationDone.current = true;
         try {
           const sessionResult = await withTimeout(
-            mintSessionCookie((forceRefresh) => currentUser.getIdToken(forceRefresh)),
+            // A3: Google sign-in uses the SAME signupRole handshake as
+            // email/password sign-up, so a brand-new Google user is created as
+            // an RPL candidate server-side. Existing accounts keep their role
+            // (the server never overwrites an existing user doc).
+            mintSessionCookie(
+              (forceRefresh) => currentUser.getIdToken(forceRefresh),
+              fetch,
+              { signupRole: 'candidate', signupName: currentUser.displayName || '' },
+            ),
             AUTH_OP_TIMEOUT_MS,
             'Session creation',
           );
