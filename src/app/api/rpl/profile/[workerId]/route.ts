@@ -3,7 +3,8 @@ import { verifyFirebaseToken } from '@/lib/verify-auth';
 import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
-import { RPL_ASSESSMENTS } from '@/lib/rpl/rpl-collections';
+import { RPL_ASSESSMENTS, RPL_WORKERS } from '@/lib/rpl/rpl-collections';
+import { isReferenceCode } from '@/lib/rpl/reference-code';
 import {
   generateCertificationRecommendation,
   generateCompetencyProfile,
@@ -36,12 +37,39 @@ export async function GET(
     if (rl) return rl;
 
     const { workerId: rawParam } = await params;
-    const workerId = (rawParam ?? '').trim();
-    if (!workerId) {
+    const rawWorkerId = (rawParam ?? '').trim();
+    if (!rawWorkerId) {
       return NextResponse.json({ error: 'Missing workerId' }, { status: 400 });
     }
 
     const db = getAdminDb();
+
+    // B2: the URL param may be the caller's own uid OR a human reference code.
+    // Resolve a reference code to its worker doc id so /rpl/profile/<code>
+    // never exposes (or requires) a UID in the browser URL. Authorization is
+    // checked below against the RESOLVED id.
+    let workerId = rawWorkerId;
+    let referenceCode: string | null = isReferenceCode(rawWorkerId) ? rawWorkerId : null;
+    if (isReferenceCode(rawWorkerId)) {
+      const byRef = await db
+        .collection(RPL_WORKERS)
+        .where('assessmentReferenceCode', '==', rawWorkerId)
+        .limit(1)
+        .get();
+      if (byRef.empty) {
+        return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
+      }
+      workerId = byRef.docs[0].id;
+    } else {
+      // uid (or legacy id): try to surface the human code for display only.
+      try {
+        const workerDoc = await db.collection(RPL_WORKERS).doc(workerId).get();
+        const code = workerDoc.data()?.assessmentReferenceCode;
+        if (isReferenceCode(code)) referenceCode = code;
+      } catch {
+        referenceCode = null;
+      }
+    }
 
     let role: string | undefined;
     try {
@@ -166,7 +194,7 @@ export async function GET(
       }),
     );
 
-    return NextResponse.json({ profile, recommendation, evidence });
+    return NextResponse.json({ profile, recommendation, evidence, referenceCode });
   } catch (err) {
     console.error('[RPL Profile GET] Error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

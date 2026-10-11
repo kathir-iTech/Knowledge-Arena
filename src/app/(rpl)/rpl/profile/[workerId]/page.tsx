@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
+import { isReferenceCode } from '@/lib/rpl/reference-code';
 import type {
   CompetencyProfile,
   EvidenceImageDoc,
@@ -25,6 +26,8 @@ interface ProfileResponse {
   profile: CompetencyProfile;
   recommendation: RPLCertificationRecommendation & { requiresHumanSignoff?: boolean };
   evidence: EvidenceImageDoc[];
+  /** B2: human reference code (never the UID) for display. */
+  referenceCode?: string | null;
 }
 
 function unitBadgeVariant(status: UnitMastery): 'success' | 'warning' | 'destructive' {
@@ -140,6 +143,11 @@ export default function RplProfilePage() {
   // Dynamic-route params mirror src/app/(rpl)/rpl/assess/[assessmentId]/page.tsx.
   const params = useParams<{ workerId: string }>();
   const workerId = params.workerId;
+  // B2: the route param is either the caller's own uid OR a human reference
+  // code (so URLs never leak the UID). A reference code can't be compared to
+  // user.id client-side, so those requests fall through to the API, which
+  // resolves the code and enforces worker-sees-own vs commander/executive.
+  const paramIsCode = isReferenceCode(workerId);
   // Authoritative page-level guard (worker-own / commander / executive; the
   // global (rpl) layout guard also covers /rpl/profile* for signed-in users
   // but this guard stays authoritative).
@@ -158,15 +166,15 @@ export default function RplProfilePage() {
       return;
     }
     const privileged = user.role === 'commander' || user.role === 'executive';
-    if (!privileged && user.id !== workerId) {
+    if (!privileged && user.id !== workerId && !paramIsCode) {
       router.replace('/');
     }
-  }, [user, isLoading, router, workerId]);
+  }, [user, isLoading, router, workerId, paramIsCode]);
 
   useEffect(() => {
     if (isLoading || !user || !workerId) return;
     const privileged = user.role === 'commander' || user.role === 'executive';
-    if (!privileged && user.id !== workerId) return;
+    if (!privileged && user.id !== workerId && !paramIsCode) return;
     let cancelled = false;
     (async () => {
       try {
@@ -194,7 +202,7 @@ export default function RplProfilePage() {
           return;
         }
         if (!cancelled) {
-          setData({ profile: body.profile, recommendation: body.recommendation, evidence: body.evidence ?? [] });
+          setData({ profile: body.profile, recommendation: body.recommendation, evidence: body.evidence ?? [], referenceCode: body.referenceCode ?? null });
           setLoading(false);
         }
       } catch {
@@ -218,7 +226,7 @@ export default function RplProfilePage() {
   }
 
   const privileged = user && (user.role === 'commander' || user.role === 'executive');
-  if (!user || (!privileged && user.id !== workerId)) {
+  if (!user || (!privileged && user.id !== workerId && !paramIsCode)) {
     return (
       <main className="mx-auto max-w-3xl p-6">
         <Card>
@@ -267,7 +275,8 @@ export default function RplProfilePage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Competency profile</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Worker {profile.workerId} · {pack ? `${pack.title} (NSQF Level ${pack.nsqfLevel})` : profile.packId}
+            {data.referenceCode ? `Reference ${data.referenceCode} · ` : ''}
+            {pack ? `${pack.title} (NSQF Level ${pack.nsqfLevel})` : profile.packId}
             {typeof profile.nsqfLevelRecommended === 'number'
               ? ` · Recommended level ${profile.nsqfLevelRecommended}`
               : null}

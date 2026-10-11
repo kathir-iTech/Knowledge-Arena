@@ -8,6 +8,7 @@ import { useFirebase } from '@/firebase';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RPLStatusBadge } from '@/components/rpl/RPLStatusBadge';
+import { isReferenceCode } from '@/lib/rpl/reference-code';
 import type { RPLStage, StatusResponse } from '@/lib/rpl/types';
 
 /**
@@ -98,7 +99,8 @@ export function RPLGladiatorNav() {
   }
 
   const stage: RPLStage = status.stage;
-  const uid = user.id;
+  // B2: link by human reference code so the URL never carries the UID.
+  const profileRef = isReferenceCode(status.referenceCode) ? status.referenceCode : user.id;
 
   if (stage === 'declared' || stage === 'assessment_scheduled') {
     return (
@@ -115,7 +117,7 @@ export function RPLGladiatorNav() {
   if (stage === 'assessed' || stage === 'profile_ready') {
     return (
       <Link
-        href={`/rpl/profile/${encodeURIComponent(uid)}`}
+        href={`/rpl/profile/${encodeURIComponent(profileRef)}`}
         className="flex items-center gap-2 rounded-[10px] px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
       >
         <span>My Competency Profile</span>
@@ -126,7 +128,7 @@ export function RPLGladiatorNav() {
   // certified
   return (
     <Link
-      href={`/rpl/profile/${encodeURIComponent(uid)}`}
+      href={`/rpl/profile/${encodeURIComponent(profileRef)}`}
       className="flex items-center gap-2 rounded-[10px] px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
     >
       <Check className="h-4 w-4 text-success" aria-hidden="true" />

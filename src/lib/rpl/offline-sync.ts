@@ -15,6 +15,7 @@ import {
   markPendingDeclaration,
   removePendingDeclaration,
 } from './offline-store';
+import { isReferenceCode } from './reference-code';
 import type { PendingDeclaration } from './types';
 
 export const DECLARE_ENDPOINT = '/api/rpl/declare';
@@ -43,6 +44,12 @@ export interface SyncReport {
   /** Records left queued after a server refusal / network drop (visible). */
   failed: number;
   errors: string[];
+  /**
+   * B2: human-readable reference codes the server assigned to replayed
+   * declarations. The page surfaces these so an offline worker still gets
+   * their code instead of a UID.
+   */
+  referenceCodes: string[];
 }
 
 export interface SyncDeps {
@@ -84,6 +91,16 @@ async function markAll(
   }
 }
 
+/** B2: capture the server-assigned human reference code from a 2xx replay. */
+async function recordReferenceCode(res: Response, report: SyncReport): Promise<void> {
+  try {
+    const body = (await res.json()) as { referenceCode?: unknown };
+    if (isReferenceCode(body?.referenceCode)) report.referenceCodes.push(body.referenceCode);
+  } catch {
+    /* body absent or not JSON — nothing to record */
+  }
+}
+
 /**
  * Replay every queued declaration. Returns a report the UI must surface.
  * Guarantees:
@@ -97,7 +114,7 @@ export async function syncPendingDeclarations(deps: SyncDeps): Promise<SyncRepor
   const fetchImpl = deps.fetchImpl ?? fetch;
   const endpoint = deps.endpoint ?? DECLARE_ENDPOINT;
   const store = deps.store ?? indexedDbStore;
-  const report: SyncReport = { total: 0, synced: 0, needsSignIn: 0, failed: 0, errors: [] };
+  const report: SyncReport = { total: 0, synced: 0, needsSignIn: 0, failed: 0, errors: [], referenceCodes: [] };
 
   let records: PendingDeclaration[];
   try {
@@ -157,6 +174,7 @@ export async function syncPendingDeclarations(deps: SyncDeps): Promise<SyncRepor
 
     if (res.ok) {
       try {
+        await recordReferenceCode(res, report);
         await store.remove(record.localId);
         report.synced += 1;
       } catch (err) {
@@ -178,6 +196,7 @@ export async function syncPendingDeclarations(deps: SyncDeps): Promise<SyncRepor
         try {
           res = await attempt(fresh);
           if (res.ok) {
+            await recordReferenceCode(res, report);
             await store.remove(record.localId);
             report.synced += 1;
             continue;

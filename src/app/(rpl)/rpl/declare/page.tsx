@@ -149,6 +149,18 @@ export default function RplDeclarePage() {
           return auth.currentUser.getIdToken(forceRefresh).catch(() => null);
         },
       });
+      // B2: a replayed declaration returns its human reference code — persist
+      // and announce it so an offline worker never loses it (or sees a UID).
+      let referenceNote: string | null = null;
+      if (report.referenceCodes.length > 0) {
+        const code = report.referenceCodes[report.referenceCodes.length - 1];
+        try {
+          localStorage.setItem('rpl:lastRef', code);
+        } catch {
+          /* storage unavailable — note still shows this visit */
+        }
+        referenceNote = `Synced your saved declaration. Your reference code is ${code}.`;
+      }
       if (report.total > 0) {
         if (report.synced > 0 && report.synced === report.total) {
           setSyncNote(`Synced ${report.synced} saved declaration${report.synced === 1 ? '' : 's'}.`);
@@ -162,6 +174,7 @@ export default function RplDeclarePage() {
       } else {
         setSyncNote(null);
       }
+      if (referenceNote) setSyncNote(referenceNote);
     } catch (err) {
       setSyncNote(
         `Sync failed (${err instanceof Error ? err.message : String(err)}) — your declaration stays saved on this device.`,

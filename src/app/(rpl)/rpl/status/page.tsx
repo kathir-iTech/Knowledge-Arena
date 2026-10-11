@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTracker, type TrackerStep } from '@/components/rpl/StatusTracker';
+import { isReferenceCode } from '@/lib/rpl/reference-code';
 import type { RPLStage, StatusResponse } from '@/lib/rpl/types';
 import { Check, Copy } from 'lucide-react';
 
@@ -166,7 +167,9 @@ export default function RplStatusPage() {
     status.stage === 'assessed' ||
     status.stage === 'profile_ready' ||
     status.stage === 'certified';
-  const profileUid = status.workerId || user.id;
+  const profileRef = isReferenceCode(status.referenceCode)
+    ? status.referenceCode
+    : status.workerId || user.id;
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:p-6">
@@ -266,7 +269,7 @@ export default function RplStatusPage() {
 
       {showProfileLink && (
         <Button asChild className="w-full">
-          <Link href={`/rpl/profile/${encodeURIComponent(profileUid)}`}>View my competency profile</Link>
+          <Link href={`/rpl/profile/${encodeURIComponent(profileRef)}`}>View my competency profile</Link>
         </Button>
       )}
     </main>

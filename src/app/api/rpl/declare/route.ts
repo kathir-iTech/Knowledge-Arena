@@ -3,6 +3,7 @@ import { verifyFirebaseToken } from '@/lib/verify-auth';
 import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { RPL_WORKERS } from '@/lib/rpl/rpl-collections';
+import { allocateReferenceCode, isReferenceCode } from '@/lib/rpl/reference-code';
 
 export const runtime = 'nodejs';
 
@@ -185,6 +186,24 @@ export async function POST(req: NextRequest) {
     const existing = await ref.get().catch(() => null);
     const prevData = existing && existing.exists ? (existing.data() as AnyRecord) : null;
 
+    // B2: the reference code is human-readable and NEVER the UID.
+    //  - reuse a valid code already on the worker doc (idempotent re-declare
+    //    and offline-queue replay must not churn the code);
+    //  - accept a valid code supplied by the client (a client that already
+    //    knows its code can keep it stable);
+    //  - otherwise allocate a fresh unique code.
+    const bodyCode =
+      typeof body.referenceCode === 'string'
+        ? body.referenceCode
+        : typeof nested.referenceCode === 'string'
+          ? nested.referenceCode
+          : '';
+    const existingCode = isReferenceCode(prevData?.assessmentReferenceCode)
+      ? (prevData?.assessmentReferenceCode as string)
+      : null;
+    const referenceCode =
+      existingCode ?? (isReferenceCode(bodyCode) ? bodyCode : await allocateReferenceCode(db));
+
     const profile = {
       uid,
       ...(typeof name === 'string' && name ? { name } : {}),
@@ -212,7 +231,7 @@ export async function POST(req: NextRequest) {
         ...profile,
         declaration,
         matchedPacks,
-        assessmentReferenceCode: uid,
+        assessmentReferenceCode: referenceCode,
         declarationSubmittedAt: now,
         createdAt: typeof prevData?.createdAt === 'number' ? prevData.createdAt : now,
         updatedAt: now,
@@ -220,7 +239,7 @@ export async function POST(req: NextRequest) {
       { merge: true },
     );
 
-    return NextResponse.json({ id: uid, referenceCode: uid });
+    return NextResponse.json({ id: uid, referenceCode });
   } catch (err) {
     // Validation errors thrown as Response above.
     if (err instanceof Response) return err;
