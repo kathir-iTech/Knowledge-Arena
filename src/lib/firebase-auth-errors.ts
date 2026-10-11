@@ -68,12 +68,21 @@ export function mapFirebaseAuthError(
 
     case 'auth/popup-closed-by-user':
     case 'auth/cancelled-popup-request':
-      return { title: '', message: '', isSilent: true };
-
     case 'auth/popup-blocked':
+      // RPL Compass contract: popup failure must never be silent — the user
+      // sees the same inline guidance whichever way the popup failed, so the
+      // "Continue with Google" button can never look like it did nothing.
       return {
         title: 'Google Sign-In Failed',
-        message: 'Google Sign-In was blocked by your browser. Please allow popups and try again.',
+        message: 'Google sign-in was blocked in this browser. Use email and password instead.',
+        isSilent: false,
+      };
+
+    case 'auth/unauthorized-domain':
+      return {
+        title: 'Google Sign-In Failed',
+        message:
+          'Google sign-in was blocked in this browser (the site is not authorized for the Google provider). Use email and password instead.',
         isSilent: false,
       };
 
@@ -81,13 +90,6 @@ export function mapFirebaseAuthError(
       return {
         title: 'Google Sign-In Failed',
         message: 'An account already exists with this email. Sign in using your existing sign-in method.',
-        isSilent: false,
-      };
-
-    case 'auth/unauthorized-domain':
-      return {
-        title: 'Google Sign-In Failed',
-        message: 'Google Sign-In is not configured for this website. Please contact support.',
         isSilent: false,
       };
 
@@ -139,7 +141,11 @@ export function mapFirebaseAuthError(
     default:
       return {
         title: baseTitle,
-        message: 'Unable to sign in right now. Please try again.',
+        // Unknown codes must show the code itself — an opaque message hides
+        // the actual cause from the operator/debugger.
+        message: code
+          ? `Something went wrong (${code}). Please try again.`
+          : 'Unable to sign in right now. Please try again.',
         isSilent: false,
       };
   }

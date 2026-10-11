@@ -30,13 +30,16 @@ interface SessionResponseBody {
 export async function mintSessionCookie(
   getIdToken: (forceRefresh: boolean) => Promise<string>,
   fetchImpl: typeof fetch = fetch,
+  // Extra body fields (e.g. signupRole/signupName for the server-side
+  // candidate-doc creation handshake on email/password signup).
+  extraBody: Record<string, unknown> = {},
 ): Promise<MintSessionResult> {
   const post = async (forceRefresh: boolean) => {
     const idToken = await getIdToken(forceRefresh);
     const res = await fetchImpl(SESSION_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify({ idToken, ...extraBody }),
     });
     let body: SessionResponseBody | null = null;
     try {

@@ -3,20 +3,22 @@
 import React, { createContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, runTransaction, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, runTransaction } from 'firebase/firestore';
 import {
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   GoogleAuthProvider,
   signOut,
+  updateProfile as setFirebaseDisplayName,
 } from 'firebase/auth';
 import { useFirebase, useUser as useFirebaseUserHook } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { mapFirebaseAuthError } from '@/lib/firebase-auth-errors';
-import { mapStaffIdToEmail } from '@/lib/staff-login';
-import { getDemoAccount } from '@/lib/demo-accounts';
+import { VALID_ROLES, type AppRole } from '@/lib/session-role';
 import { mintSessionCookie } from '@/lib/client-session';
 
 interface AuthContextType {
@@ -26,7 +28,9 @@ interface AuthContextType {
   authError: string | null;
   clearAuthError: () => void;
   login: (credentials: { email: string; password: string }) => Promise<void>;
+  signUp: (data: { name: string; email: string; password: string }) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   updateAvatar: (avatar: string) => Promise<void>;
   updateProfile: (data: { name?: string; avatar?: string }) => Promise<void>;
@@ -51,6 +55,15 @@ const RATE_LIMIT_TIMEOUT_MS = 30000;
 // Phase A2: background session mint retries (bounded so a server-side
 // misconfiguration surfaces as a visible error instead of an endless loop).
 const MIGRATION_MAX_ATTEMPTS = 3;
+
+// Debug-only auth tracing, gated behind ?debug=1. NEVER log tokens or email
+// addresses — uid and error codes only.
+function debugLog(...args: unknown[]): void {
+  if (typeof window === 'undefined') return;
+  if (new URLSearchParams(window.location.search).get('debug') !== '1') return;
+  // eslint-disable-next-line no-console -- opt-in debug tracing (?debug=1)
+  console.info('[Auth][debug]', ...args);
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -98,7 +111,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
 
   const signupInProgress = useRef(false);
-  const signupUserId = useRef<string | null>(null);
+  // Login owns the profile fetch the same way signup does: while the session
+  // mint is in flight, suppress the auth-state effect's fetchUserDocument so a
+  // signOut-induced Firestore error cannot race it and overwrite the specific
+  // server error (e.g. SERVICE_ACCOUNT_PROJECT_MISMATCH) with a generic one.
+  const loginInProgress = useRef(false);
   const lastFetchedUid = useRef<string | null>(null);
   const fetchInProgress = useRef(false);
   const fetchInProgressUid = useRef<string | null>(null);
@@ -109,10 +126,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
   }, []);
 
-  const normalizeRole = useCallback((raw: string | undefined): 'executive' | 'commander' | 'gladiator' | null => {
+  const normalizeRole = useCallback((raw: string | undefined): AppRole | null => {
     if (raw === 'teacher') return 'commander';
     if (raw === 'student') return 'gladiator';
-    if (raw === 'executive' || raw === 'commander' || raw === 'gladiator') return raw;
+    if (raw && (VALID_ROLES as readonly string[]).includes(raw.trim())) {
+      return raw.trim() as AppRole;
+    }
     console.warn('AuthContext: invalid role in Firestore user document', raw);
     return null;
   }, []);
@@ -282,7 +301,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           photoURL: googleUser?.photoURL || undefined,
         });
         // Post-fetch unknown role guard: ensure role is valid, otherwise sign out
-        if (!profile.role || !['executive', 'commander', 'gladiator'].includes(profile.role)) {
+        if (!profile.role || !(VALID_ROLES as readonly string[]).includes(profile.role)) {
           throw new Error('Account not recognized — contact your Executive');
         }
         setUser(profile);
@@ -358,29 +377,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (!auth) return;
-    // Handle return from signInWithRedirect (SIH preview popup compatibility).
-    // onAuthStateChanged (via useFirebaseUserHook) will pick up the user automatically.
-    void getRedirectResult(auth).catch((err: unknown) => {
-      const code = (err as { code?: string })?.code || '';
-      const msg = getErrorMessage(err);
-      // No pending redirect is the normal case on a plain page load.
-      if (code === 'auth/no-auth-event' || msg.includes('no-auth-event')) {
-        return;
-      }
-      console.error('[Auth] Google redirect return failed', code, msg);
-      setIsLoading(false);
-      setAuthError(
-        `Google sign-in did not complete${code ? ` (${code})` : ''}: ${msg}. Please try again.`,
-      );
-      toast({
-        variant: 'destructive',
-        title: 'Google Sign-In Failed',
-        description: `${msg || 'The sign-in redirect failed.'} Please try again.`,
+    // Return path from a redirect-based sign-in. The app now uses
+    // signInWithPopup exclusively, so a non-null result here means a STALE
+    // redirect (e.g. a tab left open on the old code). Keep the call as a
+    // safety net and trace its outcome under ?debug=1 — this is exactly the
+    // signal that went missing when third-party storage partitioning ate the
+    // redirect result on cross-origin previews (signInWithRedirect bug).
+    void getRedirectResult(auth)
+      .then((cred) => {
+        if (cred?.user) {
+          debugLog('getRedirectResult: returned user', { uid: cred.user.uid });
+        } else {
+          debugLog('getRedirectResult: null (no pending redirect)');
+        }
+      })
+      .catch((err: unknown) => {
+        const code = (err as { code?: string })?.code || '';
+        const msg = getErrorMessage(err);
+        // No pending redirect is the normal case on a plain page load.
+        if (code === 'auth/no-auth-event' || msg.includes('no-auth-event')) {
+          debugLog('getRedirectResult: no pending redirect (no-auth-event)');
+          return;
+        }
+        console.error('[Auth] Google redirect return failed', code, msg);
+        setIsLoading(false);
+        setAuthError(
+          `Google sign-in did not complete${code ? ` (${code})` : ''}: ${msg}. Please try again.`,
+        );
+        toast({
+          variant: 'destructive',
+          title: 'Google Sign-In Failed',
+          description: `${msg || 'The sign-in redirect failed.'} Please try again.`,
+        });
       });
-    });
     if (isUserLoading) { setIsLoading(true); return; }
+    debugLog('auth state', {
+      hasFirebaseUser: !!firebaseUser,
+      uid: firebaseUser?.uid ?? null,
+      hasCurrentUser: !!auth.currentUser,
+    });
     if (firebaseUser) {
-      if (signupInProgress.current && signupUserId.current === firebaseUser.uid) { return; }
+      // During email/password signup the profile doc is created server-side at
+      // session mint (Firestore rules only allow client self-create with role
+      // 'gladiator'); skip the effect-driven fetch so ensureGladiatorProfile
+      // cannot race it — signUp() fetches explicitly once the mint completes.
+      // The same holds for login (loginInProgress): login() fetches explicitly
+      // on success so a failed mint keeps its specific server error.
+      if (signupInProgress.current || loginInProgress.current) { return; }
       fetchUserDocument(firebaseUser.uid);
       void migrateSession();
     } else {
@@ -422,81 +465,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         throw new Error("Password is required.");
     }
+    // Own the profile fetch for this interactive flow (see the auth-state
+    // effect) so a failed mint keeps its specific server error.
+    loginInProgress.current = true;
     try {
-      const email = mapStaffIdToEmail(credentials.email);
+      const email = credentials.email.trim();
       await withTimeout(checkRateLimit('login', email), RATE_LIMIT_TIMEOUT_MS, 'Rate limit check');
       await withTimeout(signInWithEmailAndPassword(auth, email, credentials.password), AUTH_OP_TIMEOUT_MS, 'Sign in');
 
-      const uid = auth.currentUser?.uid;
-      if (!uid) {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
         await signOut(auth);
         toast({ variant: "destructive", title: "Sign In Failed", description: "Unable to verify account." });
         throw new Error("Unable to verify account.");
       }
 
-      if (!firestore) {
-        await signOut(auth);
-        toast({ variant: "destructive", title: "Sign In Failed", description: "Service not available." });
-        throw new Error("Service not available.");
-      }
+      // Claim the mint for this login. The auth-state effect fires as soon as
+      // signInWithEmailAndPassword sets the Firebase user and would otherwise
+      // POST a SECOND session cookie for the same user (mirrors
+      // signInWithGoogle). login() owns the mint for the interactive path.
+      migrationDone.current = true;
 
-      let userDoc;
+      // Mint the server session cookie NOW and fail hard if it fails —
+      // otherwise the client thinks it is signed in while middleware
+      // (cookie-gated) bounces every portal navigation back to /login.
+      // The SERVER is the role authority (env lists > claim > user doc); the
+      // client no longer gates login by role. mintSessionCookie completes the
+      // role-claim handshake (claimsRefresh -> forced refresh -> re-mint) so
+      // the cookie always carries `role`.
       try {
-        userDoc = await withTimeout(getDoc(doc(firestore, 'users', uid)), PROFILE_TIMEOUT_MS, 'Profile read');
-      } catch (e) {
-        if (isPermissionDenied(e)) {
-          await signOut(auth);
-          setAuthError("Sign-in failed — please try again");
-          toast({ variant: "destructive", title: "Sign In Failed", description: "Please try again" });
-          throw new Error("Sign-in failed — please try again");
-        }
-        if (isTimeoutError(e)) {
-          await signOut(auth);
-          setAuthError("Sign-in failed — please try again");
-          toast({ variant: "destructive", title: "Sign In Failed", description: "Request timed out. Please try again." });
-          throw new Error("Request timed out. Please try again.");
-        }
-        throw e;
-      }
-
-      if (!userDoc.exists()) {
-        await signOut(auth);
-        setAuthError("Account not recognized — contact your Executive");
-        toast({ variant: "destructive", title: "Access Denied", description: "Staff account not found. Contact your Executive." });
-        throw new Error("Staff account not found.");
-      }
-
-      const role = userDoc.data()?.role;
-      const normalized = normalizeRole(role);
-      if (!normalized || !['executive', 'commander'].includes(normalized)) {
-        const isDemoGladiator =
-          normalized === 'gladiator' &&
-          process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === 'true' &&
-          email === getDemoAccount('gladiator')?.email;
-        if (!isDemoGladiator) {
-          // Unknown or gladiator trying staff login
-          if (!normalized) {
-            await signOut(auth);
-            setAuthError("Account not recognized — contact your Executive");
-            toast({ variant: "destructive", title: "Access Denied", description: "Account not recognized — contact your Executive" });
-            throw new Error("Account not recognized — contact your Executive");
-          }
-          await signOut(auth);
-          toast({ variant: "destructive", title: "Access Denied", description: "Staff login is not available for this account. Gladiators must use Google Sign-In." });
-          throw new Error("Staff login is not available for this account.");
-        }
-      }
-
-      // Phase A1/A2: mint the server session cookie NOW and fail hard if it
-      // fails. Previously login relied solely on the background
-      // migrateSession() best-effort call, so a /api/auth/session failure left
-      // the client thinking it was logged in while middleware (cookie-gated)
-      // bounced every portal navigation back to /login. mintSessionCookie also
-      // completes the role-claim handshake (claimsRefresh -> forced refresh ->
-      // re-mint) so the cookie always carries `role`.
-      try {
-        const currentUser = auth.currentUser;
-        if (!currentUser) throw new Error('Unable to verify account.');
         const sessionResult = await withTimeout(
           mintSessionCookie((forceRefresh) => currentUser.getIdToken(forceRefresh)),
           AUTH_OP_TIMEOUT_MS,
@@ -505,13 +502,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!sessionResult.ok) {
           await signOut(auth).catch(() => {});
           const friendly = sessionResult.errorMessage || 'Sign-in failed — please try again';
+          // Surface the server's OWN code (e.g. SERVICE_ACCOUNT_PROJECT_MISMATCH)
+          // plus its message so the operator sees the exact misconfiguration.
+          const codeFragment = sessionResult.errorCode ? ` (${sessionResult.errorCode})` : '';
+          const message = `Sign-in failed${codeFragment} — ${friendly}`;
           console.error('[Auth] login session mint failed', sessionResult.errorCode, sessionResult.errorMessage);
-          setAuthError(friendly);
+          setAuthError(message);
           setIsLoading(false);
-          throw new Error(`Sign-in failed — ${friendly}`);
+          throw new Error(message);
         }
       } catch (e) {
-        if (e instanceof Error && e.message.startsWith('Sign-in failed —')) throw e;
+        // Preserve the crafted message (which may carry the server's own code,
+        // e.g. "Sign-in failed (SERVICE_ACCOUNT_PROJECT_MISMATCH) — ..."). A
+        // strict em-dash prefix check used to miss the coded variant and
+        // overwrite it with the generic message, hiding the real cause.
+        if (e instanceof Error && e.message.startsWith('Sign-in failed')) throw e;
         await signOut(auth).catch(() => {});
         if (isTimeoutError(e)) {
           setAuthError("Sign-in failed — please try again");
@@ -522,6 +527,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toast({ variant: "destructive", title: "Sign In Failed", description: "Could not establish server session. Please try again." });
         throw new Error("Sign-in failed — please try again");
       }
+
+      // Mint succeeded — populate client state from the authoritative user doc
+      // (the auth-state effect is suppressed while loginInProgress is true).
+      await fetchUserDocument(currentUser.uid);
     } catch (error: unknown) {
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
         toast({ variant: "destructive", title: "Too Many Attempts", description: "Too many attempts. Please wait a moment and try again." });
@@ -530,10 +539,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error;
       }
       if (error instanceof Error && (
-        error.message.includes('Access Denied') ||
-        error.message.includes('Staff account not found') ||
-        error.message.includes('Staff login is not available') ||
-        error.message.includes('Account not recognized') ||
         error.message.includes('Sign-in failed') ||
         error.message.includes('Request timed out')
       )) {
@@ -561,6 +566,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast({ variant: "destructive", title: mapped.title, description: mapped.message });
       setIsLoading(false);
       throw new Error(mapped.message);
+    } finally {
+      loginInProgress.current = false;
     }
   };
 
@@ -576,43 +583,172 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prompt: 'select_account',
     });
     try {
-      // Redirect-based auth for SIH preview URL popup compatibility:
-      // redirects the whole tab to Google and back instead of opening a popup.
-      await signInWithRedirect(auth, provider);
-      // onAuthStateChanged will fire on return and fetchUserDocument will handle profile creation.
+      // Popup flow — NOT signInWithRedirect. Whole-tab redirects lose the
+      // auth result under third-party storage partitioning on cross-origin
+      // previews (*.vercel.app with a firebaseapp.com authDomain): the
+      // getRedirectResult() call comes back null, no user state exists, and
+      // POST /api/auth/session is never sent. signInWithPopup keeps the
+      // result in this tab's JS context, so the auth-state effect always sees
+      // the user and mints the cookie. The popup MUST be triggered
+      // synchronously inside the click gesture (no awaits before this call)
+      // or browsers block it.
+      await signInWithPopup(auth, provider);
+      // The auth-state effect fetches/creates the profile. Mint the server
+      // session cookie here so a failure is surfaced immediately (same
+      // fail-hard contract as login()) instead of after 3 background retries.
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        // Claim the mint for the background migrateSession() so it does not
+        // race this one with a duplicate POST.
+        migrationDone.current = true;
+        try {
+          const sessionResult = await withTimeout(
+            mintSessionCookie((forceRefresh) => currentUser.getIdToken(forceRefresh)),
+            AUTH_OP_TIMEOUT_MS,
+            'Session creation',
+          );
+          if (!sessionResult.ok) {
+            if (sessionResult.errorCode === 'ROLE_MISSING') {
+              // First Google sign-in: the profile doc is still being created
+              // by fetchUserDocument (open gladiator signup). The effect
+              // re-mints once the doc lands — do NOT sign the user out.
+              debugLog('google mint deferred: profile doc still being created');
+              migrationDone.current = false;
+            } else {
+              const friendly = sessionResult.errorMessage || 'Sign-in failed — please try again';
+              const codeFragment = sessionResult.errorCode ? ` (${sessionResult.errorCode})` : '';
+              const message = `Sign-in failed${codeFragment} — ${friendly}`;
+              console.error('[Auth] google session mint failed', sessionResult.errorCode, sessionResult.errorMessage);
+              migrationDone.current = false;
+              await signOut(auth).catch(() => {});
+              setAuthError(message);
+              setIsLoading(false);
+              toast({ variant: "destructive", title: "Google Sign-In Failed", description: message });
+            }
+          } else {
+            debugLog('google session mint ok', { role: sessionResult.role });
+          }
+        } catch (e) {
+          migrationDone.current = false;
+          if (isTimeoutError(e) || isPermissionDenied(e)) {
+            await signOut(auth).catch(() => {});
+            setAuthError("Sign-in failed — please try again");
+            setIsLoading(false);
+            toast({ variant: "destructive", title: "Google Sign-In Failed", description: "Could not establish server session. Please try again." });
+            return;
+          }
+          throw e;
+        }
+      }
       // Part 5A: domain is enforced at arena-join, not at Google sign-in.
     } catch (error: unknown) {
-      console.error('[Auth] signInWithRedirect error', error);
+      console.error('[Auth] signInWithPopup error', error);
       setIsLoading(false);
-      const code = (error as { code?: string })?.code || '';
-      const msg = getErrorMessage(error).toLowerCase();
-      if (code === 'auth/popup-blocked' || msg.includes('popup was blocked') || msg.includes('popup_blocked')) {
-        const friendly = 'Popup was blocked. Please allow popups for this site and try again.';
-        setAuthError(friendly);
-        toast({ variant: "destructive", title: "Popup Blocked", description: friendly });
-        return;
-      }
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        // User closed popup — silently reset loading, no error toast
-        return;
-      }
-      if (isTimeoutError(error)) {
-        setAuthError("Sign-in failed — please try again");
-        toast({ variant: "destructive", title: "Google Sign-In Failed", description: "Request timed out. Please try again." });
-        return;
-      }
-      if (isPermissionDenied(error)) {
-        setAuthError("Sign-in failed — please try again");
-        toast({ variant: "destructive", title: "Sign-in failed", description: "Please try again" });
-        return;
-      }
       const mapped = mapFirebaseAuthError(error, 'google');
+      // Popup codes are never silent (RPL Compass contract): the caller shows
+      // the message INLINE on the login form. Keep a defensive silent-guard so
+      // a future deliberately-silent code cannot spin the UI forever.
+      if (mapped.isSilent) return;
+      toast({ variant: 'destructive', title: mapped.title, description: mapped.message });
+      setAuthError(null);
+      // Rethrow the user-facing message so LoginForm renders it inline instead
+      // of triggering a full-screen ClientLayout auth-error takeover.
+      throw new Error(mapped.message || 'Google sign-in was blocked in this browser. Use email and password instead.');
+    }
+  }, [auth, toast]);
+
+  const signUp = async (data: { name: string; email: string; password: string }) => {
+    setAuthError(null);
+    if (!auth) throw new Error('Auth service not available');
+    const email = data.email.trim();
+    const name = data.name.trim();
+    // Block the auth-state effect from fetching a profile while we create the
+    // account: Firestore rules only allow client self-create with role
+    // 'gladiator', so the candidate user doc is created server-side during the
+    // session mint (signupRole: 'candidate'). A racing fetchUserDocument would
+    // otherwise create a gladiator doc first and the mint would see it.
+    signupInProgress.current = true;
+    let serverError: string | null = null;
+    try {
+      await withTimeout(checkRateLimit('signup', email), RATE_LIMIT_TIMEOUT_MS, 'Rate limit check');
+      const cred = await withTimeout(
+        createUserWithEmailAndPassword(auth, email, data.password),
+        AUTH_OP_TIMEOUT_MS,
+        'Account creation',
+      );
+      try {
+        // firebase v11: updateProfile is a standalone function, not a User method.
+        await setFirebaseDisplayName(cred.user, { displayName: name });
+      } catch (err) {
+        // Non-fatal: the display name is cosmetic; the user doc (created
+        // server-side below) is the authoritative record.
+        console.warn('[Auth] displayName update failed', getErrorMessage(err));
+      }
+      // Server creates users/{uid} with role 'candidate' (Admin SDK bypasses
+      // the gladiator-only client rules) and runs the claims handshake.
+      const sessionResult = await withTimeout(
+        mintSessionCookie(
+          (forceRefresh) => cred.user.getIdToken(forceRefresh),
+          fetch,
+          { signupRole: 'candidate', signupName: name },
+        ),
+        AUTH_OP_TIMEOUT_MS,
+        'Session creation',
+      );
+      if (!sessionResult.ok) {
+        serverError = sessionResult.errorMessage || 'Account creation failed — please try again';
+        console.error('[Auth] signup session mint failed', sessionResult.errorCode, sessionResult.errorMessage);
+        setAuthError(serverError);
+        throw new Error(serverError);
+      }
+      migrationDone.current = true;
+      signupInProgress.current = false;
+      // Doc now exists with role candidate — safe to populate client state.
+      await fetchUserDocument(cred.user.uid);
+      debugLog('signup ok', { uid: cred.user.uid, role: sessionResult.role });
+    } catch (error: unknown) {
+      signupInProgress.current = false;
+      // Never leave a half-authenticated account behind: without the cookie
+      // the middleware bounces every page, and the user can simply sign in
+      // again (the candidate doc is created by the mint above).
+      if (auth.currentUser) {
+        await signOut(auth).catch(() => {});
+      }
+      setUser(null);
+      setIsLoading(false);
+      if (serverError) {
+        toast({ variant: "destructive", title: "Account Creation Failed", description: serverError });
+        throw error;
+      }
+      if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
+        toast({ variant: "destructive", title: "Too Many Attempts", description: error.message });
+        throw error;
+      }
+      const mapped = mapFirebaseAuthError(error, 'signup');
       if (!mapped.isSilent) {
         setAuthError(mapped.message);
         toast({ variant: "destructive", title: mapped.title, description: mapped.message });
       }
+      throw new Error(mapped.message || 'Account creation failed — please try again.');
     }
-  }, [auth, toast]);
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    if (!auth) throw new Error('Auth service not available');
+    const trimmed = email.trim();
+    await withTimeout(checkRateLimit('login', trimmed), RATE_LIMIT_TIMEOUT_MS, 'Rate limit check');
+    try {
+      await withTimeout(sendPasswordResetEmail(auth, trimmed), AUTH_OP_TIMEOUT_MS, 'Password reset');
+    } catch (error: unknown) {
+      // Enumeration guard: an unregistered email must resolve exactly like a
+      // successful send (the caller shows the same non-enumerating message).
+      const code = (error as { code?: string } | null)?.code ?? '';
+      const msg = error instanceof Error ? error.message : '';
+      if (code === 'auth/user-not-found' || msg.includes('user-not-found')) return;
+      const mapped = mapFirebaseAuthError(error, 'login');
+      throw new Error(mapped.message || 'Could not send the reset email. Please try again.');
+    }
+  };
 
   const logout = async () => {
     if (!auth) return;
@@ -687,7 +823,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authError,
     clearAuthError,
     login,
+    signUp,
     signInWithGoogle,
+    sendPasswordReset,
     logout,
     updateAvatar,
     updateProfile,

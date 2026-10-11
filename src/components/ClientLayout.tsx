@@ -9,6 +9,7 @@ import { SessionTimeout } from '@/components/session-timeout';
 import { OfflineDetector } from '@/components/offline-detector';
 import { Button } from '@/components/ui/button';
 import { ROLE_HOME, isValidRole } from '@/lib/auth-redirect';
+import { sanitizeNextPath } from '@/lib/next-path';
 import { useToast } from '@/hooks/use-toast';
 
 const SPECIAL_PAGES = ['/kicked', '/cheating-detected'];
@@ -78,9 +79,9 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       target = qs ? `${base}?${qs}` : base;
     } else if (currentPath === '/login') {
       // Phase A5: /login?next=<path> wins over ROLE_HOME (only same-origin
-      // absolute paths — reject scheme-relative "//host" and anything else).
-      const next = searchParams.get('next');
-      const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+      // absolute paths — any absolute URL, scheme-relative or backslash
+      // trick is rejected by sanitizeNextPath).
+      const safeNext = sanitizeNextPath(searchParams.get('next'));
       target = safeNext || ROLE_HOME[user.role] || ROLE_HOME.gladiator;
     } else {
       const isExecutivePage = currentPath.startsWith('/executive');
