@@ -1,9 +1,15 @@
 // Phase 103: single source of truth for post-login role routing.
 // Do not scatter dashboardMap copies across components — import from here.
+//
+// SIH-26242 (branch sih-26242-rpl): this branch is RPL-COMPASS ONLY. Every
+// legacy Quorena role is routed into the RPL app (they are treated as a
+// candidate for RPL purposes); the Quorena portals are unreachable here.
+// main keeps the Quorena homes — never merge this mapping to main.
 export const ROLE_HOME: Record<string, string> = {
-  executive: '/executive/workspace',
-  commander: '/commander/dashboard',
-  gladiator: '/gladiator/dashboard',
+  // Legacy Quorena roles -> RPL app (see A1). Do not restore Quorena homes.
+  executive: '/rpl',
+  commander: '/rpl',
+  gladiator: '/rpl',
   // RPL Compass roles — see src/lib/session-role.ts VALID_ROLES.
   candidate: '/rpl',
   assessor: '/rpl/assessor',

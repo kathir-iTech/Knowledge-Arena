@@ -7,16 +7,31 @@ import { readRoleClaim } from '@/lib/session-role';
 
 export const runtime = 'nodejs';
 
-const PUBLIC_ROUTES = ['/', '/login', '/kicked', '/cheating-detected', '/force-password-change'];
-const BATTLE_ROUTE_PREFIX = '/battle/';
+// SIH-26242 (branch sih-26242-rpl): RPL-COMPASS ONLY.
+// The only surfaces served by this branch are the public landing/login and the
+// /rpl/* app. Every legacy Quorena page/portal is "quarantined": an
+// authenticated visitor is sent into the RPL app, a guest to /login. This is
+// what stops an existing Quorena Google account from landing on the old
+// battle/dashboard shell (A1).
+const PUBLIC_ROUTES = ['/', '/login'];
 const API_ROUTE_PREFIX = '/api/';
 
-const PORTAL_ROUTES: Record<string, string> = {
-  '/executive': 'executive',
-  '/commander': 'commander',
-  '/create-quiz': 'commander',
-  '/gladiator': 'gladiator',
-};
+const QUARANTINE_ROUTES = [
+  '/gladiator',
+  '/commander',
+  '/executive',
+  '/create-quiz',
+  '/battle',
+  '/kicked',
+  '/cheating-detected',
+  '/force-password-change',
+];
+
+function isQuarantined(pathname: string): boolean {
+  return QUARANTINE_ROUTES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + '/'),
+  );
+}
 
 // Strict, nonce-based CSP (audit Phase 1 — serverless execution sandbox).
 // The nonce is generated per-request so only the exact scripts/Next hydration
@@ -108,7 +123,6 @@ export async function middleware(request: NextRequest) {
   if (
     PUBLIC_ROUTES.includes(pathname) ||
     pathname.startsWith('/__/') ||
-    pathname.startsWith(BATTLE_ROUTE_PREFIX) ||
     pathname.startsWith(API_ROUTE_PREFIX) ||
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico' ||
@@ -118,12 +132,21 @@ export async function middleware(request: NextRequest) {
     return withCspResponse(request);
   }
 
-  let requiredRole: string | null = null;
-  for (const [prefix, role] of Object.entries(PORTAL_ROUTES)) {
-    if (pathname === prefix || pathname.startsWith(prefix + '/')) {
-      requiredRole = role;
-      break;
+  // A1: every legacy Quorena surface is off-limits on this branch. Send
+  // authenticated users into the RPL app; guests go to /login where they can
+  // sign in (Google or email/password) and are then routed to /rpl by
+  // ClientLayout/ROLE_HOME. This is a redirect, never a Quorena page render.
+  if (isQuarantined(pathname)) {
+    const quarantineCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    if (quarantineCookie) {
+      try {
+        await getAdminAuth().verifySessionCookie(quarantineCookie, true);
+        return NextResponse.redirect(new URL('/rpl', request.url));
+      } catch {
+        // Fall through to /login below.
+      }
     }
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // SIH-26242 RPL track — additive branch (approved exception to the
@@ -149,31 +172,22 @@ export async function middleware(request: NextRequest) {
     return withCspResponse(request);
   }
 
-  if (!requiredRole) {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
-
-  // Verify session cookie via Admin SDK (Node.js runtime)
+  // Any other route is not part of this branch: send authenticated users to
+  // their RPL home and guests to the landing page (never render a stray
+  // Quorena surface).
   const cookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (!cookie) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  try {
-    const decoded = await getAdminAuth().verifySessionCookie(cookie, true);
-
-    // Wrong-role users go to their OWN dashboard (roleless users to /login).
-    // Redirecting to the requested portal would loop back onto itself, and
-    // the bare /<role> prefix has no page — ROLE_HOME is the real landing.
-    const userRole = readRoleClaim(decoded) as string | undefined;
-    if (requiredRole && userRole !== requiredRole) {
-      return NextResponse.redirect(new URL((userRole && ROLE_HOME[userRole]) || '/login', request.url));
+  if (cookie) {
+    try {
+      const decoded = await getAdminAuth().verifySessionCookie(cookie, true);
+      const userRole = readRoleClaim(decoded) as string | undefined;
+      return NextResponse.redirect(
+        new URL((userRole && ROLE_HOME[userRole]) || '/rpl', request.url),
+      );
+    } catch {
+      // Expired/invalid cookie — treat as a guest.
     }
-  } catch {
-    return NextResponse.redirect(new URL('/login', request.url));
   }
-
-  return withCspResponse(request);
+  return NextResponse.redirect(new URL('/', request.url));
 }
 
 export const config = {
