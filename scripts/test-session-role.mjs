@@ -22,8 +22,10 @@ async function loadTs(specifier) {
 
 const roleMod = await loadTs('src/lib/session-role.ts');
 const sessionMod = await loadTs('src/lib/client-session.ts');
+const envMod = await loadTs('src/lib/rpl-role-env.ts');
 const { resolveSessionRole, normalizeDocRole } = roleMod;
 const { mintSessionCookie } = sessionMod;
+const { parseEmailList, resolveEnvRole } = envMod;
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -63,6 +65,60 @@ check('non-string claim + doc -> refresh-claims', resolveSessionRole({ claimRole
   role: 'gladiator',
 });
 check('gibberish doc role -> role-missing', resolveSessionRole({ docRole: 'wizard' }), { action: 'role-missing', role: null });
+
+console.log('\nresolveSessionRole — env-assigned roles (RPL_ADMIN_EMAILS / RPL_ASSESSOR_EMAILS)');
+check(
+  'env admin + stale gladiator claim -> refresh-claims/admin',
+  resolveSessionRole({ claimRole: 'gladiator', docRole: 'gladiator', envRole: 'admin' }),
+  { action: 'refresh-claims', role: 'admin' },
+);
+check(
+  'env assessor + no claim + commander doc -> refresh-claims/assessor',
+  resolveSessionRole({ docRole: 'commander', envRole: 'assessor' }),
+  { action: 'refresh-claims', role: 'assessor' },
+);
+check(
+  'env admin + matching admin claim -> mint/admin',
+  resolveSessionRole({ claimRole: 'admin', envRole: 'admin' }),
+  { action: 'mint', role: 'admin' },
+);
+check(
+  'env assessor wins over role-missing doc/claim',
+  resolveSessionRole({ envRole: 'assessor' }),
+  { action: 'refresh-claims', role: 'assessor' },
+);
+check(
+  'env role null falls through to claim',
+  resolveSessionRole({ claimRole: 'candidate', envRole: null }),
+  { action: 'mint', role: 'candidate' },
+);
+check(
+  'candidate claim alone is a valid mint (self-serve signup)',
+  resolveSessionRole({ claimRole: 'candidate' }),
+  { action: 'mint', role: 'candidate' },
+);
+
+console.log('\nnormalizeDocRole — new roles pass through');
+check('candidate doc -> candidate', normalizeDocRole('candidate'), 'candidate');
+check('assessor doc -> assessor', normalizeDocRole('ASSESSOR '), 'assessor');
+check('admin doc -> admin', normalizeDocRole('admin'), 'admin');
+
+console.log('\nparseEmailList');
+check('undefined -> []', parseEmailList(undefined), []);
+check('empty string -> []', parseEmailList(''), []);
+check('trim + lowercase', parseEmailList('  Admin@X.COM , b@y.com '), ['admin@x.com', 'b@y.com']);
+check('dedupe after normalization', parseEmailList('a@x.com, A@X.COM,a@x.com'), ['a@x.com']);
+check('empty parts dropped', parseEmailList('a@x.com,, ,b@y.com'), ['a@x.com', 'b@y.com']);
+
+console.log('\nresolveEnvRole');
+const sources = { adminEmails: 'boss@x.com, shared@x.com', assessorEmails: 'shared@x.com, judge@x.com' };
+check('admin list match (case-insensitive)', resolveEnvRole('Boss@X.com', sources), 'admin');
+check('assessor list match', resolveEnvRole('judge@x.com', sources), 'assessor');
+check('admin wins when in both lists', resolveEnvRole('shared@x.com', sources), 'admin');
+check('unknown email -> null', resolveEnvRole('nobody@x.com', sources), null);
+check('missing email -> null', resolveEnvRole(undefined, sources), null);
+check('whitespace-only email -> null', resolveEnvRole('   ', sources), null);
+check('empty lists -> null', resolveEnvRole('boss@x.com', {}), null);
 
 console.log('\nnormalizeDocRole');
 check('teacher -> commander', normalizeDocRole('teacher'), 'commander');
