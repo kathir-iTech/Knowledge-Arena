@@ -92,6 +92,23 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // --- B1: at least one can-do/done skill is required ---
+    // The wizard blocks Next on an empty claim set; this is the authoritative
+    // guard so an offline replay or stale client can never persist an empty
+    // declaration.
+    const claimedSkillCount = Object.values(declarationsByPack)
+      .flat()
+      .filter((entry) => entry.status === 'can-do' || entry.status === 'done').length;
+    if (claimedSkillCount === 0) {
+      return NextResponse.json(
+        {
+          error: 'Mark at least one skill as can-do or done before submitting.',
+          code: 'NO_SKILL_CLAIMED',
+        },
+        { status: 400 },
+      );
+    }
+
     // --- evidenceTextByPack (each <= 500 chars) ---
     const rawEvidence =
       body.evidenceTextByPack && typeof body.evidenceTextByPack === 'object'

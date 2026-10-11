@@ -253,6 +253,22 @@ export default function RplDeclarePage() {
     [matchedPacks, marks],
   );
 
+  // B1: a declaration is only meaningful when the worker claims at least one
+  // skill. Counts every can-do/done across all matched packs; step 2's Next
+  // and the submit button are blocked while this is 0, and the API enforces
+  // the same rule so a stale client can never persist an empty declaration.
+  const claimedSkillCount = useMemo(() => {
+    let n = 0;
+    for (const m of matchedPacks) {
+      for (const u of m.pack.competencyUnits) {
+        const mark = marks[m.pack.id]?.[u.id] ?? 'never';
+        if (mark === 'can-do' || mark === 'done') n += 1;
+      }
+    }
+    return n;
+  }, [matchedPacks, marks]);
+  const hasClaimedSkill = claimedSkillCount > 0;
+
   function buildPayload(): DeclarePayload {
     const years = Number(yearsExperience);
     const declarationsByPack: DeclarePayload['declarationsByPack'] = {};
@@ -807,14 +823,16 @@ export default function RplDeclarePage() {
             </p>
             <Button
               className="w-full"
-              disabled={submitting || !step1Valid}
+              disabled={submitting || !step1Valid || !hasClaimedSkill}
               onClick={() => void submitDeclaration(buildPayload())}
             >
               {submitting ? 'Submitting…' : 'Submit declaration'}
             </Button>
-            {!step1Valid && (
+            {(!step1Valid || !hasClaimedSkill) && (
               <p className="text-xs text-muted-foreground">
-                Trade and years of experience (0–60) are required before submitting.
+                {!step1Valid
+                  ? 'Trade and years of experience (0–60) are required before submitting.'
+                  : 'Mark at least one skill as “I can do this” or “I have done this before” before submitting.'}
               </p>
             )}
           </CardContent>
@@ -828,13 +846,20 @@ export default function RplDeclarePage() {
         {step < 3 && (
           <Button
             className="flex-1"
-            disabled={step === 0 && !step1Valid}
+            disabled={(step === 0 && !step1Valid) || (step === 1 && !hasClaimedSkill)}
             onClick={() => setStep((s) => s + 1)}
           >
             Next
           </Button>
         )}
       </div>
+
+      {/* B1: inline reason the Next button is blocked on step 2. */}
+      {step === 1 && !hasClaimedSkill && (
+        <p role="alert" className="text-xs text-destructive">
+          Mark at least one skill as “I can do this” or “I have done this before” to continue.
+        </p>
+      )}
     </main>
   );
 }
