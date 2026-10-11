@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySessionCookie } from '@/lib/session-cookie';
+import { readRoleClaim } from '@/lib/session-role';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
       authenticated: true,
       uid: decoded.uid,
       email: decoded.email ?? null,
-      role: decoded.customClaims?.role ?? null,
+      role: readRoleClaim(decoded) ?? null,
     });
   } catch {
     return NextResponse.json({ error: 'Unauthorized', authenticated: false }, { status: 401 });

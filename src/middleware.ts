@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { SESSION_COOKIE_NAME } from '@/lib/session-cookie';
 import { ROLE_HOME } from '@/lib/auth-redirect';
+import { readRoleClaim } from '@/lib/session-role';
 
 export const runtime = 'nodejs';
 
@@ -164,7 +165,7 @@ export async function middleware(request: NextRequest) {
     // Wrong-role users go to their OWN dashboard (roleless users to /login).
     // Redirecting to the requested portal would loop back onto itself, and
     // the bare /<role> prefix has no page — ROLE_HOME is the real landing.
-    const userRole = decoded.customClaims?.role;
+    const userRole = readRoleClaim(decoded) as string | undefined;
     if (requiredRole && userRole !== requiredRole) {
       return NextResponse.redirect(new URL((userRole && ROLE_HOME[userRole]) || '/login', request.url));
     }

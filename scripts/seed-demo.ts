@@ -3,7 +3,11 @@ import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '../src/lib/demo-accounts';
 
-const PROJECT_ID = process.env.SEED_PROJECT_ID ?? 'studio-4092189688-c74a7';
+// Local demo seed only. Default to the DEMO project id used by the Firebase
+// emulators (.firebaserc default + the client/Admin emulator overrides in
+// src/firebase/index.ts and src/lib/firebase-admin.ts). Override with
+// SEED_PROJECT_ID when seeding a non-demo project.
+const PROJECT_ID = process.env.SEED_PROJECT_ID ?? 'demo-quorena';
 const NOW = Date.now();
 const MIN = 60 * 1000;
 const HOUR = 60 * MIN;
@@ -36,6 +40,10 @@ async function main() {
   // ── Users ──────────────────────────────────────────────────────────────
   const execUid = await ensureUser('exec@test.local', 'Executive Beta', 'executive', '🏛️');
   const commanderUid = await ensureUser('commander@test.local', 'Commander Kade', 'commander', '🎖️');
+  // RPL Compass candidate (self-serve worker) — the primary role for the RPL
+  // track. Seeded so the RPL candidate home (/rpl) is reachable with a demo
+  // login and the mocked session-handshake specs have a candidate to drive.
+  await ensureUser('candidate@test.local', 'Priya Candidate', 'candidate', '🧑‍🎓');
   const gladiators: Array<[string, string, string]> = [
     ['glad1@test.local', 'Ruby', '🦊'],
     ['glad2@test.local', 'Atlas', '🐺'],

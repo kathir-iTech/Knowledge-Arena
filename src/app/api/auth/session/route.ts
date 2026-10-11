@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSessionCookie, SESSION_COOKIE_NAME, cookieOptions } from '@/lib/session-cookie';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
-import { resolveSessionRole } from '@/lib/session-role';
+import { resolveSessionRole, readRoleClaim } from '@/lib/session-role';
+import { resolveEnvRole } from '@/lib/rpl-role-env';
 import { firebaseConfig } from '@/firebase/config';
 
 export const runtime = 'nodejs';
@@ -49,32 +50,87 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'idToken is required', code: 'BAD_REQUEST' }, { status: 400 });
     }
 
+    // Signup handshake: only 'candidate' may be client-asserted (the lowest
+    // privilege, same class as the open Google -> gladiator self-signup).
+    // admin/assessor/executive/commander can NEVER be self-asserted here.
+    const signupRole = body.signupRole === 'candidate' ? ('candidate' as const) : null;
+    const signupName =
+      typeof body.signupName === 'string' ? body.signupName.trim().slice(0, 100) : '';
+
     // Phase A2: the cookie must carry the role claim — the edge middleware can
     // only read the token, it has no Firestore access.
     const decoded = await getAdminAuth().verifyIdToken(idToken);
-    const claimRole = (decoded.customClaims as { role?: unknown } | undefined)?.role;
+    const claimRole = readRoleClaim(decoded);
+
+    // RPL operator config: RPL_ADMIN_EMAILS / RPL_ASSESSOR_EMAILS assign the
+    // admin/assessor roles without a Firestore write. Server-side only.
+    const envRole = resolveEnvRole(decoded.email, {
+      adminEmails: process.env.RPL_ADMIN_EMAILS,
+      assessorEmails: process.env.RPL_ASSESSOR_EMAILS,
+    });
 
     let docRole: unknown = null;
     let lookupFailed = false;
-    if (typeof claimRole !== 'string') {
+    let docExists: boolean | null = null;
+    let needDocEnsure = false;
+    // Read the user doc whenever claim resolution cannot settle the role on
+    // its own (no claim) or an authoritative source must be reconciled with
+    // it (env-assigned role, signup handshake).
+    if (typeof claimRole !== 'string' || envRole || signupRole) {
       try {
-        const snap = await getAdminDb().collection('users').doc(decoded.uid).get();
-        docRole = snap.exists ? snap.data()?.role : null;
+        const userRef = getAdminDb().collection('users').doc(decoded.uid);
+        const snap = await userRef.get();
+        docExists = snap.exists;
+        if (snap.exists) {
+          docRole = snap.data()?.role ?? null;
+          // Doc exists but may disagree with the authoritative source (env
+          // list or a claim that wins below) — reconcile after the decision.
+          needDocEnsure = envRole != null;
+        } else if (signupRole) {
+          // Email/password signup: Firestore rules only allow client
+          // self-create with role 'gladiator', so the candidate doc is
+          // created here (Admin SDK bypasses rules) and the normal claims
+          // handshake assigns the role.
+          const email = decoded.email ?? '';
+          const name = signupName || decoded.name || email.split('@')[0] || 'Candidate';
+          await userRef.set({
+            name,
+            email,
+            avatar: '🧑‍🎓',
+            role: signupRole,
+          });
+          docRole = signupRole;
+          console.warn(`[Session] candidate user doc created uid=${decoded.uid}`);
+        } else {
+          // Doc missing with no signup intent: create it with the resolved
+          // role after the decision (env-assigned admin/assessor first login,
+          // or a valid claim whose doc was deleted).
+          needDocEnsure = true;
+        }
       } catch (err) {
-        lookupFailed = true;
-        console.error(
-          `[Session] role lookup failed uid=${decoded.uid} project=${firebaseConfig.projectId}`,
-          (err as Error)?.message,
-        );
+        if (typeof claimRole !== 'string') {
+          lookupFailed = true;
+          console.error(
+            `[Session] role lookup failed uid=${decoded.uid} project=${firebaseConfig.projectId}`,
+            (err as Error)?.message,
+          );
+        } else {
+          // Valid claim already settles the role; a doc read failure here is
+          // non-fatal (the ensure below is skipped, profile fetch reports it).
+          console.error(
+            `[Session] user doc read failed uid=${decoded.uid} project=${firebaseConfig.projectId}`,
+            (err as Error)?.message,
+          );
+        }
       }
     }
 
-    const decision = resolveSessionRole({ claimRole, docRole, lookupFailed });
+    const decision = resolveSessionRole({ claimRole, docRole, lookupFailed, envRole });
 
     if (decision.action === 'role-missing') {
       console.error(
         `[Session] ROLE_MISSING uid=${decoded.uid} email=${decoded.email ?? 'n/a'} ` +
-          `project=${firebaseConfig.projectId} hasClaim=${claimRole !== undefined} hasUserDoc=false`,
+          `project=${firebaseConfig.projectId} hasClaim=${claimRole !== undefined} hasUserDoc=${docExists === true}`,
       );
       return NextResponse.json(
         {
@@ -98,10 +154,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (decision.action === 'refresh-claims') {
-      const previousClaims = (decoded.customClaims ?? {}) as Record<string, unknown>;
+    // Reconcile the user doc with the authoritative role. The client profile
+    // fetch (ensureGladiatorProfile) reads this doc to build local state, so a
+    // doc that disagrees with the cookie/claim would route the user to the
+    // wrong home. Env-assigned roles (RPL_ADMIN_EMAILS / RPL_ASSESSOR_EMAILS)
+    // are operator config and always win.
+    if (needDocEnsure && decision.role) {
       try {
-        await getAdminAuth().setCustomUserClaims(decoded.uid, { ...previousClaims, role: decision.role });
+        const userRef = getAdminDb().collection('users').doc(decoded.uid);
+        const snap = await userRef.get();
+        if (!snap.exists) {
+          const email = decoded.email ?? '';
+          await userRef.set({
+            name: decoded.name || email.split('@')[0] || 'User',
+            email,
+            avatar: '🧑‍🎓',
+            role: decision.role,
+          });
+          console.warn(
+            `[Session] user doc created uid=${decoded.uid} role=${decision.role} (doc was missing)`,
+          );
+        } else if ((snap.data()?.role ?? null) !== decision.role) {
+          await userRef.update({ role: decision.role });
+          console.warn(
+            `[Session] user doc role reconciled uid=${decoded.uid} role=${decision.role}`,
+          );
+        }
+      } catch (err) {
+        // Non-fatal: the cookie/claim below is already correct; the client
+        // profile fetch surfaces any profile problem on its own.
+        console.error(
+          `[Session] user doc role sync failed uid=${decoded.uid}`,
+          (err as Error)?.message,
+        );
+      }
+    }
+
+    if (decision.action === 'refresh-claims') {
+      try {
+        // setCustomUserClaims REPLACES the entire claim set. `role` is the only
+        // custom claim this app ever writes, so there is nothing else to carry
+        // over from the (top-level) decoded token.
+        await getAdminAuth().setCustomUserClaims(decoded.uid, { role: decision.role });
       } catch (err) {
         console.error(`[Session] CLAIM_SYNC_FAILED uid=${decoded.uid}`, (err as Error)?.message);
         return NextResponse.json(

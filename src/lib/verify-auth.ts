@@ -2,6 +2,8 @@ import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import { logAuthFailure } from '@/lib/security-log';
 import { hasPermission as hasCapPermission, type CapabilityName } from '@/lib/permissions';
+import type { AppRole } from '@/lib/session-role';
+import { readRoleClaim } from '@/lib/session-role';
 
 // R2-33 additive capability gate (second gate after role checks; never replaces them).
 export function hasPermission(
@@ -89,7 +91,7 @@ export async function verifyFirebaseToken(tokenOrRequest: string | Request): Pro
 
 export async function verifyFirebaseTokenWithRole(
   tokenOrRequest: string | Request,
-  requiredRole: 'executive' | 'commander' | 'gladiator',
+  requiredRole: AppRole,
 ): Promise<AuthResult | null> {
   let idToken: string | null = null;
 
@@ -116,13 +118,15 @@ export async function verifyFirebaseTokenWithRole(
     return null;
   }
 
-  // Determine the user's role: check token customClaims first, then Firestore.
-  // Single Firestore read reused for both role and mustChangePassword (TOCTOU fix).
+  // Determine the user's role: check the token's top-level role claim first,
+  // then Firestore. Single Firestore read reused for both role and
+  // mustChangePassword (TOCTOU fix).
   try {
     let role: string | undefined;
     let cachedUserDoc: DocumentSnapshot | null = null;
-    if (typeof decoded.customClaims !== 'undefined' && decoded.customClaims?.role) {
-      role = decoded.customClaims.role as string;
+    const claimRole = readRoleClaim(decoded);
+    if (typeof claimRole === 'string' && claimRole) {
+      role = claimRole;
     } else {
       const userDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
       if (!userDoc.exists) return null;
@@ -137,7 +141,7 @@ export async function verifyFirebaseTokenWithRole(
     }
     // Users under a forced password change may not use the platform until
     // they set a new password through /api/auth/change-password.
-    // If role came from customClaims we still need to check mustChangePassword via Firestore.
+    // If role came from the token claim we still need to check mustChangePassword via Firestore.
     if (!cachedUserDoc) {
       cachedUserDoc = await getAdminDb().collection('users').doc(decoded.uid).get();
     }
@@ -156,7 +160,7 @@ export async function verifyFirebaseTokenWithRole(
 
 export async function verifyFirebaseTokenWithAnyRole(
   tokenOrRequest: string | Request,
-  roles: readonly ('executive' | 'commander' | 'gladiator')[],
+  roles: readonly AppRole[],
 ): Promise<(AuthResult & { role: string }) | null> {
   let idToken: string | null = null;
 
