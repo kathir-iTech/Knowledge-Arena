@@ -110,6 +110,70 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
+## SIH-26242 — RPL Compass Track 🧭
+
+This repository also ships **RPL Compass**, the SIH-26242 Recognition of Prior
+Learning (RPL) track. It is an **additive** feature set served under `/rpl` and
+is intended to run against its **own Firebase project** — *not* the shared
+Quorena production project. Legacy Quorena-only routes are quarantined for
+RPL-track users (they redirect to `/rpl` or `/login`).
+
+The RPL flow: a candidate **declares** prior experience → the app **matches**
+NSQF qualification packs → an assessor **scores** rubric items → inter-assessor
+agreement is **measured** with linear-weighted Cohen's kappa → an executive
+**certifies**. AI only *proposes* scores; a human assessor always decides.
+
+### Demo accounts to create
+
+Create these four accounts (Firebase Auth, Email/Password; email verification is
+not required) in the RPL Firebase project. Use **fake** `@rplcompass.test`
+emails — never a real personal Google account — and choose your own password
+(keep it out of the repo and any slide deck).
+
+| Email | Role (via env, below) | Purpose |
+|---|---|---|
+| `admin@rplcompass.test` | `admin` | Admin overview + **Load demo data** button |
+| `assessor1@rplcompass.test` | `assessor` | First rater in the two-assessor pairs |
+| `assessor2@rplcompass.test` | `assessor` | Second rater (needed for kappa) |
+| `candidate1@rplcompass.test` | `candidate` (default) | Primary demo candidate (Suresh Kumar) |
+
+New sign-ups default to the `candidate` role. `admin` / `assessor` are granted
+**server-side** from the environment variables below — they can never be
+self-assigned from the client.
+
+### RPL environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `RPL_ADMIN_EMAILS` | ✅ (RPL) | Comma-separated emails granted the `admin` role at session mint (e.g. `admin@rplcompass.test`) |
+| `RPL_ASSESSOR_EMAILS` | ✅ (RPL) | Comma-separated emails granted the `assessor` role (e.g. `assessor1@rplcompass.test,assessor2@rplcompass.test`) |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | ✅ | Admin SDK key for the **RPL** Firebase project (see note below) |
+
+> These are server-only operator config — never prefix them with `NEXT_PUBLIC_`.
+> An email that already holds a Quorena role is refused with `ENV_ROLE_CONFLICT`
+> (the account is never silently rewritten).
+
+### Load / remove demo data
+
+Once the four accounts exist and you are signed in as `admin@rplcompass.test`,
+open **`/rpl/admin`** and use the **Demo data** card:
+
+- **Load demo data** — writes an idempotent demo dataset: 6 candidates, two
+  assessors rating the *same* criteria (so kappa is *computed*, never typed),
+  evidence images, drafts for the assessor queues, and one pending + one
+  certified profile. Re-running merges into the same batch.
+- **Remove demo data** — deletes **only** documents tagged `isDemoData: true`
+  (behind a confirmation dialog). Real records are never touched.
+
+Every demo document carries `isDemoData: true` and
+`demoBatchId: 'sih-26242-rpl-demo-v1'`, and affected surfaces display a
+**“Demo data”** badge.
+
+> The loader needs a live/emulator Firebase with Admin SDK access — it cannot be
+> exercised fully offline.
+
+---
+
 ## Project Structure 📁
 
 ```

@@ -5,20 +5,36 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
 import { getRoleHome } from '@/lib/auth-redirect';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   AlertTriangle,
   Award,
+  CheckCircle2,
   ClipboardCheck,
   ClipboardList,
+  Database,
   FileText,
+  Loader2,
   Minus,
   RefreshCw,
   Scale,
+  Trash2,
   TrendingDown,
   TrendingUp,
   Users,
@@ -101,6 +117,13 @@ export default function RplAdminPage() {
   const [alerts, setAlerts] = useState<KappaAlert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
 
+  // Part C1: admin-only demo data controls.
+  const { toast } = useToast();
+  const [demoBusy, setDemoBusy] = useState<'load' | 'remove' | null>(null);
+  const [demoResult, setDemoResult] = useState<
+    { kind: 'load'; totalWrites: number; packs: Array<{ packId: string; kappa: number | null }> } | null
+  >(null);
+
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
@@ -166,6 +189,67 @@ export default function RplAdminPage() {
     if (!user || (user.role !== 'executive' && user.role !== 'admin')) return;
     fetchAlerts();
   }, [user, fetchAlerts]);
+
+  // POST /api/rpl/admin/demo — load, then refresh every admin surface.
+  const handleLoadDemo = useCallback(async () => {
+    setDemoBusy('load');
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        toast({ variant: 'destructive', title: 'Not signed in', description: 'Sign in again to load demo data.' });
+        return;
+      }
+      const res = await fetch('/api/rpl/admin/demo', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { ok?: boolean; totalWrites?: number; packs?: Array<{ packId: string; kappa: number | null }>; error?: string }
+        | null;
+      if (!res.ok || !data?.ok) {
+        toast({ variant: 'destructive', title: 'Demo load failed', description: data?.error ?? `Request failed (${res.status}).` });
+        return;
+      }
+      setDemoResult({ kind: 'load', totalWrites: data.totalWrites ?? 0, packs: data.packs ?? [] });
+      toast({
+        title: 'Demo data loaded',
+        description: `${data.totalWrites ?? 0} documents written. Dashboards will refresh.`,
+      });
+      await Promise.all([fetchOverview(), fetchAlerts()]);
+    } catch {
+      toast({ variant: 'destructive', title: 'Network error', description: 'Could not reach the demo endpoint.' });
+    } finally {
+      setDemoBusy(null);
+    }
+  }, [auth, toast, fetchOverview, fetchAlerts]);
+
+  // DELETE /api/rpl/admin/demo — removes ONLY isDemoData docs.
+  const handleRemoveDemo = useCallback(async () => {
+    setDemoBusy('remove');
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        toast({ variant: 'destructive', title: 'Not signed in', description: 'Sign in again to remove demo data.' });
+        return;
+      }
+      const res = await fetch('/api/rpl/admin/demo', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; removed?: number; error?: string } | null;
+      if (!res.ok || !data?.ok) {
+        toast({ variant: 'destructive', title: 'Demo removal failed', description: data?.error ?? `Request failed (${res.status}).` });
+        return;
+      }
+      setDemoResult(null);
+      toast({ title: 'Demo data removed', description: `${data.removed ?? 0} demo documents deleted.` });
+      await Promise.all([fetchOverview(), fetchAlerts()]);
+    } catch {
+      toast({ variant: 'destructive', title: 'Network error', description: 'Could not reach the demo endpoint.' });
+    } finally {
+      setDemoBusy(null);
+    }
+  }, [auth, toast, fetchOverview, fetchAlerts]);
 
   if (isLoading || loading) {
     return (
@@ -346,6 +430,91 @@ export default function RplAdminPage() {
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </div>
+
+      {/* Part C1: Demo data (admin only) */}
+      {user.role === 'admin' && (
+        <Card className="border-primary/30" data-testid="demo-data-section">
+          <CardHeader className="border-b border-border/30 pb-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Database className="h-4 w-4 text-primary" /> Demo data
+            </CardTitle>
+            <CardDescription>
+              Load a full demo dataset (6 candidates, two assessors rating the same
+              criteria, computed kappa, evidence and certifications) into this project.
+              Every document is tagged <span className="font-mono">isDemoData</span> so
+              Remove deletes only demo records — never real ones.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-3 pt-4">
+            <button
+              type="button"
+              onClick={handleLoadDemo}
+              disabled={demoBusy !== null}
+              className="inline-flex items-center gap-2 rounded-[12px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
+            >
+              {demoBusy === 'load' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Database className="h-4 w-4" />
+              )}
+              Load demo data
+            </button>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  type="button"
+                  disabled={demoBusy !== null}
+                  className="inline-flex items-center gap-2 rounded-[12px] border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-60"
+                >
+                  {demoBusy === 'remove' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Remove demo data
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Remove demo data?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This permanently deletes every document tagged{' '}
+                    <span className="font-mono">isDemoData</span> across workers,
+                    assessments, items, evidence, consistency and certifications. Real
+                    records are not touched. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleRemoveDemo}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Remove demo data
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {demoResult && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-success">
+                <CheckCircle2 className="h-4 w-4" />
+                Loaded {demoResult.totalWrites} docs
+                {demoResult.packs.length > 0 && (
+                  <span className="text-muted-foreground">
+                    · kappa{' '}
+                    {demoResult.packs
+                      .filter((p) => p.kappa !== null)
+                      .map((p) => `${p.packId}=${p.kappa!.toFixed(3)}`)
+                      .join(', ') || 'n/a'}
+                  </span>
+                )}
+              </span>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* (1) Overview cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4" aria-live="polite" aria-label="RPL statistics">

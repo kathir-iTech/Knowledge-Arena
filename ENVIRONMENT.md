@@ -100,6 +100,19 @@ Gladiator sign-up is open — any Google account may create a profile. Domain re
 
 ---
 
+## RPL Compass (SIH-26242)
+
+Server-only operator config for the RPL track. Read at **session-mint time** by
+`src/app/api/auth/session/route.ts` (via `src/lib/rpl-role-env.ts`). Never expose
+these with a `NEXT_PUBLIC_` prefix.
+
+| Variable | Required | Description | Example |
+|---|---|---|---|
+| `RPL_ADMIN_EMAILS` | ❌ (RPL) | Comma-separated emails granted the `admin` role. Case-insensitive, trimmed, de-duped. The admin list wins if an email appears in both lists. An email that already holds a Quorena role is refused with `ENV_ROLE_CONFLICT`. | `admin@rplcompass.test` |
+| `RPL_ASSESSOR_EMAILS` | ❌ (RPL) | Comma-separated emails granted the `assessor` role. Two assessors are needed for inter-assessor kappa. | `assessor1@rplcompass.test,assessor2@rplcompass.test` |
+
+---
+
 ## Cron & Telemetry
 
 | Variable | Required | Description | Example |
@@ -163,6 +176,11 @@ NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://studio-4092189688-c74a7-default-rtdb.f
 # ─── Gladiator Email Domain Lock (optional) ────────────────────
 ALLOWED_GLADIATOR_EMAIL_DOMAIN=
 NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN=
+
+# ─── RPL Compass (SIH-26242, server-only) ──────────────────────
+# Comma-separated emails granted the admin / assessor role at session mint.
+RPL_ADMIN_EMAILS=
+RPL_ASSESSOR_EMAILS=
 
 # ─── Script-Only Variables ─────────────────────────────────────
 SERVICE_ACCOUNT_PATH=

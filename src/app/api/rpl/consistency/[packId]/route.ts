@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
+import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { recomputePackConsistency } from '@/lib/rpl/recompute-consistency';
@@ -17,7 +17,9 @@ type ConsistencyResponse = ConsistencyReport & { history: HistoryEntry[] };
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ packId: string }> }) {
   try {
-    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    // Part C3: the admin demo account must be able to open consistency reports.
+    // Executive keeps access; admin is added here (certify/forge remain executive-only).
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['executive', 'admin']);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

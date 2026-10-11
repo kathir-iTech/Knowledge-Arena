@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
+import { getRoleHome } from '@/lib/auth-redirect';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -50,17 +51,20 @@ export default function RplConsistencyPage() {
   const [error, setError] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'name'>('desc');
 
+  const canView = user?.role === 'executive' || user?.role === 'admin';
+
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
       router.replace('/');
       return;
     }
-    if (user.role !== 'executive') {
-      router.replace('/');
+    if (!canView) {
+      // Part C3: admin may view; everyone else returns to their own home.
+      router.replace(getRoleHome(user.role));
       return;
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router, canView]);
 
   const fetchReport = useCallback(async () => {
     try {
@@ -89,10 +93,10 @@ export default function RplConsistencyPage() {
   }, [auth, packId]);
 
   useEffect(() => {
-    if (!user || user.role !== 'executive') return;
+    if (!canView) return;
     if (!packId) return;
     fetchReport();
-  }, [user, packId, fetchReport]);
+  }, [canView, packId, fetchReport]);
 
   const assessors = useMemo(() => {
     if (!report) return [];
@@ -136,7 +140,7 @@ export default function RplConsistencyPage() {
     );
   }
 
-  if (!user || user.role !== 'executive') {
+  if (!user || !canView) {
     return null;
   }
 

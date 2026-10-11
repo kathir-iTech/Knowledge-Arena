@@ -14,10 +14,11 @@ import { Button } from '@/components/ui/button';
 // higher-privilege surfaces.
 const EXECUTIVE_ONLY_PREFIXES = [
   '/rpl/certify',
-  '/rpl/consistency',
   '/rpl/forge',
 ];
-const ADMIN_OR_EXECUTIVE_PREFIXES = ['/rpl/admin'];
+// Part C3: consistency reports are viewable by executive OR admin (the demo
+// admin account has no executive twin); certify/forge stay executive-only.
+const ADMIN_OR_EXECUTIVE_PREFIXES = ['/rpl/admin', '/rpl/consistency'];
 const ASSESSOR_PREFIXES = ['/rpl/assess', '/rpl/assessor'];
 
 function matchesPrefixes(pathname: string, prefixes: string[]): boolean {
