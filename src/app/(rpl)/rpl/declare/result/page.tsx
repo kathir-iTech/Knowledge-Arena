@@ -17,6 +17,10 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTracker, type TrackerStep } from '@/components/rpl/StatusTracker';
 import { DeclarationAccessState } from '@/components/rpl/DeclarationAccessState';
+import { CompetencyRadar } from '@/components/rpl/CompetencyRadar';
+import { NsqfLadder } from '@/components/rpl/NsqfLadder';
+import { EvidenceTimeline } from '@/components/rpl/EvidenceTimeline';
+import { CertificateCard } from '@/components/rpl/CertificateCard';
 import type { MatchedPackSummary, RPLPackMatch, RPLStage, StatusResponse } from '@/lib/rpl/types';
 import { AlertCircle, Check, CheckCircle2, Copy } from 'lucide-react';
 
@@ -324,6 +328,12 @@ function ResultContent() {
     );
   }
 
+  const topPack = status?.matchedPacks?.[0];
+  const radarData = (status?.matchedPacks ?? []).map((p) => ({
+    axis: p.title.length > 18 ? `${p.title.slice(0, 17)}…` : p.title,
+    value: p.matchScore ?? 0,
+  }));
+
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-6">
       {/* Confirmation */}
@@ -449,6 +459,67 @@ function ResultContent() {
                 <StatusTracker steps={stepsForStage(status.stage)} />
               </CardContent>
             </Card>
+
+            {/* Part 3: design components on the result page */}
+            {topPack && (
+              <section className="space-y-4" aria-label="Your skills at a glance">
+                <h2 className="text-lg font-semibold text-foreground">Your skills at a glance</h2>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>NSQF level ladder</CardTitle>
+                    <CardDescription>{topPack.title}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <NsqfLadder
+                      currentLevel={topPack.nsqfLevel}
+                      orientation="horizontal"
+                      showDescriptions={false}
+                    />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Competency radar</CardTitle>
+                    <CardDescription>Match strength per qualification pack</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <CompetencyRadar data={radarData} size={260} className="mx-auto max-w-full" />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Evidence</CardTitle>
+                    <CardDescription>Uploaded during your physical assessment</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <EvidenceTimeline items={[]} />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Certificate</CardTitle>
+                    <CardDescription>
+                      {status.certified
+                        ? 'Your certificate is ready'
+                        : 'Not yet issued — awaiting assessment and sign-off'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <CertificateCard
+                      verificationCode={status.referenceCode}
+                      candidateName={user?.name ?? 'Candidate'}
+                      nqsfLevel={topPack.nsqfLevel}
+                      issuedAt={
+                        status.declarationSubmittedAt
+                          ? new Date(status.declarationSubmittedAt)
+                          : new Date()
+                      }
+                      pendingSignOff={!status.certified}
+                    />
+                  </CardContent>
+                </Card>
+              </section>
+            )}
           </>
         )
       )}

@@ -1,4 +1,5 @@
 import { Reveal } from '@/components/landing/Reveal';
+import { KappaGauge } from '@/components/rpl/KappaGauge';
 import {
   Award,
   BadgeCheck,
@@ -161,6 +162,8 @@ export function LandingShowcases() {
                 </div>
               ))}
             </div>
+            {/* Part 3: real KappaGauge visualisation on the landing */}
+            <KappaGauge kappa={0.78} n={42} size={170} className="mx-auto mt-3 text-center" />
             <div className="mt-4 border-t pt-3">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Landis &amp; Koch scale</p>
               <div className="mt-2 flex items-center gap-1">

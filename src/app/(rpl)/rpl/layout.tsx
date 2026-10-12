@@ -6,6 +6,7 @@ import { LogOut, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { CompassMarkSmall } from '@/components/rpl/CompassMark';
 import { Button } from '@/components/ui/button';
 
 // Prefix -> allowed roles. Anything NOT listed here is open to every valid
@@ -125,7 +126,14 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="fixed right-3 top-3 z-50">
+      <div className="fixed right-3 top-3 z-50 flex items-center gap-2">
+        {/* Part 3: CompassMark brand in the persistent app header */}
+        <div
+          aria-hidden="true"
+          className="hidden items-center rounded-full bg-background/80 p-2 shadow-elevation-small backdrop-blur sm:flex"
+        >
+          <CompassMarkSmall className="text-primary" />
+        </div>
         <Button
           type="button"
           variant="outline"

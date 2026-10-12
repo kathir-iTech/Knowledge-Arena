@@ -7,6 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { CompassMark } from '@/components/rpl/CompassMark';
+import { KappaGauge } from '@/components/rpl/KappaGauge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -417,7 +419,11 @@ export default function RplAdminPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="space-y-1.5">
-          <h1 className="text-page-title font-headline tracking-tight">RPL Admin Overview</h1>
+          <div className="flex items-center gap-3">
+            {/* Part 3: CompassMark brand in the admin header */}
+            <CompassMark size={40} className="shrink-0 text-primary" aria-label="RPL Compass logo" />
+            <h1 className="text-page-title font-headline tracking-tight">RPL Admin Overview</h1>
+          </div>
           <p className="text-base text-muted-foreground">
             Live worker, assessment, agreement and assessor metrics.
           </p>
@@ -430,6 +436,19 @@ export default function RplAdminPage() {
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </div>
+
+      {/* Part 3: KappaGauge — average agreement across live packs */}
+      <Card className="border-primary/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Scale className="h-4 w-4 text-primary" /> Inter-assessor agreement
+          </CardTitle>
+          <CardDescription>Average Cohen&apos;s kappa across live packs</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center">
+          <KappaGauge kappa={overview.averageKappa} size={180} />
+        </CardContent>
+      </Card>
 
       {/* Part C1: Demo data (admin only) */}
       {user.role === 'admin' && (

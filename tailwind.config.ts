@@ -52,6 +52,13 @@ export default {
           DEFAULT: 'hsl(var(--warning))',
           foreground: 'hsl(var(--warning-foreground))',
         },
+        /* SIH-26242 RPL Compass named palette (Part 3) */
+        ink: 'hsl(var(--ink))',
+        teal: 'hsl(var(--teal))',
+        saffron: 'hsl(var(--saffron))',
+        paper: 'hsl(var(--paper))',
+        slate: 'hsl(var(--slate))',
+        danger: 'hsl(var(--danger))',
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

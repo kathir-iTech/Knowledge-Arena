@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { CompassMark } from '@/components/rpl/CompassMark';
 import type { RPLAssessmentDoc } from '@/lib/rpl/types';
 
 type AssessmentRow = Partial<RPLAssessmentDoc> & { id: string };
@@ -173,7 +174,10 @@ export default function RplAssessorPage() {
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="space-y-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight">Assessor Home</h1>
+        <div className="flex items-center gap-3">
+          <CompassMark size={40} className="shrink-0 text-primary" aria-label="RPL Compass logo" />
+          <h1 className="text-2xl font-semibold tracking-tight">Assessor Home</h1>
+        </div>
         <p className="text-sm text-muted-foreground">
           Your queue, your agreement with the panel, and where you drift from it.
         </p>

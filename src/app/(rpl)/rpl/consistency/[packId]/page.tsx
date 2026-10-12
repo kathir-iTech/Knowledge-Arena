@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import type { ConsistencyReport } from '@/lib/rpl/types';
 import { computeKappaImprovement } from '@/lib/rpl/kappa';
+import { KappaGauge } from '@/components/rpl/KappaGauge';
 import { DemoBadge } from '@/components/rpl/DemoBadge';
 
 interface HistoryEntry {
@@ -223,6 +224,13 @@ export default function RplConsistencyPage() {
           <Badge variant={report.overallKappa === null ? 'outline' : badgeVariantFor(report.overallKappa)}>
             {report.overallKappa === null ? 'needs 2+ assessors' : report.interpretation}
           </Badge>
+          {/* Part 3: KappaGauge visualisation */}
+          <KappaGauge
+            kappa={report.overallKappa}
+            n={report.assessmentCount}
+            size={170}
+            className="mx-auto"
+          />
           {report.overallKappa !== null && (
             <span className="text-sm text-muted-foreground">
               95% CI [{report.confidence[0].toFixed(3)}, {report.confidence[1].toFixed(3)}]

@@ -11,6 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { isReferenceCode } from '@/lib/rpl/reference-code';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { CompetencyRadar } from '@/components/rpl/CompetencyRadar';
+import { NsqfLadder } from '@/components/rpl/NsqfLadder';
+import { EvidenceTimeline } from '@/components/rpl/EvidenceTimeline';
+import { CertificateCard } from '@/components/rpl/CertificateCard';
 import type {
   CompetencyProfile,
   EvidenceImageDoc,
@@ -273,6 +277,14 @@ export default function RplProfilePage() {
   const gapTraining = Array.isArray(recommendation.requiredGapTraining)
     ? recommendation.requiredGapTraining
     : [];
+  const evidenceItems = (data.evidence ?? []).map((ev) => ({
+    id: ev.imageId,
+    type: 'photo' as const,
+    title: profile.unitScores?.[ev.unitId]?.unitName ?? ev.unitId,
+    date: new Date(ev.uploadedAt),
+    unitId: ev.unitId,
+    thumbnail: ev.dataUrl,
+  }));
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6">
@@ -297,6 +309,27 @@ export default function RplProfilePage() {
         </Button>
       </div>
 
+      {/* Part 3: NsqfLadder visualisation */}
+      <Card>
+        <CardHeader>
+          <CardTitle>NSQF level ladder</CardTitle>
+          <CardDescription>
+            {pack ? `${pack.title} — level ${pack.nsqfLevel}` : profile.packId}
+            {typeof profile.nsqfLevelRecommended === 'number'
+              ? ` · recommended level ${profile.nsqfLevelRecommended}`
+              : ''}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <NsqfLadder
+            currentLevel={pack?.nsqfLevel ?? profile.nsqfLevelRecommended ?? 4}
+            orientation="horizontal"
+            packTitle={pack?.title}
+            showDescriptions={false}
+          />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Overall competency</CardTitle>
@@ -304,6 +337,12 @@ export default function RplProfilePage() {
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-2">
           <span className="text-4xl font-bold text-primary">{profile.overallScore ?? 0}/100</span>
+          {/* Part 3: branded CompetencyRadar visualisation */}
+          <CompetencyRadar
+            data={radarUnits.map((u) => ({ axis: u.name, value: u.score }))}
+            size={280}
+            className="mx-auto max-w-full"
+          />
           <RadarChart units={radarUnits} />
         </CardContent>
       </Card>
@@ -346,6 +385,21 @@ export default function RplProfilePage() {
                 </li>
               ))}
             </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Part 3: EvidenceTimeline visualisation */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Evidence timeline</CardTitle>
+          <CardDescription>Uploaded evidence, newest first</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {evidenceItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No work evidence uploaded yet.</p>
+          ) : (
+            <EvidenceTimeline items={evidenceItems} />
           )}
         </CardContent>
       </Card>
@@ -420,6 +474,22 @@ export default function RplProfilePage() {
           ) : null}
         </CardContent>
       </Card>
+
+      {/* Part 3: CertificateCard preview (certification path is pending sign-off) */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">Certificate</h2>
+        <CertificateCard
+          verificationCode={data.referenceCode ?? 'RPL-PENDING'}
+          candidateName={user?.name ?? 'Candidate'}
+          nqsfLevel={pack?.nsqfLevel ?? profile.nsqfLevelRecommended ?? 4}
+          issuedAt={profile.generatedAt ? new Date(profile.generatedAt) : new Date()}
+          pendingSignOff
+        />
+        <p className="text-xs text-muted-foreground">
+          Preview only — no certificate has been issued; final certification requires executive
+          sign-off.
+        </p>
+      </section>
     </main>
   );
 }

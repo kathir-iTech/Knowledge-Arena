@@ -29,6 +29,13 @@
     --success-foreground: 0 0% 100%;
     --warning: 38 87% 59%;          /* saffron #F2A33A */
     --warning-foreground: 215 25% 10%;
+    /* Named palette tokens (Part 3): ink, teal, saffron, paper, slate, danger */
+    --ink: 214 68% 14%;             /* navy #0B1F3A */
+    --teal: 186 78% 27%;            /* deep teal #0E7C7B */
+    --saffron: 38 87% 59%;          /* #F2A33A */
+    --paper: 40 33% 98%;            /* #FAF7F2 */
+    --slate: 215 25% 27%;           /* #334155 */
+    --danger: 3 82% 40%;            /* #B42318 */
     --border: 40 15% 85%;
     --input: 40 15% 85%;
     --ring: 186 78% 27%;
@@ -309,6 +316,13 @@
     --success-foreground: 0 0% 100%;
     --warning: 38 87% 55%;            /* saffron #F2A33A */
     --warning-foreground: 215 25% 10%;
+    /* Named palette tokens (Part 3) — dark variants */
+    --ink: 214 45% 90%;
+    --teal: 186 60% 55%;
+    --saffron: 38 87% 55%;
+    --paper: 215 25% 10%;
+    --slate: 215 20% 78%;
+    --danger: 3 82% 58%;
     --border: 205 15% 22%;
     --input: 205 15% 22%;
     --ring: 186 78% 35%;

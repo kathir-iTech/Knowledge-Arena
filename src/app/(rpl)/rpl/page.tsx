@@ -8,6 +8,7 @@ import { useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CompassMark } from '@/components/rpl/CompassMark';
 
 const STEPS = ['Declare', 'Assess', 'Profile', 'Certificate'] as const;
 
@@ -158,6 +159,10 @@ export default function RplLandingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Part 3: CompassMark brand on the landing card */}
+          <div className="flex justify-center py-2">
+            <CompassMark size={56} className="text-primary" aria-label="RPL Compass logo" />
+          </div>
           <ProcessDiagram />
           {checking ? (
             <Skeleton className="h-11 w-full" />

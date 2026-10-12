@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTracker, type TrackerStep } from '@/components/rpl/StatusTracker';
 import { DeclarationAccessState } from '@/components/rpl/DeclarationAccessState';
+import { CompassMark } from '@/components/rpl/CompassMark';
 import { isReferenceCode } from '@/lib/rpl/reference-code';
 import type { RPLStage, StatusResponse } from '@/lib/rpl/types';
 import { Check, Copy } from 'lucide-react';
@@ -200,7 +201,10 @@ export default function RplStatusPage() {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-xl font-bold sm:text-2xl">My RPL Status</h1>
+        <div className="flex items-center gap-3">
+          <CompassMark size={36} className="shrink-0 text-primary" aria-label="RPL Compass logo" />
+          <h1 className="text-xl font-bold sm:text-2xl">My RPL Status</h1>
+        </div>
         <p className="text-sm text-muted-foreground">Track your journey from declaration to certificate.</p>
       </div>
 
