@@ -84,23 +84,23 @@ const ta: Record<string, string> = {
   // machine-drafted, needs native review
   step1: 'தொடர்பு தகவல்',  // placeholder
   step2: 'அனுபவ அறிவிப்பு',  // placeholder
-  step3: 'ஆதாரச் சரांஶம்',  // placeholder
+  step3: 'சான்று சுருக்கம்',  // placeholder
   step4: 'மதிப்பீடு மற்றும் சமர்ப்பிப்பு',  // placeholder
   personalTradeContext: 'உங்கள் வேலை பற்றி சொல்லுங்கள்',  // placeholder
   experienceDeclaration: 'ஒவ்வொரு திறனையும் உ,',  // placeholder
   evidenceSummary: 'எப்போது, எங்கே இந்த வேலை செய்தீர்கள்',  // placeholder
   reviewSubmit: 'சமர்ப்பிக்குவதற்கு முன் அனைத்தையும் சரிபார்க்கவும்',  // placeholder
   trade: 'தொழில் / வேலை',  // placeholder
-  sector: 'ச warf ',  // placeholder
+  sector: 'துறை',  // placeholder
   years: 'அனுபவ வருடங்கள்',  // placeholder
   location: 'இடம் (மாநிலம்)',  // placeholder
   employerType: 'மூலம் வகை',  // placeholder
   canDo: 'நான் இதைச் செய்ய முடியும்',  // placeholder
   doneBefore: 'நான் இதை முன்பு செய்துள்ளேன்',  // placeholder
   neverDone: 'நான் இதை முன்பு ஒருபோதும் செய்யவில்லை',  // placeholder
-  findMatching: 'ம后汉书',  // placeholder
+  findMatching: 'பொருந்தும் தகுதிகளை கண்டறியவும்',  // placeholder
   analyzing: 'உங்கள் அனுபவம் பகுப்பாய்வு செய்யப்படுகிறது...',  // placeholder
-  offlineSaved: 'இந்த சாதனத்தில் சேமிக்கப்பட்டது — மீண்டும் இணைக்கும்போது αυτόமாக ஸிங்க் செய்யப்படும்.',  // placeholder
+  offlineSaved: 'இந்த சாதனத்தில் சேமிக்கப்பட்டது — மீண்டும் இணைக்கும்போது தானாக ஒத்திசைக்கப்படும்.',  // placeholder
   offlineNotice: 'நீங்கள் ஆஃப்லைனில் இருக்கிறீர்கள் — உங்கள் அறிவிப்பு சேமிக்கப்படும் மற்றும் மீண்டும் இணை',  // placeholder
   success: 'அனுபவ அறிவிப்பு வெற்றிகரமாக சமர்ப்பிக்கப்பட்டது!',  // placeholder
   referenceCode: 'உங்கள் குறிப்பு குறியீடு இது',  // placeholder
