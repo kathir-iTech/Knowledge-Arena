@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
@@ -237,6 +238,12 @@ export default function RplProfilePage() {
             <CardTitle>Access denied</CardTitle>
             <CardDescription>You can only view your own competency profile.</CardDescription>
           </CardHeader>
+          <CardContent>
+            {/* FIX-3: this card was a dead end — no way back to the workspace. */}
+            <Button asChild>
+              <Link href={getRoleHome(user?.role ?? null)}>Go to my workspace</Link>
+            </Button>
+          </CardContent>
         </Card>
       </main>
     );

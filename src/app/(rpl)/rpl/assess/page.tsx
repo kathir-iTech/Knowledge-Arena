@@ -118,6 +118,12 @@ export default function RplAssessListPage() {
               Only commanders, executives and assessors can view assessments.
             </CardDescription>
           </CardHeader>
+          <CardContent>
+            {/* FIX-3: this card was a dead end — no way back to the workspace. */}
+            <Button asChild>
+              <Link href={getRoleHome(user?.role ?? null)}>Go to my workspace</Link>
+            </Button>
+          </CardContent>
         </Card>
       </main>
     );

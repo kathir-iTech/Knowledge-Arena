@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
+import { getRoleHome } from '@/lib/auth-redirect';
 import type { RPLAssessmentPack } from '@/lib/rpl/types';
 
 const MIN_PDF_BYTES = 50 * 1024;
@@ -56,6 +58,12 @@ export default function RplForgePage() {
             <CardTitle>Access denied</CardTitle>
             <CardDescription>Only commanders and executives can use the RPL Forge.</CardDescription>
           </CardHeader>
+          <CardContent>
+            {/* FIX-3: this card was a dead end — no way back to the workspace. */}
+            <Button asChild>
+              <Link href={getRoleHome(user?.role ?? null)}>Go to my workspace</Link>
+            </Button>
+          </CardContent>
         </Card>
       </main>
     );
