@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import {
@@ -276,6 +277,12 @@ function ResultContent() {
             <CardTitle>Access denied</CardTitle>
             <CardDescription>Please sign in to view your declaration result.</CardDescription>
           </CardHeader>
+          <CardContent>
+            {/* FIX-2: this card used to be a dead end — no way to sign in. */}
+            <Button asChild>
+              <Link href={`/login?next=${encodeURIComponent('/rpl/declare/result')}`}>Sign in</Link>
+            </Button>
+          </CardContent>
         </Card>
       </main>
     );
@@ -292,6 +299,15 @@ function ResultContent() {
               your reference code is saved automatically when you finish.
             </CardDescription>
           </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {/* FIX-2: give the dead end a way forward. */}
+            <Button asChild>
+              <Link href="/rpl/declare">Start a new declaration</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/rpl">Back to my workspace</Link>
+            </Button>
+          </CardContent>
         </Card>
       </main>
     );
