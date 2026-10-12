@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTracker, type TrackerStep } from '@/components/rpl/StatusTracker';
+import { DeclarationAccessState } from '@/components/rpl/DeclarationAccessState';
 import type { MatchedPackSummary, RPLPackMatch, RPLStage, StatusResponse } from '@/lib/rpl/types';
 import { AlertCircle, Check, CheckCircle2, Copy } from 'lucide-react';
 
@@ -161,6 +162,9 @@ function ResultContent() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Part 1.5: 403/404 from the status API = this ref belongs to someone else.
+  // Never render the raw API string ("Forbidden") — see DeclarationAccessState.
+  const [accessDenied, setAccessDenied] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Resolve the reference code: ?ref= wins, else the wizard's stored value.
@@ -193,6 +197,7 @@ function ResultContent() {
     async function load() {
       setLoading(true);
       setError(null);
+      setAccessDenied(false);
       try {
         const token = await auth.currentUser?.getIdToken().catch(() => null);
         if (!token) {
@@ -211,11 +216,15 @@ function ResultContent() {
           status?: string;
         }) | null;
         if (!cancelled) {
-          if (body && body.status === 'none') {
+          if (res.status === 403 || res.status === 404 || body?.error === 'Forbidden') {
+            // Part 1.5: this ref belongs to another worker — designed state,
+            // never the raw API string ("Forbidden").
+            setAccessDenied(true);
+          } else if (body && body.status === 'none') {
             setError('Declaration not found for this reference code.');
           } else if (!res.ok || !body || Array.isArray(body) || typeof body.stage !== 'string') {
             setError(
-              typeof body?.error === 'string'
+              typeof body?.error === 'string' && res.status !== 403 && res.status !== 404
                 ? body.error
                 : res.status === 404
                   ? 'Declaration not found for this reference code.'
@@ -284,6 +293,17 @@ function ResultContent() {
             </CardDescription>
           </CardHeader>
         </Card>
+      </main>
+    );
+  }
+
+  // Part 1.5: 403/404 (or a literal "Forbidden" body) — this reference belongs
+  // to somebody else. Show the designed state on its own: the confirmation
+  // card above must not pretend we loaded this worker's declaration.
+  if (accessDenied) {
+    return (
+      <main className="mx-auto max-w-3xl p-6">
+        <DeclarationAccessState referenceCode={ref} />
       </main>
     );
   }

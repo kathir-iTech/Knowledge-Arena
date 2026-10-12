@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTracker, type TrackerStep } from '@/components/rpl/StatusTracker';
+import { DeclarationAccessState } from '@/components/rpl/DeclarationAccessState';
 import { isReferenceCode } from '@/lib/rpl/reference-code';
 import type { RPLStage, StatusResponse } from '@/lib/rpl/types';
 import { Check, Copy } from 'lucide-react';
@@ -49,6 +50,8 @@ export default function RplStatusPage() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Part 1.5: 403/404 -> designed state, never the raw API string "Forbidden".
+  const [accessDenied, setAccessDenied] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -63,6 +66,7 @@ export default function RplStatusPage() {
     async function load() {
       setLoading(true);
       setError(null);
+      setAccessDenied(false);
       try {
         const token = await auth.currentUser?.getIdToken().catch(() => null);
         if (!token) {
@@ -81,7 +85,10 @@ export default function RplStatusPage() {
           status?: string;
         }) | null;
         if (cancelled) return;
-        if (body && body.status === 'none') {
+        if (res.status === 403 || res.status === 404 || body?.error === 'Forbidden') {
+          // Part 1.5: designed state instead of the raw API string.
+          setAccessDenied(true);
+        } else if (body && body.status === 'none') {
           // B3: normal "not started" state — render the Start CTA, not an error.
           setError('No declaration found yet. Start your assessment to get your status.');
         } else if (
@@ -91,7 +98,7 @@ export default function RplStatusPage() {
           typeof body.stage !== 'string'
         ) {
           setError(
-            typeof body?.error === 'string'
+            typeof body?.error === 'string' && res.status !== 403 && res.status !== 404
               ? body.error
               : res.status === 404
                 ? 'No declaration found yet. Start your assessment to get your status.'
@@ -146,6 +153,15 @@ export default function RplStatusPage() {
             </Button>
           </CardContent>
         </Card>
+      </main>
+    );
+  }
+
+  // Part 1.5: 403/404 from the status API — designed state, never "Forbidden".
+  if (accessDenied) {
+    return (
+      <main className="mx-auto w-full max-w-3xl p-4 sm:p-6">
+        <DeclarationAccessState />
       </main>
     );
   }

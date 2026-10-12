@@ -55,6 +55,13 @@ export interface SyncReport {
 export interface SyncDeps {
   /** False when nobody is signed in — every record is marked 'needs-signin'. */
   isAuthenticated: boolean;
+  /**
+   * SIH-26242 Part 1.4: uid of the account replaying the queue. A record whose
+   * `workerId` belongs to a DIFFERENT account is never replayed (and is marked
+   * 'needs-signin'), so signing out and signing in as someone else on the same
+   * device can never submit the previous worker's declaration.
+   */
+  uid?: string | null;
   /** Fresh ID token provider (page: user.getIdToken(forceRefresh)). */
   getIdToken: (forceRefresh: boolean) => Promise<string | null>;
   fetchImpl?: typeof fetch;
@@ -131,6 +138,27 @@ export async function syncPendingDeclarations(deps: SyncDeps): Promise<SyncRepor
     report.needsSignIn = records.length;
     report.errors.push('Not signed in — queued declarations kept until you sign in again.');
     return report;
+  }
+
+  // Part 1.4 — queue user binding: only the worker who queued a record may
+  // replay it. Records from any other account are marked 'needs-signin' and
+  // left untouched (never submitted under the wrong identity).
+  if (deps.uid) {
+    const foreign = records.filter((r) => r.workerId && r.workerId !== deps.uid);
+    if (foreign.length > 0) {
+      await markAll(
+        store,
+        foreign,
+        'needs-signin',
+        'Queued by another account — sign in with that account to sync.',
+      );
+      report.needsSignIn += foreign.length;
+      report.errors.push(
+        `${foreign.length} queued declaration(s) belong to a different account and were not replayed.`,
+      );
+      records = records.filter((r) => !r.workerId || r.workerId === deps.uid);
+      if (records.length === 0) return report;
+    }
   }
 
   for (const record of records) {

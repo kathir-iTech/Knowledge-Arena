@@ -139,6 +139,8 @@ export default function RplDeclarePage() {
     try {
       const report = await syncPendingDeclarations({
         isAuthenticated: Boolean(user),
+        // Part 1.4: replay only the records this account queued.
+        uid: user?.id ?? null,
         getIdToken: async (forceRefresh) => {
           if (!auth?.currentUser) return null;
           return auth.currentUser.getIdToken(forceRefresh).catch(() => null);

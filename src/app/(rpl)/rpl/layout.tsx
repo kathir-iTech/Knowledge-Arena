@@ -2,11 +2,10 @@
 
 import { useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { LogOut, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { getRoleHome } from '@/lib/auth-redirect';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
 // Prefix -> allowed roles. Anything NOT listed here is open to every valid
@@ -20,8 +19,15 @@ const EXECUTIVE_ONLY_PREFIXES = [
 // admin account has no executive twin); certify/forge stay executive-only.
 const ADMIN_OR_EXECUTIVE_PREFIXES = ['/rpl/admin', '/rpl/consistency'];
 const ASSESSOR_PREFIXES = ['/rpl/assess', '/rpl/assessor'];
+// Part 1.5: the self-declaration wizard is for the worker declaring their own
+// skills. Assessors and admins never open it — they are sent to their OWN
+// workspace with a toast instead of sitting on somebody else's form.
+// Legacy Quorena roles are treated as candidates for RPL purposes (A1), so
+// they keep access.
+const SELF_DECLARATION_PREFIXES = ['/rpl/declare'];
+const WORKER_ROLES = ['candidate', 'executive', 'commander', 'gladiator'];
 
-function matchesPrefixes(pathname: string, prefixes: string[]): boolean {
+function matchesPrefixes(pathname: string, prefixes: readonly string[]): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
@@ -29,8 +35,18 @@ function roleAllowed(role: string, allowed: readonly string[]): boolean {
   return allowed.includes(role);
 }
 
+/** Shared wrong-role decision for the effect (redirect) and the render (null). */
+function isBlockedForRole(pathname: string, role: string): boolean {
+  return (
+    (matchesPrefixes(pathname, EXECUTIVE_ONLY_PREFIXES) && role !== 'executive') ||
+    (matchesPrefixes(pathname, ADMIN_OR_EXECUTIVE_PREFIXES) && !roleAllowed(role, ['executive', 'admin'])) ||
+    (matchesPrefixes(pathname, ASSESSOR_PREFIXES) && !roleAllowed(role, ['commander', 'executive', 'assessor'])) ||
+    (matchesPrefixes(pathname, SELF_DECLARATION_PREFIXES) && !roleAllowed(role, WORKER_ROLES))
+  );
+}
+
 export default function RplLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, logout } = useAuth();
+  const { user, isLoading, logout, isSigningOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -50,7 +66,13 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      // Phase A5: preserve the RPL destination so login returns here.
+      // Part 1.4: an explicit sign-out owns the navigation. logout() goes to
+      // /login with NO next param — appending `?next=` here is what sent the
+      // NEXT account to this user's result page (403 Forbidden).
+      if (isSigningOut) return;
+      // Phase A5: preserve the RPL destination so login returns here (only
+      // for a guest who opened a protected URL directly — handled by
+      // middleware first; the client copy is the same behaviour).
       router.replace('/login?next=' + encodeURIComponent(pathname ?? '/rpl'));
       return;
     }
@@ -58,14 +80,8 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
       pathname ??
       (typeof window !== 'undefined' ? window.location.pathname : '/rpl');
     // Wrong-role users go to their OWN home with a visible explanation —
-    // never to /login (they are signed in).
-    const blocked =
-      (matchesPrefixes(current, EXECUTIVE_ONLY_PREFIXES) && user.role !== 'executive') ||
-      (matchesPrefixes(current, ADMIN_OR_EXECUTIVE_PREFIXES) &&
-        !roleAllowed(user.role, ['executive', 'admin'])) ||
-      (matchesPrefixes(current, ASSESSOR_PREFIXES) &&
-        !roleAllowed(user.role, ['commander', 'executive', 'assessor']));
-    if (blocked) {
+    // never to /login (they are signed in) and never left on skeletons.
+    if (isBlockedForRole(current, user.role)) {
       const home = getRoleHome(user.role);
       if (redirectToastFired.current !== current) {
         redirectToastFired.current = current;
@@ -76,19 +92,22 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
       }
       router.replace(home);
     }
-  }, [user, isLoading, router, pathname, toast]);
+  }, [user, isLoading, router, pathname, toast, isSigningOut]);
 
   const handleSignOut = async () => {
+    // Part 1.4: ONE code path — logout() clears the cookie, Firebase, stored
+    // paths and the offline-queue binding, then navigates to /login itself
+    // (no ?next=). Do NOT add a second redirect here: racing router.replace
+    // calls were what produced /login?next=<somebody else's result page>.
     await logout();
-    router.replace('/login');
   };
 
   if (isLoading) {
+    // Part 1.5: a single spinner, never a screenful of skeletons — a
+    // wrong-role visitor must not be left staring at loading placeholders.
     return (
-      <div className="p-6 space-y-4">
-        <Skeleton className="h-8 w-1/3" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-2/3" />
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
       </div>
     );
   }
@@ -98,13 +117,9 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
   const current =
     pathname ??
     (typeof window !== 'undefined' ? window.location.pathname : '/rpl');
-  if (
-    (matchesPrefixes(current, EXECUTIVE_ONLY_PREFIXES) && user.role !== 'executive') ||
-    (matchesPrefixes(current, ADMIN_OR_EXECUTIVE_PREFIXES) &&
-      !roleAllowed(user.role, ['executive', 'admin'])) ||
-    (matchesPrefixes(current, ASSESSOR_PREFIXES) &&
-      !roleAllowed(user.role, ['commander', 'executive', 'assessor']))
-  ) {
+  // Part 1.5: render NOTHING while the redirect above is in flight (no
+  // skeletons) so a wrong-role visitor sees a clean one-tick hand-off.
+  if (isBlockedForRole(current, user.role)) {
     return null;
   }
 

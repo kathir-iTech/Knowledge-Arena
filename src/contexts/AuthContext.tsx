@@ -18,6 +18,8 @@ import { useFirebase, useUser as useFirebaseUserHook } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { mapFirebaseAuthError } from '@/lib/firebase-auth-errors';
+import { authFormError, getAuthErrorCode } from '@/lib/auth-form-error';
+import { releaseOfflineQueue } from '@/lib/rpl/offline-store';
 import { VALID_ROLES, type AppRole } from '@/lib/session-role';
 import { mintSessionCookie } from '@/lib/client-session';
 
@@ -27,6 +29,12 @@ interface AuthContextType {
   isLoading: boolean;
   authError: string | null;
   clearAuthError: () => void;
+  /**
+   * Part 1.4: true while an explicit sign-out is in flight / has taken over
+   * navigation. Client guards must NOT append ?next= during a sign-out — that
+   * is what sent the next account to someone else's result page (403).
+   */
+  isSigningOut: boolean;
   login: (credentials: { email: string; password: string }) => Promise<void>;
   signUp: (data: { name: string; email: string; password: string }) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -52,6 +60,14 @@ const AUTH_OP_TIMEOUT_MS = 10000;
 // Failing the WHOLE sign-in because the limiter was slow is wrong — the limiter
 // already fails open server-side — so it gets a longer, separate budget.
 const RATE_LIMIT_TIMEOUT_MS = 30000;
+// The session mint is a CHAIN: POST /api/auth/session -> (server answers
+// claimsRefresh) -> forced getIdToken(true) -> SECOND POST. Each hop can
+// legitimately take seconds on a slow/cold server (same reasoning as the
+// rate-limit budget above), so 10s for the whole chain aborts sign-ins that
+// the server actually COMPLETES (the cookie lands after the client gave up,
+// leaving the user stuck on the form with a generic error). Give the chain
+// its own budget; single-shot auth ops keep AUTH_OP_TIMEOUT_MS.
+const SESSION_MINT_TIMEOUT_MS = 30000;
 // Phase A2: background session mint retries (bounded so a server-side
 // misconfiguration surfaces as a visible error instead of an endless loop).
 const MIGRATION_MAX_ATTEMPTS = 3;
@@ -107,6 +123,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  // Part 1.4: set by logout() before any state clears, so the (rpl) and
+  // ClientLayout guards know a sign-out owns the navigation (never ?next=).
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  // Part 1.3: fires exactly one "Welcome, <name>" toast per interactive
+  // sign-in / sign-up / Google sign-in (never on a plain page reload).
+  const welcomePending = useRef(false);
   const authTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
 
@@ -285,10 +307,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isLoading, firebaseUser, auth, toast]);
 
-  const fetchUserDocument = useCallback(async (uid: string) => {
-    if (!firestore) { setIsLoading(false); return; }
-    if (lastFetchedUid.current === uid && user) { return; }
-    if (fetchInProgress.current && fetchInProgressUid.current === uid) { return; }
+  const fetchUserDocument = useCallback(async (uid: string): Promise<User | null> => {
+    if (!firestore) { setIsLoading(false); return null; }
+    if (lastFetchedUid.current === uid && user) { return user; }
+    if (fetchInProgress.current && fetchInProgressUid.current === uid) { return null; }
     fetchInProgress.current = true;
     fetchInProgressUid.current = uid;
     lastFetchedUid.current = uid;
@@ -311,6 +333,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setUser(profile);
         setAuthError(null);
+        // Part 1.3: "Welcome, <name>" fires only for an interactive
+        // sign-in / sign-up / Google sign-in (login(), signUp() and
+        // signInWithGoogle() set welcomePending) — never on a page reload.
+        if (welcomePending.current) {
+          welcomePending.current = false;
+          toast({ title: `Welcome, ${profile.name}`, description: 'Signed in successfully.' });
+        }
+        return profile;
     } catch (err) {
         const msg = getErrorMessage(err);
         const permissionDenied = isPermissionDenied(err);
@@ -323,13 +353,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // authError and isLoading already set by ensureGladiatorProfile; ensure we don't overwrite
           // But ensure loading is false if not already
           setIsLoading(false);
-          return;
+          return null;
         }
         // Any other error: ensureGladiatorProfile already signed out and set error; just ensure loading false
         console.error('AuthContext: fetchUserDocument error', err);
         setIsLoading(false);
         // Do not create fallback — leave signed out
-        return;
+        return null;
     } finally {
         // Only clear loading if not already cleared by timeout/error path
         // (timeout already sets isLoading false; this is idempotent)
@@ -341,7 +371,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           authTimeoutRef.current = null;
         }
     }
-  }, [firestore, auth, user, ensureGladiatorProfile]);
+  }, [firestore, auth, user, ensureGladiatorProfile, toast]);
 
   // Migrate existing ID token to session cookie on load (existing users with no session cookie).
   // Covers the Google signInWithRedirect return path (whole-tab redirect, no
@@ -367,7 +397,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const result = await withTimeout(
         mintSessionCookie((forceRefresh) => user.getIdToken(forceRefresh)),
-        AUTH_OP_TIMEOUT_MS,
+        SESSION_MINT_TIMEOUT_MS,
         'Session creation',
       );
       if (!result.ok) {
@@ -461,6 +491,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (credentials: { email: string, password?: string }) => {
     setAuthError(null);
+    setIsSigningOut(false);
     if (!auth) throw new Error("Auth service not available");
     if (!credentials.password) {
         toast({
@@ -501,7 +532,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const sessionResult = await withTimeout(
           mintSessionCookie((forceRefresh) => currentUser.getIdToken(forceRefresh)),
-          AUTH_OP_TIMEOUT_MS,
+          SESSION_MINT_TIMEOUT_MS,
           'Session creation',
         );
         if (!sessionResult.ok) {
@@ -535,19 +566,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Mint succeeded — populate client state from the authoritative user doc
       // (the auth-state effect is suppressed while loginInProgress is true).
-      await fetchUserDocument(currentUser.uid);
+      welcomePending.current = true;
+      const profile = await fetchUserDocument(currentUser.uid);
+      if (!profile) welcomePending.current = false;
     } catch (error: unknown) {
+      // Part 1.1: NOTHING below may set authError — a form error stays on the
+      // form (the caller renders it inline and keeps the fields mounted).
+      welcomePending.current = false;
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
         toast({ variant: "destructive", title: "Too Many Attempts", description: "Too many attempts. Please wait a moment and try again." });
         // Ensure loading is not stuck
         setIsLoading(false);
-        throw error;
+        throw authFormError(error.message, getAuthErrorCode(error) ?? 'auth/too-many-requests');
       }
       if (error instanceof Error && (
         error.message.includes('Sign-in failed') ||
         error.message.includes('Request timed out')
       )) {
-        // Already handled with toast/authError above
+        // Session-bootstrap failure: already surfaced with authError + toast above.
         setIsLoading(false);
         throw error;
       }
@@ -556,21 +592,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error;
       }
       if (isPermissionDenied(error)) {
-        setAuthError("Sign-in failed — please try again");
         setIsLoading(false);
         toast({ variant: "destructive", title: "Sign In Failed", description: "Please try again" });
-        throw new Error("Sign-in failed — please try again");
+        throw authFormError("Sign-in failed — please try again", getAuthErrorCode(error));
       }
       if (isTimeoutError(error)) {
-        setAuthError("Sign-in failed — please try again");
         setIsLoading(false);
         toast({ variant: "destructive", title: "Sign In Failed", description: "Request timed out. Please try again." });
-        throw new Error("Request timed out. Please try again.");
+        throw authFormError("Request timed out. Please try again.", getAuthErrorCode(error));
       }
       const mapped = mapFirebaseAuthError(error, 'login');
       toast({ variant: "destructive", title: mapped.title, description: mapped.message });
       setIsLoading(false);
-      throw new Error(mapped.message);
+      throw authFormError(mapped.message, getAuthErrorCode(error));
     } finally {
       loginInProgress.current = false;
     }
@@ -598,6 +632,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // synchronously inside the click gesture (no awaits before this call)
       // or browsers block it.
       await signInWithPopup(auth, provider);
+      // Part 1.3: fire the welcome toast once the profile lands.
+      welcomePending.current = true;
       // The auth-state effect fetches/creates the profile. Mint the server
       // session cookie here so a failure is surfaced immediately (same
       // fail-hard contract as login()) instead of after 3 background retries.
@@ -617,7 +653,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               fetch,
               { signupRole: 'candidate', signupName: currentUser.displayName || '' },
             ),
-            AUTH_OP_TIMEOUT_MS,
+            SESSION_MINT_TIMEOUT_MS,
             'Session creation',
           );
           if (!sessionResult.ok) {
@@ -633,6 +669,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const message = `Sign-in failed${codeFragment} — ${friendly}`;
               console.error('[Auth] google session mint failed', sessionResult.errorCode, sessionResult.errorMessage);
               migrationDone.current = false;
+              welcomePending.current = false;
               await signOut(auth).catch(() => {});
               setAuthError(message);
               setIsLoading(false);
@@ -645,6 +682,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           migrationDone.current = false;
           if (isTimeoutError(e) || isPermissionDenied(e)) {
             await signOut(auth).catch(() => {});
+            welcomePending.current = false;
             setAuthError("Sign-in failed — please try again");
             setIsLoading(false);
             toast({ variant: "destructive", title: "Google Sign-In Failed", description: "Could not establish server session. Please try again." });
@@ -657,6 +695,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: unknown) {
       console.error('[Auth] signInWithPopup error', error);
       setIsLoading(false);
+      welcomePending.current = false;
       const mapped = mapFirebaseAuthError(error, 'google');
       // Popup codes are never silent (RPL Compass contract): the caller shows
       // the message INLINE on the login form. Keep a defensive silent-guard so
@@ -666,12 +705,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuthError(null);
       // Rethrow the user-facing message so LoginForm renders it inline instead
       // of triggering a full-screen ClientLayout auth-error takeover.
-      throw new Error(mapped.message || 'Google sign-in was blocked in this browser. Use email and password instead.');
+      throw authFormError(
+        mapped.message || 'Google sign-in was blocked in this browser. Use email and password instead.',
+        getAuthErrorCode(error),
+      );
     }
   }, [auth, toast]);
 
   const signUp = async (data: { name: string; email: string; password: string }) => {
     setAuthError(null);
+    setIsSigningOut(false);
     if (!auth) throw new Error('Auth service not available');
     const email = data.email.trim();
     const name = data.name.trim();
@@ -705,7 +748,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fetch,
           { signupRole: 'candidate', signupName: name },
         ),
-        AUTH_OP_TIMEOUT_MS,
+        SESSION_MINT_TIMEOUT_MS,
         'Session creation',
       );
       if (!sessionResult.ok) {
@@ -717,10 +760,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       migrationDone.current = true;
       signupInProgress.current = false;
       // Doc now exists with role candidate — safe to populate client state.
-      await fetchUserDocument(cred.user.uid);
+      welcomePending.current = true;
+      const profile = await fetchUserDocument(cred.user.uid);
+      if (!profile) welcomePending.current = false;
       debugLog('signup ok', { uid: cred.user.uid, role: sessionResult.role });
     } catch (error: unknown) {
       signupInProgress.current = false;
+      welcomePending.current = false;
       // Never leave a half-authenticated account behind: without the cookie
       // the middleware bounces every page, and the user can simply sign in
       // again (the candidate doc is created by the mint above).
@@ -730,19 +776,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setIsLoading(false);
       if (serverError) {
+        // Session-bootstrap failure (Part 1.1): authError is reserved for
+        // exactly this — the session cookie could not be minted.
         toast({ variant: "destructive", title: "Account Creation Failed", description: serverError });
-        throw error;
+        throw authFormError(serverError, 'session-mint-failed');
       }
       if (error instanceof Error && (error.message.includes('Too many') || error.message.includes('Please wait'))) {
         toast({ variant: "destructive", title: "Too Many Attempts", description: error.message });
-        throw error;
+        throw authFormError(error.message, getAuthErrorCode(error) ?? 'auth/too-many-requests');
       }
       const mapped = mapFirebaseAuthError(error, 'signup');
       if (!mapped.isSilent) {
-        setAuthError(mapped.message);
+        // Part 1.1 / 1.2: NEVER setAuthError here. A duplicate email, a weak
+        // password or a network failure is a FORM error — the login form stays
+        // mounted and renders it inline (with the "Sign in with this email"
+        // switch for auth/email-already-in-use).
         toast({ variant: "destructive", title: mapped.title, description: mapped.message });
       }
-      throw new Error(mapped.message || 'Account creation failed — please try again.');
+      throw authFormError(
+        mapped.message || 'Account creation failed — please try again.',
+        getAuthErrorCode(error),
+      );
     }
   };
 
@@ -759,32 +813,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const msg = error instanceof Error ? error.message : '';
       if (code === 'auth/user-not-found' || msg.includes('user-not-found')) return;
       const mapped = mapFirebaseAuthError(error, 'login');
-      throw new Error(mapped.message || 'Could not send the reset email. Please try again.');
+      throw authFormError(mapped.message || 'Could not send the reset email. Please try again.', getAuthErrorCode(error));
     }
   };
 
+  /**
+   * SIH-26242 Part 1.4 — THE sign-out path. Every caller (the RPL header
+   * button, the session-timeout dialog, unknown-role recovery) goes through
+   * this one function, and it is the ONLY place that navigates on sign-out:
+   *
+   *   1. clear the server session cookie  (POST /api/auth/logout)
+   *   2. sign out of Firebase             (signOut(auth))
+   *   3. clear stored next / remembered paths (rpl:lastRef, rpl:aiMatches …)
+   *   4. release the offline queue's user binding (never replayed by the next
+   *      account that signs in on this device)
+   *   5. navigate to /login with NO `next` parameter — the client guards see
+   *      isSigningOut and must not append `?next=` (that race is what sent the
+   *      next account to someone else's result page → 403)
+   */
   const logout = async () => {
-    if (!auth) return;
+    setIsSigningOut(true);
+    welcomePending.current = false;
     setAuthError(null);
     if (authTimeoutRef.current) {
       clearTimeout(authTimeoutRef.current);
       authTimeoutRef.current = null;
     }
-    try {
-      await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` } });
-    } catch {
-      // server-side logout best-effort
-    }
-    try {
-      await signOut(auth);
-    } catch {
-      // ensure cleanup runs even if signOut fails
+    if (auth) {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${await auth.currentUser?.getIdToken()}` } });
+      } catch {
+        // server-side logout best-effort
+      }
+      try {
+        await signOut(auth);
+      } catch {
+        // ensure cleanup runs even if signOut fails
+      }
     }
     setUser(null);
     setIsLoading(false);
     lastFetchedUid.current = null;
     fetchInProgress.current = false;
     fetchInProgressUid.current = null;
+    migrationDone.current = false;
+    migrationAttempts.current = 0;
+
+    // 3. remembered paths that could hand the NEXT account this user's data
+    //    (rpl:lastRef is the fallback reference the result page reads when the
+    //    URL carries no ?ref=).
+    try {
+      if (typeof window !== 'undefined') {
+        for (const key of ['rpl:lastRef', 'rpl:aiMatches', 'rpl:next', 'login:next', 'next']) {
+          window.localStorage.removeItem(key);
+          window.sessionStorage.removeItem(key);
+        }
+      }
+    } catch {
+      // storage unavailable — nothing remembered in that case anyway
+    }
+
+    // 4. offline queue user binding (bounded so a slow IndexedDB can never
+    //    block the sign-out navigation).
+    try {
+      await Promise.race([
+        releaseOfflineQueue(),
+        new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+      ]);
+    } catch (err) {
+      console.warn('[Auth] offline queue release failed', getErrorMessage(err));
+    }
+
+    // 5. single navigation target, never with ?next=. Skip when we are already
+    //    on /login (otherwise an unknown-role user on /login would reload
+    //    forever).
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.replace('/login');
+    }
   };
 
   const updateAvatar = async (avatar: string) => {
@@ -835,6 +940,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLoading,
     authError,
     clearAuthError,
+    isSigningOut,
     login,
     signUp,
     signInWithGoogle,
@@ -844,7 +950,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateProfile,
     refreshUser,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [user, isLoading, authError, clearAuthError, signInWithGoogle, refreshUser]);
+  }), [user, isLoading, authError, isSigningOut, clearAuthError, signInWithGoogle, refreshUser]);
 
   return (
     <AuthContext.Provider value={contextValue}>

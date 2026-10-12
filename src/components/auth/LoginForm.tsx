@@ -9,18 +9,35 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  DUPLICATE_EMAIL_CODE,
+  getAuthErrorCode,
+  isCredentialError,
+  isRateLimitError,
+} from '@/lib/auth-form-error';
 import { Loader2 } from 'lucide-react';
 
 const signInSchema = z.object({
-  email: z.string().min(1, { message: 'Email is required.' }),
+  email: z
+    .string()
+    .min(1, { message: 'Email is required.' })
+    .email({ message: 'Please enter a valid email address.' }),
   password: z.string().min(1, { message: 'Password is required.' }),
 });
 
 const signUpSchema = z
   .object({
     name: z.string().min(1, { message: 'Name is required.' }),
-    email: z.string().min(1, { message: 'Email is required.' }),
-    password: z.string().min(1, { message: 'Password is required.' }),
+    email: z
+      .string()
+      .min(1, { message: 'Email is required.' })
+      .email({ message: 'Please enter a valid email address.' }),
+    // Part 1.2: a specific, early message for a weak password (Firebase only
+    // refuses at 6 characters, and its message arrives after the network call).
+    password: z
+      .string()
+      .min(1, { message: 'Password is required.' })
+      .min(6, { message: 'Password must be at least 6 characters.' }),
     confirmPassword: z.string().min(1, { message: 'Confirm your password.' }),
   })
   .refine((values) => values.password === values.confirmPassword, {
@@ -102,11 +119,16 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ initialValues }: LoginFormProps = {}) {
-  const { login, signUp, signInWithGoogle, sendPasswordReset } = useAuth();
+  const { login, signUp, signInWithGoogle, sendPasswordReset, authError } = useAuth();
   const [tab, setTab] = useState<Tab>('signin');
   // Phase A4: a visible, non-spinning failure state on the page itself —
   // the toast disappears, this stays until the user retries.
-  const [formError, setFormError] = useState<{ title: string; message: string } | null>(null);
+  // Part 1.2: `code` carries the Firebase code so the block can offer the
+  // right next step (duplicate email -> "Sign in with this email",
+  // bad credentials -> "Forgot password?").
+  const [formError, setFormError] = useState<
+    { title: string; message: string; code?: string | null } | null
+  >(null);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -165,6 +187,25 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
     setResetMessage(null);
   };
 
+  /**
+   * Part 1.2 — "Sign in with this email": the duplicate-email dead end becomes
+   * a switch to the Sign in tab with the address prefilled and the caret in
+   * the password field.
+   */
+  const goToSignInWithEmail = (email: string) => {
+    if (email) {
+      signInForm.setValue('email', email, { shouldDirty: true, shouldValidate: true });
+    }
+    setTab('signin');
+    setResetMessage(null);
+    setFormError(null);
+    window.setTimeout(() => {
+      document
+        .querySelector<HTMLInputElement>('input[autocomplete="current-password"]')
+        ?.focus();
+    }, 0);
+  };
+
   const onSignInSubmit = async (values: SignInValues) => {
     setIsSubmitting(true);
     setFormError(null);
@@ -172,10 +213,19 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
     try {
       await login(values);
       // Success: the auth state updates and ClientLayout routes to the
-      // remembered ?next= destination (same-origin only) or the role home.
+      // remembered ?next= destination (same-origin allowlist) or the role home.
     } catch (err) {
+      // Part 1.1: form errors stay inline — the form keeps the email and the
+      // tab the user was on (AuthContext never sets authError for these).
+      // Passwords are never kept after a failed attempt.
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
-      setFormError({ title: 'Sign-in failed', message });
+      signInForm.setValue('password', '');
+      setFormError({
+        // Part 1.2: rate limiting gets its own headline, not a generic failure.
+        title: isRateLimitError(err) ? 'Too many attempts' : 'Sign-in failed',
+        message,
+        code: getAuthErrorCode(err),
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -188,10 +238,25 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
     try {
       await signUp({ name: values.name, email: values.email, password: values.password });
       // Success: candidate account + session cookie created; ClientLayout
-      // routes to ?next= or the candidate home (/rpl).
+      // routes to a safe ?next= or the candidate home (/rpl).
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Account creation failed. Please try again.';
-      setFormError({ title: 'Account creation failed', message });
+      const code = getAuthErrorCode(err);
+      const message =
+        code === DUPLICATE_EMAIL_CODE
+          ? 'This email already has an account.'
+          : err instanceof Error
+            ? err.message
+            : 'Account creation failed. Please try again.';
+      // Passwords are never kept after a failed attempt; the email stays so
+      // the duplicate-email switch can carry it over to the Sign in tab.
+      signUpForm.setValue('password', '');
+      signUpForm.setValue('confirmPassword', '');
+      setSignUpPassword('');
+      setFormError({
+        title: isRateLimitError(err) ? 'Too many attempts' : 'Account creation failed',
+        message,
+        code,
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -211,6 +276,7 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
         message:
           mapped ||
           'Google sign-in was blocked in this browser. Use email and password instead.',
+        code: getAuthErrorCode(err),
       });
     }
   };
@@ -245,13 +311,41 @@ export function LoginForm({ initialValues }: LoginFormProps = {}) {
   return (
     <Card>
       <CardContent className="pt-6 px-4 sm:px-6 space-y-6">
-        {formError && (
+        {formError && !authError && (
           <div role="alert" className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
             <p className="font-medium text-destructive">{formError.title}</p>
             <p className="mt-1 text-xs text-muted-foreground break-words">{formError.message}</p>
-            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => setFormError(null)}>
-              Try again
-            </Button>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {/* Part 1.2: a duplicate email is not a dead end. */}
+              {formError.code === DUPLICATE_EMAIL_CODE && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => goToSignInWithEmail(signUpForm.getValues('email'))}
+                >
+                  Sign in with this email
+                </Button>
+              )}
+              {/* Part 1.2: bad credentials always offer the recovery path. */}
+              {isCredentialError({ code: formError.code }) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFormError(null);
+                    void onForgotPassword();
+                  }}
+                >
+                  Forgot password?
+                </Button>
+              )}
+              <Button type="button" variant="outline" size="sm" onClick={() => setFormError(null)}>
+                {formError.code === DUPLICATE_EMAIL_CODE || isCredentialError({ code: formError.code })
+                  ? 'Dismiss'
+                  : 'Try again'}
+              </Button>
+            </div>
           </div>
         )}
         {resetMessage && (

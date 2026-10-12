@@ -130,6 +130,36 @@ export async function markPendingDeclaration(
   }
 }
 
+/**
+ * SIH-26242 Part 1.4 — sign-out releases the queue's user binding.
+ *
+ * Every queued record carries the `workerId` (uid) of the account that created
+ * it. On sign-out we mark the WHOLE queue 'needs-signin' so no record can be
+ * replayed by the next account that signs in on this device: the next session
+ * must belong to the worker who queued the declaration (see the uid check in
+ * offline-sync.ts).
+ */
+export async function releaseOfflineQueue(): Promise<void> {
+  if (typeof indexedDB === 'undefined') return;
+  const records = await getPendingDeclarations();
+  if (records.length === 0) return;
+  const db = await openDatabase();
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    for (const record of records) {
+      store.put({
+        ...record,
+        syncState: 'needs-signin',
+        lastError: 'Signed out — sign in with the account that queued this to sync.',
+      });
+    }
+    await transactionComplete(tx);
+  } finally {
+    db.close();
+  }
+}
+
 export interface PendingSummary {
   total: number;
   needsSignIn: number;

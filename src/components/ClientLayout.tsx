@@ -9,13 +9,13 @@ import { SessionTimeout } from '@/components/session-timeout';
 import { OfflineDetector } from '@/components/offline-detector';
 import { Button } from '@/components/ui/button';
 import { ROLE_HOME, isValidRole } from '@/lib/auth-redirect';
-import { sanitizeNextPath } from '@/lib/next-path';
+import { isAllowedNextPath } from '@/lib/next-path';
 import { useToast } from '@/hooks/use-toast';
 
 const SPECIAL_PAGES = ['/kicked', '/cheating-detected'];
 
 function ClientLayoutInner({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, authError, clearAuthError, logout } = useAuth();
+  const { user, isLoading, authError, clearAuthError, logout, isSigningOut } = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -37,6 +37,14 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     }
 
     if (!user) {
+      // Part 1.4: an explicit sign-out owns the navigation (logout() goes to
+      // /login with NO ?next=). Never let this guard append `?next=` during a
+      // sign-out — that is what returned the NEXT account to somebody else's
+      // result page (403 Forbidden).
+      if (isSigningOut) {
+        redirecting.current = null;
+        return;
+      }
       // Phase 1 login chain: /rpl is cookie-gated server-side (middleware →
       // /login). Let the RPL layout own that redirect so server and client
       // agree; everything else unauthenticated goes to the landing page.
@@ -78,10 +86,10 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       const qs = searchParams.toString();
       target = qs ? `${base}?${qs}` : base;
     } else if (currentPath === '/login') {
-      // Phase A5: /login?next=<path> wins over ROLE_HOME (only same-origin
-      // absolute paths — any absolute URL, scheme-relative or backslash
-      // trick is rejected by sanitizeNextPath).
-      const safeNext = sanitizeNextPath(searchParams.get('next'));
+      // Part 1.3: only a safe, same-origin, ownership-neutral `?next=` wins
+      // over ROLE_HOME — result/ref URLs and anything outside the RPL
+      // allowlist fall back to the role home (see src/lib/next-path.ts).
+      const safeNext = isAllowedNextPath(searchParams.get('next'));
       target = safeNext || ROLE_HOME[user.role] || ROLE_HOME.gladiator;
     } else {
       const isExecutivePage = currentPath.startsWith('/executive');
@@ -102,9 +110,16 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     }
 
     redirecting.current = null;
-  }, [user, isLoading, pathname, searchParams, router, logout, toast]);
+  }, [user, isLoading, pathname, searchParams, router, logout, toast, isSigningOut]);
 
-  if (authError) {
+  const onLoginPage = pathname === '/login';
+
+  // Part 1.1: the full-screen takeover is reserved for TRUE session-bootstrap
+  // failures (session mint impossible, project mismatch, profile resolution
+  // failure) and is never rendered on /login — there it becomes an inline
+  // banner above the page, so the form stays mounted and keeps what the user
+  // typed.
+  if (authError && !onLoginPage) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-6 p-4 text-center" role="alert">
         <p className="text-lg font-medium">Sign-in failed — please try again</p>
@@ -132,12 +147,29 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     </>
   );
 
-  if (SPECIAL_PAGES.includes(pathname)) return shared;
-  if (!user && (pathname === '/' || pathname === '/login')) return shared;
-  if (user && pathname.startsWith('/battle')) return shared;
-  if (user) return shared;
+  // Part 1.1 — session-bootstrap failure noticed while ON /login: render it
+  // inside the page layout with an explicit Retry, never as a blank screen.
+  const sessionBanner = authError && onLoginPage ? (
+    <div role="alert" className="border-b border-destructive/40 bg-destructive/10 px-4 py-3">
+      <div className="mx-auto flex w-full max-w-xl flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <p className="text-sm font-semibold text-destructive">We could not open your session</p>
+          <p className="break-words text-xs text-muted-foreground">{authError}</p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button size="sm" onClick={() => window.location.reload()}>Retry</Button>
+          <Button size="sm" variant="ghost" onClick={() => clearAuthError?.()}>Dismiss</Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
-  return shared;
+  return (
+    <>
+      {sessionBanner}
+      {shared}
+    </>
+  );
 }
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
