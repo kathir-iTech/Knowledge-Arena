@@ -469,7 +469,7 @@ function ResultContent() {
                     <CardTitle>NSQF level ladder</CardTitle>
                     <CardDescription>{topPack.title}</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="overflow-x-auto">
                     <NsqfLadder
                       currentLevel={topPack.nsqfLevel}
                       orientation="horizontal"

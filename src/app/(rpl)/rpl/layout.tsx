@@ -146,7 +146,9 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
           Sign out
         </Button>
       </div>
-      {children}
+      {/* FIX-W2: clear the fixed top-right Sign out pill so page content
+          never slides underneath it (notably centred max-w columns) */}
+      <div className="pt-8 sm:pt-10">{children}</div>
     </>
   );
 }

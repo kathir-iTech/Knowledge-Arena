@@ -163,7 +163,10 @@ export function LandingShowcases() {
               ))}
             </div>
             {/* Part 3: real KappaGauge visualisation on the landing */}
-            <KappaGauge kappa={0.78} n={42} size={170} className="mx-auto mt-3 text-center" />
+            {/* FIX-W3: centre with flex (text-center does nothing on the SVG) */}
+            <div className="mt-3 flex justify-center">
+              <KappaGauge kappa={0.78} n={42} size={170} />
+            </div>
             <div className="mt-4 border-t pt-3">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Landis &amp; Koch scale</p>
               <div className="mt-2 flex items-center gap-1">

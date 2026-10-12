@@ -283,8 +283,12 @@ export default function RplAdminPage() {
             ))}
           </section>
         ) : null}
-        <div className="space-y-1.5">
-          <Skeleton className="h-10 w-56" />
+        <div className="flex items-center gap-3">
+          {/* FIX-W1: the loading screen was an anonymous skeleton wall — brand it */}
+          <CompassMark size={36} className="shrink-0 text-primary" aria-label="RPL Compass logo" />
+          <h1 className="text-page-title font-headline tracking-tight">RPL Admin Overview</h1>
+        </div>
+        <div className="space-y-1.5" aria-hidden="true">
           <Skeleton className="h-4 w-80 max-w-full" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

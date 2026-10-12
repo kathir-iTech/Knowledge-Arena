@@ -320,7 +320,7 @@ export default function RplProfilePage() {
               : ''}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <NsqfLadder
             currentLevel={pack?.nsqfLevel ?? profile.nsqfLevelRecommended ?? 4}
             orientation="horizontal"
