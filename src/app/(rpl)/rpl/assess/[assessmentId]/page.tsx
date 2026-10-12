@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { NSQF_PACKS, type NSQFQualificationPack } from '@/lib/rpl/nsqf-packs';
 import { knowledgeItemId, performanceItemId } from '@/lib/rpl/item-ids';
+import { getRoleHome } from '@/lib/auth-redirect';
 import type { AssessmentItem, EvidenceImageDoc, RPLAssessmentDoc, RPLWorkerDoc } from '@/lib/rpl/types';
 import { deleteEvidence, listEvidenceForUnit, uploadEvidenceImage } from '@/lib/rpl/evidence-upload';
 
@@ -139,11 +140,13 @@ export default function RplAssessScoringPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      router.replace('/');
+      router.replace('/login');
       return;
     }
-    if (user.role !== 'commander' && user.role !== 'executive') {
-      router.replace('/');
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') {
+      // Part 1.5: wrong role returns to their own workspace, never `/`.
+      // (Assessors score here too — they must NOT be redirected away.)
+      router.replace(getRoleHome(user.role));
     }
   }, [user, isLoading, router]);
 

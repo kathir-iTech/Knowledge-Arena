@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
+import { getRoleHome } from '@/lib/auth-redirect';
 import type { RPLAssessmentDoc } from '@/lib/rpl/types';
 
 type AssessmentRow = Partial<RPLAssessmentDoc> & { id: string };
@@ -72,11 +73,12 @@ export default function RplAssessorPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      router.replace('/');
+      router.replace('/login');
       return;
     }
     if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') {
-      router.replace('/');
+      // Part 1.5: own workspace, never the Quorena landing.
+      router.replace(getRoleHome(user.role));
     }
   }, [user, isLoading, router]);
 

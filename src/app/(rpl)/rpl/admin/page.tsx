@@ -127,7 +127,7 @@ export default function RplAdminPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      router.replace('/');
+      router.replace('/login');
       return;
     }
     if (user.role !== 'executive' && user.role !== 'admin') {

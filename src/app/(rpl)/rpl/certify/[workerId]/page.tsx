@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
+import { getRoleHome } from '@/lib/auth-redirect';
 import type {
   CompetencyProfile,
   RPLCertificationDoc,
@@ -60,11 +61,12 @@ export default function RplCertifyPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      router.replace('/');
+      router.replace('/login');
       return;
     }
     if (user.role !== 'executive') {
-      router.replace('/');
+      // Part 1.5: own workspace, never the Quorena landing.
+      router.replace(getRoleHome(user.role));
     }
   }, [user, isLoading, router]);
 

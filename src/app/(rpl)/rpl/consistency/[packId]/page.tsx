@@ -56,7 +56,7 @@ export default function RplConsistencyPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      router.replace('/');
+      router.replace('/login');
       return;
     }
     if (!canView) {

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { isReferenceCode } from '@/lib/rpl/reference-code';
+import { getRoleHome } from '@/lib/auth-redirect';
 import type {
   CompetencyProfile,
   EvidenceImageDoc,
@@ -162,12 +163,14 @@ export default function RplProfilePage() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      router.replace('/');
+      router.replace('/login');
       return;
     }
     const privileged = user.role === 'commander' || user.role === 'executive';
     if (!privileged && user.id !== workerId && !paramIsCode) {
-      router.replace('/');
+      // Part 1.5: a signed-in visitor without access goes to their OWN
+      // workspace, never the Quorena landing.
+      router.replace(getRoleHome(user.role));
     }
   }, [user, isLoading, router, workerId, paramIsCode]);
 
