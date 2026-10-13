@@ -67,6 +67,14 @@ export function useSharedIntersectionObserver(
     const element = ref.current;
     if (!element) return;
 
+    // Robustness: environments without IntersectionObserver (very old browsers,
+    // some prerenderers/screenshot tools) would otherwise leave `.reveal`
+    // content at opacity 0 forever. Show immediately instead of throwing.
+    if (typeof IntersectionObserver === 'undefined') {
+      setIsIntersecting(true);
+      return;
+    }
+
     const cleanup = observerRef.current.observe(
       element,
       (entries) => {

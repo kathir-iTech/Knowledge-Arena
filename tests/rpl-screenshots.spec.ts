@@ -30,7 +30,18 @@ for (const [name, width, height] of [
       await expect(
         page.getByRole('heading', { name: /Standardise how assessors/i }),
       ).toBeVisible({ timeout: 90_000 });
-      await page.waitForTimeout(700);
+      // Scroll-reveal sections only intersect (and finish their 0.7s fade)
+      // after scrolling. Walk the page so the fullPage capture shows content,
+      // not mid-transition blanks.
+      await page.evaluate(async () => {
+        const h = document.body.scrollHeight;
+        for (let y = 0; y <= h; y += 600) {
+          window.scrollTo(0, y);
+          await new Promise((r) => setTimeout(r, 120));
+        }
+        window.scrollTo(0, 0);
+      });
+      await page.waitForTimeout(1200);
       await page.screenshot({ path: `${SHOTS}/landing-${name}.png`, fullPage: true });
     });
 
@@ -74,9 +85,11 @@ for (const [name, width, height] of [
       await ensureRoleUser(email, 'admin', 'Admin Arun');
       await signInViaUi(page, email);
       await expect(page).toHaveURL(`${BASE}/rpl/admin`, { timeout: 60_000 });
+      // Wait for LOADED content (demo-data button), not the branded skeleton
+      // wall — otherwise the capture shows loaders instead of the dashboard.
       await expect(
         page
-          .getByRole('heading', { name: 'RPL Admin Overview' })
+          .getByRole('button', { name: 'Load demo data' })
           .or(page.getByText('Admin overview unavailable')),
       ).toBeVisible({ timeout: 150_000 });
       await page.waitForTimeout(700);

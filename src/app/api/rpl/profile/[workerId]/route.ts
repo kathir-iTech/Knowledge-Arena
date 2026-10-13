@@ -14,9 +14,9 @@ import type { AssessmentItem, EvidenceImageDoc, RPLAssessmentDoc } from '@/lib/r
 export const runtime = 'nodejs';
 
 // GET /api/rpl/profile/[workerId] — competency profile + draft recommendation.
-// Auth: 401 when unauthenticated; worker (any non-commander/executive role)
-// may read ONLY their own record (uid == workerId), commander/executive may
-// read any record (403 otherwise). ?packId selects the pack; default is the
+// Auth: 401 when unauthenticated; worker (candidate/gladiator) may read ONLY
+// their own record (uid == workerId), assessor/admin (both vocabs) may read
+// any record (403 otherwise). ?packId selects the pack; default is the
 // pack of the latest submitted non-template assessment.
 export async function GET(
   req: NextRequest,
@@ -78,7 +78,8 @@ export async function GET(
     } catch {
       role = undefined;
     }
-    const isPrivileged = role === 'commander' || role === 'executive';
+    const isPrivileged =
+      role === 'commander' || role === 'executive' || role === 'assessor' || role === 'admin';
     if (!isPrivileged && caller.uid !== workerId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

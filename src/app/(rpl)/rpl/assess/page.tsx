@@ -20,9 +20,8 @@ function packTitle(packId: string | undefined): string {
 }
 
 export default function RplAssessListPage() {
-  // Authoritative page-level guard (commander/executive/assessor; the global
-  // (rpl) layout guard also covers /rpl/assess* but this guard stays
-  // authoritative).
+  // Authoritative page-level guard: assessor/admin (both vocabs). Matches the
+  // global (rpl) layout guard + GET /api/rpl/assess.
   const { user, isLoading } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();
@@ -38,7 +37,7 @@ export default function RplAssessListPage() {
       router.replace('/login');
       return;
     }
-    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') {
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor' && user.role !== 'admin') {
       // Part 1.5: wrong role goes to their OWN workspace, not `/`.
       router.replace(getRoleHome(user.role));
     }
@@ -46,7 +45,7 @@ export default function RplAssessListPage() {
 
   useEffect(() => {
     if (isLoading || !user) return;
-    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') return;
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor' && user.role !== 'admin') return;
     let cancelled = false;
     (async () => {
       try {
@@ -108,14 +107,14 @@ export default function RplAssessListPage() {
     );
   }
   const role = user?.role;
-  if (!user || (role !== 'commander' && role !== 'executive' && role !== 'assessor')) {
+  if (!user || (role !== 'commander' && role !== 'executive' && role !== 'assessor' && role !== 'admin')) {
     return (
       <main className="mx-auto max-w-3xl p-6">
         <Card>
           <CardHeader>
             <CardTitle>Access denied</CardTitle>
             <CardDescription>
-              Only commanders, executives and assessors can view assessments.
+              Only assessors and admins can view assessments.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -128,14 +127,14 @@ export default function RplAssessListPage() {
       </main>
     );
   }
-  const isExecutive = role === 'executive';
+  const isPrivileged = role === 'executive' || role === 'admin';
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Pending assessments</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {isExecutive
+          {isPrivileged
             ? 'All assessor queues. Draft assessments need scoring; submitted ones await review.'
             : 'Your assessor queue. Draft assessments need scoring; submitted ones await review.'}
         </p>
@@ -173,7 +172,7 @@ export default function RplAssessListPage() {
                       <span className="ml-2 text-xs">({a.packId})</span>
                     ) : null}
                   </p>
-                  {isExecutive && a.assessorId ? (
+                  {isPrivileged && a.assessorId ? (
                     <p className="text-xs text-muted-foreground">Assessor: {a.assessorId}</p>
                   ) : null}
                 </div>

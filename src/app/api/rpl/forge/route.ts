@@ -9,7 +9,7 @@ import type { AssessmentMethod } from '@/lib/rpl/types';
 
 export const runtime = 'nodejs';
 
-// RPL Forge upload + finalize endpoint (Commander OR Executive only).
+// RPL Forge upload + finalize endpoint (Admin only, both vocabs: admin/executive).
 // - multipart FormData with a PDF file -> server-side text extraction, flow, { pack, cached }
 // - JSON { finalize: true, pack } -> template doc rpl_assessments/tpl_{packId}
 //   with isTemplate:true + items subcollection (templates are excluded from
@@ -181,7 +181,7 @@ function isValidFinalizePack(pack: unknown): pack is {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['executive', 'admin']);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).

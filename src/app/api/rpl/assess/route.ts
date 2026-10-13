@@ -10,20 +10,20 @@ import type { AssessmentItem, RPLAssessmentDoc } from '@/lib/rpl/types';
 
 export const runtime = 'nodejs';
 
-// RPL assessor queue + save endpoint (Commander/Executive/Assessor read,
-// Commander/Assessor write).
-// - GET: commander AND assessor see own assessments (assessorId == uid),
-//   executive sees all. Single-field where() only + in-memory filter; docs
+// RPL assessor queue + save endpoint (Assessor/Admin, both vocabs, read;
+// Assessor/Admin write).
+// - GET: assessor/commander see own assessments (assessorId == uid),
+//   executive/admin see all. Single-field where() only + in-memory filter; docs
 //   with isTemplate == true (forge template contract) are always excluded.
 //   Sorted by createdAt desc.
-// - POST: commander or assessor. Writes rpl_assessments/{assessmentId}
+// - POST: assessor/commander/executive/admin. Writes rpl_assessments/{assessmentId}
 //   (set-merge) plus all items into the items subcollection via batched
 //   writes (chunk 500).
 
 type AssessmentRow = Partial<RPLAssessmentDoc> & { id: string };
 
-const QUEUE_ROLES = ['commander', 'executive', 'assessor'] as const;
-const WRITER_ROLES = ['commander', 'assessor'] as const;
+const QUEUE_ROLES = ['commander', 'executive', 'assessor', 'admin'] as const;
+const WRITER_ROLES = ['commander', 'assessor', 'executive', 'admin'] as const;
 
 function toRow(id: string, data: Record<string, unknown>): AssessmentRow {
   return { id, ...(data as Partial<RPLAssessmentDoc>) };
@@ -43,9 +43,9 @@ export async function GET(req: NextRequest) {
     if (rl) return rl;
 
     const db = getAdminDb();
-    // Non-executive callers (commander/assessor) only ever see their OWN queue.
+    // Privileged callers (executive/admin) see all; assessor/commander only ever see their OWN queue.
     const snap =
-      auth.role !== 'executive'
+      auth.role !== 'executive' && auth.role !== 'admin'
         ? await db.collection(RPL_ASSESSMENTS).where('assessorId', '==', auth.uid).get()
         : await db.collection(RPL_ASSESSMENTS).get();
 

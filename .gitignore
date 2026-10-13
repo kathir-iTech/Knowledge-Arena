@@ -82,3 +82,9 @@ node_modules/
 # local browser test profile + trace snapshots (regenerable, never share)
 .lighthouse-chrome/
 snapshot/
+
+# SIH-26242: generated design captures (regenerable via rpl-screenshots.spec.ts)
+screenshots-sih/
+
+# Firebase database emulator debug log (local runs only)
+database-debug.log

@@ -6,18 +6,21 @@ import { LogOut, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { isRplAdmin, isRplAssessor, canUseDeclare } from '@/lib/rpl/roles';
 import { CompassMarkSmall } from '@/components/rpl/CompassMark';
 import { Button } from '@/components/ui/button';
 
 // Prefix -> allowed roles. Anything NOT listed here is open to every valid
 // role (candidate included) — the lists below are deny-lists for the
 // higher-privilege surfaces.
-const EXECUTIVE_ONLY_PREFIXES = [
+// Canonical RPL equivalence (src/lib/rpl/roles.ts): admin == executive,
+// assessor == commander, candidate == gladiator. Guards accept BOTH vocabs.
+const ADMIN_ONLY_PREFIXES = [
   '/rpl/certify',
   '/rpl/forge',
 ];
 // Part C3: consistency reports are viewable by executive OR admin (the demo
-// admin account has no executive twin); certify/forge stay executive-only.
+// admin account has no executive twin); certify/forge are admin-only (both vocabs).
 const ADMIN_OR_EXECUTIVE_PREFIXES = ['/rpl/admin', '/rpl/consistency'];
 const ASSESSOR_PREFIXES = ['/rpl/assess', '/rpl/assessor'];
 // Part 1.5: the self-declaration wizard is for the worker declaring their own
@@ -26,23 +29,18 @@ const ASSESSOR_PREFIXES = ['/rpl/assess', '/rpl/assessor'];
 // Legacy Quorena roles are treated as candidates for RPL purposes (A1), so
 // they keep access.
 const SELF_DECLARATION_PREFIXES = ['/rpl/declare'];
-const WORKER_ROLES = ['candidate', 'executive', 'commander', 'gladiator'];
 
 function matchesPrefixes(pathname: string, prefixes: readonly string[]): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
-function roleAllowed(role: string, allowed: readonly string[]): boolean {
-  return allowed.includes(role);
-}
-
 /** Shared wrong-role decision for the effect (redirect) and the render (null). */
 function isBlockedForRole(pathname: string, role: string): boolean {
   return (
-    (matchesPrefixes(pathname, EXECUTIVE_ONLY_PREFIXES) && role !== 'executive') ||
-    (matchesPrefixes(pathname, ADMIN_OR_EXECUTIVE_PREFIXES) && !roleAllowed(role, ['executive', 'admin'])) ||
-    (matchesPrefixes(pathname, ASSESSOR_PREFIXES) && !roleAllowed(role, ['commander', 'executive', 'assessor'])) ||
-    (matchesPrefixes(pathname, SELF_DECLARATION_PREFIXES) && !roleAllowed(role, WORKER_ROLES))
+    (matchesPrefixes(pathname, ADMIN_ONLY_PREFIXES) && !isRplAdmin(role)) ||
+    (matchesPrefixes(pathname, ADMIN_OR_EXECUTIVE_PREFIXES) && !isRplAdmin(role)) ||
+    (matchesPrefixes(pathname, ASSESSOR_PREFIXES) && !isRplAssessor(role)) ||
+    (matchesPrefixes(pathname, SELF_DECLARATION_PREFIXES) && !canUseDeclare(role))
   );
 }
 
@@ -89,6 +87,9 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
         toast({
           title: 'Access redirected',
           description: `You don't have access to that page — returning to your workspace.`,
+          // Redirect explanations must outlive slow navigations/compiles so the
+          // user (and e2e) actually sees why they landed elsewhere.
+          duration: 10000,
         });
       }
       router.replace(home);

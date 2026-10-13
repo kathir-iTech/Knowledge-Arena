@@ -58,9 +58,8 @@ function kappaVariant(kappa: number | null): 'destructive' | 'warning' | 'succes
 }
 
 export default function RplAssessorPage() {
-  // Authoritative page-level guard (commander/executive/assessor; the global
-  // (rpl) layout guard also covers /rpl/assessor but this guard stays
-  // authoritative).
+  // Authoritative page-level guard: assessor/admin (both vocabs). Matches the
+  // global (rpl) layout guard + GET /api/rpl/assess.
   const { user, isLoading } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();
@@ -77,7 +76,7 @@ export default function RplAssessorPage() {
       router.replace('/login');
       return;
     }
-    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') {
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor' && user.role !== 'admin') {
       // Part 1.5: own workspace, never the Quorena landing.
       router.replace(getRoleHome(user.role));
     }
@@ -136,7 +135,7 @@ export default function RplAssessorPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') return;
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor' && user.role !== 'admin') return;
     void fetchAll();
   }, [user, fetchAll]);
 
@@ -167,7 +166,7 @@ export default function RplAssessorPage() {
     );
   }
 
-  if (!user || (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor')) {
+  if (!user || (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor' && user.role !== 'admin')) {
     return null;
   }
 

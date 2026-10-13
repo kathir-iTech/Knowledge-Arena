@@ -7,7 +7,7 @@ import type { AssessmentItem, RPLAssessmentDoc, RPLConsistencyDoc } from '@/lib/
 
 export const runtime = 'nodejs';
 
-// GET /api/rpl/assess/my-consistency — commander/assessor (own) or executive
+// GET /api/rpl/assess/my-consistency — assessor/commander (own) or admin
 // (?assessorId= to inspect).
 // Derives the target assessor's packIds from their submitted assessments, reads
 // rpl_consistency/{packId} keeping pairs involving them, and computes
@@ -49,7 +49,7 @@ function isValidScore(v: unknown): v is number {
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive', 'assessor']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive', 'assessor', 'admin']);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const requested = url.searchParams.get('assessorId');
     const targetAssessorId =
-      auth.role === 'executive' && requested && requested.trim()
+      (auth.role === 'executive' || auth.role === 'admin') && requested && requested.trim()
         ? requested.trim()
         : auth.uid;
 

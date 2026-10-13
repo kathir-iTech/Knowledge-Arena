@@ -17,6 +17,8 @@ interface CompetencyRadarProps {
 /**
  * SVG radar/spider chart for competency profiles.
  * Shows unit-by-unit mastery percentages.
+ * With fewer than 3 axes a radar polygon degenerates to a dot/line, so we
+ * render an honest bar list instead of a misleading single-dot chart.
  */
 export function CompetencyRadar({
   data,
@@ -25,6 +27,29 @@ export function CompetencyRadar({
   showLabels = true,
   levels = 5,
 }: CompetencyRadarProps) {
+  if (data.length < 3) {
+    return (
+      <div className={cn('w-full space-y-2', className)} role="img" aria-label="Competency scores">
+        {data.map((d) => (
+          <div key={d.axis} className="space-y-1">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="truncate text-muted-foreground">{d.axis}</span>
+              <span className="font-medium text-foreground">{Math.round(d.value)}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${Math.max(0, Math.min(100, d.value))}%` }}
+              />
+            </div>
+          </div>
+        ))}
+        {data.length === 0 && (
+          <p className="text-xs text-muted-foreground">No competency data yet.</p>
+        )}
+      </div>
+    );
+  }
   const center = size / 2;
   const maxRadius = center - 24;
   const axes = data.length;

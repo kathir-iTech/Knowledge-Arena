@@ -683,7 +683,9 @@ export default function RplAdminPage() {
                       key={row.assessorId}
                       className="grid grid-cols-[2fr_1fr_1fr_1fr] items-center gap-3 px-3 py-2.5 border-b border-border/20 last:border-0"
                     >
-                      <span className="text-sm font-medium font-mono truncate">{row.assessorId}</span>
+                      <span className="text-sm font-medium truncate" title={row.assessorId}>
+                        {row.assessorName ?? row.assessorId}
+                      </span>
                       <span className="text-sm font-semibold tabular-nums">{row.assessments}</span>
                       <span className="text-sm tabular-nums">
                         {row.avgAgreement === null ? 'n/a — needs 2+ assessors' : row.avgAgreement.toFixed(3)}

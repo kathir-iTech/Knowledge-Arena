@@ -44,7 +44,7 @@ const WORKFLOW_STEPS = [
     icon: Award,
     step: '5 · Certify',
     title: 'Profile + human sign-off',
-    text: 'An NSQF competency profile is generated. The recommendation is always PENDING ASSESSOR SIGN-OFF — the tool recommends, the assessor decides.',
+    text: 'An NSQF competency profile is generated. The recommendation is always PENDING ADMIN SIGN-OFF — the tool recommends, the admin decides.',
   },
 ];
 
@@ -189,7 +189,7 @@ export function LandingShowcases() {
         id="certify"
         eyebrow="Competency profile"
         title="The tool recommends, the assessor decides"
-        text="Every worker gets a unit-by-unit NSQF competency profile with mastery percentages and a knowledge-gap list. The certification recommendation always shows PENDING ASSESSOR SIGN-OFF — and sign-off requires an explicit executive confirmation, recorded with timestamp and UID."
+        text="Every worker gets a unit-by-unit NSQF competency profile with mastery percentages and a knowledge-gap list. The certification recommendation always shows PENDING ADMIN SIGN-OFF — and sign-off requires an explicit admin confirmation, recorded with timestamp and UID."
         reverse
       >
         <div className="relative mx-auto w-full max-w-lg">
@@ -200,7 +200,7 @@ export function LandingShowcases() {
                 <Radar className="h-4 w-4 text-accent" /> NSQF competency profile
               </p>
               <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold text-warning">
-                <BadgeCheck className="h-3 w-3" /> PENDING ASSESSOR SIGN-OFF
+                <BadgeCheck className="h-3 w-3" /> PENDING ADMIN SIGN-OFF
               </span>
             </div>
             <div className="mt-5 space-y-3">
@@ -217,7 +217,7 @@ export function LandingShowcases() {
               ))}
             </div>
             <p className="mt-4 border-t pt-3 text-[11px] leading-relaxed text-muted-foreground">
-              Certification is recommended from the profile — never auto-issued. The assessor signs, or the worker is referred for more evidence.
+              Certification is recommended from the profile — never auto-issued. The admin signs, or the worker is referred for more evidence.
             </p>
           </div>
         </div>
@@ -296,7 +296,7 @@ export function LandingFeatures() {
     { icon: Languages, title: 'AI-matched self-declaration', text: 'Workers describe experience in plain language; Gemini + TF-IDF maps it to the closest NCVET NSQF pack with matched units highlighted.' },
     { icon: ClipboardCheck, title: 'Per-criterion rubric', text: 'Every performance criterion scored 1–4. AI proposes a mark the assessor must explicitly accept, modify or reject — each change recorded.' },
     { icon: Scale, title: 'Live Cohen\u2019s \u03BA', text: 'Inter-assessor agreement recomputed after every assessment, with Landis & Koch interpretation, sample size, and admin alerts below 0.4.' },
-    { icon: Radar, title: 'NSQF competency profile', text: 'Unit-by-unit mastery with knowledge-gap list. Recommendations stay PENDING ASSESSOR SIGN-OFF until an executive confirms.' },
+    { icon: Radar, title: 'NSQF competency profile', text: 'Unit-by-unit mastery with knowledge-gap list. Recommendations stay PENDING ADMIN SIGN-OFF until an admin confirms.' },
     { icon: WifiOff, title: 'Offline-first', text: 'Declarations queue locally when connectivity drops and sync automatically on reconnect — built for rural and semi-urban assessment centres.' },
     { icon: History, title: 'Auditable by design', text: 'aiSuggestionUsed is stored per item, so AI-assisted and unassisted scores can be compared honestly. Every decision is reconstructable.' },
   ];

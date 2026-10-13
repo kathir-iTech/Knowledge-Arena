@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyFirebaseTokenWithRole } from '@/lib/verify-auth';
+import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
@@ -16,15 +16,15 @@ import type {
 
 export const runtime = 'nodejs';
 
-// POST /api/rpl/certify — executive-only certification sign-off.
+// POST /api/rpl/certify — admin-only certification sign-off (both vocabs).
 // Body: { workerId, packId, assessorNotes, decision: 'certify' | 'reassess' }.
 // The profile is recomputed server-side with the same lib as the profile GET
 // (never trusted from the client). The stored status comes ONLY from the
-// executive decision plus this signed write (executiveUid + signedAt) — the
+// admin decision plus this signed write (executiveUid + signedAt) — the
 // lib's draft recommendation is advisory text and can never auto-approve.
 export async function POST(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithRole(req, 'executive');
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['executive', 'admin']);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

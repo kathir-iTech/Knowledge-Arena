@@ -27,8 +27,8 @@ type EditablePack = Omit<RPLAssessmentPack, 'items'> & {
 };
 
 export default function RplForgePage() {
-  // Authoritative page-level guard (a peer agent builds (rpl)/rpl/layout.tsx
-  // in parallel; this guard stays authoritative).
+  // Authoritative page-level guard: admin-only (both vocabs). Matches the
+  // global (rpl) layout + POST /api/rpl/forge.
   const { user, isLoading } = useAuth();
   const { auth } = useFirebase();
 
@@ -50,13 +50,13 @@ export default function RplForgePage() {
     );
   }
   const role = user?.role;
-  if (!user || (role !== 'commander' && role !== 'executive')) {
+  if (!user || (role !== 'executive' && role !== 'admin')) {
     return (
       <main className="mx-auto max-w-3xl p-6">
         <Card>
           <CardHeader>
             <CardTitle>Access denied</CardTitle>
-            <CardDescription>Only commanders and executives can use the RPL Forge.</CardDescription>
+            <CardDescription>Only admins can use the RPL Forge.</CardDescription>
           </CardHeader>
           <CardContent>
             {/* FIX-3: this card was a dead end — no way back to the workspace. */}

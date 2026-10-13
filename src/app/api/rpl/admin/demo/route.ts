@@ -58,7 +58,7 @@ async function resolveIdentity(adminUid: string): Promise<DemoIdentity> {
 // POST /api/rpl/admin/demo — load (idempotent) the demo dataset.
 export async function POST(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['admin']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['executive', 'admin']);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
 // DELETE /api/rpl/admin/demo — remove ONLY docs flagged isDemoData.
 export async function DELETE(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['admin']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['executive', 'admin']);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

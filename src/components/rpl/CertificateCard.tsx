@@ -60,9 +60,9 @@ export function CertificateCard({
         {/* Right side - certificate details */}
         <div className="text-right">
           {/* FIX-W5: a pending preview must not claim "Certified / Issued" */}
-          <p className="mt-1 text-sm text-muted-foreground">{pendingSignOff ? 'Pending' : 'Certified'}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{pendingSignOff ? 'Pending sign-off' : 'Certified'}</p>
           <p className="mt-1 font-medium text-foreground">
-            {nqsfLevel} NSQF
+            NSQF Level {nqsfLevel}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             {pendingSignOff ? 'Not yet issued' : `Issued ${formattedDate}`}

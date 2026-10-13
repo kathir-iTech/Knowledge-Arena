@@ -132,12 +132,12 @@ test.describe('RPL end-to-end (emulator)', () => {
       await page.locator('#location').click();
       await page.getByRole('option', { name: 'Maharashtra', exact: true }).click();
       await page.locator('#emp-informal').click();
-      await page.getByRole('button', { name: 'Next' }).click();
+      await page.getByRole('button', { name: 'Next', exact: true }).click();
 
       // Step 2 — Experience declaration: Electrician pack must match.
       await expect(page.getByText('Electrician - General')).toBeVisible({ timeout: 30000 });
       await page.locator('#ELE\\/Q1301-ELE\\/N1301-can-do').click();
-      await page.getByRole('button', { name: 'Next' }).click();
+      await page.getByRole('button', { name: 'Next', exact: true }).click();
 
       // Step 3 — Evidence summary.
       const evidenceBox = page.getByLabel('Describe when you did this and where.');
@@ -145,7 +145,7 @@ test.describe('RPL end-to-end (emulator)', () => {
       await evidenceBox.fill(
         'Wired three homes in Pune under contractor Ramesh from 2021 to 2023.',
       );
-      await page.getByRole('button', { name: 'Next' }).click();
+      await page.getByRole('button', { name: 'Next', exact: true }).click();
 
       // Step 4 — Review + submit.
       await expect(page.getByText(/does not replace/)).toBeVisible({ timeout: 30000 });
@@ -220,7 +220,9 @@ test.describe('RPL end-to-end (emulator)', () => {
       await uiLogin(page, 'commander@test.local');
       await page.goto(BASE + '/rpl/assessor', { waitUntil: 'domcontentloaded' });
       await expect(page.getByText('Assessor Home')).toBeVisible({ timeout: 30000 });
-      await page.getByRole('link', { name: /Ruby/ }).first().click();
+      // Queue rows render workerName as text with an "Open scoring" link (href
+      // carries the assessment id) — click that link for the Ruby row.
+      await page.locator(`a[href$="/rpl/assess/${assessmentId}"]`).click();
       await page.waitForURL(`**/rpl/assess/${assessmentId}`, { timeout: 30000 });
 
       // Pre-scored criterion renders checked.
@@ -235,7 +237,9 @@ test.describe('RPL end-to-end (emulator)', () => {
 
       // Save as draft, reload, confirm preservation.
       await page.getByRole('button', { name: 'Save draft' }).click();
-      await expect(page.getByText('Draft saved.')).toBeVisible({ timeout: 30000 });
+      // Dev-server cold compile can make the first save slow; the save itself
+      // is confirmed 200 in the server log.
+      await expect(page.getByText('Draft saved.')).toBeVisible({ timeout: 90000 });
       await page.reload({ waitUntil: 'domcontentloaded' });
       await expect(page.locator('input[name="ELE/N1301::p0"][value="3"]')).toBeChecked({
         timeout: 30000,
@@ -253,9 +257,12 @@ test.describe('RPL end-to-end (emulator)', () => {
       });
       expect(listRes.ok).toBe(true);
       const listBody = (await listRes.json()) as {
-        assessments: { assessmentId?: string; status?: string }[];
+        assessments: { id?: string; assessmentId?: string; status?: string }[];
       };
-      const row = listBody.assessments.find((a) => a.assessmentId === assessmentId);
+      // List rows carry the doc id (`id`); some docs also store assessmentId.
+      const row = listBody.assessments.find(
+        (a) => a.id === assessmentId || a.assessmentId === assessmentId,
+      );
       expect(row?.status).toBe('submitted');
     });
   });

@@ -692,7 +692,7 @@ export default function RplDeclarePage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-base">{m.pack.title}</CardTitle>
                   <Badge variant="secondary">NSQF {m.pack.nsqfLevel}</Badge>
-                  {m.score > 0 && <Badge variant="outline">Match {m.score}</Badge>}
+                  {m.score > 0 && <Badge variant="outline">Relevance {m.score}%</Badge>}
                 </div>
                 <CardDescription>
                   {m.pack.id} · {m.pack.sector} · {m.pack.trade}

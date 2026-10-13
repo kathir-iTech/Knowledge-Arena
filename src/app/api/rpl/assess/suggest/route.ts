@@ -8,7 +8,7 @@ import { z } from 'genkit';
 
 export const runtime = 'nodejs';
 
-// AI score suggestion for one competency unit (Commander or Assessor).
+// AI score suggestion for one competency unit (Assessor/Admin, both vocabs).
 // Gemini is framed as an assistant whose suggestion the assessor must verify;
 // the UI renders the proposal greyed-out until the assessor accepts or edits it.
 // Honest failure: when Gemini fails or its output cannot be parsed we return a
@@ -101,7 +101,7 @@ function parseSuggestResponse(res: { output?: unknown; text?: string }): {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'assessor']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'assessor', 'executive', 'admin']);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).

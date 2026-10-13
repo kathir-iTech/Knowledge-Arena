@@ -36,11 +36,18 @@ function toEvidenceDoc(
   };
 }
 
-// POST /api/rpl/evidence — commander/executive/assessor.
+// POST /api/rpl/evidence — assessor/admin (any) + worker (own assessment only).
 // Body: { assessmentId, workerId, unitId, dataUrl, mimeType, sizeBytes }.
 export async function POST(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive', 'assessor']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, [
+      'commander',
+      'executive',
+      'assessor',
+      'admin',
+      'candidate',
+      'gladiator',
+    ]);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).
@@ -106,6 +113,13 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    // Worker roles (candidate/gladiator) may upload ONLY to their own assessment.
+    if (
+      (auth.role === 'candidate' || auth.role === 'gladiator') &&
+      assessment.workerId !== auth.uid
+    ) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const evRef = assessRef.collection('evidence').doc();
     const doc: EvidenceImageDoc = {
@@ -128,8 +142,8 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/rpl/evidence?assessmentId= — commander/executive/assessor any;
-// gladiator ONLY when the assessment's workerId == requester uid (never leak
+// GET /api/rpl/evidence?assessmentId= — assessor/admin any;
+// worker ONLY when the assessment's workerId == requester uid (never leak
 // others).
 export async function GET(req: NextRequest) {
   try {
@@ -137,7 +151,9 @@ export async function GET(req: NextRequest) {
       'commander',
       'executive',
       'assessor',
+      'admin',
       'gladiator',
+      'candidate',
     ]);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -164,7 +180,10 @@ export async function GET(req: NextRequest) {
 
     // Explicit privacy check: non-privileged callers see only their own worker record.
     const isPrivileged =
-      auth.role === 'commander' || auth.role === 'executive' || auth.role === 'assessor';
+      auth.role === 'commander' ||
+      auth.role === 'executive' ||
+      auth.role === 'assessor' ||
+      auth.role === 'admin';
     if (!isPrivileged && assessment.workerId !== auth.uid) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -187,10 +206,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// DELETE /api/rpl/evidence — commander/executive/assessor. Body: { assessmentId, imageId }.
+// DELETE /api/rpl/evidence — assessor/admin (both vocabs). Body: { assessmentId, imageId }.
 export async function DELETE(req: NextRequest) {
   try {
-    const auth = await verifyFirebaseTokenWithAnyRole(req, ['commander', 'executive', 'assessor']);
+    const auth = await verifyFirebaseTokenWithAnyRole(req, [
+      'commander',
+      'executive',
+      'assessor',
+      'admin',
+    ]);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // INLINE rate-limit config (do not touch Limits).

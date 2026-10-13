@@ -82,7 +82,8 @@ export async function GET(
     } catch {
       role = undefined;
     }
-    const isPrivileged = role === 'commander' || role === 'executive';
+    const isPrivileged =
+      role === 'commander' || role === 'executive' || role === 'assessor' || role === 'admin';
     if (!isPrivileged && caller.uid !== docId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

@@ -116,8 +116,8 @@ export default function RplAssessScoringPage() {
   // Dynamic-route params mirror src/app/executive/commanders/[uid]/page.tsx.
   const params = useParams<{ assessmentId: string }>();
   const assessmentId = params.assessmentId;
-  // Authoritative page-level guard (commander-or-executive; the global (rpl)
-  // layout guard also covers /rpl/assess* but this guard stays authoritative).
+  // Authoritative page-level guard: assessor/admin (both vocabs). Matches the
+  // global (rpl) layout guard + GET /api/rpl/assess/[assessmentId].
   const { user, isLoading } = useAuth();
   const { auth } = useFirebase();
   const router = useRouter();
@@ -144,7 +144,7 @@ export default function RplAssessScoringPage() {
       router.replace('/login');
       return;
     }
-    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') {
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor' && user.role !== 'admin') {
       // Part 1.5: wrong role returns to their own workspace, never `/`.
       // (Assessors score here too — they must NOT be redirected away.)
       router.replace(getRoleHome(user.role));
@@ -153,7 +153,7 @@ export default function RplAssessScoringPage() {
 
   useEffect(() => {
     if (isLoading || !user || !assessmentId) return;
-    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') return;
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor' && user.role !== 'admin') return;
     let cancelled = false;
     (async () => {
       try {
@@ -218,7 +218,7 @@ export default function RplAssessScoringPage() {
 
   useEffect(() => {
     if (isLoading || !user || !assessmentId || !pack) return;
-    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor') return;
+    if (user.role !== 'commander' && user.role !== 'executive' && user.role !== 'assessor' && user.role !== 'admin') return;
     let cancelled = false;
     (async () => {
       try {
@@ -482,14 +482,14 @@ export default function RplAssessScoringPage() {
     );
   }
   const role = user?.role;
-  if (!user || (role !== 'commander' && role !== 'executive' && role !== 'assessor')) {
+  if (!user || (role !== 'commander' && role !== 'executive' && role !== 'assessor' && role !== 'admin')) {
     return (
       <main className="mx-auto max-w-3xl p-6">
         <Card>
           <CardHeader>
             <CardTitle>Access denied</CardTitle>
             <CardDescription>
-              Only commanders, executives and assessors can score assessments.
+              Only assessors and admins can score assessments.
             </CardDescription>
           </CardHeader>
           <CardContent>

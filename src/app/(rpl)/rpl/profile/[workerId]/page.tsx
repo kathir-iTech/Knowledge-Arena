@@ -152,9 +152,9 @@ export default function RplProfilePage() {
   // B2: the route param is either the caller's own uid OR a human reference
   // code (so URLs never leak the UID). A reference code can't be compared to
   // user.id client-side, so those requests fall through to the API, which
-  // resolves the code and enforces worker-sees-own vs commander/executive.
+  // resolves the code and enforces worker-sees-own vs assessor/admin.
   const paramIsCode = isReferenceCode(workerId);
-  // Authoritative page-level guard (worker-own / commander / executive; the
+  // Authoritative page-level guard (worker-own / assessor / admin, both vocabs;
   // global (rpl) layout guard also covers /rpl/profile* for signed-in users
   // but this guard stays authoritative).
   const { user, isLoading } = useAuth();
@@ -171,7 +171,11 @@ export default function RplProfilePage() {
       router.replace('/login');
       return;
     }
-    const privileged = user.role === 'commander' || user.role === 'executive';
+    const privileged =
+      user.role === 'commander' ||
+      user.role === 'executive' ||
+      user.role === 'assessor' ||
+      user.role === 'admin';
     if (!privileged && user.id !== workerId && !paramIsCode) {
       // Part 1.5: a signed-in visitor without access goes to their OWN
       // workspace, never the Quorena landing.
@@ -181,7 +185,11 @@ export default function RplProfilePage() {
 
   useEffect(() => {
     if (isLoading || !user || !workerId) return;
-    const privileged = user.role === 'commander' || user.role === 'executive';
+    const privileged =
+      user.role === 'commander' ||
+      user.role === 'executive' ||
+      user.role === 'assessor' ||
+      user.role === 'admin';
     if (!privileged && user.id !== workerId && !paramIsCode) return;
     let cancelled = false;
     (async () => {
@@ -233,7 +241,12 @@ export default function RplProfilePage() {
     );
   }
 
-  const privileged = user && (user.role === 'commander' || user.role === 'executive');
+  const privileged =
+    user &&
+    (user.role === 'commander' ||
+      user.role === 'executive' ||
+      user.role === 'assessor' ||
+      user.role === 'admin');
   if (!user || (!privileged && user.id !== workerId && !paramIsCode)) {
     return (
       <main className="mx-auto max-w-3xl p-6">
@@ -449,10 +462,10 @@ export default function RplProfilePage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <Badge variant="warning">Awaiting assessor sign-off</Badge>
+            <Badge variant="warning">Awaiting admin sign-off</Badge>
             <p className="mt-2 text-sm text-muted-foreground">
               This recommendation is advisory only. No certificate has been issued — final
-              certification requires executive sign-off.
+              certification requires admin sign-off.
             </p>
           </div>
           {recommendation.rationale ? (

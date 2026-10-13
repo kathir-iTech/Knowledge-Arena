@@ -313,6 +313,8 @@ export interface ActivityEvent {
 
 export interface AssessorLeaderboardRow {
   assessorId: string;
+  /** Human display name when resolvable (users collection); omitted otherwise. */
+  assessorName?: string;
   assessments: number;
   avgAgreement: number | null;
   trend: 'improving' | 'declining' | 'stable';

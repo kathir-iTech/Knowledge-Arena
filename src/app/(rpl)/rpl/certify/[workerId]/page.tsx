@@ -64,14 +64,14 @@ export default function RplCertifyPage() {
       router.replace('/login');
       return;
     }
-    if (user.role !== 'executive') {
+    if (user.role !== 'executive' && user.role !== 'admin') {
       // Part 1.5: own workspace, never the Quorena landing.
       router.replace(getRoleHome(user.role));
     }
   }, [user, isLoading, router]);
 
   useEffect(() => {
-    if (isLoading || !user || user.role !== 'executive' || !workerId) return;
+    if (isLoading || !user || (user.role !== 'executive' && user.role !== 'admin') || !workerId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -158,7 +158,7 @@ export default function RplCertifyPage() {
     );
   }
 
-  if (!user || user.role !== 'executive') {
+  if (!user || (user.role !== 'executive' && user.role !== 'admin')) {
     return null;
   }
 

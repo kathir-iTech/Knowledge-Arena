@@ -226,6 +226,14 @@
   transform: translateY(0);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 .accordion-trigger[data-state="open"] .accordion-chevron {
   transform: rotate(180deg);
 }

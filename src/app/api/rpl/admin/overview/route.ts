@@ -107,11 +107,46 @@ export async function GET(req: NextRequest) {
 
     const submitted = submittedDocs.map((d) => ({ id: d.id, data: asRecord(d.data()) }));
 
-    const consistencyDocs = consistencySnap.docs.map((d) => ({
-      packId: d.id,
-      data: asRecord(d.data()),
-    }));
+    const consistencyDocs = consistencySnap.docs.map((d) => {
+      const data = asRecord(d.data());
+      // Doc IDs are sanitized (ELE/Q1301 -> ELE_Q1301); the canonical pack
+      // code lives in the packId FIELD — key by that so pack lookups hit.
+      return { packId: nonEmptyString(data.packId) ?? d.id, data };
+    });
     const consistencyByPack = new Map(consistencyDocs.map((c) => [c.packId, c.data]));
+
+    // Display names for assessor UIDs (judges see names, not raw UIDs).
+    // One batched read of users/{uid}; unknown IDs fall back to the raw UID.
+    const nameByUid = new Map<string, string>();
+    {
+      const ids = new Set<string>();
+      for (const s of submitted) {
+        const aid = nonEmptyString(s.data.assessorId);
+        if (aid) ids.add(aid);
+      }
+      for (const { data } of consistencyDocs) {
+        const pairs: unknown[] = Array.isArray(data.assessorPairs) ? data.assessorPairs : [];
+        for (const raw of pairs) {
+          const pair = asRecord(raw);
+          for (const id of [nonEmptyString(pair.assessorA), nonEmptyString(pair.assessorB)]) {
+            if (id) ids.add(id);
+          }
+        }
+      }
+      const refs = [...ids].slice(0, 100).map((id) => db.collection('users').doc(id));
+      if (refs.length > 0) {
+        const snaps = await db.getAll(...refs).catch(() => []);
+        for (const snap of snaps) {
+          if (!snap.exists) continue;
+          const data = asRecord(snap.data());
+          const name = nonEmptyString(data.name) ?? nonEmptyString(data.email)?.split('@')[0] ?? null;
+          if (name) nameByUid.set(snap.id, name);
+        }
+      }
+    }
+    function displayName(uid: string): string {
+      return nameByUid.get(uid) ?? uid;
+    }
 
     const kappaValues: number[] = [];
     for (const { data } of consistencyDocs) {
@@ -177,7 +212,7 @@ export async function GET(req: NextRequest) {
       const assessorId = nonEmptyString(data.assessorId) ?? 'unknown assessor';
       events.push({
         type: 'assessment',
-        message: `Assessment submitted for ${packId} by ${assessorId}`,
+        message: `Assessment submitted for ${packId} by ${displayName(assessorId)}`,
         at,
         ref: d.id,
       });
@@ -251,7 +286,7 @@ export async function GET(req: NextRequest) {
           if (latest < avgAgreement - 0.1) trend = 'declining';
           else if (latest > avgAgreement + 0.1) trend = 'improving';
         }
-        return { assessorId, assessments: acc.assessments, avgAgreement, trend };
+        return { assessorId, assessorName: nameByUid.get(assessorId), assessments: acc.assessments, avgAgreement, trend };
       })
       .sort((x, y) => y.assessments - x.assessments || x.assessorId.localeCompare(y.assessorId));
 
