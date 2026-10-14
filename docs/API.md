@@ -46,7 +46,7 @@ Check if an action is rate-limited before attempting it.
 ```json
 {
   "type": "login",       // "login" | "signup"
-  "identifier": "user@example.com"  // email for login, optional
+  "identifier": "user@rplcompass.test"  // email for login, optional
 }
 ```
 
@@ -76,8 +76,8 @@ Create a new Commander user.
 **Request Body:**
 ```json
 {
-  "email": "commander@example.com",
-  "password": "securepass123",
+  "email": "commander@rplcompass.test",
+  "password": "<password>",
   "displayName": "Commander Name"
 }
 ```
@@ -86,7 +86,7 @@ Create a new Commander user.
 ```json
 {
   "uid": "abc123...",
-  "email": "commander@example.com",
+  "email": "commander@rplcompass.test",
   "displayName": "Commander Name"
 }
 ```
@@ -109,7 +109,7 @@ List users filtered by role.
   "users": [
     {
       "uid": "abc123",
-      "email": "user@example.com",
+      "email": "user@rplcompass.test",
       "displayName": "User Name",
       "role": "commander",
       "disabled": false,
@@ -140,7 +140,7 @@ Update or disable a user.
 
 **Request Body (reset password):**
 ```json
-{ "uid": "abc123", "resetPassword": true, "password": "newpass123" }
+{ "uid": "abc123", "resetPassword": true, "password": "<new-password>" }
 ```
 
 **Status codes:** `200` Success, `400` Missing uid/invalid input, `401` Unauthorized, `403` Cannot modify executive accounts, `404` User not found
@@ -252,7 +252,7 @@ Get the authenticated executive's profile with recent activity.
 **Response `200`:**
 ```json
 {
-  "profile": { "uid": "...", "name": "Admin", "email": "admin@example.com", "avatar": "🤖", "role": "executive", "lastLogin": "...", "createdAt": "...", "lastActivity": 1700000000000, "actionCount": 42 },
+  "profile": { "uid": "...", "name": "Admin", "email": "admin@rplcompass.test", "avatar": "🤖", "role": "executive", "lastLogin": "...", "createdAt": "...", "lastActivity": 1700000000000, "actionCount": 42 },
   "recentActivity": [{ "id": "...", "action": "profile_updated", "target": "...", "timestamp": 1700000000000 }]
 }
 ```
@@ -270,7 +270,7 @@ Update profile (name, avatar, password).
 {
   "name": "New Name",
   "avatar": "🦸",
-  "password": "newpassword123"
+  "password": "<new-password>"
 }
 ```
 
@@ -330,7 +330,7 @@ Global search across users, questions, battles, audit logs, conversations, and a
 ```json
 {
   "results": [
-    { "type": "Commander", "id": "abc123", "title": "John Doe", "subtitle": "commander · john@example.com", "href": "/executive/commanders", "metadata": {} }
+    { "type": "Commander", "id": "abc123", "title": "John Doe", "subtitle": "commander · john@rplcompass.test", "href": "/executive/commanders", "metadata": {} }
   ],
   "total": 12
 }
@@ -966,7 +966,7 @@ List active commanders for initiating conversations (with optional search).
 **Response `200`:**
 ```json
 {
-  "commanders": [{ "id": "uid", "name": "Commander Name", "email": "commander@example.com", "avatar": "🤖", "lastActive": 1700000000000 }]
+  "commanders": [{ "id": "uid", "name": "Commander Name", "email": "commander@rplcompass.test", "avatar": "🤖", "lastActive": 1700000000000 }]
 }
 ```
 

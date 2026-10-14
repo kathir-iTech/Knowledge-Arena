@@ -88,3 +88,6 @@ screenshots-sih/
 
 # Firebase database emulator debug log (local runs only)
 database-debug.log
+
+# SIH-26242 internal planning notes — local-only by design, never commit/push
+/sih-26242-rpl-assessment/

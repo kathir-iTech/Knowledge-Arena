@@ -29,7 +29,7 @@ The Firebase **client config** (project id, API key, app id, sender id) is embed
 
 ### 2.1 Project setup (one-time)
 
-1. Create/enable the Firebase project. Current config references `studio-4092189688-c74a7`; for a fresh project, update `src/firebase/config.ts` (projectId, appId, apiKey, messagingSenderId).
+1. Create/enable the Firebase project. Current config references your own Firebase project id; for a fresh project, update `src/firebase/config.ts` (projectId, appId, apiKey, messagingSenderId).
 2. **Authentication**: enable Email/Password and Google sign-in. Set the auth domain (custom domains supported via `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`).
 3. **Firestore**: deploy rules and indexes:
    ```bash
@@ -49,7 +49,7 @@ There is **no self-signup for staff**:
   ```bash
   npx tsx scripts/bootstrap-executive.ts
   ```
-- All staff accounts are subject to the force-password-change gate on first login. Emails ending in `@knowledgearena.app` are treated as staff (`STAFF_EMAIL_DOMAIN`).
+- All staff accounts are subject to the force-password-change gate on first login. Emails on the configured staff domain (`STAFF_EMAIL_DOMAIN`) are treated as staff.
 
 ---
 

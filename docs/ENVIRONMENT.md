@@ -16,8 +16,8 @@ Variables prefixed with `NEXT_PUBLIC_` are exposed to client-side code.
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `GEMINI_API_KEYS` | ✅ (recommended) | Comma-separated list of Gemini API keys from **different Google accounts** for automatic rotation/fallback via `src/ai/key-resolver.ts`. Each free-tier account contributes its own ~20 req/min quota, so 3 keys ≈ 3× capacity. The resolver round-robins, skips keys that hit 429 for Google's `retryDelay` (or 60s default), and fails fast with `ALL_GEMINI_KEYS_EXHAUSTED` if all are cooling (bounded 15s wait). Supports optional `scope` param for future per-client key assignment without call-site changes. | `AIzaSy...key1...,AIzaSy...key2...` |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | ✅ (fallback) | Single-key fallback (backward compat). If `GEMINI_API_KEYS` is unset, the resolver falls back to this var, then `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `GOOGLE_GENAI_API_KEY`. Single-key mode behaves exactly as before (no behavior change) — multi-key simply extends capacity. | `AIzaSy...` |
+| `GEMINI_API_KEYS` | ✅ (recommended) | Comma-separated list of Gemini API keys from **different Google accounts** for automatic rotation/fallback via `src/ai/key-resolver.ts`. Each free-tier account contributes its own ~20 req/min quota, so 3 keys ≈ 3× capacity. The resolver round-robins, skips keys that hit 429 for Google's `retryDelay` (or 60s default), and fails fast with `ALL_GEMINI_KEYS_EXHAUSTED` if all are cooling (bounded 15s wait). Supports optional `scope` param for future per-client key assignment without call-site changes. | `<gemini-key-1>,<gemini-key-2>` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | ✅ (fallback) | Single-key fallback (backward compat). If `GEMINI_API_KEYS` is unset, the resolver falls back to this var, then `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `GOOGLE_GENAI_API_KEY`. Single-key mode behaves exactly as before (no behavior change) — multi-key simply extends capacity. | `<gemini-key>` |
 
 **Where to get it:** [Google AI Studio](https://aistudio.google.com/app/apikey) → Create API key (one per Google account for multi-key).
 
@@ -31,7 +31,7 @@ Variables prefixed with `NEXT_PUBLIC_` are exposed to client-side code.
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `FIREBASE_SERVICE_ACCOUNT_KEY` | ✅ (production) | Firebase Admin SDK service account key. Full Firebase service account JSON, **minified to a single line**. When unset, falls back to Application Default Credentials (ADC), which works on Google Cloud Run, Cloud Functions, etc. | `{"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}` |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | ✅ (production) | Firebase Admin SDK service account key. Full Firebase service account JSON, **minified to a single line**. When unset, falls back to Application Default Credentials (ADC), which works on Google Cloud Run, Cloud Functions, etc. | A single-line JSON service-account document (contains a private key — never commit it) |
 
 **Where to get it:** Firebase Console → Project Settings → Service Accounts → Generate new private key → "Generate Key". Then minify the downloaded JSON to a single line.
 
@@ -74,7 +74,7 @@ Variables prefixed with `NEXT_PUBLIC_` are exposed to client-side code.
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | ❌ | Realtime Database URL for live battle presence (`presence/{quizId}/{uid}` via `getAdminRtdb()` / client). When unset, falls back to `https://studio-4092189688-c74a7-default-rtdb.firebaseio.com` (default instance). | `https://your-project-default-rtdb.firebaseio.com` |
+| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | ❌ | Realtime Database URL for live battle presence (`presence/{quizId}/{uid}` via `getAdminRtdb()` / client). When unset, falls back to the default RTDB instance for the configured project. | `https://your-project-default-rtdb.firebaseio.com` |
 | `FIREBASE_DATABASE_URL` | ❌ (script) | Server-side fallback used by `src/lib/firebase-admin.ts` (`process.env.FIREBASE_DATABASE_URL \|\| firebaseConfig.databaseURL`) and `scripts/wipe-to-clean-slate.mjs`. | `https://your-project-default-rtdb.firebaseio.com` |
 
 **Where to get it:** Firebase Console → Realtime Database → Data tab → URL shown at top (region-specific).
@@ -171,7 +171,7 @@ SIEM_WEBHOOK_URL=
 # ─── Firebase Auth ─────────────────────────────────────────────
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
-NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://studio-4092189688-c74a7-default-rtdb.firebaseio.com
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com
 
 # ─── Gladiator Email Domain Lock (optional) ────────────────────
 ALLOWED_GLADIATOR_EMAIL_DOMAIN=
@@ -185,7 +185,7 @@ RPL_ASSESSOR_EMAILS=
 # ─── Script-Only Variables ─────────────────────────────────────
 SERVICE_ACCOUNT_PATH=
 # EXECUTIVE_SEQ=001
-# EXECUTIVE_PASSWORD=1234567
+# EXECUTIVE_PASSWORD=<set-a-strong-password>
 # EXECUTIVE_NAME=
 
 # ─── Emulator (local dev, auto-set) ────────────────────────────

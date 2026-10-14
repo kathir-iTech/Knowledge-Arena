@@ -25,7 +25,7 @@ Edit `.env` and set the required variables (see [ENVIRONMENT.md](./ENVIRONMENT.m
 ## Step 3: Firebase Setup
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Create a project (or use existing `studio-4092189688-c74a7`)
+2. Create a project (or use your existing Firebase project)
 3. Enable **Authentication** > Sign-in method > Email/Password
 4. Enable **Cloud Firestore** > Create database (start in test mode, apply rules later)
 5. In Project Settings > General > Your apps > Web app, copy the config
@@ -63,7 +63,7 @@ Open [http://localhost:3000](http://localhost:3000).
 1. The platform uses three roles: **Executive** (admin), **Commander** (quiz creator/host), **Gladiator** (participant)
 2. Gladiators self-register with any email and are assigned the `gladiator` role
 3. Commander and Executive accounts are provisioned by an existing Executive (or the first Executive via the admin API) — there is no public self-signup for privileged roles
-4. Emails ending in `@knowledgearena.app` are treated as staff accounts (see `STAFF_EMAIL_DOMAIN` in `src/lib/constants.ts`)
+4. Emails on the configured staff domain (`STAFF_EMAIL_DOMAIN` in `src/lib/constants.ts`) are treated as staff accounts
 
 ## AI Features (Optional)
 

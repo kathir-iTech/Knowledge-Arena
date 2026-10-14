@@ -1,278 +1,180 @@
-# Quorena ⚔️
+# RPL Compass
 
-> **The ultimate AI-powered quiz battleground. Create, compete, and conquer.**
+**SIH-26242 — AI-assisted Recognition of Prior Learning (RPL) assessment platform**
 
-Quorena is a real-time multiplayer quiz platform where educators generate AI-powered quizzes from PDFs and students compete in live battles. Built with Next.js, Firebase, and Google Gemini AI.
----
+RPL Compass helps assessors certify the skills Indian workers already have on the
+job, without making them sit a course again. It structures the assessment,
+records every step, and — most importantly — **measures how much two assessors
+agree** with each other, so low agreement is detected and flagged instead of
+quietly shipping a certificate.
 
-## Features ✨
+**Core idea: AI proposes, humans decide.** AI can suggest a match or a score;
+a human assessor always makes the decision and a human admin signs the
+certificate. The system audits whether the humans agree with each other
+(Cohen's weighted kappa) and raises an alert when they do not.
 
-- **AI PDF Forge** — Generate intelligent multiple-choice quizzes from any PDF using Google Gemini AI. Select difficulty and question count; the AI extracts key concepts and crafts questions automatically.
-- **Real-Time Battles** — Compete live with opponents. Questions appear simultaneously on all screens; scores update in real-time via Firestore listeners.
-- **Role-Based Access** — Three tiers: **Executive** (admin/analytics), **Commander** (quiz creator/host), **Gladiator** (participant). Tailored dashboards and permissions for each role.
-- **Battle Room System** — Each quiz generates a unique 6-character room code with a shareable QR code. Gladiators join by entering the code.
-- **Live Scoring** — Correct answers score between a per-arena max and min (defaults 1000/100) with linear time decay for speed, plus streak bonuses and wrong/skip penalties. Scoring rules live in each arena's gated `quizzes/{id}/config/settings` document; see `computeCorrectScore` in `src/lib/battle-machine.ts`. Leaderboard updates live.
-- **Tab-Visibility Enforcement** — Gladiators who switch browser tabs during a battle are detected and can be blocked (anti-cheating).
-- **Smart Analytics** — Track performance with detailed per-quiz, per-student, and per-question insights. Export to CSV or HTML.
-- **Executive Workspace** — Central dashboard with system health monitoring, user management, audit logs, backup/restore, and platform settings.
-- **Commander Dashboard** — Create quizzes, manage battles, view participant stats, and send requests to Executive.
-- **Gladiator Profile** — View battle history, scores, accuracy stats, and join new battles via room code.
-- **Messaging System** — Direct conversations between Executives and Commanders with real-time updates, file attachments, and unread counts.
-- **Announcements** — Executives can broadcast announcements to all Commanders or target specific individuals.
-- **Notifications** — System-wide notification service for battle completion, new messages, requests, and system warnings.
-- **Audit Logging** — Every action is logged with actor, role, action type, target, and metadata. Filterable and paginated.
-- **Backup & Restore** — Full platform backup (users, quizzes, conversations, settings) with import/restore capability.
-- **Data Export** — Export users, questions, battles, and audit logs in CSV or JSON format.
-- **Rate Limiting** — Firestore-backed fixed-window rate limiter for login, signup, and AI API endpoints.
-- **File Attachments** — Secure file upload validation with MIME type, extension, and size checks.
-- **Password Management** — Force password change on first login; Executive can reset passwords.
-- **Cheating Detection** — Tab-switch violations tracked per participant; automated or manual blocking.
-- **Dark-Themed UI** — Deep-maroon theme (`theme-color: #8B1E2A`, `--primary: 15 68%`), smooth animations, and responsive layout.
+## The problem (SIH26242)
 
----
+Recognition of Prior Learning is slow, paper-heavy and inconsistent: two
+assessors can score the same worker very differently, and nobody notices. The
+problem statement (Ministry of Skill Development, SIH 2026) asks for an
+AI-assisted skill-assessment tool that makes RPL fair, fast and trustworthy.
+RPL Compass answers with a 5-step pipeline where agreement is measured, not
+assumed.
 
-## Tech Stack 🛠
+## The 5-step pipeline
+
+```
+Declare  →  Match  →  Score  →  Measure  →  Certify
+```
+
+| Step | What happens | Where |
+|---|---|---|
+| **Declare** | The worker declares their trade, experience and skills (EN/HI/TA), with optional evidence. Works offline; syncs when back online. | `/rpl/declare` |
+| **Match** | The declared skills are matched to an official NSQF qualification pack (AI proposes, with a local offline fallback matcher). | `/rpl/declare/result` |
+| **Score** | An assessor scores each criterion on a 1–4 rubric. AI can offer a *suggestion*; the assessor can ignore it, and the app records whether the suggestion was used (`aiSuggestionUsed`). | `/rpl/assess` |
+| **Measure** | Inter-assessor agreement is computed per qualification pack (Cohen's linear-weighted kappa, 95% CI, Landis & Koch band). κ < 0.4 raises an admin alert. | `/rpl/consistency/[packId]` |
+| **Certify** | An admin reviews the recomputed profile and signs off; the worker gets a certificate with a human-readable reference code. | `/rpl/certify/[workerId]` |
+
+## Roles
+
+| Role | Who | Home after login | Notes |
+|---|---|---|---|
+| **Candidate** | The worker being assessed | `/rpl` | Anyone can sign up. Sees only their own record. |
+| **Assessor** | Trained evaluator who scores candidates | `/rpl/assessor` | Granted **server-side** only (`RPL_ASSESSOR_EMAILS`). |
+| **Admin** | Programme officer monitoring agreement and signing certificates | `/rpl/admin` | Granted **server-side** only (`RPL_ADMIN_EMAILS`). |
+
+Role assignment is env-driven and enforced in three layers: client route
+guards, API route checks, and Firestore security rules. A self-signed-up user
+can never grant themselves assessor or admin.
+
+## Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | [Next.js 15](https://nextjs.org/) (App Router, Turbopack) |
-| Language | [TypeScript](https://www.typescriptlang.org/) (strict mode) |
-| Styling | [Tailwind CSS](https://tailwindcss.com/) v3 + `tailwind-merge` + `class-variance-authority` |
-| UI Components | [Radix UI](https://www.radix-ui.com/) primitives + [Lucide React](https://lucide.dev/) icons + [Recharts](https://recharts.org/) |
-| Forms | [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/) validation |
-| Backend / Auth | [Firebase](https://firebase.google.com/) (Auth, Firestore, Storage) |
-| Admin SDK | [firebase-admin](https://firebase.google.com/docs/admin/setup) (server-side) |
-| AI / Genkit | [Genkit](https://firebase.google.com/docs/genkit) + Gemini via `@genkit-ai/googleai` (model catalog in `src/config/gemini-models.ts`, default `gemini-2.5-flash-lite`; Forge generation chain `gemini-3.6-flash` → `gemini-3.5-flash`, overridable via platform settings) |
-| PDF Parsing | [pdfjs-dist](https://www.npmjs.com/package/pdfjs-dist) (browser-side text extraction in `src/lib/prepare-documents.ts`, with server-side fallback in `generate-quiz-pdf-flow.ts`) |
-| Testing | [Playwright](https://playwright.dev/) (E2E) |
-| Deployment | [Vercel](https://vercel.com/) (standalone output) |
+| Framework | Next.js 15 (App Router), React 19, TypeScript (strict) |
+| Styling / UI | Tailwind CSS v3, shadcn/Radix UI, Lucide icons, Recharts |
+| Auth / DB | Firebase Auth (email/password + Google popup) and Firestore, with a server session cookie |
+| AI | Genkit + Google Gemini (multi-key rotation, offline TF-IDF fallback) |
+| Offline | Service worker (scoped `/rpl/`) + IndexedDB queue that replays with a fresh ID token |
+| i18n | English, Hindi, Tamil (`src/lib/rpl/i18n.ts`) |
+| Tests | Playwright (E2E), Node test scripts (`scripts/test-*.mjs`) |
 
----
+## Run locally (with the Firebase emulators)
 
-## Architecture Overview 🏗
-
-Quorena follows a **hybrid architecture** combining server-rendered pages, client-side Firebase SDK for real-time data, and server-side API routes for admin operations.
-
-The Next.js 15 App Router serves as the backbone, with React Server Components for static content and Client Components for interactive real-time features. Authentication is handled client-side via Firebase Auth, with ID tokens verified server-side in API routes using the Firebase Admin SDK. Authorization is enforced at three layers: **client-side route guards** (redirects by role), **API route verification** (role-checked middleware), and **Firestore Security Rules**.
-
-All quiz-scoped data is organized under `quizzes/{quizId}` subcollections (questions, answer keys, participants, submissions), providing fast queries and natural data isolation. The AI PDF Forge pipeline uses Genkit to call Google Gemini with a multi-model fallback chain, retry logic, and JSON repair utilities. Real-time features like battle progression, messaging, and leaderboard updates leverage Firestore's `onSnapshot` listeners for instant state synchronization across clients.
-
----
-
-## Quick Start 🚀
-
-### Prerequisites
-
-- **Node.js** v20+ (LTS recommended)
-- **npm** v10+
-- **Firebase project** with Auth (Email/Password + Google), Firestore, and (optionally) Storage enabled
-- **Google AI API key** from [Google AI Studio](https://aistudio.google.com/app/apikey)
-
-### Installation
+Prerequisites: Node.js ≥ 22.13, npm.
 
 ```bash
-# Clone the repository
-git clone https://github.com/kathir-iTech/Knowledge-Arena.git
-cd Knowledge-Arena
-
-# Install dependencies
+# 1. Install dependencies
 npm install
 
-# Copy environment variables
+# 2. Copy the env template (names are documented below; keep values out of git)
 cp .env.example .env.local
 
-# Edit .env.local with your Firebase config and API keys
+# 3. Start the Firebase emulators — ALWAYS under the local demo project
+npx firebase emulators:start --project demo-quorena \
+  --import=./.firebase-emulator-data --export-on-exit=./.firebase-emulator-data
+
+# 4. In a second terminal: dev server wired to the emulators (port 3456)
+npx cross-env NEXT_PUBLIC_FIREBASE_EMULATOR=true \
+  FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+  FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+  FIREBASE_DATABASE_EMULATOR_HOST=127.0.0.1:9000 \
+  npx next dev --turbopack -p 3456
+
+# 5. (Optional) seed the demo data as admin
+npm run demo:seed
 ```
 
-### Run Development
+Open <http://localhost:3456/rpl>. Never point any of these commands at a real
+Firebase project — the scripts are emulator-only by design.
 
-```bash
-# Start the Next.js dev server
-npm run dev
+### Test accounts convention
 
-# (Optional) Start Genkit flow dev server
-npm run genkit:dev
-```
+Demo/test accounts use **fake emails ending in `@rplcompass.test`** — never a
+real personal address:
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+| Email | Role |
+|---|---|
+| `admin@rplcompass.test` | admin (via `RPL_ADMIN_EMAILS`) |
+| `assessor1@rplcompass.test` | assessor (via `RPL_ASSESSOR_EMAILS`) |
+| `assessor2@rplcompass.test` | assessor (via `RPL_ASSESSOR_EMAILS`) |
+| `candidate1@rplcompass.test` | candidate (default for sign-ups) |
 
-### Key Commands
+### Key commands
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Start Next.js dev server (Turbopack) |
-| `npm run build` | Production build |
-| `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
-| `npm run typecheck` | Run TypeScript type checking |
-| `npm run genkit:dev` | Start Genkit flow development UI |
-| `npm test` | Run Playwright E2E tests |
+| `npx firebase emulators:start --project demo-quorena …` | Start Auth + Firestore + RTDB emulators |
+| `npx next dev --turbopack -p 3456` | Dev server used by the test suites |
+| `npm run demo:seed` | Seed the demo dataset (emulator-only) |
+| `npm run lint` / `npm run typecheck` | ESLint / TypeScript check |
+| `npx playwright test` | Playwright suites in `tests/` |
+| `node scripts/test-kappa.mjs` | κ maths unit tests |
+| `node scripts/test-i18n.mjs` | i18n integrity tests (EN/HI/TA) |
 
----
+## Environment variables
 
-## SIH-26242 — RPL Compass Track 🧭
+Names only — values live in `.env.local` / hosting secrets and are never
+committed. Full reference: [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 
-This repository also ships **RPL Compass**, the SIH-26242 Recognition of Prior
-Learning (RPL) track. It is an **additive** feature set served under `/rpl` and
-is intended to run against its **own Firebase project** — *not* the shared
-Quorena production project. Legacy Quorena-only routes are quarantined for
-RPL-track users (they redirect to `/rpl` or `/login`).
+| Variable | Used for |
+|---|---|
+| `RPL_ADMIN_EMAILS` | Comma-separated emails granted the admin role at session mint |
+| `RPL_ASSESSOR_EMAILS` | Comma-separated emails granted the assessor role |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials (server only) |
+| `SERVICE_ACCOUNT_PATH` | Alternative: path to an Admin SDK credentials file |
+| `GEMINI_API_KEYS` | Comma-separated Gemini keys (rotation + quota cooldown) |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Single-key Gemini fallback |
+| `GEMINI_API_KEY` | Legacy single-key fallback |
+| `CRON_SECRET` | Bearer guard for `/api/cron/*` endpoints |
+| `SIEM_WEBHOOK_URL` | Optional security telemetry export |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase Auth domain |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase Storage bucket |
+| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | Realtime Database URL |
+| `NEXT_PUBLIC_FIREBASE_EMULATOR` | Set to `true` only when running against emulators |
+| `ALLOWED_GLADIATOR_EMAIL_DOMAIN` / `NEXT_PUBLIC_ALLOWED_GLADIATOR_EMAIL_DOMAIN` | Sign-up domain restriction |
 
-The RPL flow: a candidate **declares** prior experience → the app **matches**
-NSQF qualification packs → an assessor **scores** rubric items → inter-assessor
-agreement is **measured** with linear-weighted Cohen's kappa → an executive
-**certifies**. AI only *proposes* scores; a human assessor always decides.
+Server-only variables must never be prefixed with `NEXT_PUBLIC_`.
 
-### Demo accounts to create
+## Status (honest, this branch)
 
-Create these four accounts (Firebase Auth, Email/Password; email verification is
-not required) in the RPL Firebase project. Use **fake** `@rplcompass.test`
-emails — never a real personal Google account — and choose your own password
-(keep it out of the repo and any slide deck).
+**Verified locally against the emulators** (Playwright suites in `tests/`):
+login/session chain and role redirects; candidate declare → result (reference
+code, matched pack); assessor scoring end to end; admin demo-data load with
+κ computed from the seeded ratings (ELE/Q1301 computes **κ = 0.3846, "Fair"**
+— the low-agreement alert fires, which is the point of the demo); access
+control (candidates cannot read other profiles or admin APIs).
 
-| Email | Role (via env, below) | Purpose |
-|---|---|---|
-| `admin@rplcompass.test` | `admin` | Admin overview + **Load demo data** button |
-| `assessor1@rplcompass.test` | `assessor` | First rater in the two-assessor pairs |
-| `assessor2@rplcompass.test` | `assessor` | Second rater (needed for kappa) |
-| `candidate1@rplcompass.test` | `candidate` (default) | Primary demo candidate (Suresh Kumar) |
+**Built but not fully verified:** evidence upload, certification sign-off
+click-through, AI suggestion endpoint against live Gemini keys, service-worker
+offline replay in a real browser, preview-deployment clicks.
 
-New sign-ups default to the `candidate` role. `admin` / `assessor` are granted
-**server-side** from the environment variables below — they can never be
-self-assigned from the client.
-
-### RPL environment variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `RPL_ADMIN_EMAILS` | ✅ (RPL) | Comma-separated emails granted the `admin` role at session mint (e.g. `admin@rplcompass.test`) |
-| `RPL_ASSESSOR_EMAILS` | ✅ (RPL) | Comma-separated emails granted the `assessor` role (e.g. `assessor1@rplcompass.test,assessor2@rplcompass.test`) |
-| `FIREBASE_SERVICE_ACCOUNT_KEY` | ✅ | Admin SDK key for the **RPL** Firebase project (see note below) |
-
-> These are server-only operator config — never prefix them with `NEXT_PUBLIC_`.
-> An email that already holds a Quorena role is refused with `ENV_ROLE_CONFLICT`
-> (the account is never silently rewritten).
-
-### Load / remove demo data
-
-Once the four accounts exist and you are signed in as `admin@rplcompass.test`,
-open **`/rpl/admin`** and use the **Demo data** card:
-
-- **Load demo data** — writes an idempotent demo dataset: 6 candidates, two
-  assessors rating the *same* criteria (so kappa is *computed*, never typed),
-  evidence images, drafts for the assessor queues, and one pending + one
-  certified profile. Re-running merges into the same batch.
-- **Remove demo data** — deletes **only** documents tagged `isDemoData: true`
-  (behind a confirmation dialog). Real records are never touched.
-
-Every demo document carries `isDemoData: true` and
-`demoBatchId: 'sih-26242-rpl-demo-v1'`, and affected surfaces display a
-**“Demo data”** badge.
-
-> The loader needs a live/emulator Firebase with Admin SDK access — it cannot be
-> exercised fully offline.
-
----
-
-## Project Structure 📁
-
-```
-knowledge-arena/
-├── src/
-│   ├── app/                    # Next.js App Router
-│   │   ├── api/                # API route handlers
-│   │   │   ├── admin/          # User management
-│   │   │   ├── audit/          # Audit logging
-│   │   │   ├── battle/         # Battle engine (start, activate, advance, end, ...)
-│   │   │   ├── commander/      # Commander dashboard & requests
-│   │   │   │   ├── decision-support/ # Shelved (410) — kept for future wiring
-│   │   │   ├── executive/      # Executive workspace, analytics, export, backup
-│   │   │   ├── gladiator/      # Gladiator dashboard
-│   │   │   ├── knowledge/      # Shelved (410) — kept for future wiring
-│   │   │   ├── messaging/      # Conversations, announcements
-│   │   │   ├── predictions/    # Shelved (410) — kept for future wiring
-│   │   │   └── rate-limit/     # Rate limit checking
-│   │   ├── battle/             # Battle room page
-│   │   ├── commander/          # Commander portal
-│   │   ├── create-quiz/        # Quiz creation page
-│   │   ├── executive/          # Executive portal
-│   │   ├── gladiator/          # Gladiator portal
-│   │   ├── layout.tsx          # Root layout
-│   │   ├── page.tsx            # Landing page
-│   │   └── globals.css         # Global styles
-│   ├── ai/                     # Genkit AI integration
-│   │   ├── engines/            # AI engine implementations
-│   │   ├── flows/              # Genkit flow definitions
-│   │   └── genkit.ts           # Genkit instance
-│   ├── components/             # React components
-│   │   ├── analytics/          # Analytics charts & tables
-│   │   ├── auth/               # Login form
-│   │   ├── dashboard/          # Role-specific dashboards
-│   │   ├── profile/            # Profile components
-│   │   ├── quiz/               # Quiz-related components
-│   │   └── ui/                 # Primitive UI components
-│   ├── config/                 # App configuration
-│   ├── contexts/               # React contexts (AuthContext)
-│   ├── firebase/               # Firebase client SDK setup
-│   ├── hooks/                  # Custom React hooks
-│   ├── lib/                    # Shared utilities & types
-│   ├── services/               # Business logic services
-│   ├── types/                  # TypeScript type declarations
-│   └── middleware.ts           # Next.js middleware
-├── tests/                      # Playwright E2E tests
-├── docs/                       # Architecture documentation
-├── scripts/                    # CLI utility scripts
-├── public/                     # Static assets
-├── .env.example                # Environment variable template
-├── next.config.ts              # Next.js configuration
-├── tailwind.config.ts          # Tailwind CSS configuration
-├── tsconfig.json               # TypeScript configuration
-├── firebase.json               # Firebase configuration
-├── firestore.rules             # Firestore security rules
-├── firestore.indexes.json      # Firestore composite indexes
-├── storage.rules               # Firebase Storage rules
-└── Dockerfile                  # Docker container definition
-```
-
----
-
-## Environment Variables
-
-See [ENVIRONMENT.md](./ENVIRONMENT.md) for the complete reference.
-
-| Variable | Required | Description |
-|---|---|---|
-| `GEMINI_API_KEYS` | ✅ (recommended) | Comma-separated Gemini API keys (one per Google account) — multi-key rotation |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | ✅ (fallback) | Single Gemini API key (used when `GEMINI_API_KEYS` is unset) |
-| `FIREBASE_SERVICE_ACCOUNT_KEY` | ✅ (prod) | Firebase Admin SDK private key (minified JSON) |
-| `CRON_SECRET` | ✅ (prod) | Bearer secret guarding `/api/cron/*` endpoints |
-| `SIEM_WEBHOOK_URL` | ❌ | Optional SIEM webhook for security telemetry export |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | ❌ | Custom auth domain for OAuth |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | ❌ | Firebase Storage bucket URL |
-
----
-
-## Deployment
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for the complete deployment guide.
-
-1. Set environment variables in Vercel project settings
-2. Deploy with `vercel --prod` or via GitHub integration
-3. The app uses `next.config.ts` with `output: 'standalone'` — compatible with Vercel, Docker, or Node.js hosting
-
----
+**Known caveats:**
+- Hindi and Tamil strings are **machine-drafted and pending native-speaker
+  review** (see `docs/i18n-review.md`); an in-app note says so.
+- Gemini free-tier quota can be exhausted; the app falls back to a local
+  matcher / shows "AI temporarily unavailable" instead of crashing.
+- The demo numbers are computed from **synthetic demo data** (badged as such
+  in the UI); no number in this app is hand-typed.
 
 ## Documentation
 
 | Document | Description |
 |---|---|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | System architecture, data model, auth flow, design decisions |
-| [API.md](./API.md) | Complete API endpoint reference |
-| [ENVIRONMENT.md](./ENVIRONMENT.md) | Environment variables reference |
-| [DEPLOYMENT.md](./DEPLOYMENT.md) | Deployment guide for Vercel |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture, data model, auth flow |
+| [`docs/API.md`](docs/API.md) | API endpoint reference |
+| [`docs/DATABASE.md`](docs/DATABASE.md) | Data model reference |
+| [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | Environment variables reference |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Security model |
+| [`docs/INSTALL.md`](docs/INSTALL.md) | Installation notes |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Deployment guide |
+| [`docs/PPT-CORRECTIONS.md`](docs/PPT-CORRECTIONS.md) | Slide claims vs. what the app computes |
 
----
+## Origin
 
-## License
-
-MIT
+Origin: built on the Quorena codebase. Quorena (formerly Knowledge Arena) is
+an earlier quiz-battle platform by the same team; RPL Compass reuses its
+stack — login, Firebase plumbing, AI integration and UI kit. The legacy
+Quorena screens are quarantined for RPL users (they redirect to `/rpl`), and
+RPL data is kept isolated from Quorena data. License: MIT.
