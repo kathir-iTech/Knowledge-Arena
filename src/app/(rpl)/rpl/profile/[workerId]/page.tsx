@@ -29,11 +29,13 @@ interface RadarUnit {
 }
 
 interface ProfileResponse {
-  profile: CompetencyProfile;
-  recommendation: RPLCertificationRecommendation & { requiresHumanSignoff?: boolean };
+  profile: CompetencyProfile | null;
+  recommendation: (RPLCertificationRecommendation & { requiresHumanSignoff?: boolean }) | null;
   evidence: EvidenceImageDoc[];
   /** B2: human reference code (never the UID) for display. */
   referenceCode?: string | null;
+  /** Set when the worker has no scored assessment yet (a normal empty state). */
+  reason?: 'no_assessment' | 'no_assessment_for_pack';
 }
 
 function unitBadgeVariant(status: UnitMastery): 'success' | 'warning' | 'destructive' {
@@ -164,6 +166,7 @@ export default function RplProfilePage() {
   const [data, setData] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [noProfileYet, setNoProfileYet] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
@@ -196,6 +199,7 @@ export default function RplProfilePage() {
       try {
         setLoading(true);
         setError(null);
+        setNoProfileYet(false);
         const token = await auth.currentUser?.getIdToken().catch(() => null);
         if (!token) {
           if (!cancelled) {
@@ -210,6 +214,14 @@ export default function RplProfilePage() {
         const body = (await res.json().catch(() => null)) as (ProfileResponse & {
           error?: string;
         }) | null;
+        if (res.ok && body && body.profile === null) {
+          // Normal "no data yet" state — not an error.
+          if (!cancelled) {
+            setNoProfileYet(true);
+            setLoading(false);
+          }
+          return;
+        }
         if (!res.ok || !body?.profile) {
           if (!cancelled) {
             setError(typeof body?.error === 'string' ? body.error : 'Failed to load profile.');
@@ -218,7 +230,12 @@ export default function RplProfilePage() {
           return;
         }
         if (!cancelled) {
-          setData({ profile: body.profile, recommendation: body.recommendation, evidence: body.evidence ?? [], referenceCode: body.referenceCode ?? null });
+          setData({
+            profile: body.profile,
+            recommendation: body.recommendation ?? null,
+            evidence: body.evidence ?? [],
+            referenceCode: body.referenceCode ?? null,
+          });
           setLoading(false);
         }
       } catch {
@@ -266,6 +283,33 @@ export default function RplProfilePage() {
     );
   }
 
+  if (noProfileYet) {
+    return (
+      <main className="mx-auto max-w-3xl p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>No competency profile yet</CardTitle>
+            <CardDescription>
+              {user.id === workerId
+                ? 'You have not been assessed yet. Declare your skills to start — your profile appears here once an assessor has scored your work.'
+                : 'This candidate has not been assessed yet, so there are no unit scores to show.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            {user.id === workerId ? (
+              <Button asChild>
+                <Link href="/rpl/declare">Start your declaration</Link>
+              </Button>
+            ) : null}
+            <Button asChild variant="outline">
+              <Link href={getRoleHome(user.role)}>Go to my workspace</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
   if (error || !data) {
     return (
       <main className="mx-auto max-w-3xl p-6">
@@ -279,7 +323,14 @@ export default function RplProfilePage() {
     );
   }
 
-  const { profile, recommendation } = data;
+  const { profile } = data;
+  if (!profile) return null;
+  const recommendation: RPLCertificationRecommendation = data.recommendation ?? {
+    workerId: profile.workerId,
+    status: 'pending_human_signoff',
+    requiredGapTraining: [],
+    rationale: '',
+  };
   const pack = NSQF_PACKS.find((p) => p.id === profile.packId);
   const unitEntries = Object.entries(profile.unitScores ?? {});
   const radarUnits: RadarUnit[] = unitEntries.map(([unitId, u]) => ({

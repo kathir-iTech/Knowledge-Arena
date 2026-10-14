@@ -401,7 +401,7 @@ export default function RplAdminPage() {
                 }
               >
                 <CardContent className="space-y-1 p-4">
-                  <p className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide">
                     <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                     <Badge variant={alert.severity === 'critical' ? 'destructive' : 'warning'}>
                       {alert.severity === 'critical' ? 'Critical' : 'Warning'}
@@ -410,7 +410,7 @@ export default function RplAdminPage() {
                       {alert.packId}
                       {alert.assessorId ? ` · ${alert.assessorId}` : ''}
                     </span>
-                  </p>
+                  </div>
                   <p className="text-sm">{alert.message}</p>
                   <p className="text-xs text-muted-foreground">{alert.recommendedAction}</p>
                 </CardContent>

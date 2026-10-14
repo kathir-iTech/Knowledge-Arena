@@ -92,10 +92,17 @@ export async function GET(
       .filter((a) => a.status === 'submitted' && a.isTemplate !== true)
       .sort((a, b) => (b.submittedAt ?? b.createdAt ?? 0) - (a.submittedAt ?? a.createdAt ?? 0));
     if (submitted.length === 0) {
-      return NextResponse.json(
-        { error: 'No submitted assessments found for worker' },
-        { status: 404 },
-      );
+      // Not an ERROR: the worker simply has no scored assessment yet. Returning
+      // 404 here made the browser log a console error on the (valid) own-profile
+      // page for every candidate who has not been assessed. Return an explicit
+      // "no data yet" payload the UI renders as a helpful empty state.
+      return NextResponse.json({
+        profile: null,
+        recommendation: null,
+        evidence: [],
+        referenceCode,
+        reason: 'no_assessment',
+      });
     }
 
     const { searchParams } = new URL(req.url);
@@ -112,10 +119,13 @@ export async function GET(
 
     const packAssessments = submitted.filter((a) => a.packId === packId);
     if (packAssessments.length === 0) {
-      return NextResponse.json(
-        { error: 'No submitted assessments found for worker and pack' },
-        { status: 404 },
-      );
+      return NextResponse.json({
+        profile: null,
+        recommendation: null,
+        evidence: [],
+        referenceCode,
+        reason: 'no_assessment_for_pack',
+      });
     }
     const newest = packAssessments[0];
 
