@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { isReferenceCode } from '@/lib/rpl/reference-code';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import { CompetencyRadar } from '@/components/rpl/CompetencyRadar';
 import { NsqfLadder } from '@/components/rpl/NsqfLadder';
 import { EvidenceTimeline } from '@/components/rpl/EvidenceTimeline';
@@ -224,7 +225,7 @@ export default function RplProfilePage() {
         }
         if (!res.ok || !body?.profile) {
           if (!cancelled) {
-            setError(typeof body?.error === 'string' ? body.error : 'Failed to load profile.');
+            setError(rplErrorMessage(res.status, body?.error, 'Failed to load profile.'));
             setLoading(false);
           }
           return;

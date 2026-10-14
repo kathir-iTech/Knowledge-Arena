@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import { CompassMark } from '@/components/rpl/CompassMark';
 import type { RPLAssessmentDoc } from '@/lib/rpl/types';
 
@@ -103,7 +104,7 @@ export default function RplAssessorPage() {
       } | null;
       if (!assessRes.ok || !assessBody || !Array.isArray(assessBody.assessments)) {
         setError(
-          typeof assessBody?.error === 'string' ? assessBody.error : 'Failed to load queue.',
+          rplErrorMessage(assessRes.status, assessBody?.error, 'Failed to load queue.'),
         );
         return;
       }

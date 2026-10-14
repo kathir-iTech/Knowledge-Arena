@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -99,11 +100,7 @@ export default function RplStatusPage() {
           typeof body.stage !== 'string'
         ) {
           setError(
-            typeof body?.error === 'string' && res.status !== 403 && res.status !== 404
-              ? body.error
-              : res.status === 404
-                ? 'No declaration found yet. Start your assessment to get your status.'
-                : 'Failed to load your RPL status.',
+            rplErrorMessage(res.status, body?.error, 'Failed to load your RPL status.'),
           );
         } else {
           setStatus(body);

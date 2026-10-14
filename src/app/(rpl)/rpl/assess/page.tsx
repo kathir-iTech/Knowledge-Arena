@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import type { RPLAssessmentDoc } from '@/lib/rpl/types';
 
 type AssessmentRow = Partial<RPLAssessmentDoc> & { id: string };
@@ -68,7 +69,7 @@ export default function RplAssessListPage() {
         } | null;
         if (!res.ok || !body || !Array.isArray(body.assessments)) {
           if (!cancelled) {
-            setError(typeof body?.error === 'string' ? body.error : 'Failed to load assessments.');
+            setError(rplErrorMessage(res.status, body?.error, 'Failed to load assessments.'));
             setLoading(false);
           }
           return;

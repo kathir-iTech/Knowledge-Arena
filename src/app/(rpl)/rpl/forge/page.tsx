@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import type { RPLAssessmentPack } from '@/lib/rpl/types';
 
 const MIN_PDF_BYTES = 50 * 1024;
@@ -50,7 +51,26 @@ export default function RplForgePage() {
     );
   }
   const role = user?.role;
-  if (!user || (role !== 'executive' && role !== 'admin')) {
+  if (!user) {
+    // Part 3: explicit 401 state — a signed-out visitor gets a sign-in
+    // affordance instead of a misleading "workspace" button.
+    return (
+      <main className="mx-auto max-w-3xl p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Sign in required</CardTitle>
+            <CardDescription>Please sign in to use the RPL Forge.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/login">Go to login</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+  if (role !== 'executive' && role !== 'admin') {
     return (
       <main className="mx-auto max-w-3xl p-6">
         <Card>
@@ -121,7 +141,7 @@ export default function RplForgePage() {
       } | null;
       if (!res.ok || !body?.pack) {
         setStatus('idle');
-        setError(typeof body?.error === 'string' ? body.error : 'Forge failed. Please try again.');
+        setError(rplErrorMessage(res.status, body?.error, 'Forge failed. Please try again.'));
         return;
       }
       setPack(body.pack);
@@ -166,7 +186,7 @@ export default function RplForgePage() {
       const body = (await res.json().catch(() => null)) as { templateId?: string; error?: string } | null;
       if (!res.ok || !body?.templateId) {
         setStatus('review');
-        setError(typeof body?.error === 'string' ? body.error : 'Save failed. Please try again.');
+        setError(rplErrorMessage(res.status, body?.error, 'Save failed. Please try again.'));
         return;
       }
       setTemplateId(body.templateId);

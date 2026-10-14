@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -342,7 +343,7 @@ export default function RplDeclarePage() {
       }
       if (!res.ok || !body?.referenceCode) {
         setError(
-          typeof body?.error === 'string' ? body.error : 'Submit failed. Please try again.',
+          rplErrorMessage(res.status, body?.error, 'Submit failed. Please try again.'),
         );
         setSubmitting(false);
         return;

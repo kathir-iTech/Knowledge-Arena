@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -103,6 +104,10 @@ export default function RplLandingPage() {
   const { auth } = useFirebase();
   const router = useRouter();
   const [checking, setChecking] = useState(false);
+  // Part 3: the "does this worker already have a status?" probe used to be
+  // swallowed silently. Keep the visitor on the landing page (that part is
+  // still correct) but TELL them when the probe failed or their session ended.
+  const [checkError, setCheckError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -112,21 +117,40 @@ export default function RplLandingPage() {
     let cancelled = false;
     async function check() {
       setChecking(true);
+      setCheckError(null);
       try {
         const token = await auth.currentUser?.getIdToken().catch(() => null);
-        if (!token || cancelled) return;
+        if (!token || cancelled) {
+          if (!token && !cancelled) setCheckError(rplErrorMessage(401, null, 'Please sign in again.'));
+          return;
+        }
         const res = await fetch(`/api/rpl/status/${encodeURIComponent(workerId)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         // B3: only redirect when a REAL status comes back. A 200
         // { status: 'none' } (own record, no declaration) must keep the worker
         // on the landing page so they can start their assessment.
-        const body = (await res.json().catch(() => null)) as { stage?: unknown } | null;
-        if (!cancelled && body && typeof body.stage === 'string') {
+        const body = (await res.json().catch(() => null)) as {
+          stage?: unknown;
+          error?: string;
+        } | null;
+        if (cancelled) return;
+        if (res.status === 401) {
+          setCheckError(rplErrorMessage(res.status, body?.error, 'Please sign in again.'));
+          return;
+        }
+        if (!res.ok) {
+          // Part 3: a failed probe must be VISIBLE (it used to be swallowed).
+          setCheckError(
+            rplErrorMessage(res.status, body?.error, 'We could not check your status. Please try again.'),
+          );
+          return;
+        }
+        if (body && typeof body.stage === 'string') {
           router.replace('/rpl/status');
         }
       } catch {
-        // Stay on landing on failure.
+        if (!cancelled) setCheckError('We could not check your status. Please try again.');
       } finally {
         if (!cancelled) setChecking(false);
       }
@@ -175,6 +199,11 @@ export default function RplLandingPage() {
               <Link href="/rpl/declare">Start your assessment</Link>
             </Button>
           )}
+          {!checking && checkError ? (
+            <p role="alert" className="text-center text-sm text-destructive">
+              {checkError}
+            </p>
+          ) : null}
           {!user && (
             <p className="text-center text-xs text-muted-foreground">
               New here? Sign in first — it takes a minute, then you can declare your skills.

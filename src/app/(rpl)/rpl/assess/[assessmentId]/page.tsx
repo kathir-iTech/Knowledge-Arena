@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { NSQF_PACKS, type NSQFQualificationPack } from '@/lib/rpl/nsqf-packs';
 import { knowledgeItemId, performanceItemId } from '@/lib/rpl/item-ids';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import type { AssessmentItem, EvidenceImageDoc, RPLAssessmentDoc, RPLWorkerDoc } from '@/lib/rpl/types';
 import { deleteEvidence, listEvidenceForUnit, uploadEvidenceImage } from '@/lib/rpl/evidence-upload';
 
@@ -179,7 +180,7 @@ export default function RplAssessScoringPage() {
         } | null;
         if (!res.ok || !body?.assessment) {
           if (!cancelled) {
-            setError(typeof body?.error === 'string' ? body.error : 'Failed to load assessment.');
+            setError(rplErrorMessage(res.status, body?.error, 'Failed to load assessment.'));
             setLoading(false);
           }
           return;
@@ -460,7 +461,7 @@ export default function RplAssessScoringPage() {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
         setSaving('idle');
-        setError(typeof body?.error === 'string' ? body.error : 'Save failed. Please try again.');
+        setError(rplErrorMessage(res.status, body?.error, 'Save failed. Please try again.'));
         return;
       }
       setSaving('idle');

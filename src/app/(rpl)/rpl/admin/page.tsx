@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { getRoleHome } from '@/lib/auth-redirect';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import { CompassMark } from '@/components/rpl/CompassMark';
 import { KappaGauge } from '@/components/rpl/KappaGauge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -152,7 +153,7 @@ export default function RplAdminPage() {
       });
       if (!res.ok) {
         const data: { error?: string } | null = await res.json().catch(() => null);
-        setError(data?.error ?? 'Failed to load admin overview.');
+        setError(rplErrorMessage(res.status, data?.error, 'Failed to load admin overview.'));
         return;
       }
       const data = (await res.json()) as AdminOverview;

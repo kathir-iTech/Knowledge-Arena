@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
+import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import {
   Card,
   CardContent,
@@ -229,11 +230,7 @@ function ResultContent() {
             setError('Declaration not found for this reference code.');
           } else if (!res.ok || !body || Array.isArray(body) || typeof body.stage !== 'string') {
             setError(
-              typeof body?.error === 'string' && res.status !== 403 && res.status !== 404
-                ? body.error
-                : res.status === 404
-                  ? 'Declaration not found for this reference code.'
-                  : 'Failed to load your declaration status.',
+              rplErrorMessage(res.status, body?.error, 'Failed to load your declaration status.'),
             );
           } else {
             setStatus(body);
