@@ -146,7 +146,13 @@ export function LandingShowcases() {
               <p className="flex items-center gap-2 font-headline text-sm font-bold">
                 <Scale className="h-4 w-4 text-primary" /> Inter-assessor agreement
               </p>
-              <span className="text-[10px] text-muted-foreground">ELE/Q1301 · N = 42 item-pairs</span>
+              {/* Part 7 (κ honesty): these are illustrative numbers, not a live
+                  report. Label them so they are never mistaken for a real pack's
+                  result — the live value for the seeded demo pack ELE/Q1301 is
+                  κ 0.38 "Fair". */}
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                Sample data
+              </span>
             </div>
             <div className="mt-4 space-y-2">
               {CONSISTENCY_ROWS.map((row, i) => (
@@ -178,7 +184,10 @@ export function LandingShowcases() {
                 ))}
               </div>
               <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                Small samples are flagged as preliminary — {'\u03BA'} is never shown as a lone number without N.
+                Illustrative sample data — not a live result. The live app computes
+                {'\u03BA'} from real assessor pairs on shared workers; small samples
+                are flagged as preliminary and {'\u03BA'} is never shown as a lone
+                number without N.
               </p>
             </div>
           </div>

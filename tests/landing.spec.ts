@@ -22,7 +22,9 @@ test.describe('Public Landing Page', () => {
     await expect(nav.locator('a:has-text("How it works")')).toBeVisible();
     await expect(nav.locator('a:has-text("Consistency")')).toBeVisible();
     await expect(nav.locator('a:has-text("Certification")')).toBeVisible();
-    await expect(nav.locator('a:has-text("Live Quizzes")')).toBeVisible();
+    await expect(nav.locator('a:has-text("Why RPL")')).toBeVisible();
+    // Quiz surfaces were removed from the public page (commit 0430077).
+    await expect(nav.locator('a:has-text("Live Quizzes")')).toHaveCount(0);
     await expect(nav.locator('a:has-text("Demo")')).toHaveCount(0);
     await expect(nav.locator('a:has-text("Team")')).toHaveCount(0);
     await expect(page.locator('a:has-text("Sign in")').first()).toBeVisible();
@@ -39,11 +41,17 @@ test.describe('Public Landing Page', () => {
     await expect(page.locator('h2:has-text("Disagreement, measured — not assumed")')).toBeVisible();
     await expect(page.locator('h2:has-text("The tool recommends, the assessor decides")')).toBeVisible();
 
-    // Quiz showcases (secondary, still present)
-    await expect(page.locator('h2:has-text("Live quizzes for the classroom")')).toBeVisible();
-    await expect(page.locator('h2:has-text("From PDF to quiz in minutes")')).toBeVisible();
-    await expect(page.locator('h2:has-text("Everyone plays at the same time")')).toBeVisible();
-    await expect(page.locator('h2:has-text("See how your class is doing")')).toBeVisible();
+    // Part 7 (κ honesty): the consistency mock is labelled as sample data, and
+    // is no longer attributed to a real pack as if it were a live result.
+    await expect(page.locator('text=Sample data').first()).toBeVisible();
+    await expect(page.locator('text=ELE/Q1301 · N = 42 item-pairs')).toHaveCount(0);
+    await expect(page.locator('text=Illustrative sample data — not a live result.')).toBeVisible();
+
+    // RPL showcases (the public page is RPL-first; quiz surfaces were removed
+    // from the unauthenticated landing in commit 0430077).
+    await expect(page.locator('h2:has-text("Every AI suggestion is recorded and auditable")')).toBeVisible();
+    await expect(page.locator('h2:has-text("Live quizzes for the classroom")')).toHaveCount(0);
+    await expect(page.locator('h2:has-text("From PDF to quiz in minutes")')).toHaveCount(0);
 
     // Features / CTA / Footer
     await expect(page.locator('h2:has-text("Built for certification integrity")')).toBeVisible();
