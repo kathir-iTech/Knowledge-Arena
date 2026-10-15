@@ -306,10 +306,24 @@ export default function RplAssessScoringPage() {
       const body = (await res.json().catch(() => null)) as {
         proposedScore?: unknown;
         rationale?: unknown;
+        available?: unknown;
+        reason?: unknown;
         error?: string;
       } | null;
       if (!res.ok || !body || !isScore(body.proposedScore)) {
-        setError(typeof body?.error === 'string' ? body.error : 'AI suggestion failed. Score manually.');
+        // Part 4: prefer the explicit { available:false, reason } contract so
+        // the assessor sees a calm, human notice instead of a raw code.
+        if (body?.available === false) {
+          const reason =
+            typeof body.reason === 'string' && body.reason.trim()
+              ? body.reason.trim()
+              : 'AI temporarily unavailable';
+          setError(`${reason} — score manually.`);
+        } else {
+          setError(
+            typeof body?.error === 'string' ? body.error : 'AI suggestion failed. Score manually.',
+          );
+        }
         return;
       }
       const suggestion: UnitSuggestion = {

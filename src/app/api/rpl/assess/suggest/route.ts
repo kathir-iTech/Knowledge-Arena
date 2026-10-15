@@ -12,7 +12,8 @@ export const runtime = 'nodejs';
 // Gemini is framed as an assistant whose suggestion the assessor must verify;
 // the UI renders the proposal greyed-out until the assessor accepts or edits it.
 // Honest failure: when Gemini fails or its output cannot be parsed we return a
-// real error status (502/504) with an error code — never a fabricated score.
+// real error status (502/504) with an error code and { available:false,
+// reason:'AI temporarily unavailable' } — never a fabricated score.
 
 const SUGGEST_TIMEOUT_MS = 30000;
 
@@ -153,13 +154,19 @@ export async function POST(req: NextRequest) {
         if (!parsed) throw new Error('SUGGEST_PARSE_FAILED');
         return parsed;
       });
-      return NextResponse.json(result);
+      return NextResponse.json({ ...result, available: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn('[RPL Suggest] Gemini failed:', message);
+      // Part 4: every failure path carries { available:false,
+      // reason:'AI temporarily unavailable' } in addition to the honest
+      // error/code, so the UI can render a calm "score manually" notice
+      // without pattern-matching on status codes.
+      const unavailable = { available: false, reason: 'AI temporarily unavailable' } as const;
       if (message.includes('SUGGEST_TIMEOUT')) {
         return NextResponse.json(
           {
+            ...unavailable,
             error: 'AI suggestion timed out — score manually.',
             code: 'AI_TIMEOUT',
           },
@@ -169,6 +176,7 @@ export async function POST(req: NextRequest) {
       if (message.includes('SUGGEST_PARSE_FAILED')) {
         return NextResponse.json(
           {
+            ...unavailable,
             error: 'AI suggestion could not be understood — score manually.',
             code: 'AI_PARSE_FAILED',
           },
@@ -177,6 +185,7 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json(
         {
+          ...unavailable,
           error: 'AI suggestion is unavailable — score manually.',
           code: 'AI_UNAVAILABLE',
         },

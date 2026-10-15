@@ -48,6 +48,11 @@ const en: Record<string, string> = {
   noSkillsMarked: 'Mark at least one skill as "I can do this" or "I have done this before" to continue.',
   tradeRequired: 'Trade and years of experience (0-60) are required before submitting.',
   skillRequired: 'Mark at least one skill as "I can do this" or "I have done this before" before submitting.',
+  /** Part 4 AI-fallback notes (additive; shown on the declare step) */
+  aiMatchNoteUnavailable:
+    'AI ranking is unavailable right now, so these are keyword matches. You can still continue.',
+  aiMatchNoteFailed:
+    'We could not rank the matches just now. Showing keyword matches — you can still continue.',
 };
 
 const hi: Record<string, string> = {
@@ -78,6 +83,11 @@ const hi: Record<string, string> = {
   noSkillsMarked: 'कम से कम एक कौशल "मैं इसे कर सकता हूँ" या "मैं पहले ऐसा कर चुका हूँ" के रूप में चिह्नित करें जारी रखने के लिए।',
   tradeRequired: 'घोषणा जमा करने से पहले व्यापार और 0-60 वर्षों का अनुभव आवश्यक है।',
   skillRequired: 'घोषणा जमा करने से पहले कम से कम एक कौशल "मैं इसे कर सकता हूँ" या "मैं पहले ऐसा कर चुका हूँ" के रूप में चिह्नित करें।',
+  // machine-drafted, needs native review
+  aiMatchNoteUnavailable:
+    'AI रैंकिंग अभी उपलब्ध नहीं है, इसलिए ये कीवर्ड मिलान हैं। आप आगे बढ़ सकते हैं।',
+  aiMatchNoteFailed:
+    'हम अभी मिलानों को रैंक नहीं कर सके। कीवर्ड मिलान दिखाए जा रहे हैं — आप आगे बढ़ सकते हैं।',
 };
 
 const ta: Record<string, string> = {
@@ -108,6 +118,10 @@ const ta: Record<string, string> = {
   tradeRequired: 'சமர்ப்பிக்கும் முன் தொழில் மற்றும் 0-60 அனுபவ வருடங்கள் தேவை.',  // placeholder
   skillRequired: 'சமர்ப்பிக்கும் முன் குறைந்தது ஒரு திறனை',  // placeholder
   submitting: 'சமர்ப்பிக்கப்படுகிறது...',  // placeholder
+  aiMatchNoteUnavailable:
+    'AI தரவரிசை இப்போது கிடைக்கவில்லை, எனவே இவை முக்கியசொல் பொருத்தங்கள். தொடரலாம்.',  // placeholder
+  aiMatchNoteFailed:
+    'பொருத்தங்களை இப்போது தரவரிசைப்படுத்த முடியவில்லை. முக்கியசொல் பொருத்தங்கள் காட்டப்படுகின்றன.',  // placeholder
 };
 
 // Active language, set by the provider page. Default to English.

@@ -43,6 +43,10 @@ const RplPackMatchSchema = z.object({
 const RplMatchingOutputSchema = z.object({
   matches: z.array(RplPackMatchSchema),
   aiUsed: z.boolean(),
+  // Part 4: explicit provenance so callers/UI never have to guess whether the
+  // ranking came from Gemini ('ai') or the deterministic keyword fallback
+  // ('local-fallback', also used when every Gemini key is quota-exhausted).
+  source: z.enum(['ai', 'local-fallback']),
 });
 export type RplMatchingOutput = z.infer<typeof RplMatchingOutputSchema>;
 
@@ -174,12 +178,20 @@ async function runRplMatching(input: RplMatchingInput): Promise<RplMatchingOutpu
       return parseMatchingResponse(res);
     });
     if (!matches || matches.length === 0) {
-      return { matches: fallbackMatches(trade, declarationText), aiUsed: false };
+      return {
+        matches: fallbackMatches(trade, declarationText),
+        aiUsed: false,
+        source: 'local-fallback',
+      };
     }
-    return { matches, aiUsed: true };
+    return { matches, aiUsed: true, source: 'ai' };
   } catch (err) {
     console.warn('[RPL Matching] Gemini failed, using keyword fallback:', err);
-    return { matches: fallbackMatches(trade, declarationText), aiUsed: false };
+    return {
+      matches: fallbackMatches(trade, declarationText),
+      aiUsed: false,
+      source: 'local-fallback',
+    };
   }
 }
 

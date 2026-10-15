@@ -301,7 +301,20 @@ export async function POST(req: NextRequest) {
     const result = await forgeRplPack({ pdfExtractedText: text, packId, trade: trade || resultTrade(packId) });
     return NextResponse.json({ pack: stripFlags(result), cached: result.cached });
   } catch (err) {
-    console.error('[RPL Forge] Error:', err instanceof Error ? err.message : String(err));
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[RPL Forge] Error:', message);
+    // Part 4: a Gemini quota/outage is surfaced as a clear retry-later error
+    // (503) — never as a silent synthetic fallback pack.
+    if (message.includes('RPL_FORGE_AI_QUOTA')) {
+      return NextResponse.json(
+        {
+          error:
+            'AI is temporarily unavailable — all Gemini keys are rate-limited. Please try again in a few minutes.',
+          code: 'AI_UNAVAILABLE',
+        },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

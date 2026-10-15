@@ -146,9 +146,17 @@ export async function POST(req: NextRequest) {
     }
     const validItems = items as AssessmentItem[];
 
-    // aiSuggestionUsed drives the kappa baseline split: true when the
-    // assessor accepted >= 1 AI-proposed score (any item aiAccepted == true).
-    const aiSuggestionUsed = validItems.some((item) => item.aiAccepted === true);
+    // aiSuggestionUsed drives the kappa baseline split: true only when the
+    // assessor ACCEPTED an AI-proposed score AND it was actually applied —
+    // i.e. the persisted rubricScore equals the aiProposedScore on at least
+    // one item. A stray/forged `aiAccepted:true` with a different (or missing)
+    // score does NOT count, so a client cannot inflate the assisted baseline.
+    const aiSuggestionUsed = validItems.some(
+      (item) =>
+        item.aiAccepted === true &&
+        typeof item.rubricScore === 'number' &&
+        item.aiProposedScore === item.rubricScore,
+    );
 
     const db = getAdminDb();
     const now = Date.now();

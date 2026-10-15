@@ -145,7 +145,17 @@ type ForgedItems = z.infer<typeof ForgeItemSchema>[];
 
 type ForgeModelResult =
   | { ok: true; units: ForgedUnits; items: ForgedItems; engine: string }
-  | { ok: false; errors: string[] };
+  | { ok: false; errors: string[]; quotaExhausted?: boolean };
+
+/** Part 4: treat the key-resolver's exhaustion errors as quota failures too. */
+function isQuotaLike(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    isResolverQuotaError(err) ||
+    msg.includes('ALL_GEMINI_KEYS_EXHAUSTED') ||
+    msg.includes('GEMINI_QUOTA_EXCEEDED')
+  );
+}
 
 function tryParseForgeJson(raw: string): { units: ForgedUnits; items: ForgedItems } | null {
   try {
@@ -335,14 +345,14 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
         break;
       }
 
-      if (isResolverQuotaError(err)) {
+      if (isQuotaLike(err)) {
         const delayMs = parseRetryDelayMs(err);
         if (apiKeyUsed) markKeyCooldown(apiKeyUsed, delayMs);
         const configured = getConfiguredKeys().length;
         if (configured > 1 && keyHistoryForModel.size >= configured) {
-          return { ok: false, errors };
+          return { ok: false, errors, quotaExhausted: true };
         }
-        if (attempt === MAX_RETRIES_PER_MODEL) return { ok: false, errors };
+        if (attempt === MAX_RETRIES_PER_MODEL) return { ok: false, errors, quotaExhausted: true };
         const keys = getConfiguredKeys();
         if (keys.length > 1 && keyHistoryForModel.size < keys.length) continue;
         await new Promise((r) => setTimeout(r, 1000 * attempt));
@@ -365,12 +375,19 @@ async function callModelWithRetry(promptText: string, modelName: string): Promis
 
 async function callGeminiWithFallback(promptText: string): Promise<ForgeModelResult> {
   const errors: string[] = [];
+  const failures: Array<{ quotaExhausted?: boolean }> = [];
   for (const modelName of RPL_FORGE_MODEL_CHAIN) {
     const result = await callModelWithRetry(promptText, modelName);
     if (result.ok) return result;
     errors.push(...result.errors);
+    failures.push(result);
   }
-  return { ok: false, errors };
+  // Only report a quota/exhaustion outage when EVERY model failed for that
+  // reason — an unparseable response from a live model is a parse failure, not
+  // an outage, and keeps the (parseError) pack fallback.
+  const quotaExhausted =
+    failures.length > 0 && failures.every((f) => f.quotaExhausted === true);
+  return { ok: false, errors, ...(quotaExhausted ? { quotaExhausted: true } : {}) };
 }
 
 /** Parse-failure fallback: the matching NSQF pack's real units, items: []. */
@@ -436,6 +453,14 @@ async function runRplForge(input: RplForgeInput): Promise<RplForgeFlowOutput> {
   const result = await callGeminiWithFallback(promptText);
 
   if (!result.ok) {
+    if (result.quotaExhausted) {
+      // Part 4: an outage is NOT a degraded-but-usable pack. Return a clear
+      // retry-later error instead of silently serving synthetic NSQF units.
+      console.error('[RplForge] All Gemini keys exhausted (quota):', result.errors.join(' || '));
+      throw new Error(
+        'RPL_FORGE_AI_QUOTA: AI capacity is temporarily exhausted — all configured Gemini keys are rate-limited. Please try again in a few minutes.',
+      );
+    }
     console.error('[RplForge] All models failed, using NSQF fallback:', result.errors.join(' || '));
     return fallbackPack(packId, trade, RPL_FORGE_MODEL_CHAIN.join(','));
   }

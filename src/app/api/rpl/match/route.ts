@@ -8,8 +8,12 @@ export const runtime = 'nodejs';
 
 // AI-assisted pack matching for a worker's free-text declaration.
 // Signed-in users only (any role — worker-facing). The flow itself falls back
-// to keyword matching when Gemini is unavailable, so this route always
-// returns a usable { matches, aiUsed } payload on success.
+// to keyword matching when Gemini is unavailable (including when ALL Gemini
+// keys are quota-exhausted), so this route always returns a usable
+// { matches, aiUsed, source } payload on success. `source` is 'ai' when Gemini
+// ranked the packs and 'local-fallback' when the deterministic keyword matcher
+// was used; the anti-fabrication contract is that 'local-fallback' is surfaced
+// to the UI, never presented as an AI result.
 
 export async function POST(req: NextRequest) {
   try {

@@ -396,12 +396,13 @@ export default function RplDeclarePage() {
           suggestedUnits?: string[];
         }[];
         aiUsed?: boolean;
+        source?: string;
       } | null;
       if (!res.ok || !matchBody || !Array.isArray(matchBody.matches)) {
         setAiMatchNote(t('aiMatchNoteFailed', lang));
         return;
       }
-      if (matchBody.aiUsed === false) {
+      if (matchBody.source === 'local-fallback' || matchBody.aiUsed === false) {
         setAiMatchNote(t('aiMatchNoteUnavailable', lang));
       }
       try {
