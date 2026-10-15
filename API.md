@@ -2,7 +2,7 @@
 
 All API endpoints return JSON responses unless otherwise noted. Authentication is via Firebase ID token in the `Authorization` header:
 
-```
+````
 Authorization: Bearer <firebase-id-token>
 ```
 
