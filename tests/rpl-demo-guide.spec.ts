@@ -34,15 +34,20 @@ test.describe('Part 8 — presenter demo guide', () => {
       await expect(page.getByTestId(`demo-guide-ready-${i}`)).toBeVisible();
     }
 
-    // Walkthrough: all seven steps render (text only — we do not click through).
+    // Walkthrough: all six steps render (text only — we do not click through).
     await expect(page.getByTestId('demo-guide-walkthrough')).toBeVisible();
-    for (let i = 1; i <= 7; i += 1) {
+    for (let i = 1; i <= 6; i += 1) {
       await expect(page.getByTestId(`demo-guide-step-${i}`)).toBeVisible();
     }
 
-    // The Electrician / Suresh Kumar story is the third step.
+    // The low-agreement story is the second step; Suresh Kumar is the third.
+    await expect(page.getByTestId('demo-guide-step-2')).toContainText('0.3846');
     await expect(page.getByTestId('demo-guide-step-3')).toContainText('Suresh Kumar');
-    await expect(page.getByTestId('demo-guide-step-3')).toContainText('0.3846');
+    // Every step carries a live readiness indicator computed from real data.
+    for (let i = 1; i <= 6; i += 1) {
+      await expect(page.getByTestId(`demo-guide-step-${i}-ready`)).toBeVisible();
+    }
+    await expect(page.getByTestId('demo-guide-recheck')).toBeVisible();
 
     // Admin-only controls.
     await expect(page.getByTestId('demo-guide-controls')).toBeVisible();
@@ -60,6 +65,43 @@ test.describe('Part 8 — presenter demo guide', () => {
       timeout: 60_000,
     });
     await expect(page.getByTestId('demo-guide-page')).toHaveCount(0);
+  });
+
+  test('after Load demo data, every walkthrough step shows Ready', async ({ page }) => {
+    const email = 'part8-guide-admin@rplcompass.test';
+    await ensureRoleUser(email, 'admin', 'Part 8 Guide Admin');
+    await signInViaUi(page, email);
+
+    await page.goto(BASE + '/rpl/admin/demo-guide', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('demo-guide-page')).toBeVisible({ timeout: 60_000 });
+
+    // Load the synthetic dataset, then re-check readiness against live data.
+    await page.getByTestId('demo-guide-load').click();
+    await expect(page.getByTestId('demo-guide-load-result')).toBeVisible({ timeout: 120_000 });
+    await page.getByTestId('demo-guide-recheck').click();
+
+    // Every step must report Ready with its live detail — computed from real
+    // API data, not static text.
+    for (let i = 1; i <= 6; i += 1) {
+      const badge = page.getByTestId(`demo-guide-step-${i}-ready`);
+      await expect(badge).toContainText('Ready', { timeout: 60_000 });
+    }
+
+    // Step 2 (consistency) names the recomputed κ and the fired κ<0.4 alert.
+    const step2 = page.getByTestId('demo-guide-step-2-ready');
+    await expect(step2).toContainText('0.3846');
+    await expect(step2).toContainText('alert fires');
+
+    // Steps 3 and 5 deep-link to Suresh Kumar's real worker record (resolved
+    // live from his reference code, never a hard-coded uid).
+    const sureshLink = page.getByTestId('demo-guide-step-3').getByRole('link', { name: 'Open' });
+    await expect(sureshLink).toHaveAttribute('href', /\/rpl\/profile\/.+/);
+    const certLink = page.getByTestId('demo-guide-step-5').getByRole('link', { name: 'Open' });
+    await expect(certLink).toHaveAttribute('href', /\/rpl\/certify\/.+/);
+
+    // Step 4 (assessor queue) and step 6 (offline note) report their live basis.
+    await expect(page.getByTestId('demo-guide-step-4-ready')).toContainText('queue');
+    await expect(page.getByTestId('demo-guide-step-6-ready')).toContainText('Declare route serves');
   });
 
   test('Load demo data then Reset demo round-trips through the endpoint', async ({ page }) => {
