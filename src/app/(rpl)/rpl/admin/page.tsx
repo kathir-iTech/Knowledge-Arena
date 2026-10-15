@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   AlertTriangle,
+  ArrowRight,
   Award,
   CheckCircle2,
   ClipboardCheck,
@@ -536,6 +537,14 @@ export default function RplAdminPage() {
                 )}
               </span>
             )}
+
+            {/* Part 8: jump to the judge-facing presenter walkthrough. */}
+            <Link
+              href="/rpl/admin/demo-guide"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              Open presenter demo guide <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </CardContent>
         </Card>
       )}
