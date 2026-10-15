@@ -188,6 +188,56 @@ for (const key of usedKeys) {
 }
 console.log(`  ok   key-leakage guard: ${usedKeys.size} literal key(s) all resolve`);
 
+// (D) placeholder parity: {name}-style tokens must match across languages.
+// There are currently NO placeholders in any string (verified: no `{` in a
+// translation value), so this passes vacuously — but it stays enforced so a
+// future `{count}` / `{name}` cannot ship in English only.
+const PLACEHOLDER = /\{[A-Za-z0-9_]+\}/g;
+for (const [key, enValue] of Object.entries(i18n.en)) {
+  const enTokens = new Set(String(enValue).match(PLACEHOLDER) ?? []);
+  for (const lang of ['hi', 'ta']) {
+    checked += 1;
+    const s = String(i18n[lang]?.[key] ?? '');
+    const localTokens = new Set(s.match(PLACEHOLDER) ?? []);
+    const missing = [...enTokens].filter((tk) => !localTokens.has(tk));
+    const extra = [...localTokens].filter((tk) => !enTokens.has(tk));
+    if (missing.length > 0 || extra.length > 0) {
+      failures += 1;
+      console.log(
+        `  FAIL ${lang}.${key}: placeholder mismatch (missing ${JSON.stringify(missing)}, extra ${JSON.stringify(extra)})`,
+      );
+    }
+  }
+}
+console.log('  ok   placeholder parity across en/hi/ta');
+
+// (E) mixed-script words: a single whitespace-separated token must not mix
+// letters from two scripts (e.g. Latin "Rank" + Devanagari "िंग" glued as
+// one token). Whole-token loanwords are allowed ("AI" in the Hindi/Tamil AI
+// notes is one Latin-only token) — only intra-token mixing fails.
+const LATIN = /[A-Za-z]/;
+const DEVANAGARI = /[\u0900-\u097F]/;
+const TAMIL = /[\u0B80-\u0BFF]/;
+function scriptsInToken(token) {
+  const scripts = new Set();
+  if (LATIN.test(token)) scripts.add('Latin');
+  if (DEVANAGARI.test(token)) scripts.add('Devanagari');
+  if (TAMIL.test(token)) scripts.add('Tamil');
+  return scripts;
+}
+for (const lang of ['hi', 'ta']) {
+  for (const [key, value] of Object.entries(i18n[lang] ?? {})) {
+    const s = String(value);
+    checked += 1;
+    const mixed = s.split(/\s+/).filter((tok) => scriptsInToken(tok).size > 1);
+    if (mixed.length > 0) {
+      failures += 1;
+      console.log(`  FAIL ${lang}.${key}: mixed-script token(s): ${JSON.stringify(mixed)}`);
+    }
+  }
+}
+console.log('  ok   no mixed-script words');
+
 console.log(`\n${checked} string(s) scanned, ${failures} failure(s)`);
 if (failures > 0) process.exit(1);
 console.log('i18n block strictness: PASS');

@@ -10,13 +10,23 @@ interface LanguageToggleProps {
 
 export function LanguageToggle({ lang, onChange }: LanguageToggleProps) {
   return (
-    <div className="flex gap-2">
+    <div
+      className="flex gap-2"
+      title="Hindi/Tamil translations are machine-drafted and being reviewed — English is authoritative."
+    >
       {(['en', 'hi', 'ta'] as const).map((l) => (
         <Button
           key={l}
           variant={lang === l ? 'default' : 'outline'}
           size="icon"
           aria-label={`Language: ${l}`}
+          title={
+            l === 'en'
+              ? 'English (authoritative)'
+              : l === 'hi'
+                ? 'Hindi — machine-drafted translation, being reviewed. English is authoritative.'
+                : 'Tamil — machine-drafted translation, being reviewed. English is authoritative.'
+          }
           onClick={() => onChange(l)}
           className="p-1 rounded-md"
         >

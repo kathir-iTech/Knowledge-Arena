@@ -100,3 +100,46 @@ Reviewer checklist:
 4. Run `node scripts/test-i18n.mjs` — it must stay at `0 failure(s)`.
 5. When all Hindi/Tamil strings are approved, `isMachineDrafted()` can be
    tightened and the in-app notice removed for that language.
+
+## Per-key review table (all keys)
+
+Every Hindi and Tamil string is machine-drafted. A native reviewer
+marks the last column per row. Keep the `// machine-drafted, needs
+native review` comment in `src/lib/rpl/i18n.ts` until that row is approved.
+
+| key | English source (authoritative) | Hindi (machine-drafted) | Tamil (machine-drafted) | native reviewer OK? |
+| --- | --- | --- | --- | --- |
+| `step1` | Personal & trade context | व्यक्तिगत एवं व्यापार संदर्भ | தொடர்பு தகவல் |  |
+| `step2` | Experience declaration | अनुभव घोषणा | அனுபவ அறிவிப்பு |  |
+| `step3` | Evidence summary | साक्ष्य सारांश | சான்று சுருக்கம் |  |
+| `step4` | Review & submit | समीक्षा और प्रस्तुत करना | மதிப்பீடு மற்றும் சமர்ப்பிப்பு |  |
+| `personalTradeContext` | Tell us about your work | अपने काम के बारे में बताएं | உங்கள் வேலை பற்றி சொல்லுங்கள் |  |
+| `experienceDeclaration` | Mark each skill honestly | कौशल का ईमानदारी से चयन करें | ஒவ்வொரு திறனையும் நேர்மையாகக் குறிக்கவும் |  |
+| `evidenceSummary` | Describe when and where you did this work | यह बताएं कि कब और कहाँ इस काम किया | எப்போது, எங்கே இந்த வேலை செய்தீர்கள் |  |
+| `reviewSubmit` | Check everything before submitting | जमा करने से पहले जांचें | சமர்ப்பிக்குவதற்கு முன் அனைத்தையும் சரிபார்க்கவும் |  |
+| `trade` | Trade / occupation | व्यवसाय / पेशा | தொழில் / வேலை |  |
+| `sector` | Sector | क्षेत्र | துறை |  |
+| `years` | Years of experience | वर्षों का अनुभव | அனுபவ வருடங்கள் |  |
+| `location` | Location (state) | स्थान (राज्य) | இடம் (மாநிலம்) |  |
+| `employerType` | Employer type | नियोक्ता प्रकार | வேலைவழங்குநர் வகை |  |
+| `canDo` | I can do this | मैं इसे कर सकता हूँ | நான் இதைச் செய்ய முடியும் |  |
+| `doneBefore` | I have done this before | मैं पहले ऐसा कर चुका हूँ | நான் இதை முன்பு செய்துள்ளேன் |  |
+| `neverDone` | I have never done this | मैं पहले ऐसा कभी नहीं किया | நான் இதை முன்பு ஒருபோதும் செய்யவில்லை |  |
+| `findMatching` | Find matching qualifications | योग्यता से मिलान खोजें | பொருந்தும் தகுதிகளை கண்டறியவும் |  |
+| `analyzing` | Analyzing your experience... | आपके अनुभव का विश्लेषण कर रहा है... | உங்கள் அனுபவம் பகுப்பாய்வு செய்யப்படுகிறது... |  |
+| `submitting` | Submitting... | जमा किया जा रहा है... | சமர்ப்பிக்கப்படுகிறது... |  |
+| `offlineSaved` | Saved on this device — it will sync automatically when you reconnect. | इस उपकरण पर बचाया गया — यह स्वतः सिंक हो जाएगा जब आप फिर से जुड़ेंगे। | இந்த சாதனத்தில் சேமிக்கப்பட்டது — மீண்டும் இணைக்கும்போது தானாக ஒத்திசைக்கப்படும். |  |
+| `offlineNotice` | You're offline — your declaration will be saved and submitted when you reconnect. | आप ऑफ़लाइन हैं — आपकी घोषणा सहेजी जाएगी और जब आप फिर से जुड़ेंगे तो जमा कर दी जाएगी। | நீங்கள் ஆஃப்லைனில் இருக்கிறீர்கள் — உங்கள் அறிவிப்பு சேமிக்கப்படும், மீண்டும் இணைக்கும்போது சமர்ப்பிக்கப்படும். |  |
+| `success` | Declaration submitted successfully! | अनुभव घोषणा सफलतापूर्वक जमा की गई! | அனுபவ அறிவிப்பு வெற்றிகரமாக சமர்ப்பிக்கப்பட்டது! |  |
+| `referenceCode` | Your reference code is | आपका संदर्भ कोड है | உங்கள் குறிப்பு குறியீடு இது |  |
+| `noSkillsMarked` | Mark at least one skill as "I can do this" or "I have done this before" to continue. | कम से कम एक कौशल "मैं इसे कर सकता हूँ" या "मैं पहले ऐसा कर चुका हूँ" के रूप में चिह्नित करें जारी रखने के लिए। | தொடர குறைந்தது ஒரு திறனை "நான் இதைச் செய்ய முடியும்" அல்லது "நான் இதை முன்பு செய்துள்ளேன்" எனக் குறிக்கவும். |  |
+| `tradeRequired` | Trade and years of experience (0-60) are required before submitting. | घोषणा जमा करने से पहले व्यापार और 0-60 वर्षों का अनुभव आवश्यक है। | சமர்ப்பிக்கும் முன் தொழில் மற்றும் 0-60 அனுபவ வருடங்கள் தேவை. |  |
+| `skillRequired` | Mark at least one skill as "I can do this" or "I have done this before" before submitting. | घोषणा जमा करने से पहले कम से कम एक कौशल "मैं इसे कर सकता हूँ" या "मैं पहले ऐसा कर चुका हूँ" के रूप में चिह्नित करें। | சமர்ப்பிக்கும் முன் குறைந்தது ஒரு திறனை "நான் இதைச் செய்ய முடியும்" அல்லது "நான் இதை முன்பு செய்துள்ளேன்" எனக் குறிக்கவும். |  |
+| `aiMatchNoteUnavailable` | AI ranking is unavailable right now, so these are keyword matches. You can still continue. | AI रैंकिंग अभी उपलब्ध नहीं है, इसलिए ये कीवर्ड मिलान हैं। आप आगे बढ़ सकते हैं। | AI தரவரிசை இப்போது கிடைக்கவில்லை, எனவே இவை முக்கியசொல் பொருத்தங்கள். தொடரலாம். |  |
+| `aiMatchNoteFailed` | We could not rank the matches just now. Showing keyword matches — you can still continue. | हम अभी मिलानों को रैंक नहीं कर सके। कीवर्ड मिलान दिखाए जा रहे हैं — आप आगे बढ़ सकते हैं। | பொருத்தங்களை இப்போது தரவரிசைப்படுத்த முடியவில்லை. முக்கியசொல் பொருத்தங்கள் காட்டப்படுகின்றன. |  |
+| `translationNotice` | This translation is machine-drafted and is being reviewed by native speakers. English is authoritative. | यह अनुवाद मशीन द्वारा तैयार किया गया है और मूल वक्ताओं द्वारा इसकी समीक्षा की जा रही है। अंग्रेज़ी मानक है। | இந்த மொழிபெயர்ப்பு இயந்திரத்தால் உருவாக்கப்பட்டது, தாய்மொழி பேசுபவர்களால் மதிப்பாய்வு செய்யப்படுகிறது. ஆங்கிலமே அதிகாரப்பூர்வமானது. |  |
+
+(29 keys. Generated from `src/lib/rpl/i18n.ts` by `node scripts/_tmp-i18n-table.mjs`;
+regenerate after any string change. Reviewer note: `ta.step1` reads as "contact
+information" — see the concern table above; `hi/aiMatchNote*` keep the Latin
+acronym "AI", which is intentional unless a native reviewer prefers otherwise.)
