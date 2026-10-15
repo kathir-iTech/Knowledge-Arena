@@ -28,7 +28,7 @@ import {
   type NSQFMatchResult,
 } from '@/lib/rpl/nsqf-packs';
 import type { DeclarationMark } from '@/lib/rpl/types';
-import { t, type Lang } from '@/lib/rpl/i18n';
+import { t, isMachineDrafted, type Lang } from '@/lib/rpl/i18n';
 import { LanguageToggle } from '@/components/rpl/LanguageToggle';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { getPendingSummary, queueDeclarationForSync, type PendingSummary } from '@/lib/rpl/offline-store';
@@ -478,6 +478,17 @@ export default function RplDeclarePage() {
       <p className="text-sm text-muted-foreground">
         {t('personalTradeContext', lang)}
       </p>
+
+      {/* Part 6: HI/TA are machine-drafted — say so in-app instead of
+          presenting them as reviewed translations. */}
+      {isMachineDrafted(lang) && (
+        <p
+          role="note"
+          className="rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          {t('translationNotice', lang)}
+        </p>
+      )}
 
       {/* Hand-rolled numbered step indicator */}
       <div className="grid grid-cols-4 gap-2" aria-label="Declaration progress">

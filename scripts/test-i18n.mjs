@@ -7,6 +7,7 @@
 // Run with: node scripts/test-i18n.mjs  (Node >=22.13, type-stripping).
 
 console.log(`node ${process.version}`);
+import { readFileSync } from 'node:fs';
 
 async function loadTs(specifier) {
   const candidates = [`../../${specifier}`, `../${specifier}`];
@@ -117,6 +118,75 @@ for (const lang of ['hi', 'ta']) {
     console.log(`  ok   ${lang}: uses non-ASCII script content`);
   }
 }
+
+// ---- Part 6 additions -----------------------------------------------------
+// Three new failure classes the original block-scan could not see:
+//   (A) empty / engineering-marker strings
+//   (B) truncated machine-drafted strings (mid-sentence stop, lost terminal
+//       punctuation relative to the English source)
+//   (C) literal t('key') references in the UI that have no dictionary entry
+//       (the bug that used to render a raw "aiMatchNoteUnavailable" key).
+
+// (A) non-empty + no engineering markers.
+const MARKERS = ['placeholder', 'todo', 'fixme', 'lorem ipsum', 'xxx'];
+for (const lang of ['en', 'hi', 'ta']) {
+  for (const [key, value] of Object.entries(i18n[lang] ?? {})) {
+    const s = String(value);
+    checked += 1;
+    if (!s.trim()) {
+      failures += 1;
+      console.log(`  FAIL ${lang}.${key}: empty string`);
+    }
+    const lower = s.toLowerCase();
+    for (const m of MARKERS) {
+      if (lower.includes(m)) {
+        failures += 1;
+        console.log(`  FAIL ${lang}.${key}: contains engineering marker "${m}"`);
+      }
+    }
+  }
+}
+console.log('  ok   no empty or marker strings');
+
+// (B) truncation checks.
+const DANGLING = /[,;:]$/;
+const TERMINAL_EN = /[.!?]$/;
+const TERMINAL_LOCAL = /[.!?।]$/; // allow the Hindi danda
+for (const lang of ['hi', 'ta']) {
+  for (const [key, enValue] of Object.entries(i18n.en)) {
+    const s = String(i18n[lang]?.[key] ?? '');
+    if (!s) continue;
+    checked += 1;
+    const trimmed = s.trim();
+    if (DANGLING.test(trimmed)) {
+      failures += 1;
+      console.log(`  FAIL ${lang}.${key}: ends with dangling punctuation: ${JSON.stringify(s)}`);
+    }
+    if (TERMINAL_EN.test(String(enValue).trim()) && !TERMINAL_LOCAL.test(trimmed)) {
+      failures += 1;
+      console.log(
+        `  FAIL ${lang}.${key}: English ends with sentence punctuation, ${lang} does not: ${JSON.stringify(s)}`,
+      );
+    }
+  }
+}
+console.log('  ok   no truncated / dangling translations');
+
+// (C) key-leakage guard against the declare page.
+const declarePath = new URL('../src/app/(rpl)/rpl/declare/page.tsx', import.meta.url);
+const declareSrc = readFileSync(declarePath, 'utf8');
+const usedKeys = new Set();
+for (const m of declareSrc.matchAll(/\bt(?:Card)?\(\s*'([a-zA-Z0-9_]+)'/g)) {
+  usedKeys.add(m[1]);
+}
+for (const key of usedKeys) {
+  checked += 1;
+  if (!(key in i18n.en) && !(key in (i18n.common ?? {}))) {
+    failures += 1;
+    console.log(`  FAIL key-leakage: t('${key}') is used in declare/page.tsx but has no en/common entry`);
+  }
+}
+console.log(`  ok   key-leakage guard: ${usedKeys.size} literal key(s) all resolve`);
 
 console.log(`\n${checked} string(s) scanned, ${failures} failure(s)`);
 if (failures > 0) process.exit(1);
