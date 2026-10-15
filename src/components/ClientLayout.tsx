@@ -136,7 +136,11 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     return <LoadingScreen message="Authenticating..." />;
   }
 
-  const skipNav = <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-background focus:text-foreground focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary" tabIndex={1}>Skip to main content</a>;
+  // Part 5 (axe): a positive tabIndex (was tabIndex={1}) reorders the tab
+  // sequence and is an accessibility anti-pattern (axe rule "tabindex"). The
+  // skip link is already the first focusable element in the DOM, so natural
+  // tab order reaches it first — no explicit tabindex needed.
+  const skipNav = <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-background focus:text-foreground focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary">Skip to main content</a>;
 
   const shared = (
     <>
