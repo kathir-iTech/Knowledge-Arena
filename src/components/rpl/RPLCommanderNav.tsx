@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFirebase } from '@/firebase';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DemoBadge } from '@/components/rpl/DemoBadge';
 import type { RPLAssessmentDoc } from '@/lib/rpl/types';
 
 type AssessmentRow = Partial<RPLAssessmentDoc> & { id: string };
@@ -14,6 +15,8 @@ interface MyConsistencyPack {
   packId: string;
   packKappa: number | null;
   myPairs: { assessorA: string; assessorB: string; kappa: number }[];
+  /** Seeded demo data flag from GET /api/rpl/assess/my-consistency. */
+  isDemoData?: boolean;
 }
 
 interface MyConsistencyResponse {
@@ -31,6 +34,7 @@ export function RPLCommanderNav() {
   const { auth } = useFirebase();
   const [queueCount, setQueueCount] = useState<number | null>(null);
   const [avgKappa, setAvgKappa] = useState<number | null>(null);
+  const [avgIsDemo, setAvgIsDemo] = useState(false);
   const [hasLow, setHasLow] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -69,6 +73,7 @@ export function RPLCommanderNav() {
         }
 
         let avg: number | null = null;
+        let avgDemo = false;
         let low = false;
         try {
           const body = (await consistencyRes.json().catch(() => null)) as
@@ -79,6 +84,8 @@ export function RPLCommanderNav() {
               .map((p) => p.packKappa)
               .filter((k): k is number => typeof k === 'number' && Number.isFinite(k));
             avg = kappas.length > 0 ? kappas.reduce((a, b) => a + b, 0) / kappas.length : null;
+            avgDemo =
+              avg !== null && body.packs.some((p) => p.isDemoData === true && typeof p.packKappa === 'number');
             low = body.packs.some(
               (p) => typeof p.packKappa === 'number' && p.packKappa < 0.4,
             );
@@ -90,6 +97,7 @@ export function RPLCommanderNav() {
         if (!cancelled) {
           setQueueCount(count);
           setAvgKappa(avg);
+          setAvgIsDemo(avgDemo);
           setHasLow(low);
         }
       } catch {
@@ -141,9 +149,12 @@ export function RPLCommanderNav() {
         </Badge>
       ) : null}
       {typeof avgKappa === 'number' && Number.isFinite(avgKappa) ? (
-        <Badge variant={avgKappa < 0.4 ? 'destructive' : avgKappa < 0.6 ? 'warning' : 'success'}>
-          κ {avgKappa.toFixed(2)}
-        </Badge>
+        <>
+          <Badge variant={avgKappa < 0.4 ? 'destructive' : avgKappa < 0.6 ? 'warning' : 'success'}>
+            κ {avgKappa.toFixed(2)}
+          </Badge>
+          <DemoBadge isDemoData={avgIsDemo} />
+        </>
       ) : null}
     </Link>
   );

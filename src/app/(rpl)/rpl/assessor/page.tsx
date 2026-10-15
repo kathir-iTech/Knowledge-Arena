@@ -12,6 +12,7 @@ import { NSQF_PACKS } from '@/lib/rpl/nsqf-packs';
 import { getRoleHome } from '@/lib/auth-redirect';
 import { rplErrorMessage } from '@/lib/rpl/api-errors';
 import { CompassMark } from '@/components/rpl/CompassMark';
+import { DemoBadge } from '@/components/rpl/DemoBadge';
 import type { RPLAssessmentDoc } from '@/lib/rpl/types';
 
 type AssessmentRow = Partial<RPLAssessmentDoc> & { id: string };
@@ -26,6 +27,8 @@ interface MyPack {
   packId: string;
   packKappa: number | null;
   myPairs: MyPair[];
+  /** Seeded demo data flag from GET /api/rpl/assess/my-consistency. */
+  isDemoData?: boolean;
 }
 
 interface CriterionDelta {
@@ -275,7 +278,9 @@ export default function RplAssessorPage() {
                 return (
                   <div key={p.packId} className="rounded-[12px] border border-border/60 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium">{packTitle(p.packId)}</p>
+                      <p className="text-sm font-medium">
+                        {packTitle(p.packId)} <DemoBadge isDemoData={p.isDemoData} />
+                      </p>
                       <Badge variant={kappaVariant(p.packKappa)}>
                         {p.packKappa === null ? 'n/a — needs 2+ assessors' : `κ ${p.packKappa.toFixed(3)}`}
                       </Badge>

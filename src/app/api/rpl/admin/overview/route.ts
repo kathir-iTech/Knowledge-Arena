@@ -235,9 +235,10 @@ export async function GET(req: NextRequest) {
       const kappa = finiteNumber(data.kappa);
       if (kappa === null || kappa >= 0.4) continue;
       const at = finiteNumber(data.computedAt) ?? nowMs;
+      const demoSuffix = data.isDemoData === true ? ' (demo data)' : '';
       events.push({
         type: 'kappa-alert',
-        message: `Low agreement (κ=${kappa.toFixed(2)}) on pack ${packId}`,
+        message: `Low agreement (κ=${kappa.toFixed(2)}) on pack ${packId}${demoSuffix}`,
         at,
         ref: packId,
       });

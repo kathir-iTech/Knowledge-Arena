@@ -24,6 +24,8 @@ interface MyPack {
   packId: string;
   packKappa: number | null;
   myPairs: MyPair[];
+  /** True when the consistency doc is seeded demo data (drives DemoBadge). */
+  isDemoData?: boolean;
 }
 
 interface CriterionDelta {
@@ -91,11 +93,13 @@ export async function GET(req: NextRequest) {
     for (const packId of packIds) {
       let packKappa: number | null = null;
       let myPairs: MyPair[] = [];
+      let isDemoData = false;
       try {
         const cSnap = await db.collection(RPL_CONSISTENCY).doc(sanitizeRplDocId(packId)).get();
         if (cSnap.exists) {
           const cData = cSnap.data() as Partial<RPLConsistencyDoc>;
           packKappa = finiteNumber(cData.kappa);
+          isDemoData = cData.isDemoData === true;
           const pairs = Array.isArray(cData.assessorPairs) ? cData.assessorPairs : [];
           myPairs = pairs
             .filter((p) => {
@@ -115,7 +119,7 @@ export async function GET(req: NextRequest) {
       } catch {
         // Missing/unreadable consistency doc -> packKappa stays null, pairs empty.
       }
-      packs.push({ packId, packKappa, myPairs });
+      packs.push({ packId, packKappa, myPairs, isDemoData });
     }
 
     // Per-criterion calibration: own mean vs panel mean on shared itemIds.

@@ -39,13 +39,16 @@ export async function checkKappaThresholds(packId: string): Promise<KappaAlert[]
   const now = Date.now();
   const alerts: KappaAlert[] = [];
   const kappa = finiteKappa(data.kappa);
+  // Honest numbers: a κ computed from seeded demo data must say so in the
+  // alert text itself (alerts render as plain messages with no badge slot).
+  const demoSuffix = data.isDemoData === true ? ' (demo data)' : '';
 
   if (kappa !== null) {
     if (kappa < 0.2) {
       alerts.push({
         severity: 'critical',
         packId,
-        message: `Critical low agreement (κ=${kappa.toFixed(3)}) on pack ${packId}.`,
+        message: `Critical low agreement (κ=${kappa.toFixed(3)}) on pack ${packId}.${demoSuffix}`,
         recommendedAction: 'Assessor calibration session recommended.',
         createdAt: now,
       });
@@ -53,7 +56,7 @@ export async function checkKappaThresholds(packId: string): Promise<KappaAlert[]
       alerts.push({
         severity: 'warning',
         packId,
-        message: `Low agreement (κ=${kappa.toFixed(3)}) on pack ${packId}.`,
+        message: `Low agreement (κ=${kappa.toFixed(3)}) on pack ${packId}.${demoSuffix}`,
         recommendedAction: 'Review assessor scoring and consider a calibration review.',
         createdAt: now,
       });
@@ -74,7 +77,7 @@ export async function checkKappaThresholds(packId: string): Promise<KappaAlert[]
         severity: 'warning',
         packId,
         assessorId,
-        message: `Low pair agreement (κ=${pairKappa.toFixed(3)}) between ${a || '?'} and ${b || '?'} on pack ${packId}.`,
+        message: `Low pair agreement (κ=${pairKappa.toFixed(3)}) between ${a || '?'} and ${b || '?'} on pack ${packId}.${demoSuffix}`,
         recommendedAction: 'Review scoring differences and consider joint calibration.',
         createdAt: now,
       });
@@ -105,7 +108,7 @@ export async function checkKappaThresholds(packId: string): Promise<KappaAlert[]
         alerts.push({
           severity: 'warning',
           packId,
-          message: `Agreement dropped by ${drop.toFixed(3)} on pack ${packId} (from ${baseline.kappa.toFixed(3)} to ${kappa.toFixed(3)}).`,
+          message: `Agreement dropped by ${drop.toFixed(3)} on pack ${packId} (from ${baseline.kappa.toFixed(3)} to ${kappa.toFixed(3)}).${demoSuffix}`,
           recommendedAction: 'Investigate recent assessments for scoring drift.',
           createdAt: now,
         });

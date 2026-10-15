@@ -447,9 +447,21 @@ export default function RplAdminPage() {
       <Card className="border-primary/30">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Scale className="h-4 w-4 text-primary" /> Inter-assessor agreement
+            <Scale className="h-4 w-4 text-primary" /> Inter-assessor agreement{' '}
+            <DemoBadge
+              isDemoData={
+                overview.averageKappa !== null &&
+                overview.packs.some((p) => p.isDemoData === true && p.kappa !== null)
+              }
+            />
           </CardTitle>
-          <CardDescription>Average Cohen&apos;s kappa across live packs</CardDescription>
+          <CardDescription>
+            Average Cohen&apos;s kappa across live packs
+            {overview.averageKappa !== null &&
+            overview.packs.some((p) => p.isDemoData === true && p.kappa !== null)
+              ? ' · includes demo-seeded packs'
+              : ''}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center">
           <KappaGauge kappa={overview.averageKappa} size={180} />

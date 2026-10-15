@@ -117,6 +117,8 @@ export interface RPLConsistencyDoc extends InterAssessorAgreement {
   unassistedKappa?: number | null;
   assistedKappa?: number | null;
   assessmentCount?: number;
+  /** True when written by POST /api/rpl/admin/demo (drives DemoBadge). */
+  isDemoData?: boolean;
 }
 
 /** rpl_certifications/{workerId} */

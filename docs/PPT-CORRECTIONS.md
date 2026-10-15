@@ -69,6 +69,39 @@ Rules for the slide:
 3. Label seeded numbers **synthetic demo data**, never "pilot results".
 4. Frame low κ as *detection*, not as tool accuracy.
 
+## Claim classification (required labels)
+
+Each checkable claim below is marked **VERIFIED-BY-TEST** (an automated test
+asserts it — name cited), **BUILT-NOT-TESTED** (the code exists, no automated
+test asserts it), or **NOT-BUILT** (not in the app). Status is as of the
+current tree; re-check after any refactor.
+
+| # | Claim (as a slide might state it) | What the app actually does | Label + evidence |
+| --- | --- | --- | --- |
+| 1 | "κ = 0.71 / 0.58" | Nothing in the app produces these. Seeded ELE/Q1301 computes **κ = 0.3846 (Fair)**. | Honest correction in this file (see table above). The 0.3846 value itself is VERIFIED-BY-TEST: `tests/rpl-demo-guide.spec.ts` — "after Load demo data, every walkthrough step shows Ready" (asserts the κ text and the fired alert). |
+| 2 | "Per-criterion 1–4 rubric" | Assessors score each criterion 1–4 (`src/app/(rpl)/rpl/assess`, `assess/[assessmentId]`); score maths in `src/lib/rpl/scores.ts`. | BUILT-NOT-TESTED as a range claim: `scripts/test-scores.mjs` covers the score formulae (ALL SCORES TESTS PASSED) but no test asserts the 1–4 range end-to-end. |
+| 3 | "κ < 0.4 raises a calibration alert" | `src/lib/rpl/kappa-monitor.ts` (`< 0.2` critical, `< 0.4` warning) + `GET /api/rpl/admin/overview` kappa-alert events; ELE/Q1301 (0.3846) fires it by design. | VERIFIED-BY-TEST: `tests/rpl-demo-guide.spec.ts` — every-step-Ready asserts step 2 reads "Ready" with the alert present. |
+| 4 | "Offline-first: declare offline, sync later" | Declare POST fails offline → IndexedDB queue (`offline-store.ts`) → replay with a fresh token on reconnect (`offline-sync.ts`); SW answers 202 and never replays itself. | VERIFIED-BY-TEST: `tests/rpl-offline-mobile-axe.spec.ts` — "offline replay: exactly one POST with a fresh token, no duplicate"; `scripts/test-offline-sync.mjs` (ALL OFFLINE-SYNC TESTS PASSED); `scripts/test-sih-gaps.mjs` B9 (SW 202 contract). |
+| 5 | "English / Hindi / Tamil UI" | Declare wizard is trilingual (`src/lib/rpl/i18n.ts`); HI/TA are machine-drafted, English authoritative, disclosed in-app. | VERIFIED-BY-TEST with caveat: `scripts/test-i18n.mjs` (428 checks: key parity, truncation, placeholders, mixed-script) + `tests/rpl-i18n.spec.ts` (banner renders). Native-speaker review is still open — see `docs/i18n-review.md`. |
+| 6 | "AI suggestions are flagged, never silent" | `aiSuggestionUsed` is persisted `true` only when `aiAccepted === true && aiProposedScore === rubricScore` on ≥1 item (`src/app/api/rpl/assess/route.ts`); unassisted/assisted κ split in `recompute-consistency.ts`. | BUILT-NOT-TESTED: the conditional is code-verified (above) but no test asserts the flag flips only on apply. |
+| 7 | "CON/Q0304 κ = 0.7647, SSC/Q2212 κ = 0.4545" | Computed from `DEMO_RATINGS` with the project's `kappa.ts` (see output block above); demo load returns them in `packs[]`. | BUILT-NOT-TESTED as exact numbers: no spec asserts 0.7647/0.4545 literally (the demo-guide Load test asserts a `kappa` line is present, not its values). Re-derive before quoting. |
+
+## DemoBadge audit — every surface that shows a demo-derived κ
+
+`DemoBadge` renders only when the backing doc carries `isDemoData: true`
+(never a hard-coded string), so real data is never mislabelled.
+
+| Surface | κ shown | Labelled? | How |
+| --- | --- | --- | --- |
+| `/rpl/consistency/[packId]` overall + pairs | overall κ, pair κs, per-criterion κs | Yes | `<DemoBadge isDemoData={report.isDemoData}>` (pre-existing). |
+| `/rpl/admin` per-pack rows | pack κ + interpretation | Yes | `<DemoBadge isDemoData={pack.isDemoData}>` (pre-existing). |
+| `/rpl/admin` Inter-assessor agreement gauge | average κ across packs | Yes (this pass) | Badge + "· includes demo-seeded packs" when a demo pack with non-null κ contributes. |
+| `/rpl/assessor` My consistency vs panel | pack κ, pair κs | Yes (this pass) | `GET /api/rpl/assess/my-consistency` now returns `isDemoData` per pack; badge next to the pack title. |
+| Assessor nav chip (sidebar) | avg κ | Yes (this pass) | Same endpoint flag; `<DemoBadge>` beside the κ chip when demo contributes. |
+| Alert texts (`kappa-monitor.ts`, admin overview kappa-alert events) | κ in the message string | Yes (this pass) | Messages append `" (demo data)"` when the consistency doc is demo-seeded (alerts render as plain text with no badge slot). |
+| Landing consistency panel | illustrative κs | Equivalent | Labelled **Sample data** with an "illustrative, not a live result" caption (Part 7); the landing is marketing, not an RPL surface, so it uses the sample-data label instead of the DemoBadge component. |
+| `/rpl/admin/demo-guide` expected numbers | κ in the presenter script | Equivalent | Page header carries a "Synthetic demo data" badge; footer points at this file before quoting numbers. |
+
 ## Other numbers in the deck to verify before presenting
 
 These are plausible but were not verified in this pass — either measure them or
