@@ -372,6 +372,78 @@ test.describe('RPL page states via API mocks (emulator)', () => {
     await expect(page.getByText(SESSION_EXPIRED).first()).toBeVisible({ timeout: 15000 });
   });
 
+  // Declare's POST endpoints cannot be failed-injected while the PWA worker
+  // owns them (public/rpl-sw.js claims POST /api/rpl/declare), so the
+  // declare phases run with service workers blocked at the CONTEXT level.
+  // The SW's own 202 contract stays covered by scripts/test-sih-gaps.mjs (B9).
+  test.describe('declare states (service workers blocked)', () => {
+    test.use({ serviceWorkers: 'block' });
+
+  test('declare: loading/empty/error/401 on match + submit', async ({ page }) => {
+    // /rpl/declare is action-driven (no primary GET): its API surface is
+    // POST /api/rpl/match ("Find matching qualifications", step 2) and POST
+    // /api/rpl/declare (submit, step 4). Each phase reloads the page so the
+    // wizard state is fresh.
+    // NOTE on "empty": the step-3 "No marked skills yet" card is defensive —
+    // the step-2 Next button is disabled until ≥1 skill is marked, so the
+    // card is unreachable through the UI while gating works. The meaningful
+    // empty-RESPONSE case is a 200 with {matches: []}: keyword packs are
+    // retained, nothing crashes, no AI note appears. That is what is asserted.
+    const email = 'state-declare@rplcompass.test';
+    await ensureRoleUser(email, 'candidate', 'State Declare');
+    await installRplMockRoute(page);
+    await signInViaUi(page, email);
+
+    async function toStep2(): Promise<void> {
+      active = null;
+      await page.goto(BASE + '/rpl/declare', { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('#trade')).toBeVisible({ timeout: 60000 });
+      await page.locator('#trade').fill('Electrician');
+      await page.locator('#years').fill('8');
+      await page.getByRole('button', { name: 'Next', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Find matching qualifications' })).toBeVisible({
+        timeout: 20000,
+      });
+    }
+
+    // loading: the match POST stalls -> "Analyzing…" shows.
+    await toStep2();
+    active = { match: (p) => p === '/api/rpl/match', status: 200, body: {}, delayMs: 3500 };
+    await page.getByRole('button', { name: 'Find matching qualifications' }).click();
+    await expect(page.getByText('Analyzing your experience...').first()).toBeVisible({ timeout: 20000 });
+
+    // empty response: 200 {matches: []} -> keyword packs stay, no AI note.
+    await toStep2();
+    active = { match: (p) => p === '/api/rpl/match', status: 200, body: { matches: [] } };
+    await page.getByRole('button', { name: 'Find matching qualifications' }).click();
+    await expect(page.getByText('NSQF').first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('status')).toHaveCount(0);
+
+    // error: 500 on match -> the "could not rank" fallback note.
+    await toStep2();
+    active = { match: (p) => p === '/api/rpl/match', status: 500, body: {} };
+    await page.getByRole('button', { name: 'Find matching qualifications' }).click();
+    await expect(
+      page.getByText('We could not rank the matches just now.').first(),
+    ).toBeVisible({ timeout: 20000 });
+
+    // 401: submit a fully valid form while the declare POST is 401 ->
+    // friendly session-expired message, never a blank page or raw 401.
+    await toStep2();
+    active = { match: (p) => p === '/api/rpl/declare', status: 401, body: { error: 'Unauthorized' } };
+    await page.getByRole('radio').first().click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 20000 });
+    await page.locator('textarea').first().fill('Wired three homes in Pune in 2023 under a contractor.');
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Submit declaration' })).toBeVisible({
+      timeout: 20000,
+    });
+    await page.getByRole('button', { name: 'Submit declaration' }).click();
+    await expect(page.getByText(SESSION_EXPIRED).first()).toBeVisible({ timeout: 20000 });
+  });
+  });
+
   test('unauthenticated visitor on an RPL page is sent to login', async ({ page }) => {
     // The signed-out (401) path for every /rpl/* page: middleware/session guard
     // must not leave the user staring at an empty or broken page.
