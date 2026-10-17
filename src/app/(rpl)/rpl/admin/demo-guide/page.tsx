@@ -410,7 +410,7 @@ export default function RplAdminDemoGuidePage() {
               data-testid="demo-guide-load"
               onClick={handleLoad}
               disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-[12px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-[12px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60 min-h-[40px]"
             >
               {busy === 'load' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
               Load demo data
@@ -422,7 +422,7 @@ export default function RplAdminDemoGuidePage() {
                   type="button"
                   data-testid="demo-guide-reset"
                   disabled={busy !== null}
-                  className="inline-flex items-center gap-2 rounded-[12px] border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-[12px] border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60 min-h-[40px]"
                 >
                   {busy === 'reset' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                   Reset demo
@@ -507,7 +507,7 @@ export default function RplAdminDemoGuidePage() {
       {/* ── Walkthrough ──────────────────────────────────────────── */}
       <Card data-testid="demo-guide-walkthrough">
         <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Terminal className="h-4 w-4 text-primary" /> The walkthrough
@@ -521,7 +521,7 @@ export default function RplAdminDemoGuidePage() {
               data-testid="demo-guide-recheck"
               onClick={() => void refreshReadiness()}
               disabled={checking}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] border border-border/60 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent/30 disabled:opacity-60"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] border border-border/60 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent/30 disabled:opacity-60 min-h-[40px]"
             >
               <RefreshCw className={`h-3 w-3 ${checking ? 'animate-spin' : ''}`} />
               Re-check readiness
@@ -536,16 +536,16 @@ export default function RplAdminDemoGuidePage() {
               <div key={s.title}>
                 {i > 0 && <Separator className="my-4" />}
                 <div data-testid={`demo-guide-step-${i + 1}`}>
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
                     <p className="font-medium">{s.title}</p>
                     <span
                       data-testid={`demo-guide-step-${i + 1}-ready`}
-                      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      className={`inline-flex max-w-full shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                         r.state === 'ready'
-                          ? 'bg-success/15 text-success'
+                          ? 'bg-success/15 text-[hsl(136_68%_22%)] dark:text-success'
                           : r.state === 'checking'
-                            ? 'bg-muted text-muted-foreground'
-                            : 'bg-warning/15 text-warning'
+                            ? 'bg-muted text-foreground'
+                            : 'bg-warning/15 text-warning-foreground dark:text-warning'
                       }`}
                     >
                       {r.state === 'ready' ? (
@@ -558,7 +558,7 @@ export default function RplAdminDemoGuidePage() {
                       {r.state === 'ready' ? 'Ready' : r.state === 'checking' ? 'Checking…' : 'Not ready'} — {r.detail}
                     </span>
                   </div>
-                  <div className="mt-1 flex items-start justify-between gap-3">
+                  <div className="mt-1 flex flex-wrap items-start justify-between gap-2">
                     <p className="text-sm text-muted-foreground">
                       <span className="font-medium text-foreground">Say:</span> {s.say}
                     </p>

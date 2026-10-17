@@ -141,7 +141,7 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
           size="sm"
           onClick={handleSignOut}
           aria-label="Sign out"
-          className="bg-background/90 backdrop-blur"
+          className="bg-background/90 backdrop-blur min-h-[40px]"
         >
           <LogOut className="mr-1.5 h-3.5 w-3.5" />
           Sign out

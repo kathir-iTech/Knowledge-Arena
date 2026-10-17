@@ -355,6 +355,7 @@ function ResultContent() {
             <Button
               variant="outline"
               size="sm"
+              className="min-h-[40px]"
               onClick={() => copyRef(status?.referenceCode ?? (ref as string))}
               aria-label="Copy reference code"
             >

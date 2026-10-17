@@ -304,7 +304,7 @@ export default function RplForgePage() {
                             {item.assessmentMethod} · difficulty {item.difficulty} · maps to:{' '}
                             {item.mapsToCriterion}
                           </span>
-                          <Button variant="destructive" size="sm" onClick={() => deleteItem(item.id)}>
+                          <Button variant="destructive" size="sm" className="min-h-[40px]" onClick={() => deleteItem(item.id)}>
                             Delete
                           </Button>
                         </div>

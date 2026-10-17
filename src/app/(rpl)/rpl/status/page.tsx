@@ -290,6 +290,7 @@ export default function RplStatusPage() {
             <Button
               variant="outline"
               size="sm"
+              className="min-h-[40px]"
               onClick={() => void copyRef(status.referenceCode)}
               aria-label="Copy reference code"
             >

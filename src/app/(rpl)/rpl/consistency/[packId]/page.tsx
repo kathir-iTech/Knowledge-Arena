@@ -237,7 +237,7 @@ export default function RplConsistencyPage() {
               95% CI [{report.confidence[0].toFixed(3)}, {report.confidence[1].toFixed(3)}]
             </span>
           )}
-          <Button variant="outline" size="sm" onClick={fetchReport}>
+          <Button variant="outline" size="sm" className="min-h-[40px]" onClick={fetchReport}>
             Refresh
           </Button>
         </CardContent>
@@ -401,7 +401,7 @@ export default function RplConsistencyPage() {
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">Sort</span>
             <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as typeof sortOrder)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px]" aria-label="Sort per-criterion agreement">
                 <SelectValue placeholder="Sort criteria" />
               </SelectTrigger>
               <SelectContent>

@@ -181,7 +181,7 @@ export function KappaBadge({
 }: { kappa: number | null; className?: string }) {
   if (kappa === null) {
     return (
-      <span className={cn("inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground", className)}>
+      <span className={cn("inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-foreground", className)}>
         <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
         κ —
       </span>
@@ -190,11 +190,19 @@ export function KappaBadge({
 
   const interpretation = kappa < 0.2 ? "Poor" : kappa < 0.4 ? "Fair" : kappa < 0.6 ? "Moderate" : kappa < 0.8 ? "Substantial" : "Almost perfect";
   const color = kappa < 0.2 ? "destructive" : kappa < 0.4 ? "warning" : kappa < 0.6 ? "accent" : "success";
+  // Saffron/accent text on a white card is ~1.9:1 (axe: serious). Use the ink
+  // foreground in light mode; the saffron reads fine on dark cards.
+  const textColorClass =
+    color === "destructive"
+      ? "text-destructive"
+      : color === "success"
+        ? "text-success"
+        : "text-warning-foreground dark:text-warning";
 
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium", className)}>
       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: `hsl(var(--${color}))` }} />
-      <span className="font-headline tabular-nums" style={{ color: `hsl(var(--${color}))` }}>
+      <span className={cn("font-headline tabular-nums", textColorClass)}>
         κ {kappa.toFixed(2)}
       </span>
       <Badge variant={color === "destructive" ? "destructive" : color === "warning" ? "warning" : color === "accent" ? "secondary" : "success"}>

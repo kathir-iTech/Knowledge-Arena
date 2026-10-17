@@ -181,7 +181,7 @@ export default function RplAssessListPage() {
                   <Badge variant={a.status === 'draft' ? 'warning' : 'success'}>
                     {a.status === 'draft' ? 'draft' : 'submitted'}
                   </Badge>
-                  <Button asChild size="sm" variant="outline">
+                  <Button asChild size="sm" variant="outline" className="min-h-[40px]">
                     <Link href={`/rpl/assess/${encodeURIComponent(a.id)}`}>Open scoring</Link>
                   </Button>
                 </div>

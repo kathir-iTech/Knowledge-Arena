@@ -185,7 +185,14 @@ export async function queueDeclarationForSync(
     if (!('serviceWorker' in navigator)) return localId;
     const container = navigator.serviceWorker;
     if (!container?.ready) return localId;
-    const reg = await container.ready;
+    // Never let Background Sync registration block the queue save:
+    // `ready` never settles when service workers are blocked/disabled,
+    // which would hang the offline submit inline notice forever.
+    const reg = await Promise.race([
+      container.ready,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+    ]);
+    if (!reg) return localId;
     if (!('sync' in reg)) return localId;
     const syncReg = reg as unknown as {
       sync?: { register: (tag: string) => Promise<void> };

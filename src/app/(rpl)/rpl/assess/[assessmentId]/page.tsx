@@ -582,7 +582,7 @@ export default function RplAssessScoringPage() {
                     /{unitItems.length} scored
                   </CardDescription>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => toggleUnit(unit.id)}>
+                <Button size="sm" variant="outline" className="min-h-[40px]" onClick={() => toggleUnit(unit.id)}>
                   {isOpen ? 'Collapse' : 'Expand'}
                 </Button>
               </div>
@@ -594,6 +594,7 @@ export default function RplAssessScoringPage() {
                   <Button
                     size="sm"
                     variant="secondary"
+                    className="min-h-[40px]"
                     disabled={!!suggesting[unit.id]}
                     onClick={() => proposeForUnit(unit.id, unit.name, unit.performanceCriteria)}
                   >
@@ -602,6 +603,7 @@ export default function RplAssessScoringPage() {
                   <Button
                     size="sm"
                     variant="outline"
+                    className="min-h-[40px]"
                     disabled={!!evidenceUploading[unit.id]}
                     onClick={() => document.getElementById(`evidence-input-${unit.id}`)?.click()}
                   >
@@ -641,6 +643,7 @@ export default function RplAssessScoringPage() {
                         <Button
                           size="sm"
                           variant="outline"
+                          className="min-h-[40px]"
                           onClick={() => void handleEvidenceDelete(unit.id, ev.imageId)}
                         >
                           Delete
@@ -662,10 +665,10 @@ export default function RplAssessScoringPage() {
                       <p className="text-sm text-muted-foreground">{suggestion.rationale}</p>
                     ) : null}
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => acceptSuggestion(unit.id)}>
+                      <Button size="sm" className="min-h-[40px]" onClick={() => acceptSuggestion(unit.id)}>
                         Accept
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => dismissSuggestion(unit.id)}>
+                      <Button size="sm" variant="outline" className="min-h-[40px]" onClick={() => dismissSuggestion(unit.id)}>
                         Dismiss
                       </Button>
                     </div>
@@ -747,6 +750,7 @@ export default function RplAssessScoringPage() {
                             <Button
                               size="sm"
                               variant={item.knowledgePass === true ? 'default' : 'outline'}
+                              className="min-h-[40px]"
                               onClick={() => setKnowledge(item.itemId, true)}
                             >
                               Pass
@@ -754,6 +758,7 @@ export default function RplAssessScoringPage() {
                             <Button
                               size="sm"
                               variant={item.knowledgePass === false ? 'default' : 'outline'}
+                              className="min-h-[40px]"
                               onClick={() => setKnowledge(item.itemId, false)}
                             >
                               Fail

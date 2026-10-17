@@ -351,7 +351,7 @@ export default function RplAdminPage() {
             <button
               type="button"
               onClick={fetchOverview}
-              className="inline-flex items-center gap-2 rounded-[12px] border border-border/60 px-4 py-2 text-sm font-medium hover:bg-accent/30 transition-colors"
+              className="inline-flex items-center gap-2 rounded-[12px] border border-border/60 px-4 py-2 text-sm font-medium hover:bg-accent/30 transition-colors min-h-[40px]"
             >
               <RefreshCw className="h-4 w-4" /> Retry
             </button>
@@ -437,7 +437,7 @@ export default function RplAdminPage() {
         <button
           type="button"
           onClick={fetchOverview}
-          className="inline-flex items-center gap-2 rounded-[12px] border border-border/60 px-4 py-2 text-sm font-medium hover:bg-accent/30 transition-colors"
+          className="inline-flex items-center gap-2 rounded-[12px] border border-border/60 px-4 py-2 text-sm font-medium hover:bg-accent/30 transition-colors min-h-[40px]"
         >
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
@@ -487,7 +487,7 @@ export default function RplAdminPage() {
               type="button"
               onClick={handleLoadDemo}
               disabled={demoBusy !== null}
-              className="inline-flex items-center gap-2 rounded-[12px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-[12px] bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60 min-h-[40px]"
             >
               {demoBusy === 'load' ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -502,7 +502,7 @@ export default function RplAdminPage() {
                 <button
                   type="button"
                   disabled={demoBusy !== null}
-                  className="inline-flex items-center gap-2 rounded-[12px] border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-[12px] border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-60 min-h-[40px]"
                 >
                   {demoBusy === 'remove' ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -657,7 +657,12 @@ export default function RplAdminPage() {
             {overview.recentActivity.length === 0 ? (
               <p className="text-sm text-muted-foreground">No recent activity yet.</p>
             ) : (
-              <div className="space-y-0 max-h-[360px] overflow-y-auto -mx-1 px-1">
+              <div
+                className="space-y-0 max-h-[360px] overflow-y-auto -mx-1 px-1"
+                role="region"
+                aria-label="Recent activity feed"
+                tabIndex={0}
+              >
                 {overview.recentActivity.map((event, i) => (
                   <div
                     key={`${event.type}-${event.at}-${i}`}

@@ -15,9 +15,13 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive/10 text-destructive",
         success:
-          "border-transparent bg-success/10 text-success",
+          // Same tint-contrast issue as warning: #15803D on success/10% is
+          // ~3.7:1. Darker green in light mode, brand green on dark cards.
+          "border-transparent bg-success/10 text-[hsl(136_68%_22%)] dark:text-success",
         warning:
-          "border-transparent bg-warning/10 text-warning",
+          // Saffron on saffron-10% is ~1.9:1 (axe: serious contrast failure).
+          // Ink foreground in light mode; saffron reads fine on dark cards.
+          "border-transparent bg-warning/10 text-warning-foreground dark:text-warning",
         outline: "text-foreground",
       },
     },

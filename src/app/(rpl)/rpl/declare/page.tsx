@@ -570,12 +570,13 @@ export default function RplDeclarePage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="min-h-[40px]"
                 disabled={syncing || isOffline}
                 onClick={() => void runQueueSync()}
               >
                 {syncing ? 'Syncing…' : 'Sync now'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => void refreshQueue()}>
+              <Button size="sm" variant="ghost" className="min-h-[40px]" onClick={() => void refreshQueue()}>
                 Refresh
               </Button>
             </div>
