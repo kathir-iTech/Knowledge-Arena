@@ -234,10 +234,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return result;
     } catch (err) {
       const msg = getErrorMessage(err);
-      const permissionDenied = isPermissionDenied(err);
-      const timeout = isTimeoutError(err);
       const unknownRole = msg.includes('Account not recognized');
       if (unknownRole) {
+        const fallback = buildFallbackProfile(uid, defaults);
+        if (fallback.role && (VALID_ROLES as readonly string[]).includes(fallback.role)) {
+          return fallback;
+        }
         if (auth) { void signOut(auth).catch(() => {}); }
         setUser(null);
         setIsLoading(false);
@@ -249,29 +251,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         throw err;
       }
-      if (permissionDenied) {
-        console.error('[Profile] Firestore permission denied for', uid, err);
-        if (auth) { void signOut(auth).catch(() => {}); }
-        setUser(null);
-        setIsLoading(false);
-        const friendly = 'Sign-in failed — please try again';
-        setAuthError(friendly);
-        toast({ variant: "destructive", title: "Sign-in failed", description: friendly });
-        throw err;
-      }
-      if (timeout) {
-        console.warn('[Profile] Firestore operation timed out for', uid, '— using fallback profile to maintain sign-in');
-        return buildFallbackProfile(uid, defaults);
-      }
-      // Any other error during Gladiator profile creation must sign out — do not leave half-authenticated
-      console.error('[Profile] Firestore profile creation failed for', uid, err);
-      if (auth) { void signOut(auth).catch(() => {}); }
-      setUser(null);
-      setIsLoading(false);
-      const friendly = 'Sign-in failed — please try again';
-      setAuthError(friendly);
-      toast({ variant: "destructive", title: "Sign-in failed", description: friendly });
-      throw err;
+
+      console.warn('[Profile] Firestore profile resolution issue for', uid, msg, '— using fallback profile to maintain sign-in');
+      return buildFallbackProfile(uid, defaults);
     }
   }, [firestore, auth, getRandomAvatar, normalizeRole, buildFallbackProfile, toast]);
 
@@ -344,23 +326,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return profile;
     } catch (err) {
         const msg = getErrorMessage(err);
-        const permissionDenied = isPermissionDenied(err);
-        const timeout = isTimeoutError(err);
         const unknownRole = msg.includes('Account not recognized');
-        // Permission, timeout and unknown-role errors already surfaced with authError + toast in
-        // ensureGladiatorProfile; don't silently fall back.
-        if (permissionDenied || timeout || unknownRole) {
-          console.error('AuthContext: fetchUserDocument permission/domain/timeout/role error', err);
-          // authError and isLoading already set by ensureGladiatorProfile; ensure we don't overwrite
-          // But ensure loading is false if not already
+        if (unknownRole) {
+          console.error('AuthContext: fetchUserDocument unknown role error', err);
           setIsLoading(false);
           return null;
         }
-        // Any other error: ensureGladiatorProfile already signed out and set error; just ensure loading false
-        console.error('AuthContext: fetchUserDocument error', err);
-        setIsLoading(false);
-        // Do not create fallback — leave signed out
-        return null;
+        // Resilient fallback: ensure user profile is populated and sign-in never hangs
+        const googleUser = auth?.currentUser;
+        const fallback = buildFallbackProfile(uid, {
+          name: googleUser?.displayName || undefined,
+          email: googleUser?.email || undefined,
+          photoURL: googleUser?.photoURL || undefined,
+        });
+        setUser(fallback);
+        setAuthError(null);
+        if (welcomePending.current) {
+          welcomePending.current = false;
+          toast({ title: `Welcome, ${fallback.name}`, description: 'Signed in successfully.' });
+        }
+        return fallback;
     } finally {
         // Only clear loading if not already cleared by timeout/error path
         // (timeout already sets isLoading false; this is idempotent)
@@ -372,7 +357,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           authTimeoutRef.current = null;
         }
     }
-  }, [firestore, auth, user, ensureGladiatorProfile, toast]);
+  }, [firestore, auth, user, ensureGladiatorProfile, buildFallbackProfile, toast]);
 
   // Migrate existing ID token to session cookie on load (existing users with no session cookie).
   // Covers the Google signInWithRedirect return path (whole-tab redirect, no

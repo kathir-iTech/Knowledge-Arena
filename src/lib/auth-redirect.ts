@@ -6,14 +6,13 @@
 // candidate for RPL purposes); the Quorena portals are unreachable here.
 // main keeps the Quorena homes — never merge this mapping to main.
 export const ROLE_HOME: Record<string, string> = {
-  // Legacy Quorena roles -> RPL app (see A1). Do not restore Quorena homes.
-  executive: '/rpl',
-  commander: '/rpl',
-  gladiator: '/rpl',
-  // RPL Compass roles — see src/lib/session-role.ts VALID_ROLES.
-  candidate: '/rpl',
-  assessor: '/rpl/assessor',
+  // Canonical RPL roles:
+  executive: '/rpl/admin',
   admin: '/rpl/admin',
+  commander: '/rpl/assessor',
+  assessor: '/rpl/assessor',
+  gladiator: '/rpl',
+  candidate: '/rpl',
 } as const;
 
 export type AppRole =

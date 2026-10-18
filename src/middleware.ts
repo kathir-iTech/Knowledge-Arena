@@ -149,15 +149,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // SIH-26242 RPL track — additive branch (approved exception to the
-  // never-touch-existing-files rule: without this, middleware 307s every
-  // /rpl/* path to / and the RPL UI is unreachable in any browser).
-  // Requires any valid session cookie; fine-grained role gating lives in
-  // src/app/(rpl)/rpl/layout.tsx + page-level guards (which read Firestore
-  // roles and work with emulator demo accounts). No existing route changes.
-  if (pathname === '/rpl' || pathname.startsWith('/rpl/')) {
-    // Phase A5: remember where the user was going so login returns them there
-    // instead of dropping them on the RPL Compass dashboard.
+  // SIH-26242 RPL track — additive branch.
+  // Public RPL routes: /rpl (portal landing) and /rpl/verify/* (public QR verification)
+  // are completely open without requiring authentication.
+  if (pathname === '/rpl' || pathname.startsWith('/rpl/verify')) {
+    return withCspResponse(request);
+  }
+
+  // Protected RPL internal routes (/rpl/admin, /rpl/assessor, /rpl/declare, etc.):
+  // Require valid session cookie.
+  if (pathname.startsWith('/rpl/')) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('next', pathname + request.nextUrl.search);
     const rplCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;

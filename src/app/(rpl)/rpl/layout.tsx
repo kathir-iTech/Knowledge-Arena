@@ -64,20 +64,24 @@ export default function RplLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isLoading) return;
+    const current =
+      pathname ??
+      (typeof window !== 'undefined' ? window.location.pathname : '/rpl');
+
     if (!user) {
       // Part 1.4: an explicit sign-out owns the navigation. logout() goes to
       // /login with NO next param — appending `?next=` here is what sent the
       // NEXT account to this user's result page (403 Forbidden).
       if (isSigningOut) return;
-      // Phase A5: preserve the RPL destination so login returns here (only
-      // for a guest who opened a protected URL directly — handled by
-      // middleware first; the client copy is the same behaviour).
+
+      // Allow public RPL surfaces: /rpl (portal landing) and /rpl/verify/* (public QR verification)
+      const isPublicRpl = current === '/rpl' || current.startsWith('/rpl/verify');
+      if (isPublicRpl) return;
+
+      // Protected internal routes bounce to login with return path
       router.replace('/login?next=' + encodeURIComponent(pathname ?? '/rpl'));
       return;
     }
-    const current =
-      pathname ??
-      (typeof window !== 'undefined' ? window.location.pathname : '/rpl');
     // Wrong-role users go to their OWN home with a visible explanation —
     // never to /login (they are signed in) and never left on skeletons.
     if (isBlockedForRole(current, user.role)) {

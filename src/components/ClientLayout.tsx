@@ -90,7 +90,11 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
       // over ROLE_HOME — result/ref URLs and anything outside the RPL
       // allowlist fall back to the role home (see src/lib/next-path.ts).
       const safeNext = isAllowedNextPath(searchParams.get('next'));
-      target = safeNext || ROLE_HOME[user.role] || ROLE_HOME.gladiator;
+      if (safeNext === '/rpl') {
+        target = ROLE_HOME[user.role] || '/rpl';
+      } else {
+        target = safeNext || ROLE_HOME[user.role] || ROLE_HOME.gladiator;
+      }
     } else {
       const isExecutivePage = currentPath.startsWith('/executive');
       const isCommanderPage = currentPath.startsWith('/commander') || currentPath.startsWith('/create-quiz');
