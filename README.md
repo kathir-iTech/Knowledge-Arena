@@ -212,3 +212,8 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for the complete deployment guide.
 ## License
 
 MIT
+
+---
+
+<sub>Maintained by [kathir-iTech](https://github.com/kathir-iTech) · Last verified: October 2026</sub>
+
