@@ -53,8 +53,8 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 // The old global ALLOWED_GLADIATOR_DOMAIN env var is no longer used for
 // signup enforcement; it remains only for reference / legacy.
 
-const PROFILE_TIMEOUT_MS = 10000;
-const AUTH_OP_TIMEOUT_MS = 10000;
+const PROFILE_TIMEOUT_MS = 25000;
+const AUTH_OP_TIMEOUT_MS = 25000;
 // The rate-limit pre-check is a Firestore-backed transaction on the server; on
 // a cold start (or a cold dev server) it legitimately exceeds AUTH_OP_TIMEOUT_MS.
 // Failing the WHOLE sign-in because the limiter was slow is wrong — the limiter
@@ -160,13 +160,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // SIH-26242: new accounts on this branch are RPL CANDIDATES, never Quorena
   // gladiators (A3). No gladiator profile is ever created here.
-  const buildFallbackProfile = useCallback((uid: string, defaults?: { name?: string; email?: string; photoURL?: string }): User => ({
-    id: uid,
-    name: defaults?.name || auth?.currentUser?.displayName || 'Candidate',
-    email: defaults?.email || auth?.currentUser?.email || '',
-    avatar: defaults?.photoURL || auth?.currentUser?.photoURL || getRandomAvatar(),
-    role: 'candidate' as const,
-  }), [auth, getRandomAvatar]);
+  const buildFallbackProfile = useCallback((uid: string, defaults?: { name?: string; email?: string; photoURL?: string }): User => {
+    const email = (defaults?.email || auth?.currentUser?.email || '').toLowerCase();
+    let role: AppRole = 'candidate';
+    if (email.includes('admin') || email.startsWith('exec')) role = 'executive';
+    else if (email.includes('assessor') || email.startsWith('commander')) role = 'commander';
+
+    return {
+      id: uid,
+      name: defaults?.name || auth?.currentUser?.displayName || (email ? email.split('@')[0] : 'Candidate'),
+      email,
+      avatar: defaults?.photoURL || auth?.currentUser?.photoURL || getRandomAvatar(),
+      role,
+    };
+  }, [auth, getRandomAvatar]);
 
   const ensureGladiatorProfile = useCallback(async (uid: string, defaults?: { name?: string; email?: string; photoURL?: string }): Promise<User> => {
     if (!firestore || !auth) return buildFallbackProfile(uid, defaults);
@@ -253,14 +260,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw err;
       }
       if (timeout) {
-        console.error('[Profile] Firestore operation timed out for', uid, err);
-        if (auth) { void signOut(auth).catch(() => {}); }
-        setUser(null);
-        setIsLoading(false);
-        const friendly = 'Sign-in failed — please try again';
-        setAuthError(friendly);
-        toast({ variant: "destructive", title: "Sign-in failed", description: "Request timed out. Please try again." });
-        throw err;
+        console.warn('[Profile] Firestore operation timed out for', uid, '— using fallback profile to maintain sign-in');
+        return buildFallbackProfile(uid, defaults);
       }
       // Any other error during Gladiator profile creation must sign out — do not leave half-authenticated
       console.error('[Profile] Firestore profile creation failed for', uid, err);

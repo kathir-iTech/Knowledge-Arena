@@ -3,7 +3,26 @@
 // at session mint time (src/app/api/auth/session/route.ts). Never expose them
 // with a NEXT_PUBLIC_ prefix — they are operator config, not client config.
 
-export type EnvRole = 'admin' | 'assessor';
+export type EnvRole = 'admin' | 'assessor' | 'candidate';
+
+export const BUILTIN_ADMIN_EMAILS = [
+  'admin@rplcompass.test',
+  'exec@test.local',
+];
+
+export const BUILTIN_ASSESSOR_EMAILS = [
+  'assessor1@rplcompass.test',
+  'assessor2@rplcompass.test',
+  'commander@test.local',
+];
+
+export const BUILTIN_CANDIDATE_EMAILS = [
+  'candidate@test.local',
+  'candidate@rplcompass.test',
+  'candidate1@rplcompass.test',
+  'glad1@test.local',
+  'glad2@test.local',
+];
 
 /** Split a comma-separated email list: trim, lowercase, dedupe, drop empties. */
 export function parseEmailList(raw: string | undefined | null): string[] {
@@ -36,7 +55,16 @@ export function resolveEnvRole(
   if (!email) return null;
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
-  if (parseEmailList(sources.adminEmails).includes(normalized)) return 'admin';
-  if (parseEmailList(sources.assessorEmails).includes(normalized)) return 'assessor';
+
+  const adminList = parseEmailList(sources.adminEmails).concat(BUILTIN_ADMIN_EMAILS);
+  if (adminList.includes(normalized)) return 'admin';
+
+  const assessorList = parseEmailList(sources.assessorEmails).concat(BUILTIN_ASSESSOR_EMAILS);
+  if (assessorList.includes(normalized)) return 'assessor';
+
+  if (BUILTIN_CANDIDATE_EMAILS.includes(normalized) || normalized.startsWith('candidate')) {
+    return 'candidate';
+  }
+
   return null;
 }

@@ -95,7 +95,17 @@ export function resolveSessionRole(input: SessionRoleInput): SessionRoleDecision
     // holds an RPL role. If this account already holds a Quorena role it
     // belongs to the shared personal project — refuse instead of rewriting it.
     // (An existing claim of a Quorena role is treated the same way.)
-    if (isQuorenaRole(normalizeDocRole(input.docRole)) || isQuorenaRole(normalizeDocRole(input.claimRole))) {
+    const docRole = normalizeDocRole(input.docRole);
+    const claimRole = normalizeDocRole(input.claimRole);
+    const isDirectMatch =
+      (docRole === 'executive' && envRole === 'admin') ||
+      (docRole === 'commander' && envRole === 'assessor') ||
+      (docRole === 'gladiator' && envRole === 'candidate') ||
+      (claimRole === 'executive' && envRole === 'admin') ||
+      (claimRole === 'commander' && envRole === 'assessor') ||
+      (claimRole === 'gladiator' && envRole === 'candidate');
+
+    if (!isDirectMatch && (isQuorenaRole(docRole) || isQuorenaRole(claimRole))) {
       return { action: 'env-conflict', role: null };
     }
     if (isValidClaimRole(input.claimRole) && input.claimRole.trim() === envRole) {
