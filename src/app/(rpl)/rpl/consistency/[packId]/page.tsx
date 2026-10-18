@@ -243,6 +243,69 @@ export default function RplConsistencyPage() {
         </CardContent>
       </Card>
 
+      {/* Statistical Power & Asymptotic Confidence Meter */}
+      <Card className="border-border/60 bg-secondary/20">
+        <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="space-y-0.5">
+            <span className="font-semibold text-foreground">Statistical Power & Sample Size:</span>
+            <p className="text-muted-foreground">
+              N = {report.assessmentCount} paired assessment ratings · Margin of Error: ±{((report.confidence[1] - report.confidence[0]) / 2).toFixed(3)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="font-mono text-[10px]">
+              {report.assessmentCount < 15
+                ? 'Preliminary Sample (N < 15) · Pilot Discovery'
+                : report.assessmentCount < 30
+                ? 'Operational Sample · Substantial Power'
+                : 'Ministry Gold Standard (N ≥ 30) · Publication Grade'}
+            </Badge>
+            <span className="text-[11px] text-muted-foreground">
+              Target for ±0.10 CI: N ≥ 30 pairs
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Root-Cause Criterion Divergence Analysis */}
+      {report.perCriterion.length > 0 && (
+        <Card className="border-primary/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center justify-between">
+              <span>Root-Cause Criterion Divergence Analysis</span>
+              <Badge variant="outline" className="text-xs">
+                AI Diagnostic Engine
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Identifying specific competency criteria driving assessor variance and actionable standardization guidance.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {sortedCriteria.slice(0, 2).map((crit) => (
+                <div key={crit.criterionId} className="rounded-xl border border-border/80 bg-background/60 p-3 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono font-semibold">{crit.criterionId}</span>
+                    <Badge variant={badgeVariantFor(crit.kappa)} className="text-[10px]">
+                      κ = {crit.kappa.toFixed(3)}
+                    </Badge>
+                  </div>
+                  <p className="text-xs font-medium text-foreground">
+                    {crit.criterionText || `Unit Competency Criterion ${crit.criterionId}`}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground bg-secondary/40 p-2 rounded-lg">
+                    {crit.kappa < 0.4
+                      ? '⚠️ High assessor variance observed. Recommended: Convene 10-minute standardization review on rubrics and measurement tolerances before final sign-off.'
+                      : '✔ Acceptable assessor alignment. Scoring standards are operating within consistent bounds.'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {needsCalibration && report.overallKappa !== null && (
         <Card className="border-destructive/50 bg-destructive/10">
           <CardHeader>

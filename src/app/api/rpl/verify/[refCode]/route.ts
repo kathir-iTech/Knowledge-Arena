@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { enforceRateLimit } from '@/lib/rate-limiter';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -82,22 +83,34 @@ export async function GET(
 
     const isDemo = workerData.isDemoData === true;
 
+    const issuedAt = certDoc?.signedAt || workerDoc.updatedAt || workerDoc.createdAt || Date.now();
+    const referenceCode = workerDoc.assessmentReferenceCode || refCode;
+    const workerName = workerDoc.name || 'Anonymous Candidate';
+    const trade = pack?.title || workerDoc.trade || 'General Trade';
+    const nsqfLevel = pack?.nsqfLevel || certDoc?.recommendedLevel || 4;
+
+    const cryptographicSeal = createHash('sha256')
+      .update(`${referenceCode}:${workerName}:${resolvedPackId}:${nsqfLevel}:${issuedAt}:NCVET-RPL-REGISTRY-V1`)
+      .digest('hex');
+
     return NextResponse.json({
       verified: true,
-      referenceCode: workerDoc.assessmentReferenceCode || refCode,
-      workerName: workerDoc.name || 'Anonymous Candidate',
-      trade: pack?.title || workerDoc.trade || 'General Trade',
+      referenceCode,
+      workerName,
+      trade,
       packId: resolvedPackId || 'N/A',
-      nsqfLevel: pack?.nsqfLevel || certDoc?.recommendedLevel || 4,
+      nsqfLevel,
       status: isCertified ? 'certified' : 'pending_signoff',
-      issuedAt: certDoc?.signedAt || workerDoc.updatedAt || workerDoc.createdAt || Date.now(),
+      issuedAt,
       issuingAuthority: 'PSG iTech · National Skill Development Corporation (RPL Center)',
       assessorNotes: certDoc?.assessorNotes || 'Assessed under NCVET standard 1-4 competency rubric.',
       requiresHumanSignoff: !isCertified,
+      cryptographicSeal,
       governanceAudit: {
         methodology: 'AI-Assisted Assessment with Cohen’s Kappa Inter-Assessor Reliability',
         decisionModel: 'Human Assessor Sign-Off Required (AI-Proposed ≠ AI-Decided)',
         isDemoData: isDemo,
+        tamperSealSha256: cryptographicSeal,
       },
     });
   } catch (err) {

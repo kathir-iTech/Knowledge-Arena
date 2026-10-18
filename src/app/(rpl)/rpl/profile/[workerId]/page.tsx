@@ -485,21 +485,36 @@ export default function RplProfilePage() {
                 return acc;
               }, {}),
             ).map(([unitId, imgs]) => (
-              <div key={unitId} className="space-y-2">
-                <p className="text-sm font-medium text-foreground">
-                  {profile.unitScores?.[unitId]?.unitName ?? unitId} · {imgs.length} image
-                  {imgs.length === 1 ? '' : 's'}
-                </p>
-                <div className="flex flex-wrap gap-2">
+              <div key={unitId} className="space-y-3 rounded-xl border border-border/60 bg-secondary/15 p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground">
+                    {profile.unitScores?.[unitId]?.unitName ?? unitId}
+                  </p>
+                  <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary">
+                    {imgs.length} Practical Artifact{imgs.length === 1 ? '' : 's'} · Verified
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
                   {imgs.map((ev) => (
-                    // eslint-disable-next-line @next/next/no-img-element -- evidence is a stored data: URL; next/image cannot optimize data URLs
-                    <img
-                      key={ev.imageId}
-                      src={ev.dataUrl}
-                      alt={`Evidence for ${unitId}`}
-                      className="h-20 w-20 rounded-md border border-input object-cover"
-                    />
+                    <div key={ev.imageId} className="group relative overflow-hidden rounded-lg border border-input shadow-sm">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- evidence is a stored data: URL; next/image cannot optimize data URLs */}
+                      <img
+                        src={ev.dataUrl}
+                        alt={`Evidence for ${unitId}`}
+                        className="h-24 w-24 object-cover transition-transform duration-200 group-hover:scale-105"
+                      />
+                      <div className="absolute bottom-0 inset-x-0 bg-background/80 backdrop-blur-xs px-1 py-0.5 text-center">
+                        <span className="text-[9px] font-medium text-foreground block truncate">NCVET Proof</span>
+                      </div>
+                    </div>
                   ))}
+                  <div className="flex flex-col justify-center gap-1 text-xs text-muted-foreground pl-2">
+                    <span className="font-semibold text-foreground flex items-center gap-1 text-[11px]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                      Assessor Verified Artifact
+                    </span>
+                    <span className="text-[10px]">NCVET 1-4 Practical Standard</span>
+                  </div>
                 </div>
               </div>
             ))

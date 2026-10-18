@@ -21,6 +21,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { Volume2, VolumeX } from 'lucide-react';
 import {
   NSQF_PACKS,
   findBestMatchingPacks,
@@ -117,6 +118,56 @@ export default function RplDeclarePage() {
   const { status: connectionStatus } = useOnlineStatus();
 
   const sectors = useMemo(() => listSectors(), []);
+
+  const [speaking, setSpeaking] = useState(false);
+
+  const toggleSpeak = useCallback(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    let textToSpeak = '';
+    if (step === 0) {
+      textToSpeak =
+        lang === 'hi'
+          ? 'चरण एक: व्यक्तिगत और व्यापार संदर्भ। कृपया अपना व्यापार, क्षेत्र, और अनुभव के वर्ष चुनें।'
+          : lang === 'ta'
+          ? 'படி ஒன்று: தனிப்பட்ட மற்றும் தொழில் சூழல். உங்கள் தொழில், துறை மற்றும் அனுபவ ஆண்டுகளைத் தேர்ந்தெடுக்கவும்.'
+          : 'Step one: Personal and trade context. Please select your trade, sector, and years of experience.';
+    } else if (step === 1) {
+      textToSpeak =
+        lang === 'hi'
+          ? 'चरण दो: योग्यता पैक मिलान। अपने कौशल का चयन करें।'
+          : lang === 'ta'
+          ? 'படி இரண்டு: தகுதித் தொகுப்பு பொருத்தம். உங்கள் திறன்களைத் தேர்ந்தெடுக்கவும்.'
+          : 'Step two: Qualification pack mapping. Select the tasks and competencies you can perform.';
+    } else if (step === 2) {
+      textToSpeak =
+        lang === 'hi'
+          ? 'चरण तीन: कार्य साक्ष्य विवरण।'
+          : lang === 'ta'
+          ? 'படி மூன்று: பணி சான்று விவரங்கள்.'
+          : 'Step three: Work evidence summary.';
+    } else {
+      textToSpeak =
+        lang === 'hi'
+          ? 'चरण चार: समीक्षा और जमा करें।'
+          : lang === 'ta'
+          ? 'படி நான்கு: சரிபார்த்து சமர்ப்பிக்கவும்.'
+          : 'Step four: Review and submit declaration.';
+    }
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = lang === 'hi' ? 'hi-IN' : lang === 'ta' ? 'ta-IN' : 'en-IN';
+    utterance.rate = 0.95;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }, [speaking, step, lang]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -470,9 +521,22 @@ export default function RplDeclarePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold sm:text-2xl">{t('step1', lang)}</h1>
-        <LanguageToggle lang={lang} onChange={toggleLang} />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant={speaking ? 'default' : 'outline'}
+            size="sm"
+            onClick={toggleSpeak}
+            className="h-8 gap-1.5 text-xs rounded-full print:hidden"
+            title="Vernacular Voice Assistance (Web Speech API)"
+          >
+            {speaking ? <VolumeX className="h-3.5 w-3.5 animate-pulse" /> : <Volume2 className="h-3.5 w-3.5" />}
+            <span>{speaking ? 'Stop' : lang === 'hi' ? 'बोलकर सुनें' : lang === 'ta' ? 'கேளுங்கள்' : 'Listen'}</span>
+          </Button>
+          <LanguageToggle lang={lang} onChange={toggleLang} />
+        </div>
       </div>
 
       <p className="text-sm text-muted-foreground">
