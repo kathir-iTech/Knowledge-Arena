@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { copilotAssist } from '@/ai/flows/copilot-flow';
 import { enforceRateLimit, Limits } from '@/lib/rate-limiter';
-import { verifyFirebaseToken } from '@/lib/verify-auth';
+import { verifyFirebaseTokenWithAnyRole } from '@/lib/verify-auth';
 
 export const runtime = 'nodejs';
 
@@ -17,9 +17,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify token to get UID for per-user rate limiting (not per-IP, which
-    // throttles an entire college NAT behind a single shared IP).
-    const auth = await verifyFirebaseToken(token);
+    // Verify token and enforce server-side role check (commander, executive, assessor, admin only)
+    const auth = await verifyFirebaseTokenWithAnyRole(token, ['commander', 'executive', 'assessor', 'admin']);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

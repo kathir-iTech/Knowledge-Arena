@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 interface CertificateCardProps {
@@ -83,16 +84,27 @@ export function CertificateCard({
         <p className="mt-1 font-mono text-xl font-bold text-primary break-all">
           {verificationCode}
         </p>
-        {onViewDetail && (
-          <button
-            type="button"
-            onClick={onViewDetail}
-            className="mt-2 text-xs text-primary hover:underline"
-            aria-label="View full certificate details"
-          >
-            View details
-          </button>
-        )}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          {onViewDetail && (
+            <button
+              type="button"
+              onClick={onViewDetail}
+              className="text-xs text-primary hover:underline"
+              aria-label="View full certificate details"
+            >
+              View details
+            </button>
+          )}
+          {verificationCode && (
+            <Link
+              href={`/rpl/verify/${encodeURIComponent(verificationCode)}`}
+              className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1"
+              aria-label="Open public certificate verification"
+            >
+              Verify credential & QR ↗
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );
