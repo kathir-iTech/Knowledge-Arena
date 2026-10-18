@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CompassMark } from '@/components/rpl/CompassMark';
-import { CheckCircle2, Clock, ShieldCheck, Printer, ArrowLeft } from 'lucide-react';
+import { CheckCircle2, Clock, ShieldCheck, Printer, ArrowLeft, Download, Share2, Check } from 'lucide-react';
 
 interface VerificationData {
   verified: boolean;
@@ -36,6 +36,43 @@ export default function PublicCertificateVerifyPage() {
   const [data, setData] = useState<VerificationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyLink = () => {
+    if (typeof window === 'undefined') return;
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadAuditJson = () => {
+    if (!data) return;
+    const auditRecord = {
+      $schema: 'https://nsqf.gov.in/schema/rpl-verification-v1.json',
+      recordType: 'NSQF_RPL_CREDENTIAL_VERIFICATION',
+      referenceCode: data.referenceCode,
+      candidateName: data.workerName,
+      trade: data.trade,
+      qualificationPack: data.packId,
+      nsqfLevel: data.nsqfLevel,
+      certificationStatus: data.status,
+      issuedAt: new Date(data.issuedAt).toISOString(),
+      issuingAuthority: data.issuingAuthority,
+      assessorNotes: data.assessorNotes,
+      governanceAudit: {
+        ...data.governanceAudit,
+        interAssessorReliability: "Cohen's Linear-Weighted Kappa",
+        verificationTimestamp: new Date().toISOString(),
+      },
+    };
+    const blob = new Blob([JSON.stringify(auditRecord, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `RPL-Audit-${data.referenceCode}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     if (!refCode) return;
@@ -117,17 +154,27 @@ export default function PublicCertificateVerifyPage() {
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Button asChild variant="ghost" size="sm">
           <Link href="/rpl">
             <ArrowLeft className="mr-1.5 h-4 w-4" />
             RPL Compass Home
           </Link>
         </Button>
-        <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden">
-          <Printer className="mr-1.5 h-4 w-4" />
-          Print / Save PDF
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <Button variant="outline" size="sm" onClick={handleCopyLink}>
+            {copied ? <Check className="mr-1.5 h-4 w-4 text-success" /> : <Share2 className="mr-1.5 h-4 w-4" />}
+            {copied ? 'Link Copied' : 'Share Link'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleDownloadAuditJson}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Audit JSON
+          </Button>
+          <Button variant="default" size="sm" onClick={() => window.print()}>
+            <Printer className="mr-1.5 h-4 w-4" />
+            Print / Save PDF
+          </Button>
+        </div>
       </div>
 
       {/* Official Certificate Card */}

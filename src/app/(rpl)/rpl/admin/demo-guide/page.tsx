@@ -59,7 +59,7 @@ interface WalkStep {
   href?: string;
   expect: string;
   /** Key into the live readiness map below. */
-  check: 'demo' | 'consistency' | 'suresh' | 'queue' | 'certify' | 'offline';
+  check: 'demo' | 'consistency' | 'suresh' | 'queue' | 'certify' | 'offline' | 'verify';
 }
 
 /**
@@ -114,6 +114,14 @@ const WALKTHROUGH: WalkStep[] = [
     expect: '“You are offline … saved and submitted when you reconnect” notice ships on the page.',
     check: 'offline',
   },
+  {
+    title: '7 · Public QR verification & audit seal',
+    say: 'Anyone — an employer, candidate, or ministry auditor — can scan this QR code or visit the public reference link to verify the authentic credential.',
+    detail: 'Open the public certificate verification page for Suresh Kumar with real-time QR code and NSQF alignment.',
+    href: `/rpl/verify/${DEMO_REFERENCE_CODES.suresh}`,
+    expect: 'Publicly verified RPL credential showing candidate name, trade, NSQF Level, governance seal, and live QR code.',
+    check: 'verify',
+  },
 ];
 
 /** Suresh Kumar's canonical demo reference code (resolves to his worker id). */
@@ -149,6 +157,7 @@ export default function RplAdminDemoGuidePage() {
     queue: CHECKING,
     certify: CHECKING,
     offline: CHECKING,
+    verify: CHECKING,
   });
   const [checking, setChecking] = useState(false);
   // Guards overlapping refresh runs (auto-run on mount vs manual Re-check):
@@ -175,6 +184,7 @@ export default function RplAdminDemoGuidePage() {
       queue: { state: 'not-ready', detail: 'Assessor queue is empty.' },
       certify: { state: 'not-ready', detail: 'No pending sign-off for Suresh yet.' },
       offline: { state: 'not-ready', detail: 'Declare route did not serve.' },
+      verify: { state: 'not-ready', detail: 'Public verification did not resolve yet.' },
     };
     try {
       const overRes = await fetch('/api/rpl/admin/overview', { headers });
@@ -263,6 +273,20 @@ export default function RplAdminDemoGuidePage() {
       const decRes = await fetch('/rpl/declare', { method: 'GET', credentials: 'same-origin' });
       if (decRes.ok) {
         next.offline = { state: 'ready', detail: 'Declare route serves (offline notice ships on that page).' };
+      }
+
+      const vRes = await fetch(`/api/rpl/verify/${encodeURIComponent(SURESH_REF)}`);
+      const vBody = (await vRes.json().catch(() => null)) as {
+        verified?: boolean;
+        trade?: string;
+        nsqfLevel?: number;
+      } | null;
+      if (vRes.ok && vBody?.verified) {
+        next.verify = {
+          state: 'ready',
+          detail: `Public registry verified: ${vBody.trade} (NSQF Level ${vBody.nsqfLevel}) with live QR seal.`,
+          href: `/rpl/verify/${encodeURIComponent(SURESH_REF)}`,
+        };
       }
     } catch {
       // Keep per-step not-ready details; the page never crashes on a check failure.
